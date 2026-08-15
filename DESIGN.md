@@ -375,6 +375,17 @@ any implementation must reproduce.)
    renderer — the reference L1 implementation, deliberately just one consumer of
    `smd-core` among possible many). Spec versions are semver; bundles record the
    spec version in `manifest.json`.
+6. **Where the framework dependency lives — and where it never does.** The
+   format is framework-free, but *component implementations* are renderer-bound:
+   a React pack renders only in React hosts. Therefore a pack's `pack.json`
+   declares its target engine (e.g. `"engine": "react"`); a host that can't run
+   a pack's engine shows the standard unknown-component fallback, so notes stay
+   readable everywhere. Frameworks live in **apps**, never in notes or bundles:
+   an `.smd` file is created empty like any text file (no init, no scaffold, no
+   per-file dependency), a `.smdb` bundle contains only content (markdown,
+   assets, scripts, cache — no runtime), and end users install an app, not npm
+   packages. Only *developers embedding* .smd in their own software take
+   `smd-core` plus a renderer matching their framework as dependencies.
 
 ## 14. Name
 
