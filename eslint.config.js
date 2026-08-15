@@ -113,4 +113,46 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    // smd-lua is the sandboxed Lua execution primitive (spec §8, §10, §11):
+    // it must not import React (or anything React-flavored) and must not
+    // depend on smd-core or smd-react. It MAY depend on smd-bundle (for the
+    // `ScriptView` capability type) — that one is deliberately not
+    // restricted here. See CLAUDE.md's smd-lua scope note.
+    files: ['packages/smd-lua/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'react',
+              message:
+                'smd-lua is the sandboxed Lua execution primitive — no React dependency (see CLAUDE.md).',
+            },
+            {
+              name: 'react-dom',
+              message:
+                'smd-lua is the sandboxed Lua execution primitive — no React dependency (see CLAUDE.md).',
+            },
+            {
+              name: 'smd-core',
+              message: 'smd-lua must not depend on smd-core (see CLAUDE.md).',
+            },
+            {
+              name: 'smd-react',
+              message: 'smd-lua must not depend on smd-react (see CLAUDE.md).',
+            },
+          ],
+          patterns: [
+            {
+              group: ['react/*', 'react-dom/*', 'smd-core/*', 'smd-react/*'],
+              message:
+                'smd-lua is the sandboxed Lua execution primitive — no React/smd-core/smd-react dependency (see CLAUDE.md).',
+            },
+          ],
+        },
+      ],
+    },
+  },
 );
