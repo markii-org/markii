@@ -1,0 +1,52 @@
+{
+  "children": [
+    {
+      "attributes": {
+        "title": "Careful",
+        "type": "warning"
+      },
+      "children": [
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": "This is a "
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "container"
+                }
+              ],
+              "type": "strong"
+            },
+            {
+              "type": "text",
+              "value": " directive. It can hold any markdown, including\na "
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "link"
+                }
+              ],
+              "title": null,
+              "type": "link",
+              "url": "https://example.com"
+            },
+            {
+              "type": "text",
+              "value": "."
+            }
+          ],
+          "type": "paragraph"
+        }
+      ],
+      "name": "callout",
+      "type": "containerDirective"
+    }
+  ],
+  "type": "root"
+}

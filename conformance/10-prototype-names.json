@@ -1,0 +1,101 @@
+{
+  "children": [
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "Prototype-name directives"
+        }
+      ],
+      "depth": 1,
+      "type": "heading"
+    },
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "Directive names that collide with inherited "
+        },
+        {
+          "type": "inlineCode",
+          "value": "Object.prototype"
+        },
+        {
+          "type": "text",
+          "value": " members must\nstill render the unknown-directive fallback, not blank the document."
+        }
+      ],
+      "type": "paragraph"
+    },
+    {
+      "attributes": {},
+      "children": [],
+      "name": "constructor",
+      "type": "leafDirective"
+    },
+    {
+      "attributes": {},
+      "children": [
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": "Content inside a container directive literally named "
+            },
+            {
+              "type": "inlineCode",
+              "value": "toString"
+            },
+            {
+              "type": "text",
+              "value": "."
+            }
+          ],
+          "type": "paragraph"
+        }
+      ],
+      "name": "toString",
+      "type": "containerDirective"
+    },
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "Inline collision: "
+        },
+        {
+          "attributes": {},
+          "children": [
+            {
+              "type": "text",
+              "value": "x"
+            }
+          ],
+          "name": "hasOwnProperty",
+          "type": "textDirective"
+        },
+        {
+          "type": "text",
+          "value": " should also show a fallback."
+        }
+      ],
+      "type": "paragraph"
+    },
+    {
+      "attributes": {},
+      "children": [],
+      "name": "valueOf",
+      "type": "leafDirective"
+    },
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "Normal paragraph after all four collisions, proving the rest of the\ndocument still renders."
+        }
+      ],
+      "type": "paragraph"
+    }
+  ],
+  "type": "root"
+}

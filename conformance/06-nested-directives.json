@@ -1,0 +1,76 @@
+{
+  "children": [
+    {
+      "attributes": {
+        "title": "Nested",
+        "type": "info"
+      },
+      "children": [
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": "Outer callout containing a rating and a keycap:"
+            }
+          ],
+          "type": "paragraph"
+        },
+        {
+          "attributes": {
+            "max": "5",
+            "value": "4"
+          },
+          "children": [],
+          "name": "rating",
+          "type": "leafDirective"
+        },
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": "Press "
+            },
+            {
+              "attributes": {},
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Enter"
+                }
+              ],
+              "name": "kbd",
+              "type": "textDirective"
+            },
+            {
+              "type": "text",
+              "value": " to continue."
+            }
+          ],
+          "type": "paragraph"
+        },
+        {
+          "attributes": {
+            "title": "Inner",
+            "type": "warning"
+          },
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "A callout nested inside another callout."
+                }
+              ],
+              "type": "paragraph"
+            }
+          ],
+          "name": "callout",
+          "type": "containerDirective"
+        }
+      ],
+      "name": "callout",
+      "type": "containerDirective"
+    }
+  ],
+  "type": "root"
+}

@@ -39,4 +39,42 @@ export default tseslint.config(
     },
     ...tseslint.configs.disableTypeChecked,
   },
+  {
+    // smd-core is the framework-agnostic reference implementation (see
+    // CLAUDE.md's "Import rule" and DESIGN.md §13): it must never import
+    // React, react-dom, or smd-react. This is a lint-enforced version of
+    // that rule, not just a convention.
+    files: ['packages/smd-core/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'react',
+              message:
+                'smd-core must stay framework-agnostic — no React dependency (see CLAUDE.md import rule).',
+            },
+            {
+              name: 'react-dom',
+              message:
+                'smd-core must stay framework-agnostic — no React dependency (see CLAUDE.md import rule).',
+            },
+            {
+              name: 'smd-react',
+              message:
+                'smd-core must not depend on smd-react — smd-react depends on smd-core, never the reverse (see CLAUDE.md import rule).',
+            },
+          ],
+          patterns: [
+            {
+              group: ['react/*', 'react-dom/*', 'smd-react/*'],
+              message:
+                'smd-core must stay framework-agnostic and must not depend on smd-react (see CLAUDE.md import rule).',
+            },
+          ],
+        },
+      ],
+    },
+  },
 );

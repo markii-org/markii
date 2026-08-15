@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { forwardRef, memo } from 'react';
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { conformanceDir } from 'smd-core/corpus';
 import { renderSmd } from './render';
 import { defaultRegistry } from './components';
 import type {
@@ -12,7 +13,7 @@ import type {
 } from './registry';
 
 function readFixture(name: string): string {
-  return readFileSync(join(process.cwd(), 'fixtures', name), 'utf8');
+  return readFileSync(join(conformanceDir(), name), 'utf8');
 }
 
 function renderFixture(name: string, registry: Registry = defaultRegistry) {
@@ -212,53 +213,6 @@ describe('renderSmd', () => {
   });
 });
 
-describe('URL sanitization', () => {
-  it('neutralizes a javascript: URL in a link href but keeps the link text', () => {
-    const { container } = render(
-      renderSmd('[click me](javascript:alert(1))', {}),
-    );
-    const link = container.querySelector('a');
-    expect(link).not.toBeNull();
-    expect(link).toHaveTextContent('click me');
-    expect(link).not.toHaveAttribute('href');
-  });
-
-  it('neutralizes uppercase and whitespace-padded javascript: URLs', () => {
-    const mixedCase = render(renderSmd('[click me](JaVaScRiPt:alert(1))', {}));
-    expect(mixedCase.container.querySelector('a')).not.toHaveAttribute('href');
-
-    // `&#32;` is a decoded character reference, so the destination the
-    // parser hands us is the literal string " JaVaScRiPt:alert(1)" (real
-    // leading space, mixed case) — proves the scheme check is a strict
-    // match, not a `startsWith('javascript:')` check a leading space (or
-    // case change) could sneak past.
-    const padded = render(renderSmd('[again](<&#32;JaVaScRiPt:alert(1)>)', {}));
-    expect(padded.container.querySelector('a')).not.toHaveAttribute('href');
-  });
-
-  it('neutralizes a data: URL in an image src but keeps the image element', () => {
-    const { container } = render(
-      renderSmd('![alt text](data:text/html,alert(1))', {}),
-    );
-    const img = container.querySelector('img');
-    expect(img).not.toBeNull();
-    expect(img).toHaveAttribute('alt', 'alt text');
-    expect(img).not.toHaveAttribute('src');
-  });
-
-  it('preserves http, https, mailto, tel, relative, fragment, and query URLs', () => {
-    const cases: Array<[string, string]> = [
-      ['https link', 'https://example.com'],
-      ['http link', 'http://example.com'],
-      ['mailto link', 'mailto:person@example.com'],
-      ['tel link', 'tel:+15555550100'],
-      ['relative link', '/notes/today'],
-      ['fragment link', '#section'],
-      ['query link', '?tab=info'],
-    ];
-    for (const [text, url] of cases) {
-      const { container } = render(renderSmd(`[${text}](${url})`, {}));
-      expect(container.querySelector('a')).toHaveAttribute('href', url);
-    }
-  });
-});
+// URL-sanitization behavior is a `toHast` (smd-core) concern and is tested
+// at the hast level in smd-core's `to-hast.test.ts` — no React/jsdom
+// involved there. This file only covers React-facing rendering behavior.

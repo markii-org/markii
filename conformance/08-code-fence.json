@@ -1,0 +1,65 @@
+{
+  "children": [
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "A real callout, for contrast:"
+        }
+      ],
+      "type": "paragraph"
+    },
+    {
+      "attributes": {
+        "title": "Real",
+        "type": "info"
+      },
+      "children": [
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": "This one renders."
+            }
+          ],
+          "type": "paragraph"
+        }
+      ],
+      "name": "callout",
+      "type": "containerDirective"
+    },
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "Directive-like text inside a fenced code block must stay literal text, not\nbe parsed as a directive:"
+        }
+      ],
+      "type": "paragraph"
+    },
+    {
+      "lang": null,
+      "meta": null,
+      "type": "code",
+      "value": ":::callout{type=warning title=\"Not real\"}\nThis should NOT render as a callout — it's inside a code fence.\n:::\n\n:kbd[Ctrl+S] should also stay literal here."
+    },
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "And inline code should protect directive-like text too: "
+        },
+        {
+          "type": "inlineCode",
+          "value": ":kbd[literal]"
+        },
+        {
+          "type": "text",
+          "value": "."
+        }
+      ],
+      "type": "paragraph"
+    }
+  ],
+  "type": "root"
+}

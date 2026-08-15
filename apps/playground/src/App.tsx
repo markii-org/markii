@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
-import { renderSmd, defaultRegistry } from 'smd-core';
+import { renderSmd, defaultRegistry } from 'smd-react';
 import { DEMO_DOC } from './demo-doc';
 
 const DEBOUNCE_MS = 150;

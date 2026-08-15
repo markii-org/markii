@@ -9,14 +9,22 @@ the source of truth for syntax, architecture, and scope.
 
 ```
 DESIGN.md            the format spec — source of truth
-packages/smd-core    reference implementation: parser, registry, React renderer
-  src/parse.ts       text → AST (unified + remark-parse + remark-directive)
-  src/registry.ts    Registry types + createRegistry
-  src/render.tsx     AST + registry → React tree (incl. unknown-directive fallback)
+conformance/         language-agnostic corpus: *.smd inputs + expected-AST *.json
+packages/smd-core    framework-agnostic reference impl — ZERO React dependency:
+  src/parse.ts       text → mdast AST (unified + remark-parse + remark-directive)
+  src/to-hast.ts     mdast → hast: directive tagging (data.hName) + URL sanitizer
+  src/corpus.ts      conformance-corpus runner (load fixtures, strip positions)
+packages/smd-react   the reference L1 renderer (one consumer of smd-core):
+  src/registry.tsx   Registry types + createRegistry/mergeRegistries
+  src/render.tsx     hast + registry → React tree (incl. unknown-directive fallback)
   src/components/    built-in demo components (callout, kbd, ...)
-  fixtures/          conformance fixtures: *.smd inputs + expected outputs
+  src/doc.css        document rhythm + component internals
 apps/playground      thin Vite dev harness to view .smd files. NOT the product.
 ```
+
+Import rule: smd-core must never import React or anything from smd-react;
+smd-react imports smd-core; the playground imports smd-react. The conformance
+corpus is plain data — no TypeScript in `conformance/`.
 
 ## Stack (fixed — do not add alternatives)
 

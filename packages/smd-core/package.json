@@ -5,15 +5,15 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./doc.css": "./src/doc.css"
+    "./corpus": "./src/corpus.ts"
   },
   "scripts": {
     "test": "vitest run",
     "build": "tsc --noEmit -p tsconfig.json",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "corpus:regen": "node scripts/regen-corpus.ts"
   },
   "dependencies": {
-    "hast-util-to-jsx-runtime": "^2.3.6",
     "mdast-util-directive": "^3.1.0",
     "remark-directive": "^4.0.0",
     "remark-parse": "^11.0.0",
@@ -21,17 +21,8 @@
     "unified": "^11.0.5",
     "unist-util-visit": "^5.1.0"
   },
-  "peerDependencies": {
-    "react": "^18.3.1"
-  },
   "devDependencies": {
-    "@testing-library/jest-dom": "^7.0.1",
-    "@testing-library/react": "^16.3.2",
     "@types/hast": "^3.0.5",
-    "@types/mdast": "^4.0.4",
-    "@types/react": "^18.3.31",
-    "@types/react-dom": "^18.3.7",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "@types/mdast": "^4.0.4"
   }
 }

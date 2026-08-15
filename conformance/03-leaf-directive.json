@@ -1,0 +1,32 @@
+{
+  "children": [
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "This recipe gets:"
+        }
+      ],
+      "type": "paragraph"
+    },
+    {
+      "attributes": {
+        "max": "5",
+        "value": "3"
+      },
+      "children": [],
+      "name": "rating",
+      "type": "leafDirective"
+    },
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "Not bad."
+        }
+      ],
+      "type": "paragraph"
+    }
+  ],
+  "type": "root"
+}

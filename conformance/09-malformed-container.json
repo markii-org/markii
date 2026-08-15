@@ -1,0 +1,41 @@
+{
+  "children": [
+    {
+      "attributes": {
+        "title": "Unclosed",
+        "type": "danger"
+      },
+      "children": [
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": "This container directive is never closed with a matching "
+            },
+            {
+              "type": "inlineCode",
+              "value": ":::"
+            },
+            {
+              "type": "text",
+              "value": " — parsing\nand rendering must not throw, even though the document is malformed."
+            }
+          ],
+          "type": "paragraph"
+        },
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": "More text after it, still inside the still-open container."
+            }
+          ],
+          "type": "paragraph"
+        }
+      ],
+      "name": "callout",
+      "type": "containerDirective"
+    }
+  ],
+  "type": "root"
+}

@@ -1,0 +1,85 @@
+{
+  "children": [
+    {
+      "attributes": {
+        "title": "Quoted title with spaces",
+        "type": "warning"
+      },
+      "children": [
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": "Attributes with a quoted value."
+            }
+          ],
+          "type": "paragraph"
+        }
+      ],
+      "name": "callout",
+      "type": "containerDirective"
+    },
+    {
+      "attributes": {
+        "type": "danger"
+      },
+      "children": [
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": "Attributes with only a bare (unquoted) value, no title."
+            }
+          ],
+          "type": "paragraph"
+        }
+      ],
+      "name": "callout",
+      "type": "containerDirective"
+    },
+    {
+      "attributes": {},
+      "children": [
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": "No attributes at all — should fall back to the "
+            },
+            {
+              "type": "inlineCode",
+              "value": "info"
+            },
+            {
+              "type": "text",
+              "value": " type."
+            }
+          ],
+          "type": "paragraph"
+        }
+      ],
+      "name": "callout",
+      "type": "containerDirective"
+    },
+    {
+      "attributes": {
+        "collapsed": "",
+        "type": "info"
+      },
+      "children": [
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": "A bare (valueless) attribute alongside a quoted one."
+            }
+          ],
+          "type": "paragraph"
+        }
+      ],
+      "name": "callout",
+      "type": "containerDirective"
+    }
+  ],
+  "type": "root"
+}

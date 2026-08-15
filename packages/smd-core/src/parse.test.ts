@@ -9,9 +9,10 @@ import type {
 import type { Code, RootContent } from 'mdast';
 import type { Node } from 'unist';
 import { parse } from './parse';
+import { conformanceDir } from './corpus';
 
 function readFixture(name: string): string {
-  return readFileSync(join(process.cwd(), 'fixtures', name), 'utf8');
+  return readFileSync(join(conformanceDir(), name), 'utf8');
 }
 
 function hasChildren(node: Node): node is Node & { children: Node[] } {
