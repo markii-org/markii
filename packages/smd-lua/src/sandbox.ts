@@ -1,5 +1,5 @@
 import type { ScriptView } from 'smd-bundle';
-import type { LuaThread } from 'wasmoon';
+import { LuaReturn, type LuaThread } from 'wasmoon';
 import {
   buildCapabilities,
   type CacheProvider,
@@ -7,7 +7,11 @@ import {
   type NetGrants,
   type NetProvider,
 } from './capabilities';
-import { CAPABILITY_ERROR_TAG, MARSHAL_ERROR_TAG } from './errors';
+import {
+  CAPABILITY_ERROR_TAG,
+  MARSHAL_ERROR_TAG,
+  ScriptLimitError,
+} from './errors';
 import type { ScriptFailure, ScriptMarshalReason } from './errors';
 import { createEmptyLuaEngine } from './globals';
 import { DEFAULT_LIMITS, installLimits, type ScriptLimits } from './limits';
@@ -54,6 +58,74 @@ function describeError(err: unknown): string {
   return String(err);
 }
 
+/**
+ * Wraps `thread.assertOk` (public wasmoon API, `thread.d.ts`) to capture the
+ * raw C-API status code (`LuaReturn`) that `lua_resume`/`lua_pcall` returned
+ * for the run, before wasmoon collapses it into a generic `Error`. Returns a
+ * getter for that last-seen code, plus a restore function.
+ *
+ * ## Why this exists: memory-cap breaches were misclassified as `'runtime'`
+ *
+ * `thread.run()` calls `this.assertOk(resumeResult.result)` exactly once,
+ * with the terminal status of the run. When the Lua allocator (the
+ * `traceAllocations`-backed custom allocator `./globals` installs, capped by
+ * `engine.global.setMemoryMax`) returns null past the cap, the VM raises
+ * `LUA_ERRMEM` — `assertOk` sees `LuaReturn.ErrorMem` (4) and throws a plain
+ * `Error` whose `.message` is set directly from `lua_tolstring` (skipping
+ * the traceback step, since traceback generation itself needs allocation
+ * that could also fail under OOM). That message is INDISTINGUISHABLE from
+ * an ordinary runtime error's message on the far side — both are plain
+ * strings — so without this hook, a genuine memory-cap breach and a
+ * script's own `error("not enough memory")` collapse to the exact same
+ * shape and there is no reliable way to tell them apart from the message
+ * alone.
+ *
+ * ## Why the status code is non-spoofable (unlike message matching)
+ *
+ * `LuaReturn.ErrorMem` is the literal C-API return code from
+ * `lua_resume`/`lua_pcall` — it is set by the Lua VM's own error-throwing
+ * path (`luaD_throw` with `LUA_ERRMEM`) when the allocator fails, and by
+ * nothing else. A script calling `error("not enough memory")` raises an
+ * ORDINARY Lua error (`LUA_ERRRUN`, code 2) — verified empirically in a
+ * throwaway harness: `error('not enough memory')` yields status 2, while an
+ * actual allocator-capped allocation yields status 4, with output messages
+ * that are otherwise identical strings. A script has no way to make Lua's
+ * own C `lua_resume` return `LUA_ERRMEM` other than genuinely exhausting the
+ * capped allocator.
+ *
+ * ## Why this does NOT reclassify a script's own `pcall`-caught OOM
+ *
+ * When a script wraps the failing allocation in its OWN `pcall`
+ * (`pcall(function() return string.rep(...) end)`), the `LUA_ERRMEM` is
+ * raised and caught entirely INSIDE that inner `lua_pcall`, at the Lua
+ * level — the outer `lua_resume` that `thread.run()` drives still completes
+ * with status `LuaReturn.Ok` (the script's own `pcall` returned `false,
+ * "not enough memory"` as an ordinary value). `assertOk` is therefore never
+ * called with `ErrorMem` in that case, so this hook correctly leaves that
+ * case alone — matching the existing (and intentional) behavior asserted in
+ * `sandbox.test.ts`'s "memory cap stops a string.rep balloon ... without
+ * OOM-ing the process" test, which expects that case to come back as an
+ * ordinary successful run (`ok: true, value: 'false'`), not a `'limit'`
+ * failure.
+ */
+function captureAssertOkStatus(thread: LuaThread): {
+  lastStatus: () => LuaReturn | undefined;
+  restore: () => void;
+} {
+  const original = thread.assertOk.bind(thread);
+  let lastStatus: LuaReturn | undefined;
+  thread.assertOk = (result: LuaReturn) => {
+    lastStatus = result;
+    original(result);
+  };
+  return {
+    lastStatus: () => lastStatus,
+    restore: () => {
+      thread.assertOk = original;
+    },
+  };
+}
+
 function extractMarshalReason(message: string): ScriptMarshalReason {
   // The tagged reason is always on the SAME LINE as the tag (Lua's
   // `error()` produces "chunkname:line: SMD_MARSHAL:<reason>[:extra]");
@@ -87,10 +159,18 @@ function extractMarshalReason(message: string): ScriptMarshalReason {
  * `MARSHAL_ERROR_TAG`) is used rather than `instanceof` because wasmoon
  * does not preserve JS `Error` subclass identity across the Lua round trip
  * — see the doc comment on those tags in `./errors` for the empirical
- * evidence. Resource-limit breaches are classified separately, BEFORE this
- * function is ever called, via the out-of-band JS flag from `./limits`
- * (see `runScript` below) — never through this message-based path, since
- * that flag can't be spoofed or missed the way a message string could be.
+ * evidence. Resource-limit breaches are ALL classified separately, BEFORE
+ * this function is ever called, via non-spoofable out-of-band signals —
+ * never through this message-based path, since a script can trivially
+ * forge any message string (e.g. `error("SMD_LIMIT: ...")` or
+ * `error("not enough memory")`) but cannot forge these:
+ *   - instruction/wall-clock breaches: the JS closure flag from
+ *     `./limits`' hook (see `runScript` below);
+ *   - the async-hang backstop: `instanceof ScriptLimitError` on the
+ *     `Promise.race` guard's own sentinel, which never crosses the Lua
+ *     boundary (see the guard's construction in `runScript`);
+ *   - memory-cap breaches: the raw `LuaReturn.ErrorMem` C-API status code
+ *     captured by `captureAssertOkStatus` (see its doc comment).
  */
 function classifyRuntimeError(err: unknown): ScriptFailure {
   const message = describeError(err);
@@ -134,9 +214,13 @@ function classifyRuntimeError(err: unknown): ScriptFailure {
  *    UNCONDITIONALLY and, if set, wins over whatever the run otherwise
  *    reported — see `./limits`'s doc comment for why this is the actual
  *    enforcement point for "not swallowed by the script's own `pcall`".
- * 7. Otherwise: a thrown error is classified (`classifyRuntimeError`); a
- *    successful return goes through `finalizeMarshaledValue` for the
- *    final NaN/Infinity check and marker cleanup.
+ * 7. Otherwise, a thrown error is classified by three non-spoofable
+ *    out-of-band signals, in order, before ever falling back to
+ *    `classifyRuntimeError`'s message-based path: the wall-clock guard's
+ *    own `ScriptLimitError` sentinel (`instanceof`, Defect 3), then the
+ *    raw `LuaReturn.ErrorMem` status code (Defect 2). A successful return
+ *    goes through `finalizeMarshaledValue` for the final NaN/Infinity
+ *    check and marker cleanup.
  * 8. `finally`: hook removed, thread popped, engine closed — every path,
  *    including every early return above.
  */
@@ -187,12 +271,34 @@ export async function runScript(
       };
     }
 
+    // Identity-based sentinel (Defect 3): this rejects with a
+    // `ScriptLimitError` — a class defined and thrown entirely within this
+    // module, never round-tripped through Lua — so the `instanceof` check
+    // below cannot be spoofed by a script's own `error("...")` call, even
+    // one using this exact message text (see the test asserting that
+    // distinction). Message-string matching would be spoofable; `instanceof`
+    // is not, because unlike the `CAPABILITY_ERROR_TAG`/`MARSHAL_ERROR_TAG`
+    // cases in `classifyRuntimeError` (which DO cross the Lua boundary and
+    // so lose subclass identity — see `./errors`'s doc comment), this
+    // guard's reject() and its catch below are the same JS scope: the error
+    // never enters the Lua VM at all.
     const guard = new Promise<never>((_resolve, reject) => {
       guardTimer = setTimeout(() => {
-        reject(new Error('SMD_LIMIT: wall-clock timeout exceeded'));
+        reject(
+          new ScriptLimitError(
+            'timeout',
+            'wall-clock timeout exceeded (external async guard: a host capability call never resolved)',
+          ),
+        );
       }, limits.wallClockMs + WALL_CLOCK_GUARD_SLACK_MS);
       guardTimer.unref?.();
     });
+
+    // Defect 2: capture the raw LuaReturn status code for this run so a
+    // genuine memory-cap breach can be told apart, non-spoofably, from an
+    // ordinary Lua runtime error whose message happens to say "not enough
+    // memory" — see `captureAssertOkStatus`'s doc comment.
+    const statusCapture = captureAssertOkStatus(thread);
 
     let runResult:
       { kind: 'ok'; value: unknown } | { kind: 'error'; err: unknown };
@@ -206,6 +312,7 @@ export async function runScript(
       runResult = { kind: 'error', err };
     } finally {
       if (guardTimer) clearTimeout(guardTimer);
+      statusCapture.restore();
     }
 
     // Authoritative check: a resource-limit breach always wins, regardless
@@ -226,6 +333,32 @@ export async function runScript(
     }
 
     if (runResult.kind === 'error') {
+      // Defect 3: the external wall-clock guard's own sentinel error,
+      // identified by class identity (never by message) — see the guard's
+      // construction above.
+      if (runResult.err instanceof ScriptLimitError) {
+        return {
+          ok: false,
+          error: {
+            kind: 'limit',
+            limit: runResult.err.limitKind,
+            message: `script exceeded its ${runResult.err.limitKind} limit`,
+          },
+        };
+      }
+      // Defect 2: a genuine, uncaught memory-cap breach, identified by the
+      // non-spoofable raw LuaReturn status code — see
+      // `captureAssertOkStatus`'s doc comment.
+      if (statusCapture.lastStatus() === LuaReturn.ErrorMem) {
+        return {
+          ok: false,
+          error: {
+            kind: 'limit',
+            limit: 'memory',
+            message: 'script exceeded its memory limit',
+          },
+        };
+      }
       return { ok: false, error: classifyRuntimeError(runResult.err) };
     }
 

@@ -126,7 +126,12 @@ const LIBRARIES: readonly LuaLibraries[] = [
  *
  * Explicitly KEPT from Base (each is on the DoD-mandated whitelist):
  * `tonumber`, `tostring`, `type`, `ipairs`, `pairs`, `next`, `select`,
- * `error`, `assert`, `pcall`, `xpcall`.
+ * `error`, `assert`, `pcall`, `xpcall`. NOTE: `xpcall` is kept in name only —
+ * the C-level `xpcall` Base actually provides is REPLACED by a pure-Lua
+ * reimplementation (`XPCALL_REIMPLEMENTATION` below, run as part of this
+ * prelude) that closes a host-deadlock the C version has under this
+ * sandbox's limits hook; see that constant's doc comment for the full
+ * mechanism and empirical evidence.
  *
  * `unpack`/`table.unpack`: Lua 5.4 (this build, no 5.1-compat flag) never
  * defines a *global* `unpack` — only `table.unpack` exists in stock 5.4,
@@ -134,6 +139,75 @@ const LIBRARIES: readonly LuaLibraries[] = [
  * global `unpack`). We do not synthesize one; `table.unpack` is exposed as
  * part of the (fully kept) Table library and is the documented spelling.
  */
+/**
+ * Replaces the C-level \`xpcall\` with a pure-Lua reimplementation built on
+ * \`pcall\`.
+ *
+ * ## Why: the C \`xpcall\` deadlocks the host under the limits hook
+ *
+ * \`./limits\`' instruction/wall-clock interrupt works by having the JS
+ * count-hook call \`thread.lua.lua_error(...)\` — a longjmp — from inside the
+ * hook. That is an ordinary Lua error, so \`pcall\` and \`xpcall\` both catch
+ * it (this is exactly what makes the "script's own pcall can't swallow the
+ * interrupt" guarantee in \`./limits\` need the out-of-band JS flag in the
+ * first place). With \`pcall\` that is harmless: no user code runs in
+ * response, the call just returns \`false, err\` and the JS-side breach flag
+ * still forces the run to a hard failure. But the C \`xpcall\` INVOKES THE
+ * USER'S MESSAGE HANDLER as part of unwinding, while the VM is still inside
+ * the C-level xpcall error-handling frame. If that handler also runs long
+ * enough for the hook to fire again (trivially true once the hook has
+ * already tightened to \`count = 1\` after the first breach — see
+ * \`./limits\`), the second \`lua_error\` longjmps AGAIN, nested inside the
+ * xpcall error-handler's setjmp/Asyncify state, and wasmoon deadlocks:
+ * \`thread.run()\` never resolves or rejects, the JS event loop is fully
+ * blocked (not spinning — an idle wait), and nothing external, including an
+ * unrelated \`setTimeout\`, ever fires again. Verified empirically against
+ * wasmoon 1.16.0 in a disposable child-process harness (own OS-level SIGKILL
+ * watchdog, run outside this repo's test suite so a still-hanging case could
+ * never block CI): \`return xpcall(f, f)\` and three structural variants
+ * (looping in a \`while\` around the xpcall call, wrapping the xpcall call in
+ * an outer \`pcall\`, and a looping message handler with a non-looping body)
+ * all hang the host process indefinitely under the stock C \`xpcall\`, while
+ * \`pcall\`-only equivalents (including the pcall-wrapped-retry-loop "worst
+ * case" documented in \`./limits\`) correctly terminate as limit failures.
+ *
+ * ## The fix
+ *
+ * Reimplementing \`xpcall\` in Lua on top of \`pcall\` means the message
+ * handler runs at ORDINARY Lua call depth (an ordinary function call from
+ * inside this prelude's own \`xpcall\`, itself invoked through \`pcall\`),
+ * never inside the C xpcall error-unwind frame — so a hook-triggered
+ * longjmp during the handler propagates exactly like it does for the
+ * already-safe \`pcall\` cases, instead of deadlocking. Verified empirically
+ * in the same disposable harness: with this reimplementation installed, all
+ * four former-hang cases now terminate (well under a second) as
+ * \`{ok:false, error:{kind:'limit', limit:'instructions'}}\`, and legitimate
+ * \`xpcall(f, handler)\` usage (handler receiving the error object on
+ * failure; all return values passed through unchanged on success) is
+ * unaffected — see \`limits.deadlock.test.ts\`.
+ *
+ * ## Accepted semantics change (safe in this sandbox)
+ *
+ * The handler now runs AFTER the stack has unwound (an ordinary \`pcall\`
+ * return), not WHILE it is still live, so it cannot walk a live traceback
+ * the way \`debug.traceback\` would from inside a real C \`xpcall\` handler.
+ * This loses nothing real here: \`debug\` is never loaded in this sandbox
+ * (see the library table below), so no script could have used that
+ * capability anyway. \`table.pack\`/\`table.unpack\` preserve variadic
+ * arguments to \`f\` and every return value on the success path, matching
+ * stock \`xpcall\`'s multi-return contract.
+ */
+const XPCALL_REIMPLEMENTATION = `
+do
+  local _pcall = pcall
+  xpcall = function(f, msgh, ...)
+    local r = table.pack(_pcall(f, ...))
+    if r[1] then return table.unpack(r, 1, r.n) end
+    return false, msgh(r[2])
+  end
+end
+`;
+
 const SCRUB_PRELUDE = `
 load = nil
 loadstring = nil
@@ -151,6 +225,7 @@ warn = nil
 _G = nil
 _VERSION = nil
 string.dump = nil
+${XPCALL_REIMPLEMENTATION}
 `;
 
 /** The Base-library names this sandbox intentionally keeps reachable. */

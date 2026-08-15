@@ -97,9 +97,35 @@ export interface LimitHandle {
  * *reported outcome* is still forced to a limit failure by the JS-side
  * flag, which the script has no way to reach or clear. **Solid** claim:
  * the reported result of a breached run is always a limit failure, never
- * a script-controlled "success". **Best-effort, not airtight** claim: the
- * breached script's own further CPU consumption is curtailed almost
- * immediately, not provably instantly.
+ * a script-controlled "success" — but this was verified against `pcall`
+ * specifically, and does NOT generalize to every Lua construct that can
+ * catch an error. It was FALSE, for one such construct, until a separate
+ * fix landed: the stock C `xpcall` invokes its message handler WHILE still
+ * inside the C-level xpcall error-unwind frame, and a hook-triggered
+ * longjmp firing again during that handler (trivial once the hook has
+ * tightened to `count = 1` after the first breach) re-enters that same
+ * setjmp/Asyncify state and deadlocks wasmoon's `thread.run()` outright —
+ * not a script-controlled "success", but a hung HOST, which is worse. That
+ * specific hole is closed by replacing `xpcall` with a pure-Lua
+ * reimplementation built on `pcall` (see `./globals`'s
+ * `XPCALL_REIMPLEMENTATION`), so the message handler runs at ordinary Lua
+ * call depth instead of inside the C xpcall frame, where a re-firing hook
+ * behaves exactly like the already-safe `pcall` case. **Best-effort, not
+ * airtight** claim, even with that fix: the breached script's own further
+ * CPU consumption is curtailed almost immediately, not provably instantly,
+ * and this in-VM hook is fundamentally a cooperative, best-effort
+ * mechanism — it only runs BETWEEN Lua VM instructions and cannot preempt
+ * a single WASM-synchronous hang (whether from an as-yet-undiscovered catch
+ * construct with the same nested-frame shape as the old `xpcall`, or from
+ * something outside the VM's own instruction stream entirely). The
+ * AUTHORITATIVE kill for that class of failure is not this hook at all —
+ * it's the host's EXTERNAL, terminatable-isolate watchdog (dedicated Web
+ * Worker/`worker_thread` + an outside wall-clock timer calling
+ * `terminate()`), now normative in DESIGN.md §10 ("In-process limits are
+ * best-effort; the terminatable isolate is the real guarantee"). This
+ * module's hook reduces how often that external kill is needed and gives
+ * fast, precise, in-band error classification for the common compute-bound
+ * case; it is not, and cannot be, a substitute for the external watchdog.
  *
  * ## Why hooks are per-thread, and why that matters here
  *

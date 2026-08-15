@@ -149,6 +149,87 @@ describe('runScript — resource limits', () => {
   });
 });
 
+describe('runScript — memory-breach classification is exact, not message-based (Defect 2)', () => {
+  it('a genuine, UNCAUGHT memory-cap breach is classified as kind:"limit", limit:"memory"', async () => {
+    const r = await run(
+      `
+      local t = {}
+      for i = 1, 100000000 do t[i] = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" end
+      return #t
+      `,
+      {
+        limits: {
+          maxInstructions: 200_000_000,
+          wallClockMs: 5_000,
+          hookIntervalInstructions: 5_000,
+          maxMemoryBytes: 2 * 1024 * 1024,
+        },
+      },
+    );
+    expect(r.ok).toBe(false);
+    expect(!r.ok && r.error.kind).toBe('limit');
+    expect(!r.ok && r.error.limit).toBe('memory');
+  });
+
+  it('a script calling error("not enough memory") itself is NOT reclassified as a memory limit (spoofing attempt fails)', async () => {
+    // Same message text a real memory-cap breach produces, but raised by
+    // the script's own `error()` call under a generous memory cap that is
+    // nowhere near exhausted -- the classifier must tell these apart by the
+    // non-spoofable LuaReturn status code (see `captureAssertOkStatus` in
+    // `./sandbox`), not by matching this string.
+    const r = await run('error("not enough memory")');
+    expect(r.ok).toBe(false);
+    expect(!r.ok && r.error.kind).toBe('runtime');
+  });
+
+  it("a script's OWN pcall around a memory-cap breach still reports as an ordinary caught error, not a limit failure", async () => {
+    // Regression guard: the memory-status capture must not fire for a
+    // breach the SCRIPT already caught at the Lua level (lua_pcall absorbs
+    // the ErrorMem status internally; the outer lua_resume/thread.run()
+    // still completes with LuaReturn.Ok). Duplicates the existing "memory
+    // cap stops a string.rep balloon" case above; kept here as an explicit
+    // adjacency check for the new classification logic.
+    const r = await run(
+      "local ok = pcall(function() return string.rep('x', 500*1024*1024) end); return tostring(ok)",
+      { limits: { ...FAST_LIMITS, maxMemoryBytes: 4 * 1024 * 1024 } },
+    );
+    expect(r).toEqual({ ok: true, value: 'false' });
+  });
+});
+
+describe('runScript — async wall-clock guard classification is identity-based, not message-based (Defect 3)', () => {
+  it('a host capability call that never resolves is classified as kind:"limit", limit:"timeout"', async () => {
+    const r = await run('return net.fetch_json("https://api.example.com/x")', {
+      net: {
+        // Never resolves -- simulates a hung host operation the in-VM
+        // instruction hook structurally cannot see (no Lua instructions
+        // execute while suspended on an await).
+        get: () => new Promise(() => {}),
+      },
+      netGrants: { get: ['api.example.com'], post: [] },
+      limits: {
+        ...FAST_LIMITS,
+        wallClockMs: 100,
+      },
+    });
+    expect(r.ok).toBe(false);
+    expect(!r.ok && r.error.kind).toBe('limit');
+    expect(!r.ok && r.error.limit).toBe('timeout');
+  }, 5_000);
+
+  it('a script calling error() with the EXACT guard message text is NOT reclassified as a limit (spoofing attempt fails)', async () => {
+    // The guard identifies its own rejection by class identity
+    // (`instanceof ScriptLimitError`), not by this message string, so a
+    // script forging the same text must still come back as an ordinary
+    // runtime error.
+    const r = await run(
+      'error("wall-clock timeout exceeded (external async guard: a host capability call never resolved)")',
+    );
+    expect(r.ok).toBe(false);
+    expect(!r.ok && r.error.kind).toBe('runtime');
+  });
+});
+
 describe('runScript — capabilities: net', () => {
   it('with net not granted, net is absent and any use fails as a runtime error, not a crash', async () => {
     const r = await run('return net.fetch_json("https://x.example.com")');

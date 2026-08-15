@@ -352,6 +352,24 @@ specific grants.**
   Grants are remembered per note (hash-keyed, re-prompt if scripts change).
 - Resource limits: instruction-count hook (kills infinite loops), wall-clock timeout,
   memory cap, fetch response size cap.
+- **In-process limits are best-effort; the terminatable isolate is the real guarantee.**
+  The instruction hook stops a runaway loop by raising a Lua error, but a WASM/Asyncify
+  interpreter cannot always be interrupted mid-instruction from inside its own realm:
+  an adversarial script can reach a state where the hook can no longer unwind the VM,
+  synchronously blocking the thread it runs on so no in-realm guard (JS flag,
+  `Promise.race` timeout) can fire. Therefore the runtime contract is normative:
+  **a host MUST run note scripts in a dedicated, terminatable isolate (Web Worker /
+  `worker_thread`) with an EXTERNAL wall-clock watchdog that calls `terminate()` when a
+  run overruns.** The isolate is not just for realm separation (§10, "never run note
+  scripts in the host page's JS realm") — it is the only reliable kill switch. The
+  reference `smd-lua` sandbox closes every known in-VM interrupt-evasion vector it can,
+  but does not — and structurally cannot — promise to stop every possible hang without
+  this external terminate.
+- **Auto/scheduled runs are gated on the terminatable isolate.** Because they carry no
+  per-run user gesture (§8's trigger×capability model), an auto-run note that hangs would
+  freeze the host on open with nothing to blame. Auto/scheduled execution is only sound
+  atop the external-`terminate()` watchdog above; manual runs share the same requirement
+  but at least fail behind a deliberate click.
 - Untrusted notes (opened from elsewhere) start with **zero grants** and still
   render fully — because scripts only feed values, the document degrades to
   stale/empty component states, never to a broken page. Reading a note must always
