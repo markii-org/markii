@@ -1,4 +1,4 @@
-import { parse } from 'smd-core';
+import { parse } from '@markii/core';
 
 export type ParseStatus =
   { ok: true; directiveCount: number } | { ok: false; error: string };
@@ -13,7 +13,7 @@ const DIRECTIVE_TYPES = new Set([
  * Counts directive nodes (inline, leaf, and container) in a parsed mdast
  * tree. Walks with `unknown` + runtime narrowing rather than importing
  * `mdast`'s types (or `unist-util-visit`) — the playground has no direct
- * dependency on either, and `smd-core`'s exported `parse()` return type is
+ * dependency on either, and `@markii/core`'s exported `parse()` return type is
  * enough on its own without adding one just for this status line.
  */
 function countDirectives(node: unknown): number {
@@ -29,9 +29,9 @@ function countDirectives(node: unknown): number {
 }
 
 /**
- * The playground status bar's data source: parses `text` with `smd-core`'s
+ * The playground status bar's data source: parses `text` with `@markii/core`'s
  * `parse()` and reports either a directive count or the error message.
- * `smd-core`'s parser is tolerant by construction and shouldn't throw on any
+ * `@markii/core`'s parser is tolerant by construction and shouldn't throw on any
  * input, but this stays defensive (matching `renderSmd`'s own try/catch)
  * rather than assuming that invariant holds forever.
  */

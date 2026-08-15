@@ -1,6 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import 'smd-react/doc.css';
+import '@markii/react/doc.css';
 import './styles.css';
 import { App } from './App';
 

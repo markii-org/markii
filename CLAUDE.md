@@ -1,4 +1,4 @@
-# Super Markdown (.smd)
+# Mark (.mk.md)
 
 An extensible markdown format: CommonMark + generic directives that render the
 author's own React components. **The product is the file format and its reference
@@ -9,34 +9,34 @@ the source of truth for syntax, architecture, and scope.
 
 ```
 DESIGN.md            the format spec — source of truth
-conformance/         language-agnostic corpus: *.smd inputs + expected-AST *.json
-packages/smd-core    framework-agnostic reference impl — ZERO React dependency:
+conformance/         language-agnostic corpus: *.mk.md inputs + expected-AST *.json
+packages/markii-core    framework-agnostic reference impl — ZERO React dependency:
   src/parse.ts       text → mdast AST (unified + remark-parse + remark-directive)
   src/to-hast.ts     mdast → hast: directive tagging (data.hName) + URL sanitizer
   src/corpus.ts      conformance-corpus runner (load fixtures, strip positions)
-packages/smd-react   the reference L1 renderer (one consumer of smd-core):
+packages/markii-react   the reference L1 renderer (one consumer of @markii/core):
   src/registry.ts    Registry types + createRegistry/mergeRegistries
   src/render.tsx     hast + registry → React tree (incl. unknown-directive fallback)
   src/components/    built-in demo components (callout, kbd, ...)
   src/doc.css        document rhythm + component internals
-packages/smd-bundle  .smdb bundle handling (spec §9–11, L2) — no React, no parsing:
+packages/markii-bundle  .mkbundle bundle handling (spec §9–11, L2) — no React, no parsing:
   src/manifest.ts    manifest.json types + hand-rolled validation (no schema deps)
   src/paths.ts       path-jail: bundle-relative path normalization/rejection
   src/zip.ts         zip form via fflate (browser-safe main entry)
   src/fs.ts          directory form via node:fs (Node-only "./fs" subpath export)
   src/script-view.ts capability-restricted view for future script runtime (§11)
-packages/smd-lua     Lua sandbox runtime (spec §8/§10/§11, L3) — no React, no parsing:
+packages/markii-lua     Lua sandbox runtime (spec §8/§10/§11, L3) — no React, no parsing:
   src/globals.ts     empty-env whitelist: curated string/table/math only
   src/capabilities.ts net/cache/bundle tables; two-tier (manual vs auto) gating
   src/limits.ts      instruction-count hook, wall-clock/memory/fetch-size caps
   src/require.ts     sandboxed require: bundle scripts/ + pack modules, pure Lua
   src/marshal.ts     Lua↔JS value conversion (serializable-only, depth/size caps)
   src/sandbox.ts     runScript(): assemble env + limits + caps, run, marshal result
-apps/playground      thin Vite dev harness to view .smd files. NOT the product.
+apps/playground      thin Vite dev harness to view .mk.md files. NOT the product.
 ```
 
-Import rule: smd-core must never import React or anything from smd-react;
-smd-react imports smd-core; the playground imports smd-react. The conformance
+Import rule: @markii/core must never import React or anything from @markii/react;
+@markii/react imports @markii/core; the playground imports @markii/react. The conformance
 corpus is plain data — no TypeScript in `conformance/`.
 
 ## Stack (fixed — do not add alternatives)
@@ -45,8 +45,8 @@ corpus is plain data — no TypeScript in `conformance/`.
 - Parsing: `unified`, `remark-parse`, `remark-directive`, `remark-rehype`,
   `hast-util-to-jsx-runtime`, `mdast-util-directive`, `unist-util-visit`
 - Playground editor: CodeMirror 6 (playground only)
-- Bundles: `fflate` (zip form; smd-bundle only)
-- Lua sandbox: `wasmoon` (Lua 5.4 in WASM; smd-lua only)
+- Bundles: `fflate` (zip form; @markii/bundle only)
+- Lua sandbox: `wasmoon` (Lua 5.4 in WASM; @markii/lua only)
 - Package manager: npm (workspaces). No pnpm/yarn/bun.
 
 ## Architecture rules (from the spec — violations are bugs)

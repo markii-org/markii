@@ -17,7 +17,7 @@
     "@lezer/highlight": "^1.2.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "smd-react": "*"
+    "@markii/react": "*"
   },
   "devDependencies": {
     "@types/react": "^18.3.31",

@@ -1,4 +1,4 @@
-# Super Markdown — Design Spec
+# Mark — Design Spec
 
 A plain-text note format that renders your personal library of React components inline
 with ordinary markdown, without turning your notes into code.
@@ -69,7 +69,7 @@ You suspected you were mixing "where it compiles" and "where it renders." You we
 Split them like this and the whole design falls out:
 
 ```
- note.smd ──▶ [ PARSE ]  ──▶ AST ──▶ [ RENDER ] ──▶ React tree
+ note.mk.md ──▶ [ PARSE ]  ──▶ AST ──▶ [ RENDER ] ──▶ React tree
               remark +               registry lookup:
               remark-directive       name → Component
 ```
@@ -172,8 +172,8 @@ No import statements in the note body — the note stays prose.
 
 ## 6. File format
 
-- Extension: `.smd`. Content: 100% valid CommonMark + directives, UTF-8, no binary,
-  no required header. Any `.smd` file is openable by any markdown tool today.
+- Extension: `.mk.md`. Content: 100% valid CommonMark + directives, UTF-8, no binary,
+  no required header. Any `.mk.md` file is openable by any markdown tool today.
 - Frontmatter (YAML) optional, for `uses:` and note metadata.
 
 ## 7. Build order
@@ -233,7 +233,7 @@ Rules that keep this a *note* and not a program:
   schedules live in the app, never inside Lua (no timers in the sandbox).
 - Values reach prose by **render-time interpolation**, never by rewriting the
   file: `:value[stars]` renders a named value inline; `{data=stars}` feeds it to
-  a component. The `.smd` source stays clean — values overlay the document.
+  a component. The `.mk.md` source stays clean — values overlay the document.
 - Directives reference values by name (`data=stars`). If the value is missing or the
   script hasn't run, the component renders its empty/stale state — same graceful
   degradation as unknown directives.
@@ -298,21 +298,21 @@ runtimes without touching the format.
   capability API; `manifest.json`'s spec version tells future runtimes which
   semantics to honor.
 
-## 9. Bundle format: `.smd` file vs `.smd` bundle
+## 9. Bundle format: `.mk.md` file vs `.mk.md` bundle
 
 The long-scripts and images problems are the same problem, and it has a proven
 answer: **TextBundle** (also `.epub`, `.docx` — all "zip of a folder with a
 manifest"). Adopt the same dual-form approach:
 
 ```
-note.smd            plain single file — remains first-class, never deprecated
-note.smdb/          bundle: a plain directory…
+note.mk.md            plain single file — remains first-class, never deprecated
+note.mkbundle/          bundle: a plain directory…
   manifest.json     format version, permissions (§10), script/value declarations
-  note.smd          the document (unchanged syntax; relative refs into the bundle)
+  note.mk.md          the document (unchanged syntax; relative refs into the bundle)
   assets/           images, attachments
   scripts/          script files too long to inline: ``lua {src=scripts/etl.lua name=x}``
   cache/            script outputs & fetched data — regenerable, gitignored
-note.smdb (file)    …or the same directory zipped, for sharing/export
+note.mkbundle (file)    …or the same directory zipped, for sharing/export
 ```
 
 - **Directory form is the working form**: git-diffable, editable with any tool,
@@ -362,7 +362,7 @@ specific grants.**
   `worker_thread`) with an EXTERNAL wall-clock watchdog that calls `terminate()` when a
   run overruns.** The isolate is not just for realm separation (§10, "never run note
   scripts in the host page's JS realm") — it is the only reliable kill switch. The
-  reference `smd-lua` sandbox closes every known in-VM interrupt-evasion vector it can,
+  reference `@markii/lua` sandbox closes every known in-VM interrupt-evasion vector it can,
   but does not — and structurally cannot — promise to stop every possible hang without
   this external terminate.
 - **Auto/scheduled runs are gated on the terminatable isolate.** Because they carry no
@@ -384,7 +384,7 @@ app-scoped sandbox): **the bundle is the script's entire filesystem.**
   `..`, no symlink following; the host resolves everything inside the bundle root
   and rejects escapes.
 - Within the bundle, write access is **`cache/` only by default**. Scripts can never
-  write `note.smd` (no self-modifying documents) and never `manifest.json` — that
+  write `note.mk.md` (no self-modifying documents) and never `manifest.json` — that
   one is load-bearing: a script that can edit the manifest can grant itself
   permissions. Reads are bundle-wide (assets, cache, own scripts).
 - The ETL pattern falls out naturally: fetch via granted `net` capability → write
@@ -395,12 +395,12 @@ app-scoped sandbox): **the bundle is the script's entire filesystem.**
 ## 12. Repository & implementation shape
 
 **Library-first.** The format is the product; apps are consumers. The reference
-implementation is a TypeScript library (`packages/smd-core`: parse, registry,
-render), its conformance fixtures (`.smd` inputs + expected outputs — for a file
+implementation is a TypeScript library (`packages/markii-core`: parse, registry,
+render), its conformance fixtures (`.mk.md` inputs + expected outputs — for a file
 format, the test suite is half the definition), and a thin Vite playground
 (`apps/playground`) that exists only so humans can see components render during
 development. Any future note-taking app, editor plugin, or third-party tool
-imports `smd-core`; nothing in the core may depend on the playground.
+imports `@markii/core`; nothing in the core may depend on the playground.
 
 Stack: TypeScript (strict) + React 18 + Vite + Vitest; parsing via `unified` /
 `remark-parse` / `remark-directive` / `remark-rehype` / `hast-util-to-jsx-runtime`;
@@ -417,11 +417,11 @@ any implementation must reproduce.)
    (textDirective / leafDirective / containerDirective with `name`, `attributes`,
    `children`). Parsers for this already exist in several ecosystems; a third
    party may use ours, theirs, or write one.
-2. **The conformance corpus is the heart**: `conformance/` holds `*.smd` inputs
+2. **The conformance corpus is the heart**: `conformance/` holds `*.mk.md` inputs
    with expected ASTs as plain JSON plus behavioral assertions ("must not parse
    directives inside code fences", "must not throw on unclosed containers").
    Pure data — a Rust, Swift, or Python implementation tests against the same
-   files. Passing the corpus at a level (below) is what "supports .smd" means.
+   files. Passing the corpus at a level (below) is what "supports .mk.md" means.
 3. **Standardize renderer *behavior*, not UI.** The spec never mentions React in
    normative text. A conforming renderer MUST: resolve directive names through a
    registry, pass attributes as string key/values, render directive children as
@@ -430,12 +430,12 @@ any implementation must reproduce.)
    That's the whole contract — a terminal viewer, a Vue app, or a static HTML
    exporter can all conform.
 4. **Conformance levels**, so a minimal viewer is cheap to build:
-   L0 parse · L1 render behavior · L2 bundles (.smdb) · L3 scripting + capability
+   L0 parse · L1 render behavior · L2 bundles (.mkbundle) · L3 scripting + capability
    security. A read-only viewer can ship at L1 and honestly say so.
-5. **Packaging follows the standard**: `smd-core` (parse + AST types + corpus
-   runner, **zero React dependency**) and `smd-react` (our registry + React
+5. **Packaging follows the standard**: `@markii/core` (parse + AST types + corpus
+   runner, **zero React dependency**) and `@markii/react` (our registry + React
    renderer — the reference L1 implementation, deliberately just one consumer of
-   `smd-core` among possible many). Spec versions are semver; bundles record the
+   `@markii/core` among possible many). Spec versions are semver; bundles record the
    spec version in `manifest.json`.
 6. **Where the framework dependency lives — and where it never does.** The
    format is framework-free, but *component implementations* are renderer-bound:
@@ -443,15 +443,37 @@ any implementation must reproduce.)
    declares its target engine (e.g. `"engine": "react"`); a host that can't run
    a pack's engine shows the standard unknown-component fallback, so notes stay
    readable everywhere. Frameworks live in **apps**, never in notes or bundles:
-   an `.smd` file is created empty like any text file (no init, no scaffold, no
-   per-file dependency), a `.smdb` bundle contains only content (markdown,
+   an `.mk.md` file is created empty like any text file (no init, no scaffold, no
+   per-file dependency), a `.mkbundle` bundle contains only content (markdown,
    assets, scripts, cache — no runtime), and end users install an app, not npm
-   packages. Only *developers embedding* .smd in their own software take
-   `smd-core` plus a renderer matching their framework as dependencies.
+   packages. Only *developers embedding* .mk.md in their own software take
+   `@markii/core` plus a renderer matching their framework as dependencies.
 
 ## 14. Name
 
-`.smd` as an extension is fine — short, unclaimed in practice, types well. If
-"super markdown" feels corny as the *project* name, candidates that keep the file
-extension working: **Sigma MD**, **smarkdown**, **Notemark**, **Inkwell**. Naming is
-reversible; the extension is the only thing notes depend on. Ship first.
+The format is **Mark**. The name is a pun that fuses two ideas: *markdown*
+already begins with "mark", and Iron Man's suits are versioned Mark I, Mark II,
+Mark III — so the brand carries a natural, techy generational-versioning
+aesthetic. Concretely:
+
+- **File extension: `.mk.md`** — a *compound* extension. The real suffix is
+  `.md`, so a Mark document opens and reads as ordinary markdown in any editor
+  with zero setup; Mark-aware tools additionally recognize the `.mk` tag and do
+  the rich directive/component rendering. This is the graceful-degradation ethos
+  applied to the filename itself. (Rejected: `.smd` collides with Valve
+  StudioModel data and Sega ROM images; `.mark` is used by reMarkable/Supernote
+  tablets; every short markdown-adjacent extension — `.mdx`, `.rmd`, `.qmd`,
+  `.mdc` — is already taken.)
+- **Bundle extension: `.mkbundle`** — one extension for both the directory and
+  the zipped form (TextBundle lineage).
+- **Packages: `@markii/*`** (`@markii/core`, `@markii/react`, `@markii/stdlib`,
+  `@markii/bundle`, `@markii/lua`). The npm scope `@markii` is used because bare
+  `mark`/`@mark` are taken; the format is still spoken as "Mark".
+
+**The name is NOT the version.** "Mark" is permanent branding and is fully
+decoupled from the spec version, which is plain semver. The spec is currently
+pre-1.0 (0.x, still being built out); the first stable release is 1.0.0, a later
+breaking revision is 2.0.0, and so on. Do not read "Mark II" as "version 2" — the
+Iron Man motif is flavor, not a version scheme. A bundle's `manifest.json`
+records the plain spec version in its required `mark` field (which doubles as the
+format's identifying key).

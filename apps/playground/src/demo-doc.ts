@@ -1,6 +1,6 @@
 export const DEMO_DOC = `# Super Markdown playground
 
-Type \`.smd\` in the left pane; the right pane re-renders live.
+Type \`.mk.md\` in the left pane; the right pane re-renders live.
 
 ## Built-in components
 

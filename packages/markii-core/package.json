@@ -1,0 +1,28 @@
+{
+  "name": "@markii/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./corpus": "./src/corpus.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "build": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint .",
+    "corpus:regen": "node scripts/regen-corpus.ts"
+  },
+  "dependencies": {
+    "mdast-util-directive": "^3.1.0",
+    "remark-directive": "^4.0.0",
+    "remark-parse": "^11.0.0",
+    "remark-rehype": "^11.1.2",
+    "unified": "^11.0.5",
+    "unist-util-visit": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/hast": "^3.0.5",
+    "@types/mdast": "^4.0.4"
+  }
+}

@@ -20,7 +20,7 @@ import { markdown } from '@codemirror/lang-markdown';
 import { tags } from '@lezer/highlight';
 
 /**
- * Syntax colors for the `.smd` source pane, tuned to sit next to the
+ * Syntax colors for the `.mk.md` source pane, tuned to sit next to the
  * rendered preview without clashing: headings/emphasis in the document's
  * ink color, links/URLs in the same blue the `callout{type=info}` accent
  * uses (`doc.css`), markup punctuation (`**`, `` ` ``, `#`, list markers)
@@ -49,7 +49,7 @@ const smdHighlightStyle = HighlightStyle.define([
   { tag: tags.comment, color: '#888888', fontStyle: 'italic' },
 ]);
 
-/** Minimal `.smd`-editor look, matching `styles.css`'s palette and type scale. */
+/** Minimal `.mk.md`-editor look, matching `styles.css`'s palette and type scale. */
 const smdEditorTheme = EditorView.theme({
   '&': {
     height: '100%',

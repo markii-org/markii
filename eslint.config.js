@@ -39,11 +39,11 @@ export default tseslint.config(
     ...tseslint.configs.disableTypeChecked,
   },
   {
-    // smd-core is the framework-agnostic reference implementation (see
+    // markii-core is the framework-agnostic reference implementation (see
     // CLAUDE.md's "Import rule" and DESIGN.md §13): it must never import
-    // React, react-dom, or smd-react. This is a lint-enforced version of
+    // React, react-dom, or @markii/react. This is a lint-enforced version of
     // that rule, not just a convention.
-    files: ['packages/smd-core/**/*.{ts,tsx}'],
+    files: ['packages/markii-core/**/*.{ts,tsx}'],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -52,24 +52,24 @@ export default tseslint.config(
             {
               name: 'react',
               message:
-                'smd-core must stay framework-agnostic — no React dependency (see CLAUDE.md import rule).',
+                '@markii/core must stay framework-agnostic — no React dependency (see CLAUDE.md import rule).',
             },
             {
               name: 'react-dom',
               message:
-                'smd-core must stay framework-agnostic — no React dependency (see CLAUDE.md import rule).',
+                '@markii/core must stay framework-agnostic — no React dependency (see CLAUDE.md import rule).',
             },
             {
-              name: 'smd-react',
+              name: '@markii/react',
               message:
-                'smd-core must not depend on smd-react — smd-react depends on smd-core, never the reverse (see CLAUDE.md import rule).',
+                '@markii/core must not depend on @markii/react — @markii/react depends on @markii/core, never the reverse (see CLAUDE.md import rule).',
             },
           ],
           patterns: [
             {
-              group: ['react/*', 'react-dom/*', 'smd-react/*'],
+              group: ['react/*', 'react-dom/*', '@markii/react/*'],
               message:
-                'smd-core must stay framework-agnostic and must not depend on smd-react (see CLAUDE.md import rule).',
+                '@markii/core must stay framework-agnostic and must not depend on @markii/react (see CLAUDE.md import rule).',
             },
           ],
         },
@@ -77,10 +77,10 @@ export default tseslint.config(
     },
   },
   {
-    // smd-bundle handles bundle storage and policy only (spec §9-11): it
+    // markii-bundle handles bundle storage and policy only (spec §9-11): it
     // must not import React (or anything React-flavored) and must not
-    // depend on smd-react. See CLAUDE.md's smd-bundle scope note.
-    files: ['packages/smd-bundle/**/*.{ts,tsx}'],
+    // depend on @markii/react. See CLAUDE.md's markii-bundle scope note.
+    files: ['packages/markii-bundle/**/*.{ts,tsx}'],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -89,24 +89,24 @@ export default tseslint.config(
             {
               name: 'react',
               message:
-                'smd-bundle handles storage and policy only — no React dependency (see CLAUDE.md).',
+                '@markii/bundle handles storage and policy only — no React dependency (see CLAUDE.md).',
             },
             {
               name: 'react-dom',
               message:
-                'smd-bundle handles storage and policy only — no React dependency (see CLAUDE.md).',
+                '@markii/bundle handles storage and policy only — no React dependency (see CLAUDE.md).',
             },
             {
-              name: 'smd-react',
+              name: '@markii/react',
               message:
-                'smd-bundle must not depend on smd-react (see CLAUDE.md).',
+                '@markii/bundle must not depend on @markii/react (see CLAUDE.md).',
             },
           ],
           patterns: [
             {
-              group: ['react/*', 'react-dom/*', 'smd-react/*'],
+              group: ['react/*', 'react-dom/*', '@markii/react/*'],
               message:
-                'smd-bundle handles storage and policy only — no React dependency (see CLAUDE.md).',
+                '@markii/bundle handles storage and policy only — no React dependency (see CLAUDE.md).',
             },
           ],
         },
@@ -114,12 +114,13 @@ export default tseslint.config(
     },
   },
   {
-    // smd-lua is the sandboxed Lua execution primitive (spec §8, §10, §11):
+    // markii-lua is the sandboxed Lua execution primitive (spec §8, §10, §11):
     // it must not import React (or anything React-flavored) and must not
-    // depend on smd-core or smd-react. It MAY depend on smd-bundle (for the
-    // `ScriptView` capability type) — that one is deliberately not
-    // restricted here. See CLAUDE.md's smd-lua scope note.
-    files: ['packages/smd-lua/**/*.{ts,tsx}'],
+    // depend on @markii/core or @markii/react. It MAY depend on
+    // @markii/bundle (for the `ScriptView` capability type) — that one is
+    // deliberately not restricted here. See CLAUDE.md's markii-lua scope
+    // note.
+    files: ['packages/markii-lua/**/*.{ts,tsx}'],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -128,27 +129,34 @@ export default tseslint.config(
             {
               name: 'react',
               message:
-                'smd-lua is the sandboxed Lua execution primitive — no React dependency (see CLAUDE.md).',
+                '@markii/lua is the sandboxed Lua execution primitive — no React dependency (see CLAUDE.md).',
             },
             {
               name: 'react-dom',
               message:
-                'smd-lua is the sandboxed Lua execution primitive — no React dependency (see CLAUDE.md).',
+                '@markii/lua is the sandboxed Lua execution primitive — no React dependency (see CLAUDE.md).',
             },
             {
-              name: 'smd-core',
-              message: 'smd-lua must not depend on smd-core (see CLAUDE.md).',
+              name: '@markii/core',
+              message:
+                '@markii/lua must not depend on @markii/core (see CLAUDE.md).',
             },
             {
-              name: 'smd-react',
-              message: 'smd-lua must not depend on smd-react (see CLAUDE.md).',
+              name: '@markii/react',
+              message:
+                '@markii/lua must not depend on @markii/react (see CLAUDE.md).',
             },
           ],
           patterns: [
             {
-              group: ['react/*', 'react-dom/*', 'smd-core/*', 'smd-react/*'],
+              group: [
+                'react/*',
+                'react-dom/*',
+                '@markii/core/*',
+                '@markii/react/*',
+              ],
               message:
-                'smd-lua is the sandboxed Lua execution primitive — no React/smd-core/smd-react dependency (see CLAUDE.md).',
+                '@markii/lua is the sandboxed Lua execution primitive — no React/@markii/core/@markii/react dependency (see CLAUDE.md).',
             },
           ],
         },

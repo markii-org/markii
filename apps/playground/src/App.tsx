@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
-import { renderSmd, defaultRegistry } from 'smd-react';
+import { renderSmd, defaultRegistry } from '@markii/react';
 import { CodeEditor } from './CodeEditor';
 import { PreviewErrorBoundary } from './PreviewErrorBoundary';
 import { getParseStatus } from './parse-status';
@@ -26,7 +26,7 @@ export function App(): ReactElement {
       <header className="playground__header">
         <h1>Super Markdown Playground</h1>
         <p>
-          A thin harness for viewing .smd source next to its rendered output.
+          A thin harness for viewing .mk.md source next to its rendered output.
         </p>
       </header>
       <main className="playground__panes">
