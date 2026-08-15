@@ -15,13 +15,13 @@ Press :kbd[Ctrl+S] to save. That was an *inline* text directive.
 
 ## Nesting
 
-:::callout{type=warning title="Nested callouts work too"}
+::::callout{type=warning title="Nested callouts work too"}
 Outer callout.
 
 :::callout{type=danger title="Inner"}
 Inner callout, nested one level deep.
 :::
-:::
+::::
 
 ## Unknown directives degrade gracefully
 

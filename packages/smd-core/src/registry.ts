@@ -34,9 +34,16 @@ export interface RegistryEntry {
 /** Directive name -> component registration. */
 export type Registry = Record<string, RegistryEntry>;
 
-/** Creates a Registry from a plain object of entries. */
+/**
+ * Creates a Registry from a plain object of entries. The returned map has a
+ * `null` prototype so a directive named `constructor`, `toString`,
+ * `valueOf`, `hasOwnProperty`, etc. cannot resolve to an inherited
+ * `Object.prototype` member — only entries actually registered here are
+ * ever found (see also the `Object.hasOwn` guard at the lookup site in
+ * `render.tsx`, which protects even plain-object registries).
+ */
 export function createRegistry(entries: Registry = {}): Registry {
-  return { ...entries };
+  return Object.assign(Object.create(null) as Registry, entries);
 }
 
 /** Merges any number of registries, later ones taking precedence. */

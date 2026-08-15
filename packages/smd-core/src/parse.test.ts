@@ -6,7 +6,7 @@ import type {
   LeafDirective,
   TextDirective,
 } from 'mdast-util-directive';
-import type { Code, Root, RootContent } from 'mdast';
+import type { Code, RootContent } from 'mdast';
 import type { Node } from 'unist';
 import { parse } from './parse';
 
@@ -20,7 +20,7 @@ function hasChildren(node: Node): node is Node & { children: Node[] } {
 }
 
 function findAll<T extends RootContent['type']>(
-  tree: Root,
+  tree: Node,
   type: T,
 ): Extract<RootContent, { type: T }>[] {
   const results: Extract<RootContent, { type: T }>[] = [];
@@ -87,23 +87,50 @@ describe('parse', () => {
       tree,
       'containerDirective',
     ) as ContainerDirective[];
-    expect(directives).toHaveLength(3);
+    expect(directives).toHaveLength(4);
     expect(directives[0]?.attributes).toEqual({
       type: 'warning',
       title: 'Quoted title with spaces',
     });
     expect(directives[1]?.attributes).toEqual({ type: 'danger' });
     expect(directives[2]?.attributes ?? {}).toEqual({});
+    // mdast-util-directive represents a bare (valueless) attribute as an
+    // empty string at the parse layer (see render.tsx's normalizeAttributes
+    // for the ''->null normalization the render layer applies on top).
+    expect(directives[3]?.attributes).toEqual({
+      type: 'info',
+      collapsed: '',
+    });
   });
 
-  it('parses directives nested inside directives', () => {
+  it('parses directives nested inside directives, with true parent/child nesting', () => {
     const tree = parse(readFixture('06-nested-directives.smd'));
     const outer = findAll(tree, 'containerDirective') as ContainerDirective[];
     expect(outer).toHaveLength(2);
-    expect(outer[0]?.name).toBe('callout');
-    expect(outer[1]?.name).toBe('callout');
-    const nestedLeaf = findAll(tree, 'leafDirective') as LeafDirective[];
-    const nestedText = findAll(tree, 'textDirective') as TextDirective[];
+    const outerCallout = outer.find((d) => d.attributes?.title === 'Nested');
+    const innerCallout = outer.find((d) => d.attributes?.title === 'Inner');
+    expect(outerCallout).toBeDefined();
+    expect(innerCallout).toBeDefined();
+
+    // Must be true nesting (the inner containerDirective is a descendant of
+    // the outer's own children), not two directives that merely both exist
+    // in the document — which is what malformed input with equal fence
+    // lengths would produce instead (the outer closes early and the
+    // "inner" directive becomes a sibling, not a child).
+    const nestedContainers = findAll(
+      outerCallout as ContainerDirective,
+      'containerDirective',
+    );
+    expect(nestedContainers).toContainEqual(innerCallout);
+
+    const nestedLeaf = findAll(
+      outerCallout as ContainerDirective,
+      'leafDirective',
+    ) as LeafDirective[];
+    const nestedText = findAll(
+      outerCallout as ContainerDirective,
+      'textDirective',
+    ) as TextDirective[];
     expect(nestedLeaf.some((d) => d.name === 'rating')).toBe(true);
     expect(nestedText.some((d) => d.name === 'kbd')).toBe(true);
   });

@@ -9,7 +9,7 @@ import remarkRehype from 'remark-rehype';
 import { visit } from 'unist-util-visit';
 import { toJsxRuntime } from 'hast-util-to-jsx-runtime';
 import type { Root as MdastRoot } from 'mdast';
-import type { Root as HastRoot } from 'hast';
+import type { Element as HastElement, Root as HastRoot } from 'hast';
 import type {
   ContainerDirective,
   LeafDirective,
@@ -134,9 +134,16 @@ function createDirectiveElement(
     const name = props['data-smd-name'] ?? '';
     const kind = props['data-smd-kind'];
     const attributes = parseAttributes(props['data-smd-attrs']);
-    const entry = registry[name];
+    // `Object.hasOwn` (rather than `registry[name]` / `name in registry`)
+    // guards against a directive named `constructor`, `toString`,
+    // `valueOf`, `hasOwnProperty`, etc. resolving through the prototype
+    // chain to an inherited `Object.prototype` member instead of falling
+    // through to the unknown-directive fallback (Architecture rule 3: unknown
+    // directives never throw). The `typeof entry?.component === 'function'`
+    // check is a second belt-and-suspenders guard for the same class of bug.
+    const entry = Object.hasOwn(registry, name) ? registry[name] : undefined;
 
-    if (!entry) {
+    if (typeof entry?.component !== 'function') {
       return (
         <UnknownDirective
           name={name || '(unnamed)'}
@@ -152,6 +159,65 @@ function createDirectiveElement(
   };
 }
 
+/** URL schemes allowed in `href`/`src`, matched case-insensitively. */
+const SAFE_URL_PROTOCOLS = new Set(['http', 'https', 'mailto', 'tel']);
+
+/**
+ * Mirrors react-markdown's `defaultUrlTransform`: a URL with no scheme
+ * (relative, fragment-only `#...`, or query-only `?...`) is always allowed;
+ * a URL with a scheme is allowed only if that scheme is in
+ * `SAFE_URL_PROTOCOLS`. Finding the "scheme" the same way a browser does —
+ * text before the first `:`, but only when that `:` comes before any `/`,
+ * `?`, or `#` — is what correctly rejects tricks like a leading space
+ * (`" javascript:..."`, whose slice-before-colon is `" javascript"`, which
+ * never matches a bare protocol name) while still allowing a same-origin
+ * path that happens to contain a colon later on.
+ */
+function isSafeUrl(url: string): boolean {
+  const colon = url.indexOf(':');
+  if (colon === -1) return true;
+
+  const slash = url.indexOf('/');
+  const questionMark = url.indexOf('?');
+  const numberSign = url.indexOf('#');
+  const hasSchemeBeforeDelimiter =
+    (slash === -1 || colon < slash) &&
+    (questionMark === -1 || colon < questionMark) &&
+    (numberSign === -1 || colon < numberSign);
+
+  if (!hasSchemeBeforeDelimiter) return true;
+
+  return SAFE_URL_PROTOCOLS.has(url.slice(0, colon).toLowerCase());
+}
+
+/** hast tag name -> the one attribute on it that carries a URL. */
+const URL_ATTRIBUTE_BY_TAG: Record<string, 'href' | 'src'> = {
+  a: 'href',
+  img: 'src',
+};
+
+/**
+ * Strips `href` on `<a>` and `src` on `<img>` when they hold an unsafe URL
+ * (e.g. `javascript:`, `data:text/html`), mutating the hast tree in place.
+ * Runs after `remark-rehype` and before `hast-util-to-jsx-runtime`, so it
+ * covers every link/image the document produces regardless of source
+ * (CommonMark autolinks, `[text](url)`, raw `<a href>` — remark-rehype
+ * normalizes all of them to hast `element` nodes by this point). The
+ * element and its children are kept — only the dangerous attribute is
+ * dropped — so link text still renders, per the fallback-not-failure spirit
+ * of Architecture rule 3.
+ */
+function sanitizeUrls(tree: HastRoot): void {
+  visit(tree, 'element', (node: HastElement) => {
+    const attr = URL_ATTRIBUTE_BY_TAG[node.tagName];
+    if (!attr) return;
+    const value = node.properties[attr];
+    if (typeof value === 'string' && !isSafeUrl(value)) {
+      delete node.properties[attr];
+    }
+  });
+}
+
 function parseToHast(text: string): HastRoot {
   const processor = unified()
     .use(remarkParse)
@@ -159,7 +225,9 @@ function parseToHast(text: string): HastRoot {
     .use(tagDirectiveNodes)
     .use(remarkRehype);
   const mdastTree = processor.parse(text);
-  return processor.runSync(mdastTree) as HastRoot;
+  const hastTree = processor.runSync(mdastTree) as HastRoot;
+  sanitizeUrls(hastTree);
+  return hastTree;
 }
 
 /**

@@ -3,3 +3,8 @@ dist
 coverage
 .vite
 package-lock.json
+
+# Orchestrator-owned prose; not subject to the code formatting gate (see
+# CLAUDE.md: subagents must not edit these files).
+DESIGN.md
+CLAUDE.md
