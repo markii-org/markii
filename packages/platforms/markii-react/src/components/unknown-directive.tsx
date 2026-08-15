@@ -20,8 +20,8 @@ export function UnknownDirective({
 }: UnknownDirectiveProps): ReactElement {
   if (inline) {
     return (
-      <span className="smd-unknown smd-unknown--inline">
-        <span className="smd-unknown__label">
+      <span className="mk-unknown mk-unknown--inline">
+        <span className="mk-unknown__label">
           unknown component <code>{name}</code>
         </span>
         {children}
@@ -30,11 +30,11 @@ export function UnknownDirective({
   }
 
   return (
-    <div className="smd-unknown smd-unknown--block">
-      <p className="smd-unknown__label">
+    <div className="mk-unknown mk-unknown--block">
+      <p className="mk-unknown__label">
         unknown component <code>{name}</code>
       </p>
-      {children ? <div className="smd-unknown__content">{children}</div> : null}
+      {children ? <div className="mk-unknown__content">{children}</div> : null}
     </div>
   );
 }

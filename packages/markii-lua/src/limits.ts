@@ -188,7 +188,7 @@ export function installLimits(
       }
     }
     if (breached) {
-      thread.pushValue(`SMD_LIMIT: ${kind ?? 'instructions'} limit exceeded`);
+      thread.pushValue(`MARK_LIMIT: ${kind ?? 'instructions'} limit exceeded`);
       thread.lua.lua_error(thread.address);
     }
     // Unreachable in practice: lua_error longjmps and never returns here.

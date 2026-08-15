@@ -83,13 +83,13 @@ describe('marshal — rejects non-JSON-safe types (Lua-side, before wasmoon ever
   it('a returned function is rejected', async () => {
     const r = await runMarshaled('return function() end');
     expect(r.ok).toBe(false);
-    expect(!r.ok && r.message).toContain('SMD_MARSHAL:type:function');
+    expect(!r.ok && r.message).toContain('MARK_MARSHAL:type:function');
   });
 
   it('a table containing a function value is rejected', async () => {
     const r = await runMarshaled('return { fn = function() end }');
     expect(r.ok).toBe(false);
-    expect(!r.ok && r.message).toContain('SMD_MARSHAL:type:function');
+    expect(!r.ok && r.message).toContain('MARK_MARSHAL:type:function');
   });
 });
 
@@ -101,7 +101,7 @@ describe('marshal — cyclic tables are rejected', () => {
       return t
     `);
     expect(r.ok).toBe(false);
-    expect(!r.ok && r.message).toContain('SMD_MARSHAL:cycle');
+    expect(!r.ok && r.message).toContain('MARK_MARSHAL:cycle');
   });
 
   it('the SAME table appearing twice via different branches (not a cycle) is allowed', async () => {
@@ -133,7 +133,7 @@ describe('marshal — depth cap', () => {
       { maxDepth: 10, maxNodes: 100_000 },
     );
     expect(r.ok).toBe(false);
-    expect(!r.ok && r.message).toContain('SMD_MARSHAL:depth');
+    expect(!r.ok && r.message).toContain('MARK_MARSHAL:depth');
     expect(Date.now() - start).toBeLessThan(2_000);
   });
 });
@@ -151,7 +151,7 @@ describe('marshal — node cap (marshaller DoS)', () => {
     );
     const elapsed = Date.now() - start;
     expect(r.ok).toBe(false);
-    expect(!r.ok && r.message).toContain('SMD_MARSHAL:nodes');
+    expect(!r.ok && r.message).toContain('MARK_MARSHAL:nodes');
     // The whole point: this must be fast (bounded by maxNodes, not by the
     // 1e6 table size). wasmoon's own table->JS conversion of an
     // uncapped 1e6-entry table was measured empirically at ~12 seconds;
@@ -164,13 +164,13 @@ describe('marshal — mixed/sparse tables have no faithful JSON shape and are re
   it('a table mixing integer and string keys is rejected as key-type', async () => {
     const r = await runMarshaled('return {1, 2, x = "y"}');
     expect(r.ok).toBe(false);
-    expect(!r.ok && r.message).toContain('SMD_MARSHAL:key-type');
+    expect(!r.ok && r.message).toContain('MARK_MARSHAL:key-type');
   });
 
   it('a table keyed by a boolean is rejected as key-type', async () => {
     const r = await runMarshaled('return {[true] = "x"}');
     expect(r.ok).toBe(false);
-    expect(!r.ok && r.message).toContain('SMD_MARSHAL:key-type');
+    expect(!r.ok && r.message).toContain('MARK_MARSHAL:key-type');
   });
 });
 

@@ -28,7 +28,7 @@ export function Rating({ attributes }: SmdComponentProps): ReactElement {
 
   return (
     <div
-      className="smd-rating"
+      className="mk-rating"
       role="img"
       aria-label={`rating: ${String(value)} out of ${String(max)}`}
     >
@@ -37,8 +37,8 @@ export function Rating({ attributes }: SmdComponentProps): ReactElement {
           key={index}
           className={
             filled
-              ? 'smd-rating__star smd-rating__star--filled'
-              : 'smd-rating__star'
+              ? 'mk-rating__star mk-rating__star--filled'
+              : 'mk-rating__star'
           }
           aria-hidden="true"
         >

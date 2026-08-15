@@ -13,7 +13,7 @@ import type {
 } from 'mdast-util-directive';
 
 /** The hast tag name our directive-tagging plugin marks directive nodes with. */
-const DIRECTIVE_TAG = 'smd-directive';
+const DIRECTIVE_TAG = 'mk-directive';
 
 type DirectiveNode = ContainerDirective | LeafDirective | TextDirective;
 
@@ -37,7 +37,7 @@ type RawDirectiveAttributes = Record<string, string | null | undefined>;
 /**
  * Small remark plugin: tags every directive node with `data.hName` /
  * `data.hProperties` so that `remark-rehype`'s default mdast->hast
- * conversion turns it into a `<smd-directive>` hast element carrying the
+ * conversion turns it into a `<mk-directive>` hast element carrying the
  * directive's name, raw attributes, and shape (inline vs block) as data-*
  * properties. Inner markdown is left untouched, so it converts to hast
  * exactly like any other node — this is what makes it become
@@ -50,9 +50,9 @@ const tagDirectiveNodes: Plugin<[], MdastRoot> = () => (tree) => {
       ...node.data,
       hName: DIRECTIVE_TAG,
       hProperties: {
-        'data-smd-name': node.name,
-        'data-smd-attrs': JSON.stringify(normalizeAttributes(node.attributes)),
-        'data-smd-kind': node.type,
+        'data-mk-name': node.name,
+        'data-mk-attrs': JSON.stringify(normalizeAttributes(node.attributes)),
+        'data-mk-kind': node.type,
       },
     };
   });
@@ -62,7 +62,7 @@ const tagDirectiveNodes: Plugin<[], MdastRoot> = () => (tree) => {
  * mdast-util-directive represents a bare (valueless) attribute, e.g.
  * `{collapsed}`, as an empty string. The registry-facing contract instead
  * uses `null` for "present but valueless" — this normalization is what
- * lands in the serialized `data-smd-attrs` JSON that the renderer parses
+ * lands in the serialized `data-mk-attrs` JSON that the renderer parses
  * back out.
  */
 function normalizeAttributes(
@@ -145,7 +145,7 @@ function sanitizeUrls(tree: HastRoot): void {
  * (mdast) -> tag directive nodes for hast conversion -> remark-rehype
  * (hast) -> strip unsafe URLs. This is the framework-agnostic half of
  * rendering — `@markii/react` (or any other renderer) turns this hast tree
- * into its own component tree, resolving `<smd-directive>` elements through
+ * into its own component tree, resolving `<mk-directive>` elements through
  * a registry.
  */
 export function toHast(text: string): HastRoot {

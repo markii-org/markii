@@ -7,5 +7,5 @@ import type { SmdComponentProps } from '../registry';
  * without disturbing line height (see doc.css).
  */
 export function Kbd({ children }: SmdComponentProps): ReactElement {
-  return <kbd className="smd-kbd">{children}</kbd>;
+  return <kbd className="mk-kbd">{children}</kbd>;
 }

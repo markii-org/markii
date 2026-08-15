@@ -32,9 +32,9 @@ function parseAttributes(json: string | undefined): DirectiveAttributes {
 }
 
 interface DirectiveElementProps {
-  'data-smd-name'?: string;
-  'data-smd-attrs'?: string;
-  'data-smd-kind'?: string;
+  'data-mk-name'?: string;
+  'data-mk-attrs'?: string;
+  'data-mk-kind'?: string;
   children?: ReactNode;
 }
 
@@ -45,13 +45,13 @@ interface DirectiveElementProps {
 declare global {
   namespace JSX {
     interface IntrinsicElements {
-      'smd-directive': DirectiveElementProps;
+      'mk-directive': DirectiveElementProps;
     }
   }
 }
 
 /**
- * Builds the React component used to replace every `<smd-directive>` hast
+ * Builds the React component used to replace every `<mk-directive>` hast
  * element (tagged by `@markii/core`'s `toHast`): looks the directive name up in
  * `registry`, and renders the matching component with parsed attributes and
  * pre-rendered children — or the neutral fallback box if the name isn't
@@ -68,9 +68,9 @@ function createDirectiveElement(
   registry: Registry,
 ): (props: DirectiveElementProps) => ReactElement {
   return function DirectiveElement(props: DirectiveElementProps): ReactElement {
-    const name = props['data-smd-name'] ?? '';
-    const kind = props['data-smd-kind'];
-    const attributes = parseAttributes(props['data-smd-attrs']);
+    const name = props['data-mk-name'] ?? '';
+    const kind = props['data-mk-kind'];
+    const attributes = parseAttributes(props['data-mk-attrs']);
     // `Object.hasOwn` (rather than `registry[name]` / `name in registry`)
     // guards against a directive named `constructor`, `toString`,
     // `valueOf`, `hasOwnProperty`, etc. resolving through the prototype
@@ -117,14 +117,14 @@ export function renderSmd(text: string, registry: Registry): ReactElement {
       Fragment,
       jsx,
       jsxs,
-      components: { 'smd-directive': DirectiveElement },
+      components: { 'mk-directive': DirectiveElement },
     }) as ReactElement;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return (
-      <div className="smd-unknown smd-unknown--block" role="alert">
-        <p className="smd-unknown__label">failed to render document</p>
-        <pre className="smd-unknown__content">{message}</pre>
+      <div className="mk-unknown mk-unknown--block" role="alert">
+        <p className="mk-unknown__label">failed to render document</p>
+        <pre className="mk-unknown__content">{message}</pre>
       </div>
     );
   }

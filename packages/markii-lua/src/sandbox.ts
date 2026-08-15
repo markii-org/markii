@@ -128,7 +128,7 @@ function captureAssertOkStatus(thread: LuaThread): {
 
 function extractMarshalReason(message: string): ScriptMarshalReason {
   // The tagged reason is always on the SAME LINE as the tag (Lua's
-  // `error()` produces "chunkname:line: SMD_MARSHAL:<reason>[:extra]");
+  // `error()` produces "chunkname:line: MARK_MARSHAL:<reason>[:extra]");
   // wasmoon appends a "\nstack traceback:\n..." block after it, which
   // itself contains further colons (e.g. "[string \"...\"]:10:") — take
   // only the first line before splitting on ":", or those traceback
@@ -162,7 +162,7 @@ function extractMarshalReason(message: string): ScriptMarshalReason {
  * evidence. Resource-limit breaches are ALL classified separately, BEFORE
  * this function is ever called, via non-spoofable out-of-band signals —
  * never through this message-based path, since a script can trivially
- * forge any message string (e.g. `error("SMD_LIMIT: ...")` or
+ * forge any message string (e.g. `error("MARK_LIMIT: ...")` or
  * `error("not enough memory")`) but cannot forge these:
  *   - instruction/wall-clock breaches: the JS closure flag from
  *     `./limits`' hook (see `runScript` below);

@@ -30,14 +30,14 @@ export function Callout({
   const title = attributes.title ?? null;
 
   return (
-    <div className={`smd-callout smd-callout--${type}`} role="note">
-      <div className="smd-callout__header">
-        <span className="smd-callout__icon" aria-hidden="true">
+    <div className={`mk-callout mk-callout--${type}`} role="note">
+      <div className="mk-callout__header">
+        <span className="mk-callout__icon" aria-hidden="true">
           {CALLOUT_ICONS[type]}
         </span>
-        {title ? <span className="smd-callout__title">{title}</span> : null}
+        {title ? <span className="mk-callout__title">{title}</span> : null}
       </div>
-      <div className="smd-callout__body">{children}</div>
+      <div className="mk-callout__body">{children}</div>
     </div>
   );
 }

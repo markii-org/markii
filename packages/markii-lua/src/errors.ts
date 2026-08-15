@@ -23,10 +23,10 @@
  */
 
 /** Prefix tag for a capability (permission) denial raised into Lua from a host-provided function. */
-export const CAPABILITY_ERROR_TAG = 'SMD_CAPABILITY';
+export const CAPABILITY_ERROR_TAG = 'MARK_CAPABILITY';
 
 /** Prefix tag for a marshal-time rejection raised from the in-Lua marshal walk (see `./marshal`). */
-export const MARSHAL_ERROR_TAG = 'SMD_MARSHAL';
+export const MARSHAL_ERROR_TAG = 'MARK_MARSHAL';
 
 /** The limits a run can breach; see `./limits`. */
 export type ScriptLimitKind = 'instructions' | 'timeout' | 'memory';

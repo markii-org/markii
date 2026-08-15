@@ -7,17 +7,17 @@ import {
 
 describe('parseManifest — happy paths', () => {
   it('accepts a minimal valid manifest', () => {
-    const result = parseManifest(JSON.stringify({ smd: '0.1.0' }));
+    const result = parseManifest(JSON.stringify({ mark: '0.1.0' }));
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.manifest.smd).toBe('0.1.0');
+    expect(result.manifest.mark).toBe('0.1.0');
     expect(result.warnings).toEqual([]);
   });
 
   it('accepts a full manifest with permissions and uses', () => {
     const result = parseManifest(
       JSON.stringify({
-        smd: '1.2.3',
+        mark: '1.2.3',
         permissions: {
           net: { get: ['api.github.com'], post: ['hooks.example.com'] },
           bundle: ['read', 'write:cache/'],
@@ -40,7 +40,7 @@ describe('parseManifest — happy paths', () => {
 
   it('accepts prerelease/build semver', () => {
     const result = parseManifest(
-      JSON.stringify({ smd: '1.0.0-beta.1+build.5' }),
+      JSON.stringify({ mark: '1.0.0-beta.1+build.5' }),
     );
     expect(result.ok).toBe(true);
   });
@@ -48,7 +48,7 @@ describe('parseManifest — happy paths', () => {
   it('accepts a single-label net host (e.g. localhost)', () => {
     const result = parseManifest(
       JSON.stringify({
-        smd: '0.1.0',
+        mark: '0.1.0',
         permissions: { net: { get: ['localhost'] } },
       }),
     );
@@ -80,29 +80,29 @@ describe('parseManifest — errors', () => {
     expect(result.ok).toBe(false);
   });
 
-  it('rejects a missing smd field', () => {
+  it('rejects a missing mark field', () => {
     const result = parseManifest(JSON.stringify({ uses: ['ana'] }));
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.errors.join(' ')).toMatch(/smd/);
+    expect(result.errors.join(' ')).toMatch(/mark/);
   });
 
-  it('rejects a non-semver smd field', () => {
-    const result = parseManifest(JSON.stringify({ smd: 'v1' }));
+  it('rejects a non-semver mark field', () => {
+    const result = parseManifest(JSON.stringify({ mark: 'v1' }));
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.errors.join(' ')).toMatch(/semver/);
   });
 
-  it('rejects an smd field that is not a string', () => {
-    const result = parseManifest(JSON.stringify({ smd: 1 }));
+  it('rejects an mark field that is not a string', () => {
+    const result = parseManifest(JSON.stringify({ mark: 1 }));
     expect(result.ok).toBe(false);
   });
 
   it('rejects a host with a scheme', () => {
     const result = parseManifest(
       JSON.stringify({
-        smd: '0.1.0',
+        mark: '0.1.0',
         permissions: { net: { get: ['https://api.github.com'] } },
       }),
     );
@@ -114,7 +114,7 @@ describe('parseManifest — errors', () => {
   it('rejects a host with a port', () => {
     const result = parseManifest(
       JSON.stringify({
-        smd: '0.1.0',
+        mark: '0.1.0',
         permissions: { net: { get: ['api.github.com:443'] } },
       }),
     );
@@ -124,7 +124,7 @@ describe('parseManifest — errors', () => {
   it('rejects a host with a path', () => {
     const result = parseManifest(
       JSON.stringify({
-        smd: '0.1.0',
+        mark: '0.1.0',
         permissions: { net: { get: ['api.github.com/x'] } },
       }),
     );
@@ -134,7 +134,7 @@ describe('parseManifest — errors', () => {
   it('rejects a wildcard host', () => {
     const result = parseManifest(
       JSON.stringify({
-        smd: '0.1.0',
+        mark: '0.1.0',
         permissions: { net: { get: ['*.github.com'] } },
       }),
     );
@@ -143,7 +143,7 @@ describe('parseManifest — errors', () => {
 
   it('rejects an invalid bundle grant', () => {
     const result = parseManifest(
-      JSON.stringify({ smd: '0.1.0', permissions: { bundle: ['write:/'] } }),
+      JSON.stringify({ mark: '0.1.0', permissions: { bundle: ['write:/'] } }),
     );
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -152,20 +152,20 @@ describe('parseManifest — errors', () => {
 
   it('rejects permissions as a non-object', () => {
     const result = parseManifest(
-      JSON.stringify({ smd: '0.1.0', permissions: 'nope' }),
+      JSON.stringify({ mark: '0.1.0', permissions: 'nope' }),
     );
     expect(result.ok).toBe(false);
   });
 
   it('rejects uses entries that are not strings', () => {
     const result = parseManifest(
-      JSON.stringify({ smd: '0.1.0', uses: [1, 2] }),
+      JSON.stringify({ mark: '0.1.0', uses: [1, 2] }),
     );
     expect(result.ok).toBe(false);
   });
 
   it('collects multiple independent errors at once', () => {
-    const result = parseManifest(JSON.stringify({ smd: 'bad', uses: [1] }));
+    const result = parseManifest(JSON.stringify({ mark: 'bad', uses: [1] }));
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.errors.length).toBeGreaterThanOrEqual(2);
@@ -175,7 +175,7 @@ describe('parseManifest — errors', () => {
 describe('parseManifest — forward compatibility', () => {
   it('warns, but does not error, on unknown top-level keys', () => {
     const result = parseManifest(
-      JSON.stringify({ smd: '0.1.0', futureField: 'x' }),
+      JSON.stringify({ mark: '0.1.0', futureField: 'x' }),
     );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -184,7 +184,7 @@ describe('parseManifest — forward compatibility', () => {
 
   it('preserves unknown top-level keys on the returned manifest', () => {
     const result = parseManifest(
-      JSON.stringify({ smd: '0.1.0', futureField: { deep: true } }),
+      JSON.stringify({ mark: '0.1.0', futureField: { deep: true } }),
     );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -193,7 +193,7 @@ describe('parseManifest — forward compatibility', () => {
 
   it('produces no warnings when only known keys are present', () => {
     const result = parseManifest(
-      JSON.stringify({ smd: '0.1.0', permissions: {}, uses: [] }),
+      JSON.stringify({ mark: '0.1.0', permissions: {}, uses: [] }),
     );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -215,6 +215,6 @@ describe('createDefaultManifest', () => {
 
   it('defaults to CURRENT_SPEC_VERSION when no version is passed', () => {
     const manifest = createDefaultManifest();
-    expect(manifest.smd).toBe(CURRENT_SPEC_VERSION);
+    expect(manifest.mark).toBe(CURRENT_SPEC_VERSION);
   });
 });

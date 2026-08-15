@@ -16,13 +16,13 @@ function u8(text: string): Uint8Array {
 function fixtureBundleView() {
   const bytes = zipSync({
     'note.mk.md': u8('# hello'),
-    'manifest.json': u8('{"smd":"0.1.0"}'),
+    'manifest.json': u8('{"mark":"0.1.0"}'),
     'assets/x.png': u8('img'),
     'cache/data.json': u8('{}'),
   });
   const storage = openZipBundle(bytes);
   const manifest: BundleManifest = {
-    smd: '0.1.0',
+    mark: '0.1.0',
     permissions: { bundle: ['read', 'write:cache/'] },
   };
   const view = createScriptView(storage, manifest, {

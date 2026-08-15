@@ -14,7 +14,8 @@ packages/markii-core    framework-agnostic reference impl — ZERO React depende
   src/parse.ts       text → mdast AST (unified + remark-parse + remark-directive)
   src/to-hast.ts     mdast → hast: directive tagging (data.hName) + URL sanitizer
   src/corpus.ts      conformance-corpus runner (load fixtures, strip positions)
-packages/markii-react   the reference L1 renderer (one consumer of @markii/core):
+packages/platforms/markii-react   the reference L1 renderer, a platform adapter
+                        (one consumer of @markii/core among possible many):
   src/registry.ts    Registry types + createRegistry/mergeRegistries
   src/render.tsx     hast + registry → React tree (incl. unknown-directive fallback)
   src/components/    built-in demo components (callout, kbd, ...)
@@ -34,6 +35,10 @@ packages/markii-lua     Lua sandbox runtime (spec §8/§10/§11, L3) — no Reac
   src/sandbox.ts     runScript(): assemble env + limits + caps, run, marshal result
 apps/playground      thin Vite dev harness to view .mk.md files. NOT the product.
 ```
+
+Platform renderers live under `packages/platforms/*` (a workspace root alongside
+`packages/*` and `apps/*`); the neutral core packages stay directly under
+`packages/*`. Future non-React renderers go under `packages/platforms/` too.
 
 Import rule: @markii/core must never import React or anything from @markii/react;
 @markii/react imports @markii/core; the playground imports @markii/react. The conformance

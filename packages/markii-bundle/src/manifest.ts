@@ -1,7 +1,7 @@
 import type { BundleFsGrant } from './paths';
 
 /**
- * `manifest.json`'s contract (spec §9–§11). `smd` is the only required
+ * `manifest.json`'s contract (spec §9–§11). `mark` is the only required
  * field. The index signature keeps unrecognized top-level keys typed as
  * `unknown` rather than dropped — `parseManifest` preserves them verbatim
  * (see the "forward compatibility" note there) so a manifest written by a
@@ -9,7 +9,7 @@ import type { BundleFsGrant } from './paths';
  */
 export interface BundleManifest {
   /** Spec semver this bundle was authored against, e.g. `"0.1.0"`. */
-  smd: string;
+  mark: string;
   permissions?: BundlePermissions;
   uses?: string[];
   [key: string]: unknown;
@@ -33,7 +33,7 @@ export type ManifestParseResult =
 /** The current spec version this package's default manifests declare. */
 export const CURRENT_SPEC_VERSION = '0.1.0';
 
-const KNOWN_TOP_LEVEL_KEYS = new Set(['smd', 'permissions', 'uses']);
+const KNOWN_TOP_LEVEL_KEYS = new Set(['mark', 'permissions', 'uses']);
 const KNOWN_FS_GRANTS = new Set<string>(['read', 'write:cache/']);
 
 // Simplified but structurally correct semver: MAJOR.MINOR.PATCH with
@@ -96,13 +96,13 @@ export function parseManifest(json: string): ManifestParseResult {
   const errors: string[] = [];
   const warnings: string[] = [];
 
-  // --- smd (required) ---
-  const smdRaw = obj.smd;
-  if (typeof smdRaw !== 'string') {
-    errors.push('"smd" is required and must be a string');
-  } else if (!SEMVER_RE.test(smdRaw)) {
+  // --- mark (required) ---
+  const markRaw = obj.mark;
+  if (typeof markRaw !== 'string') {
+    errors.push('"mark" is required and must be a string');
+  } else if (!SEMVER_RE.test(markRaw)) {
     errors.push(
-      `"smd" must be a semver string (got ${JSON.stringify(smdRaw)})`,
+      `"mark" must be a semver string (got ${JSON.stringify(markRaw)})`,
     );
   }
 
@@ -189,7 +189,7 @@ export function parseManifest(json: string): ManifestParseResult {
     return { ok: false, errors };
   }
 
-  const manifest: BundleManifest = { ...obj, smd: smdRaw as string };
+  const manifest: BundleManifest = { ...obj, mark: markRaw as string };
   if (permissions !== undefined) manifest.permissions = permissions;
   if (uses !== undefined) manifest.uses = uses;
 
@@ -200,5 +200,5 @@ export function parseManifest(json: string): ManifestParseResult {
 export function createDefaultManifest(
   specVersion: string = CURRENT_SPEC_VERSION,
 ): BundleManifest {
-  return { smd: specVersion };
+  return { mark: specVersion };
 }

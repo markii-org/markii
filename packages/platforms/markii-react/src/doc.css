@@ -39,51 +39,51 @@
 
 /* ---------- callout ---------- */
 
-.smd-callout {
-  border: 1px solid var(--smd-callout-border, #94a3b8);
+.mk-callout {
+  border: 1px solid var(--mk-callout-border, #94a3b8);
   border-left-width: 4px;
   border-radius: 6px;
   padding: 0.75rem 1rem;
-  background: var(--smd-callout-bg, #f8fafc);
+  background: var(--mk-callout-bg, #f8fafc);
 }
 
-.smd-callout--info {
-  --smd-callout-border: #3b82f6;
-  --smd-callout-bg: #eff6ff;
+.mk-callout--info {
+  --mk-callout-border: #3b82f6;
+  --mk-callout-bg: #eff6ff;
 }
 
-.smd-callout--warning {
-  --smd-callout-border: #d97706;
-  --smd-callout-bg: #fffbeb;
+.mk-callout--warning {
+  --mk-callout-border: #d97706;
+  --mk-callout-bg: #fffbeb;
 }
 
-.smd-callout--danger {
-  --smd-callout-border: #dc2626;
-  --smd-callout-bg: #fef2f2;
+.mk-callout--danger {
+  --mk-callout-border: #dc2626;
+  --mk-callout-bg: #fef2f2;
 }
 
-.smd-callout__header {
+.mk-callout__header {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   font-weight: 600;
 }
 
-.smd-callout__icon {
+.mk-callout__icon {
   line-height: 1;
 }
 
-.smd-callout__body > :first-child {
+.mk-callout__body > :first-child {
   margin-block-start: 0.5rem;
 }
 
-.smd-callout__body > * + * {
+.mk-callout__body > * + * {
   margin-block-start: 0.5rem;
 }
 
 /* ---------- kbd ---------- */
 
-.smd-kbd {
+.mk-kbd {
   display: inline-block;
   vertical-align: baseline;
   line-height: 1.4;
@@ -100,30 +100,30 @@
 
 /* ---------- rating ---------- */
 
-.smd-rating {
+.mk-rating {
   display: inline-flex;
   gap: 0.15em;
   font-size: 1.1em;
   color: #cbd5e1;
 }
 
-.smd-rating__star--filled {
+.mk-rating__star--filled {
   color: #f59e0b;
 }
 
 /* ---------- unknown directive fallback ---------- */
 
-.smd-unknown {
+.mk-unknown {
   border: 1px dashed #94a3b8;
   border-radius: 6px;
   color: #475569;
 }
 
-.smd-unknown--block {
+.mk-unknown--block {
   padding: 0.75rem 1rem;
 }
 
-.smd-unknown--inline {
+.mk-unknown--inline {
   display: inline-flex;
   align-items: baseline;
   gap: 0.4em;
@@ -131,16 +131,16 @@
   vertical-align: baseline;
 }
 
-.smd-unknown__label {
+.mk-unknown__label {
   font-size: 0.85em;
   font-style: italic;
   margin: 0;
 }
 
-.smd-unknown__content > :first-child {
+.mk-unknown__content > :first-child {
   margin-block-start: 0.5rem;
 }
 
-.smd-unknown__content > * + * {
+.mk-unknown__content > * + * {
   margin-block-start: 0.5rem;
 }

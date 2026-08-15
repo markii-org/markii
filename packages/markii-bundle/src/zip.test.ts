@@ -187,9 +187,9 @@ describe('openZipBundle — DEFECT 4: decompression-bomb guard', () => {
 describe('openZipBundle — DEFECT 5: colliding entry names', () => {
   it('rejects manifest.json + ./manifest.json (same normalized path)', () => {
     const bytes = zipSync({
-      'manifest.json': u8('{"smd":"0.1.0"}'),
+      'manifest.json': u8('{"mark":"0.1.0"}'),
       './manifest.json': u8(
-        '{"smd":"9.9.9","permissions":{"bundle":["read","write:cache/"]}}',
+        '{"mark":"9.9.9","permissions":{"bundle":["read","write:cache/"]}}',
       ),
     });
     expect(() => openZipBundle(bytes)).toThrow(BundleZipError);
