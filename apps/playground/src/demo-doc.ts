@@ -1,6 +1,25 @@
-export const DEMO_DOC = `# Super Markdown playground
+export const DEMO_DOC = `# Mark playground
 
 Type \`.mk.md\` in the left pane; the right pane re-renders live.
+
+## Scripting: a live fetch
+
+Rendering never runs a script — it only reads whatever the value store
+already has (spec §8: "rendering is pure; running is an event"). Click
+**Run scripts** above the preview to actually execute this block and fetch
+real data:
+
+\`\`\`lua {name=stars}
+local repo = net.fetch_json("https://api.github.com/repos/facebook/react")
+return repo.stargazers_count
+\`\`\`
+
+facebook/react has :value[stars] stars.
+
+Before you click Run, that shows the missing-value marker \`{stars}\` — the
+script hasn't produced anything yet. After Run, it shows the fetched
+number. Re-rendering (e.g. editing this paragraph) never re-fetches; only
+another click of Run does.
 
 ## Built-in components
 
@@ -12,16 +31,6 @@ nested component:
 :::
 
 Press :kbd[Ctrl+S] to save. That was an *inline* text directive.
-
-## Nesting
-
-::::callout{type=warning title="Nested callouts work too"}
-Outer callout.
-
-:::callout{type=danger title="Inner"}
-Inner callout, nested one level deep.
-:::
-::::
 
 ## Unknown directives degrade gracefully
 
