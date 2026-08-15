@@ -15,7 +15,7 @@ packages/smd-core    framework-agnostic reference impl — ZERO React dependency
   src/to-hast.ts     mdast → hast: directive tagging (data.hName) + URL sanitizer
   src/corpus.ts      conformance-corpus runner (load fixtures, strip positions)
 packages/smd-react   the reference L1 renderer (one consumer of smd-core):
-  src/registry.tsx   Registry types + createRegistry/mergeRegistries
+  src/registry.ts    Registry types + createRegistry/mergeRegistries
   src/render.tsx     hast + registry → React tree (incl. unknown-directive fallback)
   src/components/    built-in demo components (callout, kbd, ...)
   src/doc.css        document rhythm + component internals
