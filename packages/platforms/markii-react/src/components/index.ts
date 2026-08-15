@@ -9,6 +9,8 @@ export { Kbd } from './kbd';
 export { Rating } from './rating';
 export { UnknownDirective } from './unknown-directive';
 export type { UnknownDirectiveProps } from './unknown-directive';
+export { ValueDirective } from './value-directive';
+export type { ValueDirectiveProps } from './value-directive';
 
 /** The three built-in demo components, pre-registered under their names. */
 export const defaultRegistry: Registry = {

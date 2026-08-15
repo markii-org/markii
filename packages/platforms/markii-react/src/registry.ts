@@ -1,9 +1,16 @@
 import type { ComponentType, ReactNode } from 'react';
+import type { ValueStatus } from '@markii/runtime';
 
 /**
  * Attributes parsed off a directive, e.g. `{type=warning title="Careful"}`.
  * A bare attribute (present but valueless, e.g. `{collapsed}`) arrives as
  * `null`. A key that was never written is simply absent from the object.
+ *
+ * One key is special: `data` (DESIGN.md §8 — "`{data=stars}` feeds it to a
+ * component"). The renderer intercepts `data` before a component ever sees
+ * `attributes` — it is resolved against the value store and delivered as
+ * the separate `data`/`dataStatus` props below, never left behind as a raw
+ * string in `attributes`. See `render.tsx`'s `resolveDataAttribute`.
  */
 export type DirectiveAttributes = Record<string, string | null | undefined>;
 
@@ -12,10 +19,20 @@ export type DirectiveAttributes = Record<string, string | null | undefined>;
  * strings (or null for bare attributes) — components are responsible for
  * parsing, validating, and defaulting their own attributes; `children` is
  * the directive's inner markdown, already rendered to React elements.
+ *
+ * `data`/`dataStatus` are populated only when the directive had a `data=`
+ * attribute (§8): `data` is the resolved JS value from the value store
+ * (`undefined` if the store has no such entry, or none was provided),
+ * `dataStatus` mirrors its freshness (`@markii/runtime`'s `ValueStatus`).
+ * Both are simply absent — not merely falsy — when the directive had no
+ * `data=` attribute at all, so a component can tell "no binding requested"
+ * apart from "binding requested but missing".
  */
 export interface SmdComponentProps {
   attributes: DirectiveAttributes;
   children?: ReactNode;
+  data?: unknown;
+  dataStatus?: ValueStatus;
 }
 
 /**

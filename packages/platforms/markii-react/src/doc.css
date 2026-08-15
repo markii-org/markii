@@ -111,6 +111,25 @@
   color: #f59e0b;
 }
 
+/* ---------- value interpolation ---------- */
+
+.mk-value {
+  display: inline;
+  vertical-align: baseline;
+}
+
+.mk-value--stale {
+  color: #92400e;
+  border-bottom: 1px dashed #d97706;
+}
+
+.mk-value--missing {
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.9em;
+  color: #94a3b8;
+  font-style: italic;
+}
+
 /* ---------- unknown directive fallback ---------- */
 
 .mk-unknown {

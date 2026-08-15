@@ -114,6 +114,44 @@ export default tseslint.config(
     },
   },
   {
+    // markii-runtime is the framework-agnostic value store (spec §8, Slice
+    // 1's pure read path): it must not import React (or anything
+    // React-flavored) and, for Slice 1, has no dependency on any other
+    // @markii package — @markii/react depends on it, never the reverse.
+    files: ['packages/markii-runtime/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'react',
+              message:
+                '@markii/runtime is the framework-agnostic value store — no React dependency (see CLAUDE.md).',
+            },
+            {
+              name: 'react-dom',
+              message:
+                '@markii/runtime is the framework-agnostic value store — no React dependency (see CLAUDE.md).',
+            },
+            {
+              name: '@markii/react',
+              message:
+                '@markii/runtime must not depend on @markii/react — @markii/react depends on @markii/runtime, never the reverse.',
+            },
+          ],
+          patterns: [
+            {
+              group: ['react/*', 'react-dom/*', '@markii/react/*'],
+              message:
+                '@markii/runtime is the framework-agnostic value store — no React dependency, and must not depend on @markii/react.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     // markii-lua is the sandboxed Lua execution primitive (spec §8, §10, §11):
     // it must not import React (or anything React-flavored) and must not
     // depend on @markii/core or @markii/react. It MAY depend on

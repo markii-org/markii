@@ -3,8 +3,10 @@ import type { ReactElement, ReactNode } from 'react';
 import { jsx, jsxs } from 'react/jsx-runtime';
 import { toJsxRuntime } from 'hast-util-to-jsx-runtime';
 import { toHast } from '@markii/core';
+import type { ValueStatus, ValueStore } from '@markii/runtime';
 import type { DirectiveAttributes, Registry } from './registry';
 import { UnknownDirective } from './components/unknown-directive';
+import { ValueDirective } from './components/value-directive';
 
 function parseAttributes(json: string | undefined): DirectiveAttributes {
   if (!json) return {};
@@ -38,6 +40,48 @@ interface DirectiveElementProps {
   children?: ReactNode;
 }
 
+/** The reserved directive name for render-time value interpolation (§8: `:value[name]`). */
+const VALUE_DIRECTIVE_NAME = 'value';
+
+/** The one attribute key that binds a directive to the value store instead of passing through as a raw string (§8: `data=name`). */
+const DATA_ATTRIBUTE_KEY = 'data';
+
+interface ResolvedDataBinding {
+  attributes: DirectiveAttributes;
+  data?: unknown;
+  dataStatus?: ValueStatus;
+}
+
+/**
+ * Splits a `data=<name>` attribute (if present) off `attributes`, resolves
+ * `<name>` against `store`, and returns the resolved binding plus the
+ * remaining attributes (every other attribute is untouched — this only
+ * ever special-cases the `data` key). Never throws: no store, an empty/bare
+ * `data` attribute, and an unknown name all degrade to `dataStatus:
+ * 'missing'` with `data: undefined`, the same graceful-degradation spirit
+ * as the unknown-directive fallback.
+ */
+function resolveDataAttribute(
+  attributes: DirectiveAttributes,
+  store: ValueStore | undefined,
+): ResolvedDataBinding {
+  if (!Object.hasOwn(attributes, DATA_ATTRIBUTE_KEY)) {
+    return { attributes };
+  }
+
+  const { [DATA_ATTRIBUTE_KEY]: rawName, ...rest } = attributes;
+  if (!rawName) {
+    return { attributes: rest, data: undefined, dataStatus: 'missing' };
+  }
+
+  const entry = store?.get(rawName);
+  if (!entry) {
+    return { attributes: rest, data: undefined, dataStatus: 'missing' };
+  }
+
+  return { attributes: rest, data: entry.value, dataStatus: entry.status };
+}
+
 // hast-util-to-jsx-runtime's `Components` map is keyed by `JSX.IntrinsicElements`
 // (see its readme: "Each key is a tag name typed in JSX.IntrinsicElements").
 // Registering our marker tag there is the supported way to give it a typed
@@ -66,11 +110,21 @@ declare global {
  */
 function createDirectiveElement(
   registry: Registry,
+  store: ValueStore | undefined,
 ): (props: DirectiveElementProps) => ReactElement {
   return function DirectiveElement(props: DirectiveElementProps): ReactElement {
     const name = props['data-mk-name'] ?? '';
     const kind = props['data-mk-kind'];
     const attributes = parseAttributes(props['data-mk-attrs']);
+
+    // `:value[name]` (§8) is a renderer built-in, resolved before any
+    // registry lookup — like the unknown-directive fallback, it is not
+    // something a pack can register over; it is part of the render-time
+    // interpolation contract itself.
+    if (name === VALUE_DIRECTIVE_NAME) {
+      return <ValueDirective store={store}>{props.children}</ValueDirective>;
+    }
+
     // `Object.hasOwn` (rather than `registry[name]` / `name in registry`)
     // guards against a directive named `constructor`, `toString`,
     // `valueOf`, `hasOwnProperty`, etc. resolving through the prototype
@@ -96,7 +150,16 @@ function createDirectiveElement(
     }
 
     const Component = entry.component;
-    return <Component attributes={attributes}>{props.children}</Component>;
+    const binding = resolveDataAttribute(attributes, store);
+    return (
+      <Component
+        attributes={binding.attributes}
+        data={binding.data}
+        dataStatus={binding.dataStatus}
+      >
+        {props.children}
+      </Component>
+    );
   };
 }
 
@@ -108,11 +171,26 @@ function createDirectiveElement(
  * (or the unknown-directive fallback) along the way. Never throws: parsing
  * is tolerant by construction, and unresolved directive names always render
  * a fallback rather than fail.
+ *
+ * `store` is the note's value store (`@markii/runtime`, §8's pure read
+ * path) — optional, matching how a missing/absent value degrades
+ * gracefully rather than failing: with no store, `:value[name]` renders its
+ * missing-value marker and every `data=name` attribute resolves to
+ * `dataStatus: 'missing'`, but the document still renders completely.
+ * Threaded as a plain function argument (not a wrapping React context
+ * provider) to match `registry`, the entry point's other piece of
+ * configuration — `renderSmd` is a plain function called directly to
+ * produce a `ReactElement`, not a component mounted inside its own tree, so
+ * there is no existing provider layer for a context to hook into here.
  */
-export function renderSmd(text: string, registry: Registry): ReactElement {
+export function renderSmd(
+  text: string,
+  registry: Registry,
+  store?: ValueStore,
+): ReactElement {
   try {
     const hastTree = toHast(text);
-    const DirectiveElement = createDirectiveElement(registry);
+    const DirectiveElement = createDirectiveElement(registry, store);
     return toJsxRuntime(hastTree, {
       Fragment,
       jsx,

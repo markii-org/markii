@@ -12,7 +12,9 @@ export {
   Kbd,
   Rating,
   UnknownDirective,
+  ValueDirective,
   defaultRegistry,
   type CalloutType,
   type UnknownDirectiveProps,
+  type ValueDirectiveProps,
 } from './components';

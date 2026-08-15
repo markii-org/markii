@@ -1,0 +1,46 @@
+{
+  "children": [
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "A note with a script block, for contrast with plain code:"
+        }
+      ],
+      "type": "paragraph"
+    },
+    {
+      "lang": "lua",
+      "meta": "{name=stars}",
+      "type": "code",
+      "value": "local repo = net.fetch_json(\"https://api.github.com/repos/x/y\")\nreturn repo.stargazers_count"
+    },
+    {
+      "attributes": {
+        "data": "stars",
+        "label": "GitHub stars"
+      },
+      "children": [],
+      "name": "stat-card",
+      "type": "leafDirective"
+    },
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "The block above is an ordinary fenced code block at the parse layer — no\nspecial script syntax exists here. A plain markdown viewer renders it as\nhighlighted "
+        },
+        {
+          "type": "inlineCode",
+          "value": "lua"
+        },
+        {
+          "type": "text",
+          "value": " code and nothing more."
+        }
+      ],
+      "type": "paragraph"
+    }
+  ],
+  "type": "root"
+}

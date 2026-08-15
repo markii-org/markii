@@ -20,6 +20,9 @@ packages/platforms/markii-react   the reference L1 renderer, a platform adapter
   src/render.tsx     hast + registry → React tree (incl. unknown-directive fallback)
   src/components/    built-in demo components (callout, kbd, ...)
   src/doc.css        document rhythm + component internals
+packages/markii-runtime the host-side value store (spec §8) — neutral, no React,
+                        no deps: name→cached StoredValue map that rendering reads:
+  src/store.ts       ValueStore + createValueStore (null-proto, hasOwn-guarded)
 packages/markii-bundle  .mkbundle bundle handling (spec §9–11, L2) — no React, no parsing:
   src/manifest.ts    manifest.json types + hand-rolled validation (no schema deps)
   src/paths.ts       path-jail: bundle-relative path normalization/rejection

@@ -467,7 +467,7 @@ aesthetic. Concretely:
 - **Bundle extension: `.mkbundle`** — one extension for both the directory and
   the zipped form (TextBundle lineage).
 - **Packages: `@markii/*`** (`@markii/core`, `@markii/react`, `@markii/stdlib`,
-  `@markii/bundle`, `@markii/lua`). The npm scope `@markii` is used because bare
+  `@markii/runtime`, `@markii/bundle`, `@markii/lua`). The npm scope `@markii` is used because bare
   `mark`/`@mark` are taken; the format is still spoken as "Mark".
 
 **The name is NOT the version.** "Mark" is permanent branding and is fully

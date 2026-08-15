@@ -4,6 +4,7 @@ import { forwardRef, memo } from 'react';
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { conformanceDir } from '@markii/core/corpus';
+import { createValueStore } from '@markii/runtime';
 import { renderSmd } from './render';
 import { defaultRegistry } from './components';
 import type {
@@ -208,6 +209,143 @@ describe('renderSmd', () => {
       'hello',
     );
     expect(container.querySelector('.mk-unknown')).toBeNull();
+  });
+});
+
+describe('renderSmd — :value[name] interpolation', () => {
+  it('renders a fresh value inline as plain text', () => {
+    const store = createValueStore({
+      stars: { value: 42, status: 'fresh', ranAt: 1000 },
+    });
+    const { container } = render(
+      renderSmd('Repo has :value[stars] stars.', defaultRegistry, store),
+    );
+    expect(container.querySelector('.mk-value')).toHaveTextContent('42');
+    expect(container.querySelector('.mk-value--missing')).toBeNull();
+    expect(container.querySelector('.mk-value--stale')).toBeNull();
+  });
+
+  it('marks a stale value with the stale class while still showing it', () => {
+    const store = createValueStore({
+      stars: { value: 41, status: 'stale', ranAt: 500 },
+    });
+    const { container } = render(
+      renderSmd(':value[stars]', defaultRegistry, store),
+    );
+    const stale = container.querySelector('.mk-value--stale');
+    expect(stale).not.toBeNull();
+    expect(stale).toHaveTextContent('41');
+  });
+
+  it('renders a graceful missing marker when the store has no such name', () => {
+    const store = createValueStore();
+    const { container } = render(
+      renderSmd(':value[stars]', defaultRegistry, store),
+    );
+    const missing = container.querySelector('.mk-value--missing');
+    expect(missing).not.toBeNull();
+    expect(missing).toHaveTextContent('stars');
+  });
+
+  it('renders a graceful missing marker when no store is provided at all', () => {
+    expect(() =>
+      render(renderSmd(':value[stars]', defaultRegistry)),
+    ).not.toThrow();
+    const { container } = render(renderSmd(':value[stars]', defaultRegistry));
+    expect(container.querySelector('.mk-value--missing')).not.toBeNull();
+  });
+
+  it('renders a graceful missing marker for an errored value, and never throws', () => {
+    const store = createValueStore({
+      stars: { value: null, status: 'error', error: 'fetch failed' },
+    });
+    expect(() =>
+      render(renderSmd(':value[stars]', defaultRegistry, store)),
+    ).not.toThrow();
+    const { container } = render(
+      renderSmd(':value[stars]', defaultRegistry, store),
+    );
+    expect(container.querySelector('.mk-value--missing')).not.toBeNull();
+  });
+});
+
+describe('renderSmd — data=name attribute binding', () => {
+  function probeRegistry(): {
+    registry: Registry;
+    seen: () => SmdComponentProps | undefined;
+  } {
+    let seen: SmdComponentProps | undefined;
+    const registry: Registry = {
+      probe: {
+        component: (props: SmdComponentProps) => {
+          seen = props;
+          return (
+            <div className="probe" data-status={String(props.dataStatus)} />
+          );
+        },
+        inline: false,
+      },
+    };
+    return { registry, seen: () => seen };
+  }
+
+  it('injects the resolved store value as the `data` prop, plus a fresh `dataStatus`', () => {
+    const store = createValueStore({
+      stars: { value: 42, status: 'fresh', ranAt: 1000 },
+    });
+    const { registry, seen } = probeRegistry();
+    render(renderSmd('::probe{data=stars}', registry, store));
+
+    expect(seen()?.data).toBe(42);
+    expect(seen()?.dataStatus).toBe('fresh');
+    // The raw store-name string must not leak through as `attributes.data`.
+    expect(seen()?.attributes).toEqual({});
+  });
+
+  it('degrades gracefully when the named value is missing from the store', () => {
+    const store = createValueStore();
+    const { registry, seen } = probeRegistry();
+    expect(() =>
+      render(renderSmd('::probe{data=stars}', registry, store)),
+    ).not.toThrow();
+
+    expect(seen()?.data).toBeUndefined();
+    expect(seen()?.dataStatus).toBe('missing');
+  });
+
+  it('degrades gracefully when no store is provided at all', () => {
+    const { registry, seen } = probeRegistry();
+    expect(() =>
+      render(renderSmd('::probe{data=stars}', registry)),
+    ).not.toThrow();
+
+    expect(seen()?.data).toBeUndefined();
+    expect(seen()?.dataStatus).toBe('missing');
+  });
+
+  it('leaves `data` and `dataStatus` undefined when the directive has no `data=` attribute at all', () => {
+    const store = createValueStore({
+      stars: { value: 42, status: 'fresh', ranAt: 1000 },
+    });
+    const { registry, seen } = probeRegistry();
+    render(renderSmd('::probe{label="no binding here"}', registry, store));
+
+    expect(seen()?.data).toBeUndefined();
+    expect(seen()?.dataStatus).toBeUndefined();
+    expect(seen()?.attributes).toEqual({ label: 'no binding here' });
+  });
+
+  it('leaves a normal string attribute untouched alongside a `data=` binding', () => {
+    const store = createValueStore({
+      stars: { value: 42, status: 'fresh', ranAt: 1000 },
+    });
+    const { registry, seen } = probeRegistry();
+    render(
+      renderSmd('::probe{data=stars label="GitHub stars"}', registry, store),
+    );
+
+    expect(seen()?.data).toBe(42);
+    expect(seen()?.attributes).toEqual({ label: 'GitHub stars' });
   });
 });
 
