@@ -212,9 +212,28 @@ Rules that keep this a *note* and not a program:
   plain markdown viewers just show the code. No new syntax.
 - Scripts **return values**; they never write into the document body. No
   self-modifying notes.
-- Execution is explicit: a run button per block / "run all" per note, plus optional
-  run-on-open behind a permission (§10). Results are cached in the bundle (§9) so a
-  note renders instantly with last-known values, stale-marked.
+- **Rendering is pure; running is an event.** Opening/rendering a note only reads
+  the last cached values from the bundle (§9) — it never executes a script — so a
+  note renders instantly and offline with last-known, stale-marked data, and
+  re-opening costs zero network calls. Execution has three triggers, and the
+  trigger caps what the script may do (the browser "user activation" rule —
+  effects always cost a click):
+
+  | Trigger | Allowed capabilities |
+  |---|---|
+  | Manual run (run / run-all button) | all manifest grants, incl. effectful ops (POST/PATCH, bundle writes) |
+  | Auto-run on open (opt-in grant) | read-only tier: GET, bundle/cache reads, cache writes |
+  | Scheduled/periodic (opt-in grant) | read-only tier |
+
+  The read-only tier is enforceable, not honor-system: Lua has no ambient
+  network — the host implements `net.fetch_json`, and the read-only variant
+  exposes no method/body at all. An effectful call under an auto trigger fails
+  cleanly; the consuming component shows a "requires manual run" marker.
+  `cache.get(key, ttl, fn)` makes TTL the rate limiter even for manual runs, and
+  schedules live in the app, never inside Lua (no timers in the sandbox).
+- Values reach prose by **render-time interpolation**, never by rewriting the
+  file: `:value[stars]` renders a named value inline; `{data=stars}` feeds it to
+  a component. The `.smd` source stays clean — values overlay the document.
 - Directives reference values by name (`data=stars`). If the value is missing or the
   script hasn't run, the component renders its empty/stale state — same graceful
   degradation as unknown directives.
