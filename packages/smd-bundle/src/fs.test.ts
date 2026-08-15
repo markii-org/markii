@@ -1,5 +1,6 @@
 import { zipSync } from 'fflate';
 import {
+  link,
   mkdir,
   mkdtemp,
   readFile,
@@ -12,6 +13,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { BundlePathError } from './errors';
 import { dirToZip, openDirBundle, promoteToBundle, zipToDir } from './fs';
+import { createScriptView } from './script-view';
 
 function u8(text: string): Uint8Array {
   return new TextEncoder().encode(text);
@@ -148,6 +150,205 @@ describe('openDirBundle — symlink escape', () => {
     // Nothing should have been written into the outside directory.
     const outsideStorage = openDirBundle(outsideDir);
     expect(await outsideStorage.exists('new-file.json')).toBe(false);
+  });
+});
+
+describe('openDirBundle — ESCAPE 1/2: symlink inside cache/ re-targeting a forbidden in-bundle path', () => {
+  it('a symlink at cache/pwn -> ../manifest.json is rejected outright, manifest.json untouched', async ({
+    skip,
+  }) => {
+    const bundleDir = await makeTmpDir('smd-bundle-escape1-');
+    await mkdir(join(bundleDir, 'cache'), { recursive: true });
+    await writeFile(
+      join(bundleDir, 'manifest.json'),
+      '{"smd":"0.1.0"}',
+      'utf8',
+    );
+    await writeFile(join(bundleDir, 'note.smd'), '# original', 'utf8');
+
+    try {
+      await symlink('../manifest.json', join(bundleDir, 'cache', 'pwn'));
+    } catch {
+      skip();
+      return;
+    }
+
+    const storage = openDirBundle(bundleDir);
+    const view = createScriptView(
+      storage,
+      { smd: '0.1.0', permissions: { bundle: ['write:cache/'] } },
+      { bundle: ['write:cache/'] },
+    );
+
+    await expect(
+      view.write(
+        'cache/pwn',
+        u8('{"smd":"9.9.9","permissions":{"bundle":["read","write:cache/"]}}'),
+      ),
+    ).rejects.toThrow();
+
+    expect(await readFile(join(bundleDir, 'manifest.json'), 'utf8')).toBe(
+      '{"smd":"0.1.0"}',
+    );
+  });
+
+  it('a symlink at cache/pwn-note -> ../note.smd is rejected outright, note.smd untouched (ESCAPE 2)', async ({
+    skip,
+  }) => {
+    const bundleDir = await makeTmpDir('smd-bundle-escape2-');
+    await mkdir(join(bundleDir, 'cache'), { recursive: true });
+    await writeFile(
+      join(bundleDir, 'manifest.json'),
+      '{"smd":"0.1.0"}',
+      'utf8',
+    );
+    await writeFile(join(bundleDir, 'note.smd'), '# original', 'utf8');
+
+    try {
+      await symlink('../note.smd', join(bundleDir, 'cache', 'pwn-note'));
+    } catch {
+      skip();
+      return;
+    }
+
+    const storage = openDirBundle(bundleDir);
+    const view = createScriptView(
+      storage,
+      { smd: '0.1.0', permissions: { bundle: ['write:cache/'] } },
+      { bundle: ['write:cache/'] },
+    );
+
+    await expect(
+      view.write('cache/pwn-note', u8('# hacked, self-modifying document')),
+    ).rejects.toThrow();
+
+    expect(await readFile(join(bundleDir, 'note.smd'), 'utf8')).toBe(
+      '# original',
+    );
+  });
+
+  it('a symlinked directory (cache/up -> ..) is rejected even reaching an EXISTING file (manifest.json / note.smd)', async ({
+    skip,
+  }) => {
+    const bundleDir = await makeTmpDir('smd-bundle-escape1dir-');
+    await mkdir(join(bundleDir, 'cache'), { recursive: true });
+    await writeFile(
+      join(bundleDir, 'manifest.json'),
+      '{"smd":"0.1.0"}',
+      'utf8',
+    );
+    await writeFile(join(bundleDir, 'note.smd'), '# original', 'utf8');
+
+    try {
+      await symlink('..', join(bundleDir, 'cache', 'up'));
+    } catch {
+      skip();
+      return;
+    }
+
+    const storage = openDirBundle(bundleDir);
+    await expect(
+      storage.write('cache/up/manifest.json', u8('{"smd":"9.9.9"}')),
+    ).rejects.toThrow(BundlePathError);
+    await expect(
+      storage.write('cache/up/note.smd', u8('# hacked')),
+    ).rejects.toThrow(BundlePathError);
+
+    expect(await readFile(join(bundleDir, 'manifest.json'), 'utf8')).toBe(
+      '{"smd":"0.1.0"}',
+    );
+    expect(await readFile(join(bundleDir, 'note.smd'), 'utf8')).toBe(
+      '# original',
+    );
+  });
+
+  it('a symlinked directory (cache/up -> ..) is rejected even when the leaf under it does not exist yet', async ({
+    skip,
+  }) => {
+    const bundleDir = await makeTmpDir('smd-bundle-escape1dir2-');
+    await mkdir(join(bundleDir, 'cache'), { recursive: true });
+
+    try {
+      await symlink('..', join(bundleDir, 'cache', 'up'));
+    } catch {
+      skip();
+      return;
+    }
+
+    const storage = openDirBundle(bundleDir);
+    // "brand-new-file.txt" does not exist anywhere yet — only the parent
+    // component ("cache/up") is a symlink. Must still be rejected.
+    await expect(
+      storage.write('cache/up/brand-new-file.txt', u8('pwned')),
+    ).rejects.toThrow(BundlePathError);
+
+    const escapedPath = join(bundleDir, 'brand-new-file.txt');
+    await expect(readFile(escapedPath)).rejects.toThrow();
+  });
+});
+
+describe('openDirBundle — ESCAPE 3: hard links defeat the root boundary', () => {
+  it('rejects a write through a hard link that points outside the bundle root, victim file untouched', async ({
+    skip,
+  }) => {
+    const parent = await makeTmpDir('smd-bundle-escape3-parent-');
+    const bundleDir = join(parent, 'b.smdb');
+    await mkdir(join(bundleDir, 'cache'), { recursive: true });
+    const victimPath = join(parent, 'victim.txt');
+    await writeFile(victimPath, 'original victim content', 'utf8');
+
+    try {
+      await link(victimPath, join(bundleDir, 'cache', 'hard'));
+    } catch {
+      skip();
+      return;
+    }
+
+    const storage = openDirBundle(bundleDir);
+    await expect(
+      storage.write('cache/hard', u8('overwritten via hardlink')),
+    ).rejects.toThrow(BundlePathError);
+
+    expect(await readFile(victimPath, 'utf8')).toBe('original victim content');
+  });
+
+  it('rejects a write through a hard link that aliases manifest.json, manifest.json untouched', async ({
+    skip,
+  }) => {
+    const bundleDir = await makeTmpDir('smd-bundle-escape3-manifest-');
+    await mkdir(join(bundleDir, 'cache'), { recursive: true });
+    await writeFile(
+      join(bundleDir, 'manifest.json'),
+      '{"smd":"0.1.0"}',
+      'utf8',
+    );
+
+    try {
+      await link(
+        join(bundleDir, 'manifest.json'),
+        join(bundleDir, 'cache', 'mhard'),
+      );
+    } catch {
+      skip();
+      return;
+    }
+
+    const storage = openDirBundle(bundleDir);
+    await expect(
+      storage.write('cache/mhard', u8('{"smd":"9.9.9"}')),
+    ).rejects.toThrow(BundlePathError);
+
+    expect(await readFile(join(bundleDir, 'manifest.json'), 'utf8')).toBe(
+      '{"smd":"0.1.0"}',
+    );
+  });
+
+  it('a normal (non-hardlinked) file can still be overwritten (nlink === 1 remains the happy path)', async () => {
+    const dir = await makeTmpDir('smd-bundle-escape3-happy-');
+    const storage = openDirBundle(dir);
+    await storage.write('cache/plain.json', u8('{"v":1}'));
+    await storage.write('cache/plain.json', u8('{"v":2}'));
+    expect(await storage.read('cache/plain.json')).toEqual(u8('{"v":2}'));
   });
 });
 

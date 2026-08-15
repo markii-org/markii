@@ -32,7 +32,13 @@ export {
   ScriptCapabilityError,
 } from './errors';
 
-export { exportZipBundle, openZipBundle } from './zip';
+export type { OpenZipBundleOptions } from './zip';
+export {
+  DEFAULT_MAX_ZIP_ENTRY_BYTES,
+  DEFAULT_MAX_ZIP_TOTAL_BYTES,
+  exportZipBundle,
+  openZipBundle,
+} from './zip';
 
 export type { ScriptView } from './script-view';
-export { createScriptView } from './script-view';
+export { createScriptView, grantAllDeclaredPermissions } from './script-view';
