@@ -19,6 +19,12 @@ packages/smd-react   the reference L1 renderer (one consumer of smd-core):
   src/render.tsx     hast + registry → React tree (incl. unknown-directive fallback)
   src/components/    built-in demo components (callout, kbd, ...)
   src/doc.css        document rhythm + component internals
+packages/smd-bundle  .smdb bundle handling (spec §9–11, L2) — no React, no parsing:
+  src/manifest.ts    manifest.json types + hand-rolled validation (no schema deps)
+  src/paths.ts       path-jail: bundle-relative path normalization/rejection
+  src/zip.ts         zip form via fflate (browser-safe main entry)
+  src/fs.ts          directory form via node:fs (Node-only "./fs" subpath export)
+  src/script-view.ts capability-restricted view for future script runtime (§11)
 apps/playground      thin Vite dev harness to view .smd files. NOT the product.
 ```
 
@@ -31,7 +37,9 @@ corpus is plain data — no TypeScript in `conformance/`.
 - TypeScript (strict), React 18, Vite, Vitest
 - Parsing: `unified`, `remark-parse`, `remark-directive`, `remark-rehype`,
   `hast-util-to-jsx-runtime`, `mdast-util-directive`, `unist-util-visit`
-- Later phases only: CodeMirror 6 (editor), wasmoon (Lua sandbox)
+- Playground editor: CodeMirror 6 (playground only)
+- Bundles: `fflate` (zip form; smd-bundle only)
+- Later phases only: wasmoon (Lua sandbox)
 - Package manager: npm (workspaces). No pnpm/yarn/bun.
 
 ## Architecture rules (from the spec — violations are bugs)
