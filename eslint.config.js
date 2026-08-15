@@ -8,7 +8,6 @@ export default tseslint.config(
       '**/dist/**',
       '**/coverage/**',
       '**/.vite/**',
-      '**/fixtures/**',
     ],
   },
   tseslint.configs.recommended,

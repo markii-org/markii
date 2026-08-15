@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
 import { renderSmd, defaultRegistry } from 'smd-react';
+import { CodeEditor } from './CodeEditor';
+import { PreviewErrorBoundary } from './PreviewErrorBoundary';
+import { getParseStatus } from './parse-status';
 import { DEMO_DOC } from './demo-doc';
 
-const DEBOUNCE_MS = 150;
+const DEBOUNCE_MS = 200;
 
 export function App(): ReactElement {
   const [source, setSource] = useState(DEMO_DOC);
@@ -16,6 +19,8 @@ export function App(): ReactElement {
     return () => window.clearTimeout(timer);
   }, [source]);
 
+  const parseStatus = useMemo(() => getParseStatus(debounced), [debounced]);
+
   return (
     <div className="playground">
       <header className="playground__header">
@@ -27,20 +32,24 @@ export function App(): ReactElement {
       <main className="playground__panes">
         <section className="playground__pane">
           <h2 className="playground__pane-title">Source</h2>
-          <textarea
+          <CodeEditor
             className="playground__editor"
             value={source}
-            spellCheck={false}
-            onChange={(event) => {
-              setSource(event.target.value);
-            }}
+            onChange={setSource}
           />
         </section>
         <section className="playground__pane">
           <h2 className="playground__pane-title">Preview</h2>
           <div className="playground__preview">
-            <div className="doc">{renderSmd(debounced, defaultRegistry)}</div>
+            <PreviewErrorBoundary resetKey={debounced}>
+              <div className="doc">{renderSmd(debounced, defaultRegistry)}</div>
+            </PreviewErrorBoundary>
           </div>
+          <p className="playground__status-bar">
+            {parseStatus.ok
+              ? `ok — ${parseStatus.directiveCount} directive${parseStatus.directiveCount === 1 ? '' : 's'} found`
+              : `parse error — ${parseStatus.error}`}
+          </p>
         </section>
       </main>
     </div>

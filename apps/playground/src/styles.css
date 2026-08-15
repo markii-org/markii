@@ -53,6 +53,7 @@ body {
   flex-direction: column;
   background: #ffffff;
   min-height: 0;
+  min-width: 0;
 }
 
 .playground__pane-title {
@@ -67,17 +68,44 @@ body {
 
 .playground__editor {
   flex: 1;
-  border: none;
-  resize: none;
-  padding: 1rem;
-  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
-  font-size: 0.9rem;
-  line-height: 1.5;
-  outline: none;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .playground__preview {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 1rem 1.5rem;
+}
+
+.playground__status-bar {
+  margin: 0;
+  padding: 0.4rem 1rem;
+  border-top: 1px solid #eee;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.78rem;
+  color: #666;
+  background: #fafafb;
+}
+
+.playground__preview-error {
+  border: 1px solid #f0b4b4;
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  background: #fef2f2;
+  color: #7f1d1d;
+}
+
+.playground__preview-error-label {
+  margin: 0 0 0.5rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.playground__preview-error-message {
+  margin: 0;
+  white-space: pre-wrap;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.85rem;
 }
