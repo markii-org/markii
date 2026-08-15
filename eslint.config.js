@@ -76,4 +76,41 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    // smd-bundle handles bundle storage and policy only (spec §9-11): it
+    // must not import React (or anything React-flavored) and must not
+    // depend on smd-react. See CLAUDE.md's smd-bundle scope note.
+    files: ['packages/smd-bundle/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'react',
+              message:
+                'smd-bundle handles storage and policy only — no React dependency (see CLAUDE.md).',
+            },
+            {
+              name: 'react-dom',
+              message:
+                'smd-bundle handles storage and policy only — no React dependency (see CLAUDE.md).',
+            },
+            {
+              name: 'smd-react',
+              message:
+                'smd-bundle must not depend on smd-react (see CLAUDE.md).',
+            },
+          ],
+          patterns: [
+            {
+              group: ['react/*', 'react-dom/*', 'smd-react/*'],
+              message:
+                'smd-bundle handles storage and policy only — no React dependency (see CLAUDE.md).',
+            },
+          ],
+        },
+      ],
+    },
+  },
 );
