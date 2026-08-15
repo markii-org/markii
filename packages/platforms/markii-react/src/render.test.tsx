@@ -335,6 +335,31 @@ describe('renderSmd — data=name attribute binding', () => {
     expect(seen()?.attributes).toEqual({ label: 'no binding here' });
   });
 
+  it('`data`/`dataStatus` are truly ABSENT (not merely undefined) from props when the directive has no `data=` attribute', () => {
+    // Distinguishes "no binding requested" from "binding requested but
+    // missing": both leave `props.data` reading as `undefined`, but only
+    // the latter should leave the key present on the props object at all.
+    const { registry, seen } = probeRegistry();
+    render(renderSmd('::probe{label="no binding here"}', registry));
+
+    const props = seen();
+    expect(props).toBeDefined();
+    expect('data' in (props as object)).toBe(false);
+    expect('dataStatus' in (props as object)).toBe(false);
+  });
+
+  it('`data`/`dataStatus` ARE present as keys on props (even if missing/undefined) whenever the directive had a `data=` attribute', () => {
+    const store = createValueStore();
+    const { registry, seen } = probeRegistry();
+    render(renderSmd('::probe{data=stars}', registry, store));
+
+    const props = seen();
+    expect(props).toBeDefined();
+    expect('data' in (props as object)).toBe(true);
+    expect('dataStatus' in (props as object)).toBe(true);
+    expect(props?.dataStatus).toBe('missing');
+  });
+
   it('leaves a normal string attribute untouched alongside a `data=` binding', () => {
     const store = createValueStore({
       stars: { value: 42, status: 'fresh', ranAt: 1000 },

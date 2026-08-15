@@ -20,9 +20,10 @@ packages/platforms/markii-react   the reference L1 renderer, a platform adapter
   src/render.tsx     hast + registry → React tree (incl. unknown-directive fallback)
   src/components/    built-in demo components (callout, kbd, ...)
   src/doc.css        document rhythm + component internals
-packages/markii-runtime the host-side value store (spec §8) — neutral, no React,
-                        no deps: name→cached StoredValue map that rendering reads:
+packages/markii-runtime host-side scripting glue (spec §8) — neutral, no React,
+                        no wasmoon; stays runtime-agnostic (executor injected):
   src/store.ts       ValueStore + createValueStore (null-proto, hasOwn-guarded)
+  src/run.ts         runDocumentScripts + trigger→tier gate (auto/scheduled=read-only)
 packages/markii-bundle  .mkbundle bundle handling (spec §9–11, L2) — no React, no parsing:
   src/manifest.ts    manifest.json types + hand-rolled validation (no schema deps)
   src/paths.ts       path-jail: bundle-relative path normalization/rejection
@@ -36,6 +37,7 @@ packages/markii-lua     Lua sandbox runtime (spec §8/§10/§11, L3) — no Reac
   src/require.ts     sandboxed require: bundle scripts/ + pack modules, pure Lua
   src/marshal.ts     Lua↔JS value conversion (serializable-only, depth/size caps)
   src/sandbox.ts     runScript(): assemble env + limits + caps, run, marshal result
+  src/executor.ts    createLuaExecutor(): adapts runScript to @markii/runtime's ScriptExecutor
 apps/playground      thin Vite dev harness to view .mk.md files. NOT the product.
 ```
 

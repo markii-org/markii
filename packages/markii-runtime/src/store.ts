@@ -69,6 +69,9 @@ export function createValueStore(
     set(name: string, entry: StoredValue): void {
       values[name] = entry;
     },
+    // Shallow copy: this is a new plain object, but each `StoredValue` it
+    // holds is the same object reference already in the store — mutating a
+    // returned entry in place would be visible to the store too.
     snapshot(): Record<string, StoredValue> {
       return { ...values };
     },

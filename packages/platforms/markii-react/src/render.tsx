@@ -151,12 +151,21 @@ function createDirectiveElement(
 
     const Component = entry.component;
     const binding = resolveDataAttribute(attributes, store);
+    // `data`/`dataStatus` are only spread in when the directive actually had
+    // a `data=` attribute (`'data' in binding`) — NOT whenever
+    // `binding.data` happens to be defined. Without this check, JSX would
+    // always pass `data`/`dataStatus` as explicit (if `undefined`) props,
+    // so `'data' in props` inside a component would be `true` even for a
+    // directive with no `data=` attribute at all, defeating the very
+    // distinction `registry.ts`'s `SmdComponentProps` doc comment promises
+    // ("absent — not merely falsy — when the directive had no `data=`
+    // attribute").
+    const dataProps =
+      'data' in binding
+        ? { data: binding.data, dataStatus: binding.dataStatus }
+        : {};
     return (
-      <Component
-        attributes={binding.attributes}
-        data={binding.data}
-        dataStatus={binding.dataStatus}
-      >
+      <Component attributes={binding.attributes} {...dataProps}>
         {props.children}
       </Component>
     );

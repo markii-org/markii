@@ -52,3 +52,6 @@ export { NOT_YET_SUPPORTED_MESSAGE, buildRequireStub } from './require';
 
 export type { RunScriptOptions, RunScriptResult } from './sandbox';
 export { runScript } from './sandbox';
+
+export type { LuaExecutorConfig } from './executor';
+export { createLuaExecutor } from './executor';

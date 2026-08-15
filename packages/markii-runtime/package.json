@@ -10,5 +10,8 @@
     "test": "vitest run",
     "build": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint ."
+  },
+  "dependencies": {
+    "@markii/core": "*"
   }
 }

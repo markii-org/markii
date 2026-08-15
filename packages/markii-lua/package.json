@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@markii/bundle": "*",
+    "@markii/runtime": "*",
     "wasmoon": "^1.16.0"
   }
 }
