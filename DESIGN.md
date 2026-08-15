@@ -1,0 +1,350 @@
+# Super Markdown — Design Spec
+
+A plain-text note format that renders your personal library of React components inline
+with ordinary markdown, without turning your notes into code.
+
+## 0. What this is — and is not
+
+One product, three layers, each fully useful without the one above it:
+
+1. **A document format** — markdown + directives rendering your React components.
+   This is the product; everything else is optional on top of it.
+2. **Live documents** — script blocks feed values into those components
+   (fetch → chart). A "Streamlit inverted": Streamlit is code that emits widgets;
+   this is a document that embeds widgets, optionally fed by code. The personas
+   differ: *note-writers* (possibly non-technical) type markdown and use
+   components; *pack authors* (technical) build the components and scripts that
+   make that possible. Non-technical users benefit from scripting by *consuming*
+   shared packs and templates, not by writing scripts.
+3. ~~A programming language~~ — explicitly out of scope, forever. The directive
+   syntax stays non-Turing-complete (no conditionals, no loops, no expressions in
+   attributes), and script blocks use an existing language (§8). Designing a
+   language is a separate multi-year project that would eat this one.
+
+Scope test for any future feature: does it make a *document* better, or does it
+make this a worse IDE? Ship only the former.
+
+## 1. The core decision: don't invent a language, extend one
+
+You do **not** need a compiler, and you should **not** use a regex "pattern detector."
+Regex detection breaks the moment a component tag appears inside a code fence, a
+blockquote, or another component. What you need is a real markdown parser with one
+extra grammar rule — and that already exists.
+
+**Recommendation: CommonMark + the generic *directive* syntax**, parsed by
+`remark` (`unified` ecosystem) with `remark-directive`.
+
+Directives are a proposed CommonMark extension with exactly three forms:
+
+```
+Inline:      :kbd[Ctrl+S]              or  :badge[beta]{color=purple}
+
+Leaf block:  ::timeline{src="repo.json" collapsed}
+
+Container:   :::callout{type=warning title="Careful"}
+             Any **markdown** here, including nested directives.
+             :::
+```
+
+That's the entire syntax. One rule to learn (`:name[label]{attrs}`, more colons =
+bigger scope), and it covers every component you will ever add, because the *name* is
+open-ended — the syntax never grows, only your component registry does.
+
+### Why not the alternatives
+
+| Option | Verdict |
+|---|---|
+| Raw HTML in markdown | Renders dead, static elements — you get `<div>`s, not *your* React components with state and behavior. Also verbose and ugly in a note file. |
+| MDX (`import X` + `<Timeline prop={...}/>`) | Real answer for docs sites, wrong for notes. Notes become source code: a typo crashes the whole file, imports clutter the top, and it needs a JS build step to view anything. |
+| Custom compiler / own grammar | Months of work to rebuild what remark already does (nesting, escaping, code fences, incremental parsing), for zero expressive gain. |
+| Regex pattern detector | Fails on nesting and code fences; every "quick fix" grows it toward a bad parser. |
+
+So: yes, you were half reinventing a wheel — but the specific wheel you want
+(*tolerant markdown + your own live components*) is directives, which is niche enough
+that reaching for it is reasonable, not corny.
+
+## 2. Architecture: two cleanly separated layers
+
+You suspected you were mixing "where it compiles" and "where it renders." You were.
+Split them like this and the whole design falls out:
+
+```
+ note.smd ──▶ [ PARSE ]  ──▶ AST ──▶ [ RENDER ] ──▶ React tree
+              remark +               registry lookup:
+              remark-directive       name → Component
+```
+
+**Layer 1 — Parse (component-agnostic).** Text in, AST out. The parser does not know
+any component exists. A directive becomes a generic AST node:
+`{ type: 'containerDirective', name: 'callout', attributes: {...}, children: [...] }`.
+This layer is stable forever; you never touch it when adding components.
+
+**Layer 2 — Render (registry-driven).** A plain map from directive name to React
+component. Attributes become props, inner markdown becomes `children` (already
+rendered). Adding component #101 is one line in the registry, zero changes to syntax
+or parser.
+
+```tsx
+const registry: Registry = {
+  callout:  { component: Callout,  props: CalloutProps },   // props = zod schema
+  timeline: { component: Timeline, props: TimelineProps },
+  kbd:      { component: Kbd, inline: true },
+};
+```
+
+**Unknown names never crash.** If a note uses `:::foo` and `foo` isn't registered,
+render a neutral fallback (dashed box: "unknown component `foo`" + its inner content
+as plain markdown). This is what makes the format tolerant like markdown instead of
+brittle like code, and it's what lets you share notes with people who have fewer
+components installed than you.
+
+Concrete stack: `react-markdown` (or `remark` + `remark-rehype` +
+`hast-util-to-jsx-runtime`) with `remark-directive` and one small custom plugin that
+tags directive nodes for the component mapping. ~100 lines of glue total.
+
+## 3. Scale and readability (your two worries)
+
+**100+ / unbounded components?** Yes, trivially — the registry is a dictionary, and
+directive names are unbounded. There is no per-component syntax cost.
+
+**Will it get cryptic?** Only if the *names* do; the syntax itself never grows. Guardrails:
+
+- Names are words you choose: `:::recipe`, `:::mood`, `::divider`, `:cite[...]`.
+  Enforce lowercase-kebab, allow aliases (`:::warn` → `callout{type=warning}`).
+- Namespacing only when you import someone else's pack: `:::ana/timeline`. Your own
+  components stay unprefixed.
+- **Graceful degradation is the real readability guarantee**: in GitHub or any plain
+  markdown viewer, a container directive shows as three odd `:::` lines around
+  perfectly readable markdown. The note survives outside your tool. Design rule to
+  preserve this: *meaningful content goes in the directive body (markdown), only
+  configuration goes in `{attrs}`*. A note where the prose lives in attribute strings
+  is a note you've lost.
+
+## 4. Layout: alignment, margins, position (your biggest concern)
+
+Rule that makes this tractable: **components own their insides; the document owns the
+outsides.**
+
+- Components must not ship outer margins. The document stylesheet owns vertical
+  rhythm — one rule like `.doc > * + * { margin-block-start: 1rem }` spaces *every*
+  block element (paragraphs and components alike) identically. New components
+  automatically sit correctly in the flow; no per-component tuning, ever.
+- **Block components** are normal flow elements: full column width, `max-width: 100%`,
+  never floated, never absolutely positioned. They behave exactly like a paragraph
+  that happens to be interactive.
+- **Inline components** (`:kbd[...]`) are `inline-block`, `vertical-align: baseline`,
+  height capped near `1.4em` so they don't disturb line height.
+- Authors get a *small closed set* of layout attributes — not freeform CSS:
+
+  ```
+  :::chart{width=wide}      → narrow | normal (default) | wide | full
+  ::img-pair{align=center}  → left | center | right (block-level alignment only)
+  ```
+
+  Each maps to a predefined class in the document theme. No `style=`, no arbitrary
+  values. Freeform layout in notes is how documents rot; presets are how they stay
+  consistent as your component set and theme evolve.
+- Text wrapping around components (floats): don't. It's the single largest source of
+  layout pain and reads badly at every width. Everything stacks.
+
+## 5. Extensibility & sharing (nice-to-have, phase 3)
+
+A shareable **component pack** is an npm-ish folder:
+
+```
+pack.json      { name: "ana", components: { timeline: "./Timeline.tsx", ... } }
+Timeline.tsx   the component (props typed; schema derivable from types or zod)
+```
+
+Installing a pack merges its components into the registry under its namespace.
+Notes optionally declare intent in frontmatter — purely informative, drives the
+fallback message ("this note uses pack `ana`, not installed"):
+
+```yaml
+---
+uses: [ana]
+---
+```
+
+No import statements in the note body — the note stays prose.
+
+## 6. File format
+
+- Extension: `.smd`. Content: 100% valid CommonMark + directives, UTF-8, no binary,
+  no required header. Any `.smd` file is openable by any markdown tool today.
+- Frontmatter (YAML) optional, for `uses:` and note metadata.
+
+## 7. Build order
+
+1. **Core** — Vite + React app: file open → remark + remark-directive → registry of
+   ~3 components (`callout`, `kbd`, one fun one) → rendered view with the fallback box.
+   This proves the whole architecture in a weekend.
+2. **Live authoring** — editor pane + preview (CodeMirror 6), debounced re-parse.
+   Later: incremental block-level re-parse if files get huge.
+3. **Registry growth** — port your existing component library in; add the layout
+   attribute presets and document theme.
+4. **Packs** — pack format, namespaces, `uses:` frontmatter.
+5. **(Maybe never)** — a language server / editor plugin for autocomplete of
+   directive names. Only worth it past ~50 components.
+
+## 8. Scripting
+
+Prior art: SilverBullet (embedded Lua), Org-mode Babel, Observable/Jupyter notebooks.
+
+**Model: scripts are data providers, not document mutators.** A script block runs,
+returns a value; the value gets a name; directives consume it. The document stays
+declarative — prose and components — and scripts feed them.
+
+````
+```lua {name=stars}
+local repo = net.fetch_json("https://api.github.com/repos/x/y")
+return repo.stargazers_count
+```
+
+::stat-card{value=stars label="GitHub stars"}
+````
+
+Rules that keep this a *note* and not a program:
+
+- Script blocks are ordinary fenced code blocks with a `{name=...}` attribute —
+  plain markdown viewers just show the code. No new syntax.
+- Scripts **return values**; they never write into the document body. No
+  self-modifying notes.
+- Execution is explicit: a run button per block / "run all" per note, plus optional
+  run-on-open behind a permission (§10). Results are cached in the bundle (§9) so a
+  note renders instantly with last-known values, stale-marked.
+- Directives reference values by name (`data=stars`). If the value is missing or the
+  script hasn't run, the component renders its empty/stale state — same graceful
+  degradation as unknown directives.
+
+**"Does this cross into Excel territory?"** Yes, deliberately — this is the notebook
+computing model, and fetch-data-into-a-chart is its best use case. The line to hold:
+Excel is *keystroke-reactive* (every edit recomputes everything, the grid is the
+program). Here, recomputation is explicit or on-open, dependencies are a shallow
+name→consumer map, and the document remains readable with all scripts stripped.
+If you can't delete every script block and still have a coherent note, it's become a
+program wearing a note costume.
+
+### Language choice: Lua, sandboxed — with the runtime kept pluggable
+
+The security model (§10) is language-agnostic: empty environment, injected
+capability functions, resource limits. Candidates weighed: JavaScript (stack
+coherence, but rejected on taste), Python/Pyodide (~10MB runtime, slow start),
+Starlark (lovely semantics, DIY embedding), Wren/Rhai (elegant but niche,
+ecosystem risk). **Decision: Lua** — chosen deliberately, not because SilverBullet
+uses it (it's also Neovim's, Redis's, and half the game industry's embedding
+language, for the same reasons that apply here):
+
+- **Best embedding story in existence**: ~200KB, WASM builds (wasmoon), a fresh
+  isolated environment per note is microseconds, instruction-count hooks give
+  cheap timeouts.
+- **Plain, readable syntax** — not flashy, but the closest thing to "executable
+  pseudocode" after Python, which is what less-technical authors parse best.
+- **Decent AI/doc coverage** thanks to decades of game modding — good enough for
+  the copy-paste-and-adapt authoring loop.
+
+What actually makes scripting friendly is not the language but the **host API
+surface**: small, flat, well-named — `net.fetch_json(url)`, `cache.get(key, ttl,
+fn)`, `bundle.read(path)` — a dozen functions someone can hold in their head,
+documented with one example each.
+
+Script blocks are tagged with their language (` ```lua {name=...}` `), so the
+runtime is pluggable by design: other languages can be added later as optional
+runtimes without touching the format.
+
+## 9. Bundle format: `.smd` file vs `.smd` bundle
+
+The long-scripts and images problems are the same problem, and it has a proven
+answer: **TextBundle** (also `.epub`, `.docx` — all "zip of a folder with a
+manifest"). Adopt the same dual-form approach:
+
+```
+note.smd            plain single file — remains first-class, never deprecated
+note.smdb/          bundle: a plain directory…
+  manifest.json     format version, permissions (§10), script/value declarations
+  note.smd          the document (unchanged syntax; relative refs into the bundle)
+  assets/           images, attachments
+  scripts/          script files too long to inline: ``lua {src=scripts/etl.lua name=x}``
+  cache/            script outputs & fetched data — regenerable, gitignored
+note.smdb (file)    …or the same directory zipped, for sharing/export
+```
+
+- **Directory form is the working form**: git-diffable, editable with any tool,
+  greppable. **Zip form is the interchange form**: one artifact to send someone.
+  The app treats them identically (open folder or open zip).
+- The document never grows blobs: images and long scripts live beside it *inside*
+  the bundle, so links are relative and can't dangle — moving the bundle moves
+  everything. This is what "linking files next to the note" was missing: the bundle
+  boundary makes the note + its dependencies one object.
+- `cache/` is explicitly disposable. Deleting it must never lose authored content.
+
+## 10. Security model
+
+**A blanket "trust this note? [OK]" dialog is the Word-macro model, and it failed** —
+users click OK, that's the whole history of macro malware. Best practice is the
+inverse: **sandbox by default, capability-based permissions, prompts only for
+specific grants.**
+
+- Scripts run in an **empty Lua environment**: no `os`, no `io`, no `require`,
+  no globals except the capability functions the host injects. A fresh
+  environment per note costs microseconds and kilobytes, so sandbox-per-note is
+  *not* overengineering. (Overengineering would be an OS process per note for a
+  personal tool; Lua-in-WASM inside a Web Worker is the cheap middle ground —
+  never run note scripts in the host page's JS realm.)
+- Capabilities are **declared in the manifest, granted by the user, injected as
+  functions**:
+
+  ```json
+  "permissions": {
+    "net":    ["api.github.com"],
+    "bundle": ["read", "write:cache/"]
+  }
+  ```
+
+  The prompt becomes meaningful: *"this note wants network access to
+  api.github.com"* — a decision a human can actually make, unlike "trust this note."
+  Grants are remembered per note (hash-keyed, re-prompt if scripts change).
+- Resource limits: instruction-count hook (kills infinite loops), wall-clock timeout,
+  memory cap, fetch response size cap.
+- Untrusted notes (opened from elsewhere) start with **zero grants** and still
+  render fully — because scripts only feed values, the document degrades to
+  stale/empty component states, never to a broken page. Reading a note must always
+  be safe; only *running* it needs trust.
+
+## 11. Bundle-scoped filesystem (the ETL use case)
+
+Your instinct is right and it's the standard shape (it's exactly a mobile app's
+app-scoped sandbox): **the bundle is the script's entire filesystem.**
+
+- API is `bundle.read(path)` / `bundle.write(path, data)` — no absolute paths, no
+  `..`, no symlink following; the host resolves everything inside the bundle root
+  and rejects escapes.
+- Within the bundle, write access is **`cache/` only by default**. Scripts can never
+  write `note.smd` (no self-modifying documents) and never `manifest.json` — that
+  one is load-bearing: a script that can edit the manifest can grant itself
+  permissions. Reads are bundle-wide (assets, cache, own scripts).
+- The ETL pattern falls out naturally: fetch via granted `net` capability → write
+  normalized data to `cache/repo-stats.json` → later runs (or offline opens) read
+  the cache; components render last-known data with a staleness indicator. Add a
+  `cache.get(key, ttl, fn)` helper so "fetch unless fresh" is one line.
+
+## 12. Repository & implementation shape
+
+**Library-first.** The format is the product; apps are consumers. The reference
+implementation is a TypeScript library (`packages/smd-core`: parse, registry,
+render), its conformance fixtures (`.smd` inputs + expected outputs — for a file
+format, the test suite is half the definition), and a thin Vite playground
+(`apps/playground`) that exists only so humans can see components render during
+development. Any future note-taking app, editor plugin, or third-party tool
+imports `smd-core`; nothing in the core may depend on the playground.
+
+Stack: TypeScript (strict) + React 18 + Vite + Vitest; parsing via `unified` /
+`remark-parse` / `remark-directive` / `remark-rehype` / `hast-util-to-jsx-runtime`;
+CodeMirror 6 and wasmoon enter in later phases. npm workspaces.
+
+## 13. Name
+
+`.smd` as an extension is fine — short, unclaimed in practice, types well. If
+"super markdown" feels corny as the *project* name, candidates that keep the file
+extension working: **Sigma MD**, **smarkdown**, **Notemark**, **Inkwell**. Naming is
+reversible; the extension is the only thing notes depend on. Ship first.
