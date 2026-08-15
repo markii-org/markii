@@ -1,9 +1,14 @@
 /**
  * Thrown by a `BundleStorage` implementation when a path fails the
- * path-jail (`normalizeBundlePath`) or — for the directory form — when a
- * `fs.realpath` re-check finds the resolved target has escaped the bundle
- * root via a symlink. Both are the same class of violation from the
- * caller's perspective: "this path does not stay inside the bundle."
+ * path-jail (`normalizeBundlePath`), or — for the directory form (`./fs`)
+ * — when the real filesystem doesn't behave like the jailed logical path
+ * promised: a symlink anywhere along the path (`resolveInsideRoot`'s
+ * lstat-per-component walk), a resolved path that diverges from the
+ * requested one, or an existing file with more than one hard link
+ * (`writeExistingFileNoHardlink`, refusing to write through a path that
+ * aliases some other file — possibly outside the bundle entirely). All of
+ * these are the same class of violation from the caller's perspective:
+ * "this path does not stay inside the bundle."
  */
 export class BundlePathError extends Error {
   readonly path: string;
