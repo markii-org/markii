@@ -100,7 +100,9 @@ components installed than you.
 
 Concrete stack: `react-markdown` (or `remark` + `remark-rehype` +
 `hast-util-to-jsx-runtime`) with `remark-directive` and one small custom plugin that
-tags directive nodes for the component mapping. ~100 lines of glue total.
+tags directive nodes for the component mapping — via the standard unified idiom of
+setting `data.hName`/`hProperties` on the mdast node (not a separate hast-producing
+transform). ~100 lines of glue total.
 
 ## 3. Scale and readability (your two worries)
 
@@ -342,7 +344,39 @@ Stack: TypeScript (strict) + React 18 + Vite + Vitest; parsing via `unified` /
 `remark-parse` / `remark-directive` / `remark-rehype` / `hast-util-to-jsx-runtime`;
 CodeMirror 6 and wasmoon enter in later phases. npm workspaces.
 
-## 13. Name
+## 13. Standardization: how third parties implement their own renderer
+
+The standard is **the spec plus a language-agnostic conformance corpus** — not our
+TypeScript. (This is the CommonMark model: the spec ships with embedded examples
+any implementation must reproduce.)
+
+1. **We inherit, not invent, the hard parts.** Syntax = CommonMark + the generic
+   directive proposal; AST node shapes = `mdast-util-directive`
+   (textDirective / leafDirective / containerDirective with `name`, `attributes`,
+   `children`). Parsers for this already exist in several ecosystems; a third
+   party may use ours, theirs, or write one.
+2. **The conformance corpus is the heart**: `conformance/` holds `*.smd` inputs
+   with expected ASTs as plain JSON plus behavioral assertions ("must not parse
+   directives inside code fences", "must not throw on unclosed containers").
+   Pure data — a Rust, Swift, or Python implementation tests against the same
+   files. Passing the corpus at a level (below) is what "supports .smd" means.
+3. **Standardize renderer *behavior*, not UI.** The spec never mentions React in
+   normative text. A conforming renderer MUST: resolve directive names through a
+   registry, pass attributes as string key/values, render directive children as
+   markdown, render unregistered names as a visible fallback without failing the
+   document, and be side-effect-free on open (reading never executes scripts).
+   That's the whole contract — a terminal viewer, a Vue app, or a static HTML
+   exporter can all conform.
+4. **Conformance levels**, so a minimal viewer is cheap to build:
+   L0 parse · L1 render behavior · L2 bundles (.smdb) · L3 scripting + capability
+   security. A read-only viewer can ship at L1 and honestly say so.
+5. **Packaging follows the standard**: `smd-core` (parse + AST types + corpus
+   runner, **zero React dependency**) and `smd-react` (our registry + React
+   renderer — the reference L1 implementation, deliberately just one consumer of
+   `smd-core` among possible many). Spec versions are semver; bundles record the
+   spec version in `manifest.json`.
+
+## 14. Name
 
 `.smd` as an extension is fine — short, unclaimed in practice, types well. If
 "super markdown" feels corny as the *project* name, candidates that keep the file

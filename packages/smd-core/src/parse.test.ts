@@ -1,0 +1,153 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { describe, expect, it } from 'vitest';
+import type {
+  ContainerDirective,
+  LeafDirective,
+  TextDirective,
+} from 'mdast-util-directive';
+import type { Code, Root, RootContent } from 'mdast';
+import type { Node } from 'unist';
+import { parse } from './parse';
+
+function readFixture(name: string): string {
+  return readFileSync(join(process.cwd(), 'fixtures', name), 'utf8');
+}
+
+function hasChildren(node: Node): node is Node & { children: Node[] } {
+  const children = (node as { children?: unknown }).children;
+  return Array.isArray(children);
+}
+
+function findAll<T extends RootContent['type']>(
+  tree: Root,
+  type: T,
+): Extract<RootContent, { type: T }>[] {
+  const results: Extract<RootContent, { type: T }>[] = [];
+  const visit = (node: Node): void => {
+    if (node.type === type) {
+      results.push(node as Extract<RootContent, { type: T }>);
+    }
+    if (hasChildren(node)) {
+      for (const child of node.children) visit(child);
+    }
+  };
+  visit(tree);
+  return results;
+}
+
+describe('parse', () => {
+  it('parses plain CommonMark with no directive nodes', () => {
+    const tree = parse(readFixture('01-plain-markdown.smd'));
+    expect(tree.type).toBe('root');
+    expect(findAll(tree, 'containerDirective')).toHaveLength(0);
+    expect(findAll(tree, 'leafDirective')).toHaveLength(0);
+    expect(findAll(tree, 'textDirective')).toHaveLength(0);
+    expect(findAll(tree, 'heading')).toHaveLength(1);
+    expect(findAll(tree, 'listItem')).toHaveLength(3);
+  });
+
+  it('parses an inline text directive with a label', () => {
+    const tree = parse(readFixture('02-inline-directive.smd'));
+    const directives = findAll(tree, 'textDirective') as TextDirective[];
+    expect(directives).toHaveLength(2);
+    expect(directives[0]?.name).toBe('kbd');
+    const label = directives[0]?.children[0];
+    expect(label?.type).toBe('text');
+    expect(label && 'value' in label ? label.value : undefined).toBe('Ctrl+S');
+  });
+
+  it('parses a leaf directive with attributes', () => {
+    const tree = parse(readFixture('03-leaf-directive.smd'));
+    const directives = findAll(tree, 'leafDirective') as LeafDirective[];
+    expect(directives).toHaveLength(1);
+    expect(directives[0]?.name).toBe('rating');
+    expect(directives[0]?.attributes).toEqual({ value: '3', max: '5' });
+  });
+
+  it('parses a container directive holding block markdown children', () => {
+    const tree = parse(readFixture('04-container-directive.smd'));
+    const directives = findAll(
+      tree,
+      'containerDirective',
+    ) as ContainerDirective[];
+    expect(directives).toHaveLength(1);
+    const directive = directives[0];
+    expect(directive?.name).toBe('callout');
+    expect(directive?.attributes).toEqual({
+      type: 'warning',
+      title: 'Careful',
+    });
+    expect(directive?.children[0]?.type).toBe('paragraph');
+  });
+
+  it('parses quoted, bare, and missing attributes', () => {
+    const tree = parse(readFixture('05-attributes.smd'));
+    const directives = findAll(
+      tree,
+      'containerDirective',
+    ) as ContainerDirective[];
+    expect(directives).toHaveLength(3);
+    expect(directives[0]?.attributes).toEqual({
+      type: 'warning',
+      title: 'Quoted title with spaces',
+    });
+    expect(directives[1]?.attributes).toEqual({ type: 'danger' });
+    expect(directives[2]?.attributes ?? {}).toEqual({});
+  });
+
+  it('parses directives nested inside directives', () => {
+    const tree = parse(readFixture('06-nested-directives.smd'));
+    const outer = findAll(tree, 'containerDirective') as ContainerDirective[];
+    expect(outer).toHaveLength(2);
+    expect(outer[0]?.name).toBe('callout');
+    expect(outer[1]?.name).toBe('callout');
+    const nestedLeaf = findAll(tree, 'leafDirective') as LeafDirective[];
+    const nestedText = findAll(tree, 'textDirective') as TextDirective[];
+    expect(nestedLeaf.some((d) => d.name === 'rating')).toBe(true);
+    expect(nestedText.some((d) => d.name === 'kbd')).toBe(true);
+  });
+
+  it('parses unknown directive names into generic directive nodes', () => {
+    const tree = parse(readFixture('07-unknown-directive.smd'));
+    const text = findAll(tree, 'textDirective') as TextDirective[];
+    const leaf = findAll(tree, 'leafDirective') as LeafDirective[];
+    const container = findAll(
+      tree,
+      'containerDirective',
+    ) as ContainerDirective[];
+    expect(text[0]?.name).toBe('badge');
+    expect(leaf[0]?.name).toBe('timeline');
+    // mdast-util-directive represents a bare (valueless) attribute as an
+    // empty string at the parse layer; the render layer normalizes this to
+    // `null` for the registry-facing DirectiveAttributes contract (see
+    // render.tsx's tagDirectiveNodes).
+    expect(leaf[0]?.attributes).toEqual({ src: 'repo.json', collapsed: '' });
+    expect(container[0]?.name).toBe('widget');
+  });
+
+  it('does not parse directive-like text inside a fenced code block', () => {
+    const tree = parse(readFixture('08-code-fence.smd'));
+    const containers = findAll(
+      tree,
+      'containerDirective',
+    ) as ContainerDirective[];
+    expect(containers).toHaveLength(1);
+    expect(containers[0]?.attributes).toEqual({ type: 'info', title: 'Real' });
+
+    const codeBlocks = findAll(tree, 'code') as Code[];
+    expect(codeBlocks).toHaveLength(1);
+    expect(codeBlocks[0]?.value).toContain(
+      ':::callout{type=warning title="Not real"}',
+    );
+    expect(codeBlocks[0]?.value).toContain(':kbd[Ctrl+S]');
+  });
+
+  it('does not throw on an unclosed container directive', () => {
+    expect(() =>
+      parse(readFixture('09-malformed-container.smd')),
+    ).not.toThrow();
+    const tree = parse(readFixture('09-malformed-container.smd'));
+    expect(tree.type).toBe('root');
+  });
+});

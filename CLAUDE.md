@@ -22,7 +22,7 @@ apps/playground      thin Vite dev harness to view .smd files. NOT the product.
 
 - TypeScript (strict), React 18, Vite, Vitest
 - Parsing: `unified`, `remark-parse`, `remark-directive`, `remark-rehype`,
-  `hast-util-to-jsx-runtime`
+  `hast-util-to-jsx-runtime`, `mdast-util-directive`, `unist-util-visit`
 - Later phases only: CodeMirror 6 (editor), wasmoon (Lua sandbox)
 - Package manager: npm (workspaces). No pnpm/yarn/bun.
 
