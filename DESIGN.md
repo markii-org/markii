@@ -273,6 +273,31 @@ Script blocks are tagged with their language (` ```lua {name=...}` `), so the
 runtime is pluggable by design: other languages can be added later as optional
 runtimes without touching the format.
 
+### Script placement, long scripts, and modules
+
+- **Short scripts** are inline fenced blocks — deliberately ordinary code blocks,
+  so every non-scripting viewer degrades to readable highlighted code.
+- **Long scripts** never bloat the note: the block becomes a one-line reference,
+  ` ```lua {src=scripts/etl.lua name=stars}` ` with an empty body, and the code
+  lives in the bundle's `scripts/`. The note keeps a visible marker; prose stays
+  prose.
+- **Shared code** enters through a *sandboxed* `require` with exactly two
+  sources: bundle-local modules (`require "scripts/util"`, same path-jail as
+  `bundle.read`) and pack-shipped Lua modules (`require "ana/http"`, namespaced
+  like the pack's components). Pure Lua only.
+- **Explicit non-goal: no package manager.** No luarocks, no network `require`,
+  no dependency resolution — network require is code injection into a "note",
+  C modules can't run in the WASM sandbox anyway, and packs already are the
+  distribution unit for shared code.
+- Script blocks may appear anywhere markdown may (including inside containers),
+  but `name`s land in one note-scoped value store regardless of position.
+- **The runtime is app-owned.** wasmoon (Lua 5.4) ships inside the host app,
+  version-pinned, updated with the app — never installed by users, never carried
+  in notes or bundles (§13.6 durability rule). The available stdlib is a curated
+  slice (`string`, `table`, `math`; no `os`/`io`/raw `require`) plus the host
+  capability API; `manifest.json`'s spec version tells future runtimes which
+  semantics to honor.
+
 ## 9. Bundle format: `.smd` file vs `.smd` bundle
 
 The long-scripts and images problems are the same problem, and it has a proven
