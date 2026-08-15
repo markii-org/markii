@@ -46,7 +46,12 @@ export function createRegistry(entries: Registry = {}): Registry {
   return Object.assign(Object.create(null) as Registry, entries);
 }
 
-/** Merges any number of registries, later ones taking precedence. */
+/**
+ * Merges any number of registries, later ones taking precedence. The
+ * returned map has a `null` prototype, matching `createRegistry`, so the
+ * public API is symmetric: every `Registry` this module hands back is safe
+ * from prototype-chain collisions regardless of which factory produced it.
+ */
 export function mergeRegistries(...registries: Registry[]): Registry {
-  return Object.assign({}, ...registries) as Registry;
+  return Object.assign(Object.create(null) as Registry, ...registries);
 }

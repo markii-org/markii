@@ -139,11 +139,15 @@ function createDirectiveElement(
     // `valueOf`, `hasOwnProperty`, etc. resolving through the prototype
     // chain to an inherited `Object.prototype` member instead of falling
     // through to the unknown-directive fallback (Architecture rule 3: unknown
-    // directives never throw). The `typeof entry?.component === 'function'`
-    // check is a second belt-and-suspenders guard for the same class of bug.
+    // directives never throw). The `entry?.component == null` check is a
+    // second belt-and-suspenders guard for the same class of bug — it must
+    // be a nullish check rather than `typeof ... !== 'function'`, since
+    // `React.memo`/`forwardRef`/`lazy` all produce a component whose
+    // `typeof` is `'object'`, not `'function'`, and TypeScript's
+    // `ComponentType` accepts all of them.
     const entry = Object.hasOwn(registry, name) ? registry[name] : undefined;
 
-    if (typeof entry?.component !== 'function') {
+    if (entry?.component == null) {
       return (
         <UnknownDirective
           name={name || '(unnamed)'}
@@ -163,7 +167,9 @@ function createDirectiveElement(
 const SAFE_URL_PROTOCOLS = new Set(['http', 'https', 'mailto', 'tel']);
 
 /**
- * Mirrors react-markdown's `defaultUrlTransform`: a URL with no scheme
+ * Modelled on react-markdown's `defaultUrlTransform`, though our allowlist
+ * differs from theirs (we add `tel`; we drop `ircs` and `xmpp`) — see
+ * `SAFE_URL_PROTOCOLS` above for the actual list. A URL with no scheme
  * (relative, fragment-only `#...`, or query-only `?...`) is always allowed;
  * a URL with a scheme is allowed only if that scheme is in
  * `SAFE_URL_PROTOCOLS`. Finding the "scheme" the same way a browser does —
@@ -190,11 +196,16 @@ function isSafeUrl(url: string): boolean {
   return SAFE_URL_PROTOCOLS.has(url.slice(0, colon).toLowerCase());
 }
 
-/** hast tag name -> the one attribute on it that carries a URL. */
-const URL_ATTRIBUTE_BY_TAG: Record<string, 'href' | 'src'> = {
-  a: 'href',
-  img: 'src',
-};
+/**
+ * hast tag name -> the one attribute on it that carries a URL. Null-prototype
+ * (rather than a plain object literal) for the same reason `createRegistry`
+ * is: a hast tag named `constructor`, `toString`, etc. must miss this lookup
+ * rather than resolve to an inherited `Object.prototype` member.
+ */
+const URL_ATTRIBUTE_BY_TAG: Record<string, 'href' | 'src'> = Object.assign(
+  Object.create(null) as Record<string, 'href' | 'src'>,
+  { a: 'href', img: 'src' },
+);
 
 /**
  * Strips `href` on `<a>` and `src` on `<img>` when they hold an unsafe URL

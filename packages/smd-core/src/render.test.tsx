@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { forwardRef, memo } from 'react';
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { renderSmd } from './render';
@@ -166,6 +167,48 @@ describe('renderSmd', () => {
     render(renderSmd('::probe{collapsed src="a.json"}', probeRegistry));
 
     expect(seenAttributes).toEqual({ collapsed: null, src: 'a.json' });
+  });
+
+  it('renders a React.memo-wrapped component, not the unknown-directive fallback', () => {
+    // `typeof` a memoized component is `'object'`, not `'function'` — a
+    // regression here would silently fall through to the fallback box
+    // instead of rendering the registered component.
+    const MemoProbe = memo(function MemoProbe({ children }: SmdComponentProps) {
+      return <div className="memo-probe">{children}</div>;
+    });
+    const registry: Registry = { memoprobe: { component: MemoProbe } };
+
+    const { container } = render(
+      renderSmd(':::memoprobe\nhello\n:::', registry),
+    );
+
+    expect(container.querySelector('.memo-probe')).toHaveTextContent('hello');
+    expect(container.querySelector('.smd-unknown')).toBeNull();
+  });
+
+  it('renders a React.forwardRef-wrapped component, not the unknown-directive fallback', () => {
+    // Same `typeof === 'object'` hazard as React.memo, via a different API.
+    const ForwardRefProbe = forwardRef<HTMLDivElement, SmdComponentProps>(
+      function ForwardRefProbe({ children }, ref) {
+        return (
+          <div ref={ref} className="forwardref-probe">
+            {children}
+          </div>
+        );
+      },
+    );
+    const registry: Registry = {
+      forwardrefprobe: { component: ForwardRefProbe },
+    };
+
+    const { container } = render(
+      renderSmd(':::forwardrefprobe\nhello\n:::', registry),
+    );
+
+    expect(container.querySelector('.forwardref-probe')).toHaveTextContent(
+      'hello',
+    );
+    expect(container.querySelector('.smd-unknown')).toBeNull();
   });
 });
 
