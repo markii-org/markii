@@ -25,6 +25,13 @@ packages/smd-bundle  .smdb bundle handling (spec §9–11, L2) — no React, no 
   src/zip.ts         zip form via fflate (browser-safe main entry)
   src/fs.ts          directory form via node:fs (Node-only "./fs" subpath export)
   src/script-view.ts capability-restricted view for future script runtime (§11)
+packages/smd-lua     Lua sandbox runtime (spec §8/§10/§11, L3) — no React, no parsing:
+  src/globals.ts     empty-env whitelist: curated string/table/math only
+  src/capabilities.ts net/cache/bundle tables; two-tier (manual vs auto) gating
+  src/limits.ts      instruction-count hook, wall-clock/memory/fetch-size caps
+  src/require.ts     sandboxed require: bundle scripts/ + pack modules, pure Lua
+  src/marshal.ts     Lua↔JS value conversion (serializable-only, depth/size caps)
+  src/sandbox.ts     runScript(): assemble env + limits + caps, run, marshal result
 apps/playground      thin Vite dev harness to view .smd files. NOT the product.
 ```
 
@@ -39,7 +46,7 @@ corpus is plain data — no TypeScript in `conformance/`.
   `hast-util-to-jsx-runtime`, `mdast-util-directive`, `unist-util-visit`
 - Playground editor: CodeMirror 6 (playground only)
 - Bundles: `fflate` (zip form; smd-bundle only)
-- Later phases only: wasmoon (Lua sandbox)
+- Lua sandbox: `wasmoon` (Lua 5.4 in WASM; smd-lua only)
 - Package manager: npm (workspaces). No pnpm/yarn/bun.
 
 ## Architecture rules (from the spec — violations are bugs)
