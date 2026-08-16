@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { createRegistry, mergeRegistries } from './registry';
-import type { Registry, SmdComponentProps } from './registry';
+import type { Registry, MarkComponentProps } from './registry';
 
-function stubComponent(_props: SmdComponentProps): null {
+function stubComponent(_props: MarkComponentProps): null {
   return null;
 }
 
@@ -46,10 +46,10 @@ describe('mergeRegistries', () => {
   });
 
   it('lets later registries override entries from earlier ones on name collision', () => {
-    function earlierComponent(_props: SmdComponentProps): null {
+    function earlierComponent(_props: MarkComponentProps): null {
       return null;
     }
-    function laterComponent(_props: SmdComponentProps): null {
+    function laterComponent(_props: MarkComponentProps): null {
       return null;
     }
     const a: Registry = { shared: { component: earlierComponent } };
@@ -59,13 +59,13 @@ describe('mergeRegistries', () => {
   });
 
   it('takes the last registry as authoritative across more than two inputs', () => {
-    function first(_props: SmdComponentProps): null {
+    function first(_props: MarkComponentProps): null {
       return null;
     }
-    function second(_props: SmdComponentProps): null {
+    function second(_props: MarkComponentProps): null {
       return null;
     }
-    function third(_props: SmdComponentProps): null {
+    function third(_props: MarkComponentProps): null {
       return null;
     }
     const merged = mergeRegistries(

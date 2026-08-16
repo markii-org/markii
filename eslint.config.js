@@ -152,6 +152,44 @@ export default tseslint.config(
     },
   },
   {
+    // markii-stdlib is the neutral, framework-agnostic definition of Mark's
+    // standard component contracts (spec §13.3/§13.6): it must not import
+    // React (or anything React-flavored) and must not depend on any other
+    // @markii package — @markii/react depends on it, never the reverse.
+    files: ['packages/markii-stdlib/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'react',
+              message:
+                '@markii/stdlib is the neutral component-contract definition — no React dependency (see CLAUDE.md).',
+            },
+            {
+              name: 'react-dom',
+              message:
+                '@markii/stdlib is the neutral component-contract definition — no React dependency (see CLAUDE.md).',
+            },
+            {
+              name: '@markii/react',
+              message:
+                '@markii/stdlib must not depend on @markii/react — @markii/react depends on @markii/stdlib, never the reverse.',
+            },
+          ],
+          patterns: [
+            {
+              group: ['react/*', 'react-dom/*', '@markii/react/*'],
+              message:
+                '@markii/stdlib is the neutral component-contract definition — no React dependency, and must not depend on @markii/react.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     // markii-lua is the sandboxed Lua execution primitive (spec §8, §10, §11):
     // it must not import React (or anything React-flavored) and must not
     // depend on @markii/core or @markii/react. It MAY depend on

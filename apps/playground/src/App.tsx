@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
-import { renderSmd, defaultRegistry } from '@markii/react';
+import { renderMark, defaultRegistry } from '@markii/react';
 import { extractScripts, parse } from '@markii/core';
 import { createValueStore, runDocumentScripts } from '@markii/runtime';
 import type { RunSummary } from '@markii/runtime';
@@ -121,7 +121,7 @@ export function App(): ReactElement {
   // purely so this memo recomputes after a run mutates `storeRef.current`
   // in place (see the doc comment above `renderVersion`'s declaration).
   const preview = useMemo(
-    () => renderSmd(debounced, defaultRegistry, storeRef.current),
+    () => renderMark(debounced, defaultRegistry, storeRef.current),
     [debounced, renderVersion],
   );
 

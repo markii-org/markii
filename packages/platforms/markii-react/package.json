@@ -15,7 +15,8 @@
   "dependencies": {
     "hast-util-to-jsx-runtime": "^2.3.6",
     "@markii/core": "*",
-    "@markii/runtime": "*"
+    "@markii/runtime": "*",
+    "@markii/stdlib": "*"
   },
   "peerDependencies": {
     "react": "^18.3.1"

@@ -1,11 +1,11 @@
-export { renderSmd } from './render';
+export { renderMark } from './render';
 export {
   createRegistry,
   mergeRegistries,
   type DirectiveAttributes,
   type Registry,
   type RegistryEntry,
-  type SmdComponentProps,
+  type MarkComponentProps,
 } from './registry';
 export {
   Callout,

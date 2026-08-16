@@ -5,12 +5,12 @@ import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { conformanceDir } from '@markii/core/corpus';
 import { createValueStore } from '@markii/runtime';
-import { renderSmd } from './render';
+import { renderMark } from './render';
 import { defaultRegistry } from './components';
 import type {
   DirectiveAttributes,
   Registry,
-  SmdComponentProps,
+  MarkComponentProps,
 } from './registry';
 
 function readFixture(name: string): string {
@@ -18,10 +18,10 @@ function readFixture(name: string): string {
 }
 
 function renderFixture(name: string, registry: Registry = defaultRegistry) {
-  return render(renderSmd(readFixture(name), registry));
+  return render(renderMark(readFixture(name), registry));
 }
 
-describe('renderSmd', () => {
+describe('renderMark', () => {
   it('renders plain markdown passthrough with no components involved', () => {
     const { container } = renderFixture('01-plain-markdown.mk.md');
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
@@ -125,8 +125,8 @@ describe('renderSmd', () => {
   });
 
   it('never throws for a directive name that collides with an inherited Object.prototype member', () => {
-    expect(() => renderSmd(':::constructor\nhi\n:::', {})).not.toThrow();
-    const { container } = render(renderSmd(':::constructor\nhi\n:::', {}));
+    expect(() => renderMark(':::constructor\nhi\n:::', {})).not.toThrow();
+    const { container } = render(renderMark(':::constructor\nhi\n:::', {}));
     const fallback = container.querySelector('.mk-unknown');
     expect(fallback).not.toBeNull();
     expect(fallback).toHaveTextContent('constructor');
@@ -156,7 +156,7 @@ describe('renderSmd', () => {
     let seenAttributes: DirectiveAttributes | undefined;
     const probeRegistry: Registry = {
       probe: {
-        component: ({ attributes }: SmdComponentProps) => {
+        component: ({ attributes }: MarkComponentProps) => {
           seenAttributes = attributes;
           return null;
         },
@@ -164,7 +164,7 @@ describe('renderSmd', () => {
       },
     };
 
-    render(renderSmd('::probe{collapsed src="a.json"}', probeRegistry));
+    render(renderMark('::probe{collapsed src="a.json"}', probeRegistry));
 
     expect(seenAttributes).toEqual({ collapsed: null, src: 'a.json' });
   });
@@ -173,13 +173,15 @@ describe('renderSmd', () => {
     // `typeof` a memoized component is `'object'`, not `'function'` — a
     // regression here would silently fall through to the fallback box
     // instead of rendering the registered component.
-    const MemoProbe = memo(function MemoProbe({ children }: SmdComponentProps) {
+    const MemoProbe = memo(function MemoProbe({
+      children,
+    }: MarkComponentProps) {
       return <div className="memo-probe">{children}</div>;
     });
     const registry: Registry = { memoprobe: { component: MemoProbe } };
 
     const { container } = render(
-      renderSmd(':::memoprobe\nhello\n:::', registry),
+      renderMark(':::memoprobe\nhello\n:::', registry),
     );
 
     expect(container.querySelector('.memo-probe')).toHaveTextContent('hello');
@@ -188,7 +190,7 @@ describe('renderSmd', () => {
 
   it('renders a React.forwardRef-wrapped component, not the unknown-directive fallback', () => {
     // Same `typeof === 'object'` hazard as React.memo, via a different API.
-    const ForwardRefProbe = forwardRef<HTMLDivElement, SmdComponentProps>(
+    const ForwardRefProbe = forwardRef<HTMLDivElement, MarkComponentProps>(
       function ForwardRefProbe({ children }, ref) {
         return (
           <div ref={ref} className="forwardref-probe">
@@ -202,7 +204,7 @@ describe('renderSmd', () => {
     };
 
     const { container } = render(
-      renderSmd(':::forwardrefprobe\nhello\n:::', registry),
+      renderMark(':::forwardrefprobe\nhello\n:::', registry),
     );
 
     expect(container.querySelector('.forwardref-probe')).toHaveTextContent(
@@ -212,13 +214,13 @@ describe('renderSmd', () => {
   });
 });
 
-describe('renderSmd — :value[name] interpolation', () => {
+describe('renderMark — :value[name] interpolation', () => {
   it('renders a fresh value inline as plain text', () => {
     const store = createValueStore({
       stars: { value: 42, status: 'fresh', ranAt: 1000 },
     });
     const { container } = render(
-      renderSmd('Repo has :value[stars] stars.', defaultRegistry, store),
+      renderMark('Repo has :value[stars] stars.', defaultRegistry, store),
     );
     expect(container.querySelector('.mk-value')).toHaveTextContent('42');
     expect(container.querySelector('.mk-value--missing')).toBeNull();
@@ -230,7 +232,7 @@ describe('renderSmd — :value[name] interpolation', () => {
       stars: { value: 41, status: 'stale', ranAt: 500 },
     });
     const { container } = render(
-      renderSmd(':value[stars]', defaultRegistry, store),
+      renderMark(':value[stars]', defaultRegistry, store),
     );
     const stale = container.querySelector('.mk-value--stale');
     expect(stale).not.toBeNull();
@@ -240,7 +242,7 @@ describe('renderSmd — :value[name] interpolation', () => {
   it('renders a graceful missing marker when the store has no such name', () => {
     const store = createValueStore();
     const { container } = render(
-      renderSmd(':value[stars]', defaultRegistry, store),
+      renderMark(':value[stars]', defaultRegistry, store),
     );
     const missing = container.querySelector('.mk-value--missing');
     expect(missing).not.toBeNull();
@@ -249,9 +251,9 @@ describe('renderSmd — :value[name] interpolation', () => {
 
   it('renders a graceful missing marker when no store is provided at all', () => {
     expect(() =>
-      render(renderSmd(':value[stars]', defaultRegistry)),
+      render(renderMark(':value[stars]', defaultRegistry)),
     ).not.toThrow();
-    const { container } = render(renderSmd(':value[stars]', defaultRegistry));
+    const { container } = render(renderMark(':value[stars]', defaultRegistry));
     expect(container.querySelector('.mk-value--missing')).not.toBeNull();
   });
 
@@ -260,24 +262,24 @@ describe('renderSmd — :value[name] interpolation', () => {
       stars: { value: null, status: 'error', error: 'fetch failed' },
     });
     expect(() =>
-      render(renderSmd(':value[stars]', defaultRegistry, store)),
+      render(renderMark(':value[stars]', defaultRegistry, store)),
     ).not.toThrow();
     const { container } = render(
-      renderSmd(':value[stars]', defaultRegistry, store),
+      renderMark(':value[stars]', defaultRegistry, store),
     );
     expect(container.querySelector('.mk-value--missing')).not.toBeNull();
   });
 });
 
-describe('renderSmd — data=name attribute binding', () => {
+describe('renderMark — data=name attribute binding', () => {
   function probeRegistry(): {
     registry: Registry;
-    seen: () => SmdComponentProps | undefined;
+    seen: () => MarkComponentProps | undefined;
   } {
-    let seen: SmdComponentProps | undefined;
+    let seen: MarkComponentProps | undefined;
     const registry: Registry = {
       probe: {
-        component: (props: SmdComponentProps) => {
+        component: (props: MarkComponentProps) => {
           seen = props;
           return (
             <div className="probe" data-status={String(props.dataStatus)} />
@@ -294,7 +296,7 @@ describe('renderSmd — data=name attribute binding', () => {
       stars: { value: 42, status: 'fresh', ranAt: 1000 },
     });
     const { registry, seen } = probeRegistry();
-    render(renderSmd('::probe{data=stars}', registry, store));
+    render(renderMark('::probe{data=stars}', registry, store));
 
     expect(seen()?.data).toBe(42);
     expect(seen()?.dataStatus).toBe('fresh');
@@ -306,7 +308,7 @@ describe('renderSmd — data=name attribute binding', () => {
     const store = createValueStore();
     const { registry, seen } = probeRegistry();
     expect(() =>
-      render(renderSmd('::probe{data=stars}', registry, store)),
+      render(renderMark('::probe{data=stars}', registry, store)),
     ).not.toThrow();
 
     expect(seen()?.data).toBeUndefined();
@@ -316,7 +318,7 @@ describe('renderSmd — data=name attribute binding', () => {
   it('degrades gracefully when no store is provided at all', () => {
     const { registry, seen } = probeRegistry();
     expect(() =>
-      render(renderSmd('::probe{data=stars}', registry)),
+      render(renderMark('::probe{data=stars}', registry)),
     ).not.toThrow();
 
     expect(seen()?.data).toBeUndefined();
@@ -328,7 +330,7 @@ describe('renderSmd — data=name attribute binding', () => {
       stars: { value: 42, status: 'fresh', ranAt: 1000 },
     });
     const { registry, seen } = probeRegistry();
-    render(renderSmd('::probe{label="no binding here"}', registry, store));
+    render(renderMark('::probe{label="no binding here"}', registry, store));
 
     expect(seen()?.data).toBeUndefined();
     expect(seen()?.dataStatus).toBeUndefined();
@@ -340,7 +342,7 @@ describe('renderSmd — data=name attribute binding', () => {
     // missing": both leave `props.data` reading as `undefined`, but only
     // the latter should leave the key present on the props object at all.
     const { registry, seen } = probeRegistry();
-    render(renderSmd('::probe{label="no binding here"}', registry));
+    render(renderMark('::probe{label="no binding here"}', registry));
 
     const props = seen();
     expect(props).toBeDefined();
@@ -351,7 +353,7 @@ describe('renderSmd — data=name attribute binding', () => {
   it('`data`/`dataStatus` ARE present as keys on props (even if missing/undefined) whenever the directive had a `data=` attribute', () => {
     const store = createValueStore();
     const { registry, seen } = probeRegistry();
-    render(renderSmd('::probe{data=stars}', registry, store));
+    render(renderMark('::probe{data=stars}', registry, store));
 
     const props = seen();
     expect(props).toBeDefined();
@@ -366,7 +368,7 @@ describe('renderSmd — data=name attribute binding', () => {
     });
     const { registry, seen } = probeRegistry();
     render(
-      renderSmd('::probe{data=stars label="GitHub stars"}', registry, store),
+      renderMark('::probe{data=stars label="GitHub stars"}', registry, store),
     );
 
     expect(seen()?.data).toBe(42);
@@ -374,10 +376,10 @@ describe('renderSmd — data=name attribute binding', () => {
   });
 });
 
-describe('renderSmd — collapsed script marker (DESIGN.md §8)', () => {
+describe('renderMark — collapsed script marker (DESIGN.md §8)', () => {
   it('renders a script code block (meta carries {name=...}) as a collapsed, folded mk-script marker, not a bare <pre>', () => {
     const { container } = render(
-      renderSmd(
+      renderMark(
         [
           '```lua {name=stars}',
           'local function greet(who)',
@@ -413,7 +415,7 @@ describe('renderSmd — collapsed script marker (DESIGN.md §8)', () => {
 
   it('renders a plain code block (no meta) unchanged — no mk-script marker', () => {
     const { container } = render(
-      renderSmd('```lua\nprint("hi")\n```', defaultRegistry),
+      renderMark('```lua\nprint("hi")\n```', defaultRegistry),
     );
 
     expect(container.querySelector('.mk-script')).toBeNull();
@@ -424,7 +426,7 @@ describe('renderSmd — collapsed script marker (DESIGN.md §8)', () => {
 
   it('renders a plain code block unchanged when meta has attributes but no `name`', () => {
     const { container } = render(
-      renderSmd(
+      renderMark(
         '```lua {src=scripts/etl.lua}\nprint("hi")\n```',
         defaultRegistry,
       ),
@@ -436,7 +438,7 @@ describe('renderSmd — collapsed script marker (DESIGN.md §8)', () => {
 
   it('renders a src= long-script reference marker showing the path, with an empty body handled gracefully', () => {
     const { container } = render(
-      renderSmd(
+      renderMark(
         '```lua {src=scripts/etl.lua name=stars}\n```',
         defaultRegistry,
       ),
@@ -456,7 +458,7 @@ describe('renderSmd — collapsed script marker (DESIGN.md §8)', () => {
 
   it('renders the details expanded when the meta carries a bare `open` attribute', () => {
     const { container } = render(
-      renderSmd('```lua {name=stars open}\nreturn 1\n```', defaultRegistry),
+      renderMark('```lua {name=stars open}\nreturn 1\n```', defaultRegistry),
     );
 
     const marker = container.querySelector('details.mk-script');
@@ -465,7 +467,7 @@ describe('renderSmd — collapsed script marker (DESIGN.md §8)', () => {
 
   it('still treats directive-like text inside a NON-script code fence as literal (unaffected by script-marker detection)', () => {
     const { container } = render(
-      renderSmd(
+      renderMark(
         [
           '```',
           ':::callout{type=warning title="Not real"}',
@@ -492,7 +494,10 @@ describe('renderSmd — collapsed script marker (DESIGN.md §8)', () => {
     // found at all — degrades to "not a script", not a crash.
     expect(() =>
       render(
-        renderSmd('```lua {name="unterminated\nprint(1)\n```', defaultRegistry),
+        renderMark(
+          '```lua {name="unterminated\nprint(1)\n```',
+          defaultRegistry,
+        ),
       ),
     ).not.toThrow();
   });

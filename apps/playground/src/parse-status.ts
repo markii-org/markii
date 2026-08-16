@@ -32,7 +32,7 @@ function countDirectives(node: unknown): number {
  * The playground status bar's data source: parses `text` with `@markii/core`'s
  * `parse()` and reports either a directive count or the error message.
  * `@markii/core`'s parser is tolerant by construction and shouldn't throw on any
- * input, but this stays defensive (matching `renderSmd`'s own try/catch)
+ * input, but this stays defensive (matching `renderMark`'s own try/catch)
  * rather than assuming that invariant holds forever.
  */
 export function getParseStatus(text: string): ParseStatus {

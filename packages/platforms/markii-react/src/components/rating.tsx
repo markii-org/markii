@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react';
-import type { SmdComponentProps } from '../registry';
+import type { MarkComponentProps } from '../registry';
 
 const DEFAULT_MAX = 5;
 const MIN_MAX = 1;
@@ -21,7 +21,7 @@ function clamp(value: number, min: number, max: number): number {
  * (non-numeric, negative, out of range) degrades gracefully instead of
  * throwing or rendering something nonsensical.
  */
-export function Rating({ attributes }: SmdComponentProps): ReactElement {
+export function Rating({ attributes }: MarkComponentProps): ReactElement {
   const max = clamp(parseCount(attributes.max, DEFAULT_MAX), MIN_MAX, MAX_MAX);
   const value = clamp(parseCount(attributes.value, 0), 0, max);
   const stars = Array.from({ length: max }, (_, index) => index < value);

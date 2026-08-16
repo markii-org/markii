@@ -159,7 +159,7 @@ function createDirectiveElement(
     // always pass `data`/`dataStatus` as explicit (if `undefined`) props,
     // so `'data' in props` inside a component would be `true` even for a
     // directive with no `data=` attribute at all, defeating the very
-    // distinction `registry.ts`'s `SmdComponentProps` doc comment promises
+    // distinction `registry.ts`'s `MarkComponentProps` doc comment promises
     // ("absent — not merely falsy — when the directive had no `data=`
     // attribute").
     const dataProps =
@@ -283,11 +283,11 @@ function PreElement({ node, children }: PreElementProps): ReactElement {
  * `dataStatus: 'missing'`, but the document still renders completely.
  * Threaded as a plain function argument (not a wrapping React context
  * provider) to match `registry`, the entry point's other piece of
- * configuration — `renderSmd` is a plain function called directly to
+ * configuration — `renderMark` is a plain function called directly to
  * produce a `ReactElement`, not a component mounted inside its own tree, so
  * there is no existing provider layer for a context to hook into here.
  */
-export function renderSmd(
+export function renderMark(
   text: string,
   registry: Registry,
   store?: ValueStore,

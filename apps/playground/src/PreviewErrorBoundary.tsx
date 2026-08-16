@@ -17,10 +17,10 @@ interface PreviewErrorBoundaryState {
 }
 
 /**
- * Belt-and-suspenders around `renderSmd`: that function already never
+ * Belt-and-suspenders around `renderMark`: that function already never
  * throws (it catches internally and renders a fallback), but a *registered*
  * component's own render function can still throw once React actually
- * mounts/updates the element tree, which happens outside `renderSmd`'s
+ * mounts/updates the element tree, which happens outside `renderMark`'s
  * synchronous try/catch. An error boundary is the only mechanism React
  * offers for that case — without one, a throwing component would white-
  * screen the whole playground (editor included) instead of just the

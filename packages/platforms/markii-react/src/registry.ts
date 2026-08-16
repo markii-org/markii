@@ -28,7 +28,7 @@ export type DirectiveAttributes = Record<string, string | null | undefined>;
  * `data=` attribute at all, so a component can tell "no binding requested"
  * apart from "binding requested but missing".
  */
-export interface SmdComponentProps {
+export interface MarkComponentProps {
   attributes: DirectiveAttributes;
   children?: ReactNode;
   data?: unknown;
@@ -44,7 +44,7 @@ export interface SmdComponentProps {
  * since every component controls its own root element.
  */
 export interface RegistryEntry {
-  component: ComponentType<SmdComponentProps>;
+  component: ComponentType<MarkComponentProps>;
   inline?: boolean;
 }
 

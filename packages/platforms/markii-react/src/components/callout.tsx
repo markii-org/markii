@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react';
-import type { SmdComponentProps } from '../registry';
+import type { MarkComponentProps } from '../registry';
 
 export type CalloutType = 'info' | 'warning' | 'danger';
 
@@ -24,7 +24,7 @@ function isCalloutType(value: string): value is CalloutType {
 export function Callout({
   attributes,
   children,
-}: SmdComponentProps): ReactElement {
+}: MarkComponentProps): ReactElement {
   const rawType = attributes.type ?? 'info';
   const type: CalloutType = isCalloutType(rawType) ? rawType : 'info';
   const title = attributes.title ?? null;

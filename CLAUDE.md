@@ -25,6 +25,10 @@ packages/markii-runtime host-side scripting glue (spec §8) — neutral, no Reac
                         no wasmoon; stays runtime-agnostic (executor injected):
   src/store.ts       ValueStore + createValueStore (null-proto, hasOwn-guarded)
   src/run.ts         runDocumentScripts + trigger→tier gate (auto/scheduled=read-only)
+packages/markii-stdlib  standard component contracts (spec §13.3/§13.6) — neutral,
+                        zero deps, no React; the seam every renderer implements against:
+  src/contracts.ts   ComponentKind/AttributeSchema/ComponentContract types,
+                     STANDARD_COMPONENTS (callout/kbd/rating), getContract()
 packages/markii-bundle  .mkbundle bundle handling (spec §9–11, L2) — no React, no parsing:
   src/manifest.ts    manifest.json types + hand-rolled validation (no schema deps)
   src/paths.ts       path-jail: bundle-relative path normalization/rejection
@@ -47,7 +51,8 @@ Platform renderers live under `packages/platforms/*` (a workspace root alongside
 `packages/*`. Future non-React renderers go under `packages/platforms/` too.
 
 Import rule: @markii/core must never import React or anything from @markii/react;
-@markii/react imports @markii/core; the playground imports @markii/react. The conformance
+@markii/react imports @markii/core and @markii/stdlib (the neutral contracts it
+implements); the playground imports @markii/react. The conformance
 corpus is plain data — no TypeScript in `conformance/`.
 
 ## Stack (fixed — do not add alternatives)
