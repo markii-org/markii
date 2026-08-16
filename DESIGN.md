@@ -175,6 +175,11 @@ No import statements in the note body — the note stays prose.
 - Extension: `.mk.md`. Content: CommonMark + GFM (tables, task lists,
   strikethrough, autolinks) + directives, UTF-8, no binary,
   no required header. Any `.mk.md` file is openable by any markdown tool today.
+- Raw HTML is **not rendered** (the reference renderer runs `remark-rehype`
+  without `allowDangerousHtml`/`rehype-raw`, so `html` nodes are dropped, not
+  parsed). This is deliberate: directives are the extension mechanism instead
+  of embedded HTML (§1), and dropping HTML removes an injection surface (§10).
+  Layout/alignment is a directive concern (§4), never a raw `<div>`.
 - Frontmatter (YAML) optional, for `uses:` and note metadata.
 
 ## 7. Build order
