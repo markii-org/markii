@@ -1,25 +1,43 @@
-# Publishes the six @markii/* library packages (packages/*, packages/platforms/*)
-# to npm — NOT apps/playground, which stays `"private": true` and is skipped
-# automatically by `npm publish --workspaces`.
+# Fires on a pushed `v*.*.*` tag and does two things:
 #
-# Prerequisites for a real run:
-#   1. The `@markii` scope on npmjs.com must be created/owned by the
-#      publishing account (or an npm org) with permission to publish these
-#      package names.
-#   2. An `NPM_TOKEN` repo secret (npm automation/publish token for that
-#      scope) must be added under Settings -> Secrets and variables ->
-#      Actions.
-#   3. Push a `v*.*.*` tag to trigger this workflow.
+#   1. publish-npm    Publishes the six @markii/* library packages to npm.
+#                     Idempotent: any package whose version is already on the
+#                     registry is skipped, so re-running a tag (or tagging a
+#                     version that was published by hand) is safe and does not
+#                     need NPM_TOKEN when nothing new has to go out.
+#   2. github-release Packs each package into a stable-named tarball, extracts
+#                     the matching section from CHANGELOG.md, and creates (or
+#                     updates) the GitHub Release with those tarballs attached.
+#
+# Prerequisites for publishing a NEW version to npm:
+#   - The `@markii` scope is owned by the publishing account or org.
+#   - An `NPM_TOKEN` repo secret (npm automation token) is set under
+#     Settings -> Secrets and variables -> Actions.
+#
+# The stable tarball names mean the newest assets are always reachable at:
+#   https://github.com/sadigaxund/markii/releases/latest/download/markii-core.tgz
+#   (and markii-stdlib.tgz, markii-bundle.tgz, markii-runtime.tgz,
+#    markii-lua.tgz, markii-react.tgz)
 
-name: Release (npm)
+name: Release
 
 on:
   push:
     tags:
       - 'v*.*.*'
 
+# The library workspace directories, in dependency order.
+env:
+  PACKAGE_DIRS: >-
+    packages/markii-core
+    packages/markii-stdlib
+    packages/markii-bundle
+    packages/markii-runtime
+    packages/markii-lua
+    packages/platforms/markii-react
+
 jobs:
-  publish:
+  publish-npm:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -31,18 +49,111 @@ jobs:
           registry-url: https://registry.npmjs.org
 
       - run: npm ci
-
       - run: npm test
-
       - run: npm run build
-
-      # Builds compiled JS + .d.ts to dist/ for all six library packages, in
-      # dependency order (core/stdlib/bundle, then runtime/lua, then react).
       - run: npm run build:dist
 
-      # Publishes every publishable workspace (private:true workspaces,
-      # e.g. apps/playground and the root, are skipped automatically by
-      # npm). Requires the prerequisites documented above.
-      - run: npm publish --workspaces --access public
+      - name: Publish packages whose version is not yet on npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          for dir in $PACKAGE_DIRS; do
+            name=$(node -p "require('./$dir/package.json').name")
+            version=$(node -p "require('./$dir/package.json').version")
+            if npm view "$name@$version" version >/dev/null 2>&1; then
+              echo "$name@$version already on npm, skipping"
+            else
+              echo "publishing $name@$version"
+              npm publish -w "$name" --access public
+            fi
+          done
+
+  github-release:
+    needs: publish-npm
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build:dist
+
+      - name: Pack tarballs with stable, version-less names
+        run: |
+          set -euo pipefail
+          mkdir -p dist-artifacts
+          for dir in $PACKAGE_DIRS; do
+            name=$(node -p "require('./$dir/package.json').name")
+            stable=${name/@markii\//markii-}
+            npm pack -w "$name" --pack-destination dist-artifacts >/dev/null
+            mv dist-artifacts/${stable}-*.tgz "dist-artifacts/${stable}.tgz"
+          done
+          ls -1 dist-artifacts
+
+      - name: Assemble release notes
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+
+          # The CHANGELOG section for this version: everything between its
+          # `## [VERSION]` heading and the next `## [` heading.
+          awk -v ver="$VERSION" '
+            $0 ~ "^## \\[" ver "\\]" { grab=1; next }
+            grab && /^## \[/ { exit }
+            grab { print }
+          ' CHANGELOG.md > notes-body.md
+
+          {
+            cat notes-body.md
+            echo
+            echo "## Install"
+            echo
+            echo 'The renderer pulls the rest in as dependencies:'
+            echo
+            echo '```'
+            echo "npm install @markii/react@${VERSION}"
+            echo '```'
+            echo
+            echo 'All six packages, if you want them explicitly:'
+            echo
+            echo '```'
+            for pkg in core stdlib bundle runtime lua react; do
+              echo "npm install @markii/${pkg}@${VERSION}"
+            done
+            echo '```'
+            echo
+            echo "## Downloads"
+            echo
+            echo 'The attached tarballs are the packed npm packages. The names are'
+            echo 'stable across releases, so the latest of each is always at a fixed URL:'
+            echo
+            echo '```'
+            for pkg in core stdlib bundle runtime lua react; do
+              echo "https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/markii-${pkg}.tgz"
+            done
+            echo '```'
+          } > RELEASE_NOTES.md
+
+          echo "----- RELEASE_NOTES.md -----"
+          cat RELEASE_NOTES.md
+
+      - name: Create or update the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --title "$TAG" --notes-file RELEASE_NOTES.md
+            gh release upload "$TAG" dist-artifacts/*.tgz --clobber
+          else
+            gh release create "$TAG" --title "$TAG" --notes-file RELEASE_NOTES.md dist-artifacts/*.tgz
+          fi
