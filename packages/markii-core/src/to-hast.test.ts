@@ -72,6 +72,56 @@ describe('URL sanitization (hast level)', () => {
   });
 });
 
+describe('GFM (hast level)', () => {
+  it('renders a GFM table as <table>/<tr>/<td>, with a directive after it in the same document', () => {
+    const tree = toHast(
+      '| A | B |\n| - | - |\n| 1 | 2 |\n\n:::callout{type=info title="Note"}\nhi\n:::',
+    );
+    expect(findElement(tree, 'table')).toBeDefined();
+    expect(findElement(tree, 'tr')).toBeDefined();
+    expect(findElement(tree, 'td')).toBeDefined();
+    // The directive is still tagged for the renderer, not swallowed by GFM.
+    expect(findElement(tree, 'mk-directive')).toBeDefined();
+  });
+
+  it('renders a GFM task list item as a checkbox <input>, with the correct checked state', () => {
+    const tree = toHast('- [x] done\n- [ ] not done');
+    const inputs: HastElement[] = [];
+    visit(tree, 'element', (node: HastElement) => {
+      if (node.tagName === 'input') inputs.push(node);
+    });
+    expect(inputs).toHaveLength(2);
+    expect(inputs[0]?.properties.checked).toBe(true);
+    expect(inputs[1]?.properties.checked).toBeFalsy();
+  });
+
+  it('renders GFM strikethrough as <del>', () => {
+    const tree = toHast('~~gone~~');
+    const del = findElement(tree, 'del');
+    expect(del).toBeDefined();
+    expect(textOf(del as HastElement)).toBe('gone');
+  });
+
+  it('neutralizes a hostile javascript: URL reached via a GFM literal (bare-URL) autolink', () => {
+    // GFM literal autolinks only trigger on a real URL, so this proves the
+    // *href renderer* (a data: URL smuggled in as link text won't parse as
+    // a GFM autolink at all) — the meaningful hostile-autolink case is a
+    // CommonMark `<javascript:...>` autolink, which GFM's literal-autolink
+    // extension does not affect but which must still be sanitized with GFM
+    // enabled.
+    const tree = toHast('<javascript:alert(1)>');
+    const link = findElement(tree, 'a');
+    expect(link).toBeDefined();
+    expect(link?.properties.href).toBeUndefined();
+  });
+
+  it('preserves a safe https GFM literal autolink href', () => {
+    const tree = toHast('Visit https://example.com/page for more.');
+    const link = findElement(tree, 'a');
+    expect(link?.properties.href).toBe('https://example.com/page');
+  });
+});
+
 describe('code-fence meta preservation (hast level)', () => {
   it('preserves a fence meta string onto the hast <code> element as data-mk-meta', () => {
     const tree = toHast('```lua {name=stars}\nreturn 1\n```');

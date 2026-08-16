@@ -58,7 +58,8 @@ corpus is plain data — no TypeScript in `conformance/`.
 ## Stack (fixed — do not add alternatives)
 
 - TypeScript (strict), React 18, Vite, Vitest
-- Parsing: `unified`, `remark-parse`, `remark-directive`, `remark-rehype`,
+- Parsing: `unified`, `remark-parse`, `remark-gfm` (tables/task-lists/
+  strikethrough/autolinks), `remark-directive`, `remark-rehype`,
   `hast-util-to-jsx-runtime`, `mdast-util-directive`, `unist-util-visit`
 - Playground editor: CodeMirror 6 (playground only)
 - Bundles: `fflate` (zip form; @markii/bundle only)

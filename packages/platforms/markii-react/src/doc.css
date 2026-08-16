@@ -37,6 +37,56 @@
   padding: 0;
 }
 
+/* ---------- GFM table ---------- */
+
+/*
+ * `display: block` on the table itself (rather than wrapping it in an
+ * extra element the renderer doesn't otherwise inject) is what makes a wide
+ * table scroll horizontally instead of overflowing the page or the doc
+ * column — the table box becomes independently scrollable content, the
+ * same trick used by GitHub's own Markdown rendering.
+ */
+.doc table {
+  display: block;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 0.95em;
+}
+
+.doc th,
+.doc td {
+  border: 1px solid #e4e4e7;
+  padding: 0.4rem 0.75rem;
+  text-align: left;
+}
+
+.doc th {
+  font-weight: 600;
+  background: #f8fafc;
+}
+
+.doc tr:nth-child(even) {
+  background: #fafafa;
+}
+
+/* ---------- GFM task list ---------- */
+
+/*
+ * `li:has(> input[type="checkbox"])` scopes bullet removal + checkbox
+ * alignment to task-list items only — an ordinary `<ul>`/`<ol>` item keeps
+ * its normal bullet/number, since GFM only adds a leading `<input>` to
+ * items that used `- [ ]`/`- [x]` syntax.
+ */
+.doc li:has(> input[type='checkbox']) {
+  list-style: none;
+  margin-inline-start: -1.5em;
+}
+
+.doc li > input[type='checkbox'] {
+  margin-inline-end: 0.5em;
+  vertical-align: middle;
+}
+
 /* ---------- callout ---------- */
 
 .mk-callout {

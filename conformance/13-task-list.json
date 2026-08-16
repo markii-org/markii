@@ -1,0 +1,128 @@
+{
+  "children": [
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "GFM task list"
+        }
+      ],
+      "depth": 1,
+      "type": "heading"
+    },
+    {
+      "children": [
+        {
+          "checked": true,
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "ship the parser"
+                }
+              ],
+              "type": "paragraph"
+            }
+          ],
+          "spread": false,
+          "type": "listItem"
+        },
+        {
+          "checked": false,
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "ship the renderer"
+                }
+              ],
+              "type": "paragraph"
+            }
+          ],
+          "spread": false,
+          "type": "listItem"
+        },
+        {
+          "checked": false,
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "write the docs"
+                }
+              ],
+              "type": "paragraph"
+            }
+          ],
+          "spread": false,
+          "type": "listItem"
+        }
+      ],
+      "ordered": false,
+      "spread": false,
+      "start": null,
+      "type": "list"
+    },
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "A plain unordered list, for contrast (no "
+        },
+        {
+          "type": "inlineCode",
+          "value": "checked"
+        },
+        {
+          "type": "text",
+          "value": " field expected):"
+        }
+      ],
+      "type": "paragraph"
+    },
+    {
+      "children": [
+        {
+          "checked": null,
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "one"
+                }
+              ],
+              "type": "paragraph"
+            }
+          ],
+          "spread": false,
+          "type": "listItem"
+        },
+        {
+          "checked": null,
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "two"
+                }
+              ],
+              "type": "paragraph"
+            }
+          ],
+          "spread": false,
+          "type": "listItem"
+        }
+      ],
+      "ordered": false,
+      "spread": false,
+      "start": null,
+      "type": "list"
+    }
+  ],
+  "type": "root"
+}

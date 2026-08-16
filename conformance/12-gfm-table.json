@@ -1,0 +1,145 @@
+{
+  "children": [
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "GFM table"
+        }
+      ],
+      "depth": 1,
+      "type": "heading"
+    },
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "A table alongside a directive, proving GFM and directive syntax coexist in\nthe same document."
+        }
+      ],
+      "type": "paragraph"
+    },
+    {
+      "align": [null, null, "center"],
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Name"
+                }
+              ],
+              "type": "tableCell"
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Role"
+                }
+              ],
+              "type": "tableCell"
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Active"
+                }
+              ],
+              "type": "tableCell"
+            }
+          ],
+          "type": "tableRow"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Ada"
+                }
+              ],
+              "type": "tableCell"
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Engineer"
+                }
+              ],
+              "type": "tableCell"
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "yes"
+                }
+              ],
+              "type": "tableCell"
+            }
+          ],
+          "type": "tableRow"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Grace"
+                }
+              ],
+              "type": "tableCell"
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Admiral"
+                }
+              ],
+              "type": "tableCell"
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "yes"
+                }
+              ],
+              "type": "tableCell"
+            }
+          ],
+          "type": "tableRow"
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "attributes": {
+        "title": "Note",
+        "type": "info"
+      },
+      "children": [
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": "Tables render fine inside plain flow, and this callout renders fine right\nafter one."
+            }
+          ],
+          "type": "paragraph"
+        }
+      ],
+      "name": "callout",
+      "type": "containerDirective"
+    }
+  ],
+  "type": "root"
+}

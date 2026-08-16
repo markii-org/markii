@@ -172,7 +172,8 @@ No import statements in the note body — the note stays prose.
 
 ## 6. File format
 
-- Extension: `.mk.md`. Content: 100% valid CommonMark + directives, UTF-8, no binary,
+- Extension: `.mk.md`. Content: CommonMark + GFM (tables, task lists,
+  strikethrough, autolinks) + directives, UTF-8, no binary,
   no required header. Any `.mk.md` file is openable by any markdown tool today.
 - Frontmatter (YAML) optional, for `uses:` and note metadata.
 
@@ -413,7 +414,8 @@ TypeScript. (This is the CommonMark model: the spec ships with embedded examples
 any implementation must reproduce.)
 
 1. **We inherit, not invent, the hard parts.** Syntax = CommonMark + the generic
-   directive proposal; AST node shapes = `mdast-util-directive`
+   directive proposal, plus GFM (tables/task-lists/strikethrough/autolinks);
+   AST node shapes = `mdast-util-directive`
    (textDirective / leafDirective / containerDirective with `name`, `attributes`,
    `children`). Parsers for this already exist in several ecosystems; a third
    party may use ours, theirs, or write one.

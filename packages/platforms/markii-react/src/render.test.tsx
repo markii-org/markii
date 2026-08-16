@@ -503,6 +503,52 @@ describe('renderMark — collapsed script marker (DESIGN.md §8)', () => {
   });
 });
 
+describe('renderMark — GFM (tables, task lists, strikethrough, autolinks)', () => {
+  it('renders a GFM table as <table> with rows and cells, plus a directive after it in the same document', () => {
+    const { container } = renderFixture('12-gfm-table.mk.md');
+    const table = container.querySelector('table');
+    expect(table).not.toBeNull();
+    expect(table?.querySelectorAll('tr')).toHaveLength(3); // header + 2 rows
+    expect(table?.querySelectorAll('td')).toHaveLength(6);
+    expect(container.querySelector('.mk-callout--info')).not.toBeNull();
+  });
+
+  it('renders GFM task-list checkboxes with the correct checked state', () => {
+    const { container } = renderFixture('13-task-list.mk.md');
+    const checkboxes = container.querySelectorAll<HTMLInputElement>(
+      'input[type="checkbox"]',
+    );
+    expect(checkboxes).toHaveLength(3);
+    expect(checkboxes[0]?.checked).toBe(true);
+    expect(checkboxes[1]?.checked).toBe(false);
+    expect(checkboxes[2]?.checked).toBe(false);
+  });
+
+  it('renders GFM strikethrough as <del>, a sanitized autolink, and an inline directive, all in one document', () => {
+    const { container } = renderFixture('14-strikethrough.mk.md');
+    expect(container.querySelector('del')).toHaveTextContent(
+      'This text is struck through',
+    );
+    const link = screen.getByRole('link', {
+      name: 'https://example.com/bare-autolink',
+    });
+    expect(link).toHaveAttribute('href', 'https://example.com/bare-autolink');
+    expect(container.querySelector('kbd.mk-kbd')).toHaveTextContent('Ctrl+S');
+  });
+
+  it('renders a javascript: autolink neutralized (no href) rather than throwing', () => {
+    expect(() =>
+      render(renderMark('<javascript:alert(1)>', defaultRegistry)),
+    ).not.toThrow();
+    const { container } = render(
+      renderMark('<javascript:alert(1)>', defaultRegistry),
+    );
+    const link = container.querySelector('a');
+    expect(link).not.toBeNull();
+    expect(link).not.toHaveAttribute('href');
+  });
+});
+
 // URL-sanitization behavior is a `toHast` (@markii/core) concern and is tested
 // at the hast level in @markii/core's `to-hast.test.ts` — no React/jsdom
 // involved there. This file only covers React-facing rendering behavior.

@@ -1,0 +1,77 @@
+{
+  "children": [
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "GFM strikethrough and autolinks"
+        }
+      ],
+      "depth": 1,
+      "type": "heading"
+    },
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": "This text is struck through"
+            }
+          ],
+          "type": "delete"
+        },
+        {
+          "type": "text",
+          "value": ", but this text is not."
+        }
+      ],
+      "type": "paragraph"
+    },
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "A GFM literal autolink with no angle brackets or link syntax at all:\n"
+        },
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": "https://example.com/bare-autolink"
+            }
+          ],
+          "title": null,
+          "type": "link",
+          "url": "https://example.com/bare-autolink"
+        }
+      ],
+      "type": "paragraph"
+    },
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "And an inline directive right after: "
+        },
+        {
+          "attributes": {},
+          "children": [
+            {
+              "type": "text",
+              "value": "Ctrl+S"
+            }
+          ],
+          "name": "kbd",
+          "type": "textDirective"
+        },
+        {
+          "type": "text",
+          "value": "."
+        }
+      ],
+      "type": "paragraph"
+    }
+  ],
+  "type": "root"
+}

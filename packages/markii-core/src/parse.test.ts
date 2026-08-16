@@ -179,3 +179,71 @@ describe('parse', () => {
     expect(tree.type).toBe('root');
   });
 });
+
+describe('parse — GFM (tables, task lists, strikethrough, autolinks)', () => {
+  it('parses a GFM table into table/tableRow/tableCell nodes, alongside a directive in the same document', () => {
+    const tree = parse(readFixture('12-gfm-table.mk.md'));
+    const tables = findAll(tree, 'table');
+    expect(tables).toHaveLength(1);
+    const rows = findAll(tables[0] as Node, 'tableRow');
+    expect(rows).toHaveLength(3); // header + 2 data rows
+    const cells = findAll(tables[0] as Node, 'tableCell');
+    expect(cells).toHaveLength(9);
+
+    // The document also has a `:::callout` directive after the table — GFM
+    // and directive syntax must both parse in the same document.
+    const containers = findAll(tree, 'containerDirective');
+    expect(containers).toHaveLength(1);
+  });
+
+  it("parses a GFM task list, recording `checked` per item, and leaves an ordinary list item's `checked` unset", () => {
+    const tree = parse(readFixture('13-task-list.mk.md'));
+    const items = findAll(tree, 'listItem') as Array<
+      RootContent & { checked?: boolean | null }
+    >;
+    expect(items.map((item) => item.checked)).toEqual([
+      true,
+      false,
+      false,
+      null,
+      null,
+    ]);
+  });
+
+  it('parses GFM strikethrough into a `delete` node and a bare URL into a GFM literal autolink `link` node, alongside an inline directive', () => {
+    const tree = parse(readFixture('14-strikethrough.mk.md'));
+    const struck = findAll(tree, 'delete');
+    expect(struck).toHaveLength(1);
+
+    const links = findAll(tree, 'link');
+    expect(links).toHaveLength(1);
+    expect((links[0] as { url?: string }).url).toBe(
+      'https://example.com/bare-autolink',
+    );
+
+    const textDirectives = findAll(tree, 'textDirective');
+    expect(textDirectives).toHaveLength(1);
+  });
+
+  it('composes directive and GFM extensions regardless of `.use()` order (empirically: both parse correctly in one document)', () => {
+    const tree = parse(
+      [
+        ':::callout{type=info title="Mixed"}',
+        '| A | B |',
+        '| - | - |',
+        '| 1 | 2 |',
+        '',
+        '- [x] done',
+        '',
+        '~~gone~~ and :kbd[Ctrl+S]',
+        ':::',
+      ].join('\n'),
+    );
+    const container = findAll(tree, 'containerDirective')[0];
+    expect(container).toBeDefined();
+    expect(findAll(container as Node, 'table')).toHaveLength(1);
+    expect(findAll(container as Node, 'listItem')).toHaveLength(1);
+    expect(findAll(container as Node, 'delete')).toHaveLength(1);
+    expect(findAll(container as Node, 'textDirective')).toHaveLength(1);
+  });
+});

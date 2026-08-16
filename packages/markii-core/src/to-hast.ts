@@ -2,6 +2,7 @@ import { unified } from 'unified';
 import type { Plugin } from 'unified';
 import remarkParse from 'remark-parse';
 import remarkDirective from 'remark-directive';
+import remarkGfm from 'remark-gfm';
 import remarkRehype from 'remark-rehype';
 import { visit } from 'unist-util-visit';
 import type { Code, Root as MdastRoot } from 'mdast';
@@ -173,18 +174,25 @@ function sanitizeUrls(tree: HastRoot): void {
 }
 
 /**
- * Converts Super Markdown text straight to a sanitized hast tree: parse
- * (mdast) -> tag directive nodes + preserve code-fence meta for hast
- * conversion -> remark-rehype (hast) -> strip unsafe URLs. This is the
- * framework-agnostic half of rendering — `@markii/react` (or any other
- * renderer) turns this hast tree into its own component tree, resolving
- * `<mk-directive>` elements through a registry and `data-mk-meta` on
- * `<code>` elements however it likes (e.g. a collapsed script marker).
+ * Converts Mark text straight to a sanitized hast tree: parse (mdast, with
+ * directive + GFM syntax extensions) -> tag directive nodes + preserve
+ * code-fence meta for hast conversion -> remark-rehype (hast) -> strip
+ * unsafe URLs. GFM constructs (tables, task lists, strikethrough, autolinks)
+ * need no tagging step of their own — `remark-rehype`'s default handlers
+ * already turn them into standard `<table>`/`<input type=checkbox>`/`<del>`/
+ * `<a>` hast elements, and `sanitizeUrls` below covers every `<a href>`/
+ * `<img src>` regardless of whether it came from a GFM autolink or an
+ * ordinary link. This is the framework-agnostic half of rendering —
+ * `@markii/react` (or any other renderer) turns this hast tree into its own
+ * component tree, resolving `<mk-directive>` elements through a registry and
+ * `data-mk-meta` on `<code>` elements however it likes (e.g. a collapsed
+ * script marker).
  */
 export function toHast(text: string): HastRoot {
   const processor = unified()
     .use(remarkParse)
     .use(remarkDirective)
+    .use(remarkGfm)
     .use(tagDirectiveNodes)
     .use(preserveCodeMeta)
     .use(remarkRehype);
