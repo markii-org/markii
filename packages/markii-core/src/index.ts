@@ -6,4 +6,8 @@
 // its entry point.
 export { parse } from './parse';
 export { toHast } from './to-hast';
-export { extractScripts, type ScriptBlock } from './scripts';
+export {
+  extractScripts,
+  parseMetaAttributes,
+  type ScriptBlock,
+} from './scripts';

@@ -69,8 +69,14 @@ const ATTRIBUTE_TOKEN = /([A-Za-z_][\w-]*)(?:=(?:"([^"]*)"|'([^']*)'|(\S+)))?/g;
  * from ever resolving to an inherited `Object.prototype` member, matching
  * the defensive pattern already used for the registry (`registry.ts`) and
  * the URL-attribute lookup (`to-hast.ts`).
+ *
+ * Exported so a renderer (e.g. `@markii/react`) that wants to tell a script
+ * block from ordinary code can reuse this exact grammar instead of
+ * duplicating the brace/quote/token-scanning logic — `to-hast.ts` preserves
+ * the raw fence `meta` string onto the hast `<code>` element for exactly
+ * this purpose (see its `preserveCodeMeta` plugin).
  */
-function parseMetaAttributes(
+export function parseMetaAttributes(
   meta: string | null | undefined,
 ): Record<string, string> {
   const attrs: Record<string, string> = Object.create(null) as Record<

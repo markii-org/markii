@@ -17,7 +17,8 @@ packages/markii-core    framework-agnostic reference impl — ZERO React depende
 packages/platforms/markii-react   the reference L1 renderer, a platform adapter
                         (one consumer of @markii/core among possible many):
   src/registry.ts    Registry types + createRegistry/mergeRegistries
-  src/render.tsx     hast + registry → React tree (incl. unknown-directive fallback)
+  src/render.tsx     hast + registry → React tree (unknown-directive fallback;
+                     folds {name=…} script blocks into a collapsed marker)
   src/components/    built-in demo components (callout, kbd, ...)
   src/doc.css        document rhythm + component internals
 packages/markii-runtime host-side scripting glue (spec §8) — neutral, no React,

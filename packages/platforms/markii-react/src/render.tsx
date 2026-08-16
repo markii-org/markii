@@ -2,9 +2,11 @@ import { Fragment } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { jsx, jsxs } from 'react/jsx-runtime';
 import { toJsxRuntime } from 'hast-util-to-jsx-runtime';
-import { toHast } from '@markii/core';
+import { toHast, parseMetaAttributes } from '@markii/core';
 import type { ValueStatus, ValueStore } from '@markii/runtime';
+import type { Element as HastElement } from 'hast';
 import type { DirectiveAttributes, Registry } from './registry';
+import { ScriptMarker } from './components/script-marker';
 import { UnknownDirective } from './components/unknown-directive';
 import { ValueDirective } from './components/value-directive';
 
@@ -172,6 +174,99 @@ function createDirectiveElement(
   };
 }
 
+/** The hast/DOM attribute `@markii/core`'s `toHast` preserves a code fence's raw `meta` string onto (see `to-hast.ts`'s `preserveCodeMeta`). */
+const CODE_META_ATTR = 'data-mk-meta';
+
+/** The bare (valueless) meta attribute that opts a script marker into rendering already-expanded. */
+const OPEN_ATTRIBUTE_KEY = 'open';
+
+/** The first element child of `node` named `tagName`, or `undefined` if there is none (or `node` itself is absent). */
+function findChildElement(
+  node: HastElement | undefined,
+  tagName: string,
+): HastElement | undefined {
+  if (!node) return undefined;
+  for (const child of node.children) {
+    if (child.type === 'element' && child.tagName === tagName) return child;
+  }
+  return undefined;
+}
+
+/** Reads the fence's language tag off the `language-<lang>` class mdast-util-to-hast's default `code` handler adds, or `''` if there is none. */
+function getLanguage(codeNode: HastElement | undefined): string {
+  const classNames = codeNode?.properties.className ?? [];
+  for (const name of classNames) {
+    if (typeof name === 'string' && name.startsWith('language-')) {
+      return name.slice('language-'.length);
+    }
+  }
+  return '';
+}
+
+/**
+ * Reads a code element's exact fence body text back out of its hast text
+ * children. `mdast-util-to-hast`'s `code` handler appends exactly one
+ * trailing `"\n"` to a non-empty value when building the hast text node
+ * (`handlers/code.js`: `node.value ? node.value + '\n' : ''`) — stripping
+ * that single trailing newline back off recovers the original fenced-code
+ * source exactly, byte-for-byte, rather than re-deriving it from anywhere
+ * else.
+ */
+function getCodeText(codeNode: HastElement | undefined): string {
+  if (!codeNode) return '';
+  let text = '';
+  for (const child of codeNode.children) {
+    if (child.type === 'text') text += child.value;
+  }
+  return text.endsWith('\n') ? text.slice(0, -1) : text;
+}
+
+interface PreElementProps {
+  node?: HastElement;
+  children?: ReactNode;
+}
+
+/**
+ * Overrides hast-util-to-jsx-runtime's default `<pre>` conversion so a
+ * script code block (DESIGN.md §8: a fence whose meta carries a
+ * `{name=...}` attribute group) renders as a collapsed, expandable
+ * `ScriptMarker` instead of a raw `<pre><code>` wall. Reads the raw hast
+ * node (passed via `toJsxRuntime`'s `passNode` option) purely to reach the
+ * `data-mk-meta` string `@markii/core`'s `toHast` stashed on the nested
+ * `<code>` element — meta is otherwise dropped by the default hast
+ * conversion — and reuses `@markii/core`'s own `parseMetaAttributes` to
+ * read it, rather than re-implementing the brace/quote/token grammar here.
+ * Never throws: any malformed/unparsable meta, or a code block with no
+ * `name` attribute at all, falls through to ordinary `<pre>{children}</pre>`
+ * rendering — the same graceful-degradation spirit as the unknown-directive
+ * fallback (Architecture rule 3).
+ */
+function PreElement({ node, children }: PreElementProps): ReactElement {
+  try {
+    const codeNode = findChildElement(node, 'code');
+    const meta = codeNode?.properties[CODE_META_ATTR];
+    if (typeof meta === 'string') {
+      const attrs = parseMetaAttributes(meta);
+      const name = attrs.name;
+      if (name) {
+        return (
+          <ScriptMarker
+            name={name}
+            lang={getLanguage(codeNode)}
+            src={attrs.src || undefined}
+            code={getCodeText(codeNode)}
+            open={Object.hasOwn(attrs, OPEN_ATTRIBUTE_KEY)}
+          />
+        );
+      }
+    }
+  } catch {
+    // Malformed meta degrades to ordinary code-block rendering below —
+    // script detection must never be able to break rendering.
+  }
+  return <pre>{children}</pre>;
+}
+
 /**
  * Renders Super Markdown text to a React element tree using `registry` to
  * resolve directive names. Pipeline: `@markii/core`'s `toHast` (parse -> tag
@@ -204,7 +299,8 @@ export function renderSmd(
       Fragment,
       jsx,
       jsxs,
-      components: { 'mk-directive': DirectiveElement },
+      passNode: true,
+      components: { 'mk-directive': DirectiveElement, pre: PreElement },
     }) as ReactElement;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

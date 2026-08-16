@@ -71,3 +71,26 @@ describe('URL sanitization (hast level)', () => {
     }
   });
 });
+
+describe('code-fence meta preservation (hast level)', () => {
+  it('preserves a fence meta string onto the hast <code> element as data-mk-meta', () => {
+    const tree = toHast('```lua {name=stars}\nreturn 1\n```');
+    const code = findElement(tree, 'code');
+    expect(code?.properties['data-mk-meta']).toBe('{name=stars}');
+    // The language class mdast-util-to-hast already adds must survive
+    // untouched alongside the new attribute.
+    expect(code?.properties.className).toEqual(['language-lua']);
+  });
+
+  it('leaves an ordinary code fence with no meta unmarked', () => {
+    const tree = toHast('```lua\nprint("hi")\n```');
+    const code = findElement(tree, 'code');
+    expect(code?.properties['data-mk-meta']).toBeUndefined();
+  });
+
+  it('does not add data-mk-meta to a fence with no meta and no language either', () => {
+    const tree = toHast('```\nplain\n```');
+    const code = findElement(tree, 'code');
+    expect(code?.properties['data-mk-meta']).toBeUndefined();
+  });
+});

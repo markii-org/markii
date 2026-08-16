@@ -4,7 +4,7 @@ import remarkParse from 'remark-parse';
 import remarkDirective from 'remark-directive';
 import remarkRehype from 'remark-rehype';
 import { visit } from 'unist-util-visit';
-import type { Root as MdastRoot } from 'mdast';
+import type { Code, Root as MdastRoot } from 'mdast';
 import type { Element as HastElement, Root as HastRoot } from 'hast';
 import type {
   ContainerDirective,
@@ -75,6 +75,38 @@ function normalizeAttributes(
   return result;
 }
 
+/**
+ * The hast/DOM attribute a fenced code block's raw `meta` string (e.g.
+ * `"{name=stars}"`) is preserved onto, since `mdast-util-to-hast`'s default
+ * `code` handler drops mdast `meta` entirely when building the hast
+ * `<code>` element.
+ */
+const CODE_META_ATTR = 'data-mk-meta';
+
+/**
+ * Small remark plugin: copies a code fence's raw `meta` string onto the
+ * mdast `code` node's `data.hProperties`, so it survives the mdast->hast
+ * conversion as a `data-mk-meta` attribute on the resulting `<code>`
+ * element (`mdast-util-to-hast`'s `code` handler applies `hProperties` to
+ * the `<code>` it builds, not the wrapping `<pre>` — see its
+ * `handlers/code.js`). This is deliberately generic meta *preservation*,
+ * not script detection: `@markii/core` stays framework-agnostic and knows
+ * nothing about "script blocks" here. A renderer that cares (e.g.
+ * `@markii/react`) reads this attribute and parses it with this package's
+ * `parseMetaAttributes` (`scripts.ts`) to decide whether a code block is a
+ * script; a renderer that doesn't care ignores the attribute and the block
+ * still renders as plain `<pre><code>` either way.
+ */
+const preserveCodeMeta: Plugin<[], MdastRoot> = () => (tree) => {
+  visit(tree, 'code', (node: Code) => {
+    if (!node.meta) return;
+    node.data = {
+      ...node.data,
+      hProperties: { [CODE_META_ATTR]: node.meta },
+    };
+  });
+};
+
 /** URL schemes allowed in `href`/`src`, matched case-insensitively. */
 const SAFE_URL_PROTOCOLS = new Set(['http', 'https', 'mailto', 'tel']);
 
@@ -142,17 +174,19 @@ function sanitizeUrls(tree: HastRoot): void {
 
 /**
  * Converts Super Markdown text straight to a sanitized hast tree: parse
- * (mdast) -> tag directive nodes for hast conversion -> remark-rehype
- * (hast) -> strip unsafe URLs. This is the framework-agnostic half of
- * rendering — `@markii/react` (or any other renderer) turns this hast tree
- * into its own component tree, resolving `<mk-directive>` elements through
- * a registry.
+ * (mdast) -> tag directive nodes + preserve code-fence meta for hast
+ * conversion -> remark-rehype (hast) -> strip unsafe URLs. This is the
+ * framework-agnostic half of rendering — `@markii/react` (or any other
+ * renderer) turns this hast tree into its own component tree, resolving
+ * `<mk-directive>` elements through a registry and `data-mk-meta` on
+ * `<code>` elements however it likes (e.g. a collapsed script marker).
  */
 export function toHast(text: string): HastRoot {
   const processor = unified()
     .use(remarkParse)
     .use(remarkDirective)
     .use(tagDirectiveNodes)
+    .use(preserveCodeMeta)
     .use(remarkRehype);
   const mdastTree = processor.parse(text);
   const hastTree = processor.runSync(mdastTree) as HastRoot;

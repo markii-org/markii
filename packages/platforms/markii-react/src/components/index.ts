@@ -7,6 +7,8 @@ export { Callout } from './callout';
 export type { CalloutType } from './callout';
 export { Kbd } from './kbd';
 export { Rating } from './rating';
+export { ScriptMarker } from './script-marker';
+export type { ScriptMarkerProps } from './script-marker';
 export { UnknownDirective } from './unknown-directive';
 export type { UnknownDirectiveProps } from './unknown-directive';
 export { ValueDirective } from './value-directive';

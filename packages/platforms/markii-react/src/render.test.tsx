@@ -374,6 +374,130 @@ describe('renderSmd — data=name attribute binding', () => {
   });
 });
 
+describe('renderSmd — collapsed script marker (DESIGN.md §8)', () => {
+  it('renders a script code block (meta carries {name=...}) as a collapsed, folded mk-script marker, not a bare <pre>', () => {
+    const { container } = render(
+      renderSmd(
+        [
+          '```lua {name=stars}',
+          'local function greet(who)',
+          '  return "hi " .. who',
+          'end',
+          '```',
+        ].join('\n'),
+        defaultRegistry,
+      ),
+    );
+
+    const marker = container.querySelector('details.mk-script');
+    expect(marker).not.toBeNull();
+    // Folded by default: React omits the `open` attribute entirely for
+    // `open={false}`, so its absence IS the folded state.
+    expect(marker).not.toHaveAttribute('open');
+
+    // No bare, un-collapsed <pre> for this fence — the whole block lives
+    // inside the <details> marker.
+    expect(container.querySelector('pre:not(.mk-script__code)')).toBeNull();
+
+    const summary = marker?.querySelector('.mk-script__summary');
+    expect(summary).toHaveTextContent('stars');
+    expect(summary).toHaveTextContent('lua');
+
+    // Expanding reveals the exact original code: internal indentation and
+    // line breaks intact, byte-for-byte.
+    const code = marker?.querySelector('.mk-script__code code');
+    expect(code?.textContent).toBe(
+      'local function greet(who)\n  return "hi " .. who\nend',
+    );
+  });
+
+  it('renders a plain code block (no meta) unchanged — no mk-script marker', () => {
+    const { container } = render(
+      renderSmd('```lua\nprint("hi")\n```', defaultRegistry),
+    );
+
+    expect(container.querySelector('.mk-script')).toBeNull();
+    const code = container.querySelector('pre code');
+    expect(code).not.toBeNull();
+    expect(code?.textContent).toBe('print("hi")\n');
+  });
+
+  it('renders a plain code block unchanged when meta has attributes but no `name`', () => {
+    const { container } = render(
+      renderSmd(
+        '```lua {src=scripts/etl.lua}\nprint("hi")\n```',
+        defaultRegistry,
+      ),
+    );
+
+    expect(container.querySelector('.mk-script')).toBeNull();
+    expect(container.querySelector('pre code')).not.toBeNull();
+  });
+
+  it('renders a src= long-script reference marker showing the path, with an empty body handled gracefully', () => {
+    const { container } = render(
+      renderSmd(
+        '```lua {src=scripts/etl.lua name=stars}\n```',
+        defaultRegistry,
+      ),
+    );
+
+    const marker = container.querySelector('details.mk-script');
+    expect(marker).not.toBeNull();
+    const summary = marker?.querySelector('.mk-script__summary');
+    expect(summary).toHaveTextContent('stars');
+    expect(summary).toHaveTextContent('scripts/etl.lua');
+
+    // Empty body: no code element rendered, and a graceful placeholder
+    // instead of a blank <pre><code></code></pre>.
+    expect(marker?.querySelector('.mk-script__code')).toBeNull();
+    expect(marker?.querySelector('.mk-script__empty')).not.toBeNull();
+  });
+
+  it('renders the details expanded when the meta carries a bare `open` attribute', () => {
+    const { container } = render(
+      renderSmd('```lua {name=stars open}\nreturn 1\n```', defaultRegistry),
+    );
+
+    const marker = container.querySelector('details.mk-script');
+    expect(marker).toHaveAttribute('open');
+  });
+
+  it('still treats directive-like text inside a NON-script code fence as literal (unaffected by script-marker detection)', () => {
+    const { container } = render(
+      renderSmd(
+        [
+          '```',
+          ':::callout{type=warning title="Not real"}',
+          'This should NOT render as a callout.',
+          ':::',
+          '```',
+        ].join('\n'),
+        defaultRegistry,
+      ),
+    );
+
+    expect(container.querySelector('.mk-callout')).toBeNull();
+    expect(container.querySelector('.mk-script')).toBeNull();
+    const code = container.querySelector('pre code');
+    expect(code?.textContent ?? '').toContain(
+      ':::callout{type=warning title="Not real"}',
+    );
+  });
+
+  it('never throws even if meta parsing goes sideways, and falls back to ordinary code rendering', () => {
+    // An attribute group with an unterminated quote: `findAttributeGroup`
+    // inside `parseMetaAttributes` scans past the unmatched `"` to end of
+    // string without finding a closing `}`, so no attribute group is
+    // found at all — degrades to "not a script", not a crash.
+    expect(() =>
+      render(
+        renderSmd('```lua {name="unterminated\nprint(1)\n```', defaultRegistry),
+      ),
+    ).not.toThrow();
+  });
+});
+
 // URL-sanitization behavior is a `toHast` (@markii/core) concern and is tested
 // at the hast level in @markii/core's `to-hast.test.ts` — no React/jsdom
 // involved there. This file only covers React-facing rendering behavior.

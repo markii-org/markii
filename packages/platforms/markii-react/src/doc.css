@@ -130,6 +130,39 @@
   font-style: italic;
 }
 
+/* ---------- script marker ---------- */
+
+.mk-script {
+  border: 1px solid #d4d4d8;
+  border-radius: 6px;
+  background: #fafafa;
+}
+
+.mk-script__summary {
+  cursor: pointer;
+  padding: 0.5rem 0.75rem;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.85em;
+  color: #52525b;
+}
+
+.mk-script[open] > .mk-script__summary {
+  border-bottom: 1px solid #e4e4e7;
+}
+
+.mk-script__code {
+  margin: 0.75rem;
+  margin-block-start: 0;
+}
+
+.mk-script__empty {
+  margin: 0.75rem;
+  margin-block-start: 0;
+  font-size: 0.85em;
+  font-style: italic;
+  color: #94a3b8;
+}
+
 /* ---------- unknown directive fallback ---------- */
 
 .mk-unknown {
