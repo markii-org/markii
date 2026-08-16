@@ -7,7 +7,11 @@ Mark is a markdown format that renders your own components inline. It is CommonM
 The product is the format and its reference library, not an application. A `.mk.md` file opens as ordinary markdown in any editor, and a Mark-aware renderer adds the components on top.
 
 > [!NOTE]
-> This is version 0.1.0. The `@markii/*` libraries are not on npm yet. You can run everything from source and try the hosted playground today.
+> This is version 0.1.0. The `@markii/*` libraries are published on npm. You can also run everything from source and try the hosted playground today.
+
+```
+npm install @markii/core @markii/react
+```
 
 ## Try it
 
@@ -80,4 +84,4 @@ DESIGN.md is the specification and the source of truth for syntax, architecture,
 
 ## Status
 
-Version 0.1.0, semantic versioning. Implemented and tested (511 tests): CommonMark and GFM, the directive system, the twelve-component standard library, the Lua sandbox with the full scripting loop, and the bundle format. On the roadmap: layout presets, shareable component packs, frontmatter, a terminatable-worker host, and npm publishing.
+Version 0.1.0, semantic versioning. Implemented and tested (511 tests): CommonMark and GFM, the directive system, the twelve-component standard library, the Lua sandbox with the full scripting loop, and the bundle format. On the roadmap: layout presets, shareable component packs, frontmatter, and a terminatable-worker host.
