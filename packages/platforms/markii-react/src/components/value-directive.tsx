@@ -1,5 +1,6 @@
 import type { ReactElement, ReactNode } from 'react';
 import type { ValueStore } from '@markii/runtime';
+import { resolveStorePath } from '../store-path';
 
 export interface ValueDirectiveProps {
   store: ValueStore | undefined;
@@ -38,26 +39,32 @@ function stringifyStoredValue(value: unknown): string {
 
 /**
  * `:value[name]` (DESIGN.md §8) — renders a named value from the value
- * store inline. Built into the renderer (see `render.tsx`'s
- * `createDirectiveElement`), not a registry entry: it is part of the
- * render-time interpolation contract, resolved before any component
- * lookup. Never throws: no store, an empty name, or a name the store
- * doesn't (yet) have all render the same graceful missing-value marker —
- * the same degrade-gracefully spirit as the unknown-directive fallback,
- * just for values instead of components.
+ * store inline. `name` may be a dotted path (`repo.stars`) reaching into a
+ * stored object/array, resolved via `resolveStorePath` (`../store-path`) —
+ * a bare name works exactly as before. Built into the renderer (see
+ * `render.tsx`'s `createDirectiveElement`), not a registry entry: it is
+ * part of the render-time interpolation contract, resolved before any
+ * component lookup. Never throws: no store, an empty name, or a path the
+ * store doesn't (yet) resolve all render the same graceful missing-value
+ * marker — the same degrade-gracefully spirit as the unknown-directive
+ * fallback, just for values instead of components.
  */
 export function ValueDirective({
   store,
   children,
 }: ValueDirectiveProps): ReactElement {
   const name = extractPlainText(children).trim();
-  const entry = name ? store?.get(name) : undefined;
+  const resolved = name ? resolveStorePath(store, name) : undefined;
 
-  if (!entry || entry.status === 'missing' || entry.status === 'error') {
+  if (
+    !resolved ||
+    resolved.status === 'missing' ||
+    resolved.status === 'error'
+  ) {
     return (
       <span
         className="mk-value mk-value--missing"
-        title={entry?.error ?? undefined}
+        title={resolved?.error ?? undefined}
       >
         {name ? `{${name}}` : '{value}'}
       </span>
@@ -65,6 +72,8 @@ export function ValueDirective({
   }
 
   const className =
-    entry.status === 'stale' ? 'mk-value mk-value--stale' : 'mk-value';
-  return <span className={className}>{stringifyStoredValue(entry.value)}</span>;
+    resolved.status === 'stale' ? 'mk-value mk-value--stale' : 'mk-value';
+  return (
+    <span className={className}>{stringifyStoredValue(resolved.value)}</span>
+  );
 }

@@ -269,6 +269,28 @@ describe('renderMark — :value[name] interpolation', () => {
     );
     expect(container.querySelector('.mk-value--missing')).not.toBeNull();
   });
+
+  it('renders a nested field of a stored object via a dotted path', () => {
+    const store = createValueStore({
+      repo: { value: { stars: 99 }, status: 'fresh', ranAt: 1000 },
+    });
+    const { container } = render(
+      renderMark(':value[repo.stars]', defaultRegistry, store),
+    );
+    expect(container.querySelector('.mk-value')).toHaveTextContent('99');
+  });
+
+  it('renders a graceful missing marker for an unresolved dotted path', () => {
+    const store = createValueStore({
+      repo: { value: { stars: 99 }, status: 'fresh', ranAt: 1000 },
+    });
+    const { container } = render(
+      renderMark(':value[repo.missing]', defaultRegistry, store),
+    );
+    const missing = container.querySelector('.mk-value--missing');
+    expect(missing).not.toBeNull();
+    expect(missing).toHaveTextContent('repo.missing');
+  });
 });
 
 describe('renderMark — data=name attribute binding', () => {
@@ -373,6 +395,32 @@ describe('renderMark — data=name attribute binding', () => {
 
     expect(seen()?.data).toBe(42);
     expect(seen()?.attributes).toEqual({ label: 'GitHub stars' });
+  });
+
+  it('resolves a dotted path into a nested field of a stored object', () => {
+    const store = createValueStore({
+      repo: {
+        value: { stars: 42, forks: 7, spark: [3, 5, 4] },
+        status: 'fresh',
+        ranAt: 1000,
+      },
+    });
+    const { registry, seen } = probeRegistry();
+    render(renderMark('::probe{data=repo.stars}', registry, store));
+
+    expect(seen()?.data).toBe(42);
+    expect(seen()?.dataStatus).toBe('fresh');
+  });
+
+  it('degrades gracefully when a dotted path does not resolve', () => {
+    const store = createValueStore({
+      repo: { value: { stars: 42 }, status: 'fresh', ranAt: 1000 },
+    });
+    const { registry, seen } = probeRegistry();
+    render(renderMark('::probe{data=repo.nope}', registry, store));
+
+    expect(seen()?.data).toBeUndefined();
+    expect(seen()?.dataStatus).toBe('missing');
   });
 });
 

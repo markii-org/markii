@@ -123,6 +123,24 @@
   line-height: 1;
 }
 
+/*
+ * `display: flex; flex-direction: column` is load-bearing here, not just
+ * `> * + *` margin: several block-holding components (`stat`, `badge`)
+ * declare their OWN outer display as `inline-flex`/`inline-block` (correct
+ * for sitting inline in a sentence), so without a flex/grid parent they
+ * flow side-by-side on the same line instead of stacking — a
+ * `margin-block-start` on a same-line inline-level sibling creates no
+ * visible gap. Making the body a column flex container forces every
+ * child's *used* display to blockify (CSS Flexbox: a flex item's outer
+ * display is always block-level), so they stack regardless of the
+ * component's own declared display, and the margin rule below then has
+ * something to actually separate.
+ */
+.mk-callout__body {
+  display: flex;
+  flex-direction: column;
+}
+
 .mk-callout__body > :first-child {
   margin-block-start: 0.5rem;
 }
@@ -231,6 +249,12 @@
   margin-block-end: 0.5rem;
 }
 
+/* Blockifies inline-flex/inline-block children (`stat`, `badge`, ...) so they stack — see `.mk-callout__body`'s comment above for why this is load-bearing. */
+.mk-details__body {
+  display: flex;
+  flex-direction: column;
+}
+
 .mk-details__body > :first-child {
   margin-block-start: 0.5rem;
 }
@@ -251,6 +275,12 @@
 .mk-card__title {
   font-weight: 600;
   margin-block-end: 0.5rem;
+}
+
+/* Blockifies inline-flex/inline-block children (`stat`, `badge`, ...) so they stack — see `.mk-callout__body`'s comment above for why this is load-bearing. */
+.mk-card__body {
+  display: flex;
+  flex-direction: column;
 }
 
 .mk-card__body > :first-child {
@@ -348,8 +378,19 @@
   border-bottom-color: #1d4ed8;
 }
 
+/* Blockifies inline-flex/inline-block children (`stat`, `badge`, ...) so they stack — see `.mk-callout__body`'s comment above for why this is load-bearing. */
 .mk-tab {
+  display: flex;
+  flex-direction: column;
   padding-block-start: 0.75rem;
+}
+
+.mk-tab > :first-child {
+  margin-block-start: 0;
+}
+
+.mk-tab > * + * {
+  margin-block-start: 0.5rem;
 }
 
 /* ---------- stat ---------- */

@@ -56,9 +56,24 @@ body {
   min-width: 0;
 }
 
+/*
+ * Both pane titles share this rule (Source is plain text, Preview also
+ * carries the "Run scripts" button via `--row` below) — a fixed `height`
+ * here, not just matching padding, is what keeps the two panes' headers
+ * (and therefore the two columns below them) the same height regardless of
+ * whether a given title's content is a bare text node or a button-sized
+ * flex row: `min-height` alone would let Preview's naturally-taller button
+ * row win and leave Source shorter. `display: flex; align-items: center`
+ * on the shared rule (not just `--row`) vertically centers the plain
+ * "Source" text the same way the button is centered on the Preview side.
+ */
 .playground__pane-title {
   margin: 0;
   padding: 0.5rem 1rem;
+  height: 3rem;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -67,8 +82,6 @@ body {
 }
 
 .playground__pane-title--row {
-  display: flex;
-  align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
 }

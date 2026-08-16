@@ -9,6 +9,7 @@ import type { DirectiveAttributes, Registry } from './registry';
 import { ScriptMarker } from './components/script-marker';
 import { UnknownDirective } from './components/unknown-directive';
 import { ValueDirective } from './components/value-directive';
+import { resolveStorePath } from './store-path';
 
 function parseAttributes(json: string | undefined): DirectiveAttributes {
   if (!json) return {};
@@ -102,12 +103,14 @@ interface ResolvedDataBinding {
 
 /**
  * Splits a `data=<name>` attribute (if present) off `attributes`, resolves
- * `<name>` against `store`, and returns the resolved binding plus the
- * remaining attributes (every other attribute is untouched — this only
- * ever special-cases the `data` key). Never throws: no store, an empty/bare
- * `data` attribute, and an unknown name all degrade to `dataStatus:
- * 'missing'` with `data: undefined`, the same graceful-degradation spirit
- * as the unknown-directive fallback.
+ * `<name>` against `store` — `<name>` may be a dotted path (`repo.stars`)
+ * reaching into a stored object/array, or a bare name, via
+ * `resolveStorePath` (`./store-path`) — and returns the resolved binding
+ * plus the remaining attributes (every other attribute is untouched — this
+ * only ever special-cases the `data` key). Never throws: no store, an
+ * empty/bare `data` attribute, an unknown root name, and an unresolved path
+ * segment all degrade to `dataStatus: 'missing'` with `data: undefined`,
+ * the same graceful-degradation spirit as the unknown-directive fallback.
  */
 function resolveDataAttribute(
   attributes: DirectiveAttributes,
@@ -122,12 +125,12 @@ function resolveDataAttribute(
     return { attributes: rest, data: undefined, dataStatus: 'missing' };
   }
 
-  const entry = store?.get(rawName);
-  if (!entry) {
-    return { attributes: rest, data: undefined, dataStatus: 'missing' };
-  }
-
-  return { attributes: rest, data: entry.value, dataStatus: entry.status };
+  const resolved = resolveStorePath(store, rawName);
+  return {
+    attributes: rest,
+    data: resolved.value,
+    dataStatus: resolved.status,
+  };
 }
 
 // hast-util-to-jsx-runtime's `Components` map is keyed by `JSX.IntrinsicElements`

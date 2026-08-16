@@ -234,7 +234,9 @@ Rules that keep this a *note* and not a program:
   schedules live in the app, never inside Lua (no timers in the sandbox).
 - Values reach prose by **render-time interpolation**, never by rewriting the
   file: `:value[stars]` renders a named value inline; `{data=stars}` feeds it to
-  a component. The `.mk.md` source stays clean — values overlay the document.
+  a component. Both accept a **dotted path** — `:value[repo.stars]`,
+  `{data=repo.spark}` — to reach a field of an object/array a script returned
+  (own-property access only, so it can't traverse into the prototype chain). The `.mk.md` source stays clean — values overlay the document.
 - Directives reference values by name (`data=stars`). If the value is missing or the
   script hasn't run, the component renders its empty/stale state — same graceful
   degradation as unknown directives.
