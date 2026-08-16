@@ -159,6 +159,15 @@ Timeline.tsx   the component (props typed; schema derivable from types or zod)
 ```
 
 Installing a pack merges its components into the registry under its namespace.
+An author references a pack component by an explicit **prefixed name they type
+themselves** — `:::ana-timeline` — never an auto-registered bare name. A
+directive name may not contain `:` (it is reserved syntax), so the namespace
+prefix uses `-` or `_`. Nothing is imported implicitly: like a language import,
+the author opts in by typing the prefixed name. On a literal name collision the
+registry resolves last-wins by merge order, but prefixes make collisions a
+non-issue by convention. Shared *code* travels the same way — a pack is the
+distribution unit for reusable Lua modules too (`require "ana/http"`), so a long
+script is maintained once, not copied per note.
 Notes optionally declare intent in frontmatter — purely informative, drives the
 fallback message ("this note uses pack `ana`, not installed"):
 
@@ -285,6 +294,17 @@ runtimes without touching the format.
 
 - **Short scripts** are inline fenced blocks — deliberately ordinary code blocks,
   so every non-scripting viewer degrades to readable highlighted code.
+- **Only a fenced block carrying `{name=…}` (or `{src=…}`) is runnable.** A bare
+  ` ```lua ` block with no such attribute is display-only and never executes, so
+  example code can sit in a note harmlessly. The attribute is the sole
+  runnable-vs-display switch; no bespoke non-code syntax is introduced, precisely
+  so the block still degrades to highlighted code everywhere else.
+- **Script presentation is the renderer's choice, not the format's.** The
+  reference renderer folds a runnable block to a collapsed one-line marker
+  (`⚙ name · lua`) by default, expandable on demand; a renderer may instead show
+  it in full or hide it entirely in a reading view. The format's only rule is
+  that the code stays in the file — a plain markdown viewer always shows it — so
+  hiding it in a polished view never costs portability or provenance.
 - **Long scripts** never bloat the note: the block becomes a one-line reference,
   ` ```lua {src=scripts/etl.lua name=stars}` ` with an empty body, and the code
   lives in the bundle's `scripts/`. The note keeps a visible marker; prose stays
@@ -319,7 +339,7 @@ note.mkbundle/          bundle: a plain directory…
   note.mk.md          the document (unchanged syntax; relative refs into the bundle)
   assets/           images, attachments
   scripts/          script files too long to inline: ``lua {src=scripts/etl.lua name=x}``
-  cache/            script outputs & fetched data — regenerable, gitignored
+  .cache/           script outputs & fetched data — regenerable, gitignored
 note.mkbundle (file)    …or the same directory zipped, for sharing/export
 ```
 
@@ -330,7 +350,15 @@ note.mkbundle (file)    …or the same directory zipped, for sharing/export
   the bundle, so links are relative and can't dangle — moving the bundle moves
   everything. This is what "linking files next to the note" was missing: the bundle
   boundary makes the note + its dependencies one object.
-- `cache/` is explicitly disposable. Deleting it must never lose authored content.
+- `.cache/` is explicitly disposable. Deleting it must never lose authored content.
+  It is dot-prefixed so editors and file explorers hide it by default — it is the
+  host's to write, never the author's to edit.
+- A plain `.mk.md` has no `.cache/`, so running its scripts is possible but
+  *ephemeral*: the host keeps returned values in an in-memory store for the
+  session and persists nothing. Persistence — offline, last-known values — is
+  exactly what promoting the file to a bundle buys, and that promotion is a host
+  choice, never forced. Rendering a bare file stays pure: bound values show their
+  empty state until a run fills them in memory.
 
 ## 10. Security model
 
@@ -351,7 +379,7 @@ specific grants.**
   ```json
   "permissions": {
     "net":    ["api.github.com"],
-    "bundle": ["read", "write:cache/"]
+    "bundle": ["read", "write:.cache/"]
   }
   ```
 
@@ -391,12 +419,12 @@ app-scoped sandbox): **the bundle is the script's entire filesystem.**
 - API is `bundle.read(path)` / `bundle.write(path, data)` — no absolute paths, no
   `..`, no symlink following; the host resolves everything inside the bundle root
   and rejects escapes.
-- Within the bundle, write access is **`cache/` only by default**. Scripts can never
+- Within the bundle, write access is **`.cache/` only by default**. Scripts can never
   write `note.mk.md` (no self-modifying documents) and never `manifest.json` — that
   one is load-bearing: a script that can edit the manifest can grant itself
   permissions. Reads are bundle-wide (assets, cache, own scripts).
 - The ETL pattern falls out naturally: fetch via granted `net` capability → write
-  normalized data to `cache/repo-stats.json` → later runs (or offline opens) read
+  normalized data to `.cache/repo-stats.json` → later runs (or offline opens) read
   the cache; components render last-known data with a staleness indicator. Add a
   `cache.get(key, ttl, fn)` helper so "fetch unless fresh" is one line.
 
