@@ -35,6 +35,17 @@ export interface RunScriptOptions {
   maxFetchBytes?: number;
   limits?: Partial<ScriptLimits>;
   marshalLimits?: Partial<MarshalLimits>;
+  /**
+   * Forwarded to `./globals`' `createEmptyLuaEngine` as its
+   * `wasmUri` option (wasmoon's `customWasmUri`). Left `undefined` (the
+   * default), engine creation is byte-for-byte the same as before this
+   * option existed: local `node_modules` resolution in Node, the unpkg CDN
+   * default in an unconfigured browser bundle. A host that bundles its own
+   * copy of wasmoon's `glue.wasm` (e.g. the playground, to avoid a runtime
+   * dependency on the unpkg CDN) passes that local URL here instead — see
+   * `createEmptyLuaEngine`'s doc comment for the full rationale.
+   */
+  wasmUri?: string;
 }
 
 export type RunScriptResult =
@@ -233,7 +244,7 @@ export async function runScript(
     ...options.marshalLimits,
   };
 
-  const engine = await createEmptyLuaEngine();
+  const engine = await createEmptyLuaEngine({ wasmUri: options.wasmUri });
   engine.global.setMemoryMax(limits.maxMemoryBytes);
 
   let thread: LuaThread | undefined;

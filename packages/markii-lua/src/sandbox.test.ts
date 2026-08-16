@@ -1,3 +1,4 @@
+import { createRequire } from 'node:module';
 import { zipSync } from 'fflate';
 import {
   createScriptView,
@@ -400,5 +401,22 @@ describe('runScript — isolation across runs', () => {
     // would return "POISONED" instead of the real upper-case result.
     const r2 = await run('return ("abc"):upper()');
     expect(r2).toEqual({ ok: true, value: 'ABC' });
+  });
+});
+
+describe('runScript — wasmUri option threads to the engine (CDN-avoidance, see ./globals)', () => {
+  it('omitting wasmUri is unaffected — default resolution still runs correctly', async () => {
+    const r = await run('return 1 + 1');
+    expect(r).toEqual({ ok: true, value: 2 });
+  });
+
+  it('an explicit wasmUri is accepted and a full run (capabilities + sandbox scrub + marshal) still succeeds', async () => {
+    const require = createRequire(import.meta.url);
+    const wasmPath = require.resolve('wasmoon/dist/glue.wasm');
+
+    const r = await run('return getmetatable == nil and ("x"):upper()', {
+      wasmUri: wasmPath,
+    });
+    expect(r).toEqual({ ok: true, value: 'X' });
   });
 });

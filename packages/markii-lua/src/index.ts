@@ -15,6 +15,7 @@ export {
   ScriptLimitError,
 } from './errors';
 
+export type { CreateEmptyLuaEngineOptions } from './globals';
 export {
   ALLOWED_GLOBALS,
   DENIED_GLOBALS,

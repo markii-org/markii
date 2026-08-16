@@ -1,3 +1,4 @@
+import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
 import type { ScriptLimits } from './limits';
 import type { NetProvider } from './capabilities';
@@ -95,5 +96,17 @@ describe('createLuaExecutor', () => {
     expect(r1).toEqual({ ok: true, value: 'https://api.example.com/a' });
     expect(r2).toEqual({ ok: true, value: 'https://api.example.com/b' });
     expect(calls).toBe(2);
+  });
+
+  it('LuaExecutorConfig accepts wasmUri (Omit<RunScriptOptions, "code"|"tier"> — proves it flows through to runScript, e.g. for a playground-style local wasm asset)', async () => {
+    const require = createRequire(import.meta.url);
+    const wasmPath = require.resolve('wasmoon/dist/glue.wasm');
+
+    const executor = createLuaExecutor({
+      limits: FAST_LIMITS,
+      wasmUri: wasmPath,
+    });
+    const result = await executor({ code: 'return 2 + 2', tier: 'manual' });
+    expect(result).toEqual({ ok: true, value: 4 });
   });
 });

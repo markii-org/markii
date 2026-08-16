@@ -10,6 +10,14 @@ import {
   createMemoryCacheProvider,
   DEMO_NET_GRANTS,
 } from './script-host';
+// Vite `?url` asset import: ships wasmoon's `glue.wasm` as a hashed file in
+// this app's own build output and resolves to that local URL at runtime,
+// instead of `@markii/lua`'s default (unconfigured) browser behavior of
+// fetching it from `https://unpkg.com/wasmoon@<version>/dist/glue.wasm` —
+// see `@markii/lua`'s `createEmptyLuaEngine`/`RunScriptOptions` doc comments
+// for why that CDN default exists and why a host would want to avoid it.
+// `*?url` is typed by `vite/client` (already in this app's `tsconfig.json`).
+import wasmUrl from 'wasmoon/dist/glue.wasm?url';
 import { CodeEditor } from './CodeEditor';
 import { PreviewErrorBoundary } from './PreviewErrorBoundary';
 import { getParseStatus } from './parse-status';
@@ -38,6 +46,10 @@ const luaExecutor = createLuaExecutor({
   net: createFetchNetProvider(),
   netGrants: DEMO_NET_GRANTS,
   cache: createMemoryCacheProvider(),
+  // Local bundled asset (see the `wasmUrl` import above) — keeps this dev
+  // harness offline-capable instead of depending on the unpkg CDN at
+  // script-run time.
+  wasmUri: wasmUrl,
 });
 
 type RunState =

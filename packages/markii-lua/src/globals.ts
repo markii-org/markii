@@ -271,14 +271,37 @@ export const DENIED_GLOBALS: readonly string[] = [
   '_VERSION',
 ];
 
+export interface CreateEmptyLuaEngineOptions {
+  /**
+   * Forwarded verbatim as wasmoon's `LuaFactory` first constructor argument
+   * (`customWasmUri` — confirmed against `node_modules/wasmoon/dist/
+   * factory.d.ts`). Left `undefined` (the default), `LuaFactory` keeps its
+   * own built-in resolution: the local `node_modules/wasmoon/dist/glue.wasm`
+   * file in Node (used by this package's own Vitest suite), or — in a
+   * browser bundle with no bundler-provided URL — a fetch to
+   * `https://unpkg.com/wasmoon@<version>/dist/glue.wasm` at runtime
+   * (confirmed in `node_modules/wasmoon/dist/index.js`). That CDN fetch is
+   * exactly what makes an unconfigured browser host non-offline-capable: no
+   * network to unpkg means no script can ever run. A host that wants to
+   * avoid it (e.g. the playground, via a Vite `?url` asset import so the
+   * wasm ships in its own bundle) passes its own local URL here instead.
+   * Passing `undefined` is IDENTICAL to omitting this options object
+   * entirely — this parameter only ever narrows behavior, never changes it
+   * by default.
+   */
+  wasmUri?: string;
+}
+
 /**
  * Creates a fresh wasmoon engine with the curated, empty environment
  * described above. `traceAllocations: true` is required for the memory cap
  * (`./limits` / `./sandbox` call `engine.global.setMemoryMax`) — without it
  * wasmoon uses the plain, uncapped allocator.
  */
-export async function createEmptyLuaEngine(): Promise<LuaEngine> {
-  const factory = new LuaFactory();
+export async function createEmptyLuaEngine(
+  options?: CreateEmptyLuaEngineOptions,
+): Promise<LuaEngine> {
+  const factory = new LuaFactory(options?.wasmUri);
   const engine = await factory.createEngine({
     openStandardLibs: false,
     traceAllocations: true,

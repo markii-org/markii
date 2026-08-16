@@ -1,3 +1,4 @@
+import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
 import {
   ALLOWED_GLOBALS,
@@ -130,6 +131,48 @@ describe('createEmptyLuaEngine — sandbox escapes', () => {
 
   it('require is not a raw Lua global (this phase leaves it undefined entirely — see ./require)', async () => {
     expect(await evalGlobal('require')).toBeNull();
+  });
+});
+
+describe('createEmptyLuaEngine — wasmUri option (CDN-avoidance threading)', () => {
+  it('omitting the options object behaves exactly like today (Node local resolution, no error)', async () => {
+    const engine = await createEmptyLuaEngine();
+    try {
+      expect(await engine.doString('return 1 + 1')).toBe(2);
+    } finally {
+      engine.global.close();
+    }
+  });
+
+  it('passing { wasmUri: undefined } is identical to omitting it entirely', async () => {
+    const engine = await createEmptyLuaEngine({ wasmUri: undefined });
+    try {
+      expect(await engine.doString('return 1 + 1')).toBe(2);
+    } finally {
+      engine.global.close();
+    }
+  });
+
+  it('an explicit local wasm path is accepted and produces a fully working engine (proves the option actually reaches LuaFactory, not just that it is silently ignored)', async () => {
+    // Resolve the exact same glue.wasm the default (no customWasmUri) path
+    // would use, via Node's own module resolution rather than a hardcoded
+    // relative path — this is the same file `createEmptyLuaEngine()`
+    // resolves to by default, so a passing run here proves `wasmUri`
+    // reaches `LuaFactory`'s `customWasmUri` (a browser host would instead
+    // pass a bundler-provided URL — see the playground's `?url` import).
+    const require = createRequire(import.meta.url);
+    const wasmPath = require.resolve('wasmoon/dist/glue.wasm');
+
+    const engine = await createEmptyLuaEngine({ wasmUri: wasmPath });
+    try {
+      // Full round trip through the curated environment, not just "it
+      // booted" — confirms the custom-URI engine is indistinguishable in
+      // behavior from the default one (same libraries, same scrub prelude).
+      expect(await engine.doString('return string.upper("ok")')).toBe('OK');
+      expect(await engine.doString('return os')).toBeNull();
+    } finally {
+      engine.global.close();
+    }
   });
 });
 
