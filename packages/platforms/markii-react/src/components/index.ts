@@ -3,10 +3,13 @@ import type { Registry } from '../registry';
 import { Badge } from './badge';
 import { Callout } from './callout';
 import { Card } from './card';
+import { Chart } from './chart';
 import { Details } from './details';
 import { Figure } from './figure';
 import { Kbd } from './kbd';
+import { Progress } from './progress';
 import { Rating } from './rating';
+import { Stat } from './stat';
 import { Tab } from './tab';
 import { Tabs } from './tabs';
 
@@ -15,10 +18,13 @@ export type { BadgeVariant } from './badge';
 export { Callout } from './callout';
 export type { CalloutType } from './callout';
 export { Card } from './card';
+export { Chart } from './chart';
 export { Details } from './details';
 export { Figure } from './figure';
 export { Kbd } from './kbd';
+export { Progress } from './progress';
 export { Rating } from './rating';
+export { Stat } from './stat';
 export { Tab, DEFAULT_TAB_LABEL } from './tab';
 export { Tabs } from './tabs';
 export { ScriptMarker } from './script-marker';
@@ -54,4 +60,7 @@ export const defaultRegistry: Registry = {
   figure: { component: Figure, inline: inlineFromContract('figure') },
   tabs: { component: Tabs, inline: inlineFromContract('tabs') },
   tab: { component: Tab, inline: inlineFromContract('tab') },
+  stat: { component: Stat, inline: inlineFromContract('stat') },
+  progress: { component: Progress, inline: inlineFromContract('progress') },
+  chart: { component: Chart, inline: inlineFromContract('chart') },
 };

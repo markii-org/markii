@@ -352,6 +352,108 @@
   padding-block-start: 0.75rem;
 }
 
+/* ---------- stat ---------- */
+
+.mk-stat {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.mk-stat__value {
+  font-size: 1.8em;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.mk-stat__label {
+  font-size: 0.85em;
+  color: #71717a;
+}
+
+.mk-stat__delta {
+  font-size: 0.85em;
+  font-weight: 600;
+  color: #71717a;
+}
+
+.mk-stat__delta--up {
+  color: #15803d;
+}
+
+.mk-stat__delta--down {
+  color: #b91c1c;
+}
+
+.mk-stat__delta--flat {
+  color: #71717a;
+}
+
+/* ---------- progress ---------- */
+
+.mk-progress {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.mk-progress__label {
+  font-size: 0.85em;
+  color: #52525b;
+  flex: 0 0 auto;
+}
+
+.mk-progress__track {
+  flex: 1 1 auto;
+  height: 0.6rem;
+  border-radius: 999px;
+  background: #e4e4e7;
+  overflow: hidden;
+}
+
+.mk-progress__bar {
+  height: 100%;
+  background: #3b82f6;
+  border-radius: inherit;
+}
+
+.mk-progress__percent {
+  flex: 0 0 auto;
+  font-size: 0.85em;
+  font-variant-numeric: tabular-nums;
+  color: #52525b;
+}
+
+/* ---------- chart ---------- */
+
+.mk-chart {
+  display: block;
+  max-width: 100%;
+}
+
+.mk-chart__line {
+  fill: none;
+  stroke: #3b82f6;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.mk-chart__bar {
+  fill: #3b82f6;
+}
+
+.mk-chart--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8em;
+  font-style: italic;
+  color: #94a3b8;
+  border: 1px dashed #d4d4d8;
+  border-radius: 6px;
+}
+
 /* ---------- unknown directive fallback ---------- */
 
 .mk-unknown {

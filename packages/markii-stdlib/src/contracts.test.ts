@@ -46,15 +46,18 @@ describe('STANDARD_COMPONENTS', () => {
     }
   });
 
-  it('seeds exactly the nine components that exist in @markii/react today', () => {
+  it('seeds exactly the twelve components that exist in @markii/react today', () => {
     expect(Object.keys(STANDARD_COMPONENTS).sort()).toEqual([
       'badge',
       'callout',
       'card',
+      'chart',
       'details',
       'figure',
       'kbd',
+      'progress',
       'rating',
+      'stat',
       'tab',
       'tabs',
     ]);
@@ -131,6 +134,61 @@ describe('STANDARD_COMPONENTS', () => {
 
   it("tab's label attribute is optional", () => {
     expect(STANDARD_COMPONENTS.tab?.attributes.label?.required).toBeFalsy();
+  });
+
+  it('marks stat, progress, and chart as leaf directives (the data-bound dashboard set)', () => {
+    expect(STANDARD_COMPONENTS.stat?.kind).toBe('leaf');
+    expect(STANDARD_COMPONENTS.progress?.kind).toBe('leaf');
+    expect(STANDARD_COMPONENTS.chart?.kind).toBe('leaf');
+  });
+
+  it("stat's attributes are exactly value, label, delta, and trend, all optional", () => {
+    const attrs = STANDARD_COMPONENTS.stat?.attributes ?? {};
+    expect(Object.keys(attrs).sort()).toEqual([
+      'delta',
+      'label',
+      'trend',
+      'value',
+    ]);
+    for (const schema of Object.values(attrs)) {
+      expect(schema.required).toBeFalsy();
+    }
+  });
+
+  it("stat's trend attribute is a closed enum of up/down/flat", () => {
+    expect(STANDARD_COMPONENTS.stat?.attributes.trend?.enum).toEqual([
+      'up',
+      'down',
+      'flat',
+    ]);
+  });
+
+  it("progress's attributes are exactly value, max, and label, all optional", () => {
+    const attrs = STANDARD_COMPONENTS.progress?.attributes ?? {};
+    expect(Object.keys(attrs).sort()).toEqual(['label', 'max', 'value']);
+    for (const schema of Object.values(attrs)) {
+      expect(schema.required).toBeFalsy();
+    }
+  });
+
+  it("chart's attributes are exactly kind, values, height, and width, all optional", () => {
+    const attrs = STANDARD_COMPONENTS.chart?.attributes ?? {};
+    expect(Object.keys(attrs).sort()).toEqual([
+      'height',
+      'kind',
+      'values',
+      'width',
+    ]);
+    for (const schema of Object.values(attrs)) {
+      expect(schema.required).toBeFalsy();
+    }
+  });
+
+  it("chart's kind attribute is a closed enum of line/bar", () => {
+    expect(STANDARD_COMPONENTS.chart?.attributes.kind?.enum).toEqual([
+      'line',
+      'bar',
+    ]);
   });
 });
 

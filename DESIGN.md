@@ -204,7 +204,7 @@ local repo = net.fetch_json("https://api.github.com/repos/x/y")
 return repo.stargazers_count
 ```
 
-::stat-card{value=stars label="GitHub stars"}
+::stat{data=stars label="GitHub stars"}
 ````
 
 Rules that keep this a *note* and not a program:

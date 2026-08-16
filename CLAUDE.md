@@ -20,7 +20,8 @@ packages/platforms/markii-react   the reference L1 renderer, a platform adapter
   src/render.tsx     hast + registry → React tree (unknown-directive fallback;
                      folds {name=…} script blocks into a collapsed marker)
   src/components/    the @markii/stdlib standard set (callout, card, badge,
-                     details, figure, tabs/tab, kbd, rating)
+                     details, figure, tabs/tab, kbd, rating; data-bound
+                     dashboard: stat, progress, chart)
   src/doc.css        document rhythm + component internals
 packages/markii-runtime host-side scripting glue (spec §8) — neutral, no React,
                         no wasmoon; stays runtime-agnostic (executor injected):

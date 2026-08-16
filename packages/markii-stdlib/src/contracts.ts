@@ -201,6 +201,98 @@ export const STANDARD_COMPONENTS: Record<string, ComponentContract> = {
     description:
       'One panel of a `tabs` component, e.g. `:::tab{label="A"} ... :::`. Body is the directive\'s inner markdown, shown only while this tab is active. Rendered standalone (outside a `tabs` parent) it simply shows its panel.',
   },
+  stat: {
+    name: 'stat',
+    kind: 'leaf',
+    attributes: {
+      value: {
+        type: 'string',
+        required: false,
+        description:
+          "The headline value, shown large. Overridden by a bound `data=` value/object's own `value` field when both are present. Absent value (from either source) renders `—`.",
+      },
+      label: {
+        type: 'string',
+        required: false,
+        description:
+          "Caption shown under the value. Overridden by a bound `data=` object's `label` field when both are present. Absent means no caption line is rendered.",
+      },
+      delta: {
+        type: 'string',
+        required: false,
+        description:
+          "Optional secondary text (e.g. a change amount) shown next to the value. Overridden by a bound `data=` object's `delta` field when both are present.",
+      },
+      trend: {
+        type: 'string',
+        required: false,
+        enum: ['up', 'down', 'flat'],
+        description:
+          "Colors/annotates `delta` as an increase, decrease, or no change. Overridden by a bound `data=` object's `trend` field when both are present; absent/invalid means no trend styling.",
+      },
+    },
+    description:
+      'A leaf directive rendering a big value plus label, e.g. `::stat{value=42 label="stars" trend=up}`. Data binding (§8): `data=name` resolves against the value store — a number/string value supplies `value` directly; an object may supply `value`/`label`/`delta`/`trend` fields (explicit attributes on the directive always take precedence over the bound object\'s fields). Degrades to `—` when both the attribute and the bound value are absent — never throws.',
+  },
+  progress: {
+    name: 'progress',
+    kind: 'leaf',
+    attributes: {
+      value: {
+        type: 'string',
+        required: false,
+        description:
+          "Current amount, as a numeric string. Overridden by a bound `data=` number, or a bound object's `value` field, when present. Non-numeric/NaN/Infinity input is treated as `0`; the effective value is clamped to `[0, max]`.",
+      },
+      max: {
+        type: 'string',
+        required: false,
+        description:
+          "The amount `value` is measured against, as a numeric string. Defaults to `1`. Overridden by a bound object's `max` field when present. Non-numeric/NaN/Infinity/non-positive input falls back to the default.",
+      },
+      label: {
+        type: 'string',
+        required: false,
+        description:
+          'Optional caption shown above/alongside the bar. Absent means no caption line is rendered.',
+      },
+    },
+    description:
+      'A leaf directive rendering a meter bar, e.g. `::progress{value=3 max=5 label="tasks"}`. Data binding (§8): `data=name` resolves against the value store — a bare number supplies `value` directly; an object may supply `value`/`max` fields (explicit attributes take precedence). Parses defensively and clamps rather than throwing; missing/invalid input renders an empty (0%) bar.',
+  },
+  chart: {
+    name: 'chart',
+    kind: 'leaf',
+    attributes: {
+      kind: {
+        type: 'string',
+        required: false,
+        enum: ['line', 'bar'],
+        description:
+          'Chart form: a connected line through the points, or a bar per point. Defaults to `line` when absent or not one of the allowed values.',
+      },
+      values: {
+        type: 'string',
+        required: false,
+        description:
+          'Comma-separated numbers for static authoring, e.g. `values="1,3,2,5"`. Ignored in favor of a bound `data=` array when both are present. Non-numeric entries are dropped.',
+      },
+      height: {
+        type: 'string',
+        required: false,
+        description:
+          'SVG viewport height in pixels, as a numeric string. Defaults to a sane built-in size; non-numeric/non-positive input falls back to the default.',
+      },
+      width: {
+        type: 'string',
+        required: false,
+        description:
+          'SVG viewport width in pixels, as a numeric string. Defaults to a sane built-in size; non-numeric/non-positive input falls back to the default.',
+      },
+    },
+    description:
+      'A leaf directive rendering a minimal hand-rolled inline SVG chart, e.g. `::chart{kind=line values="1,3,2,5"}`. Data binding (§8): `data=name` resolves against the value store — expects an array of numbers (typically a Lua script returning a table), or an array of `{value}` objects. Non-finite/non-numeric entries are filtered out and the point count is capped; an empty or all-invalid series renders a small neutral empty state rather than a broken chart. Never throws, and never places unescaped text into the emitted SVG markup.',
+  },
 };
 
 /**
