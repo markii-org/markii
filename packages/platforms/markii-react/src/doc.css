@@ -213,6 +213,145 @@
   color: #94a3b8;
 }
 
+/* ---------- details ---------- */
+
+.mk-details {
+  border: 1px solid #d4d4d8;
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  background: #fafafa;
+}
+
+.mk-details__summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.mk-details[open] > .mk-details__summary {
+  margin-block-end: 0.5rem;
+}
+
+.mk-details__body > :first-child {
+  margin-block-start: 0.5rem;
+}
+
+.mk-details__body > * + * {
+  margin-block-start: 0.5rem;
+}
+
+/* ---------- card ---------- */
+
+.mk-card {
+  border: 1px solid #e4e4e7;
+  border-radius: 8px;
+  padding: 1rem;
+  background: #fff;
+}
+
+.mk-card__title {
+  font-weight: 600;
+  margin-block-end: 0.5rem;
+}
+
+.mk-card__body > :first-child {
+  margin-block-start: 0;
+}
+
+.mk-card__body > * + * {
+  margin-block-start: 0.5rem;
+}
+
+/* ---------- badge ---------- */
+
+.mk-badge {
+  display: inline-block;
+  vertical-align: baseline;
+  line-height: 1.4;
+  height: 1.4em;
+  padding: 0 0.6em;
+  font-size: 0.8em;
+  font-weight: 600;
+  border-radius: 999px;
+  color: var(--mk-badge-fg, #334155);
+  background: var(--mk-badge-bg, #e2e8f0);
+}
+
+.mk-badge--info {
+  --mk-badge-fg: #1d4ed8;
+  --mk-badge-bg: #dbeafe;
+}
+
+.mk-badge--success {
+  --mk-badge-fg: #15803d;
+  --mk-badge-bg: #dcfce7;
+}
+
+.mk-badge--warning {
+  --mk-badge-fg: #b45309;
+  --mk-badge-bg: #fef3c7;
+}
+
+.mk-badge--danger {
+  --mk-badge-fg: #b91c1c;
+  --mk-badge-bg: #fee2e2;
+}
+
+/* ---------- figure ---------- */
+
+.mk-figure {
+  margin: 0;
+}
+
+.mk-figure__img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+
+.mk-figure__caption {
+  margin-block-start: 0.5rem;
+  font-size: 0.9em;
+  color: #52525b;
+}
+
+.mk-figure__caption > :first-child {
+  margin-block-start: 0;
+}
+
+.mk-figure__caption > * + * {
+  margin-block-start: 0.5rem;
+}
+
+/* ---------- tabs ---------- */
+
+.mk-tabs__list {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid #e4e4e7;
+}
+
+.mk-tabs__button {
+  cursor: pointer;
+  border: none;
+  background: none;
+  padding: 0.5rem 0.9rem;
+  font: inherit;
+  font-weight: 600;
+  color: #71717a;
+  border-bottom: 2px solid transparent;
+  margin-block-end: -1px;
+}
+
+.mk-tabs__button--active {
+  color: #1d4ed8;
+  border-bottom-color: #1d4ed8;
+}
+
+.mk-tab {
+  padding-block-start: 0.75rem;
+}
+
 /* ---------- unknown directive fallback ---------- */
 
 .mk-unknown {

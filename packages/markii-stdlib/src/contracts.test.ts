@@ -46,11 +46,17 @@ describe('STANDARD_COMPONENTS', () => {
     }
   });
 
-  it('seeds exactly the three components that exist in @markii/react today', () => {
+  it('seeds exactly the nine components that exist in @markii/react today', () => {
     expect(Object.keys(STANDARD_COMPONENTS).sort()).toEqual([
+      'badge',
       'callout',
+      'card',
+      'details',
+      'figure',
       'kbd',
       'rating',
+      'tab',
+      'tabs',
     ]);
   });
 
@@ -83,6 +89,48 @@ describe('STANDARD_COMPONENTS', () => {
     expect(Object.keys(attrs).sort()).toEqual(['max', 'value']);
     expect(attrs.value?.required).toBeFalsy();
     expect(attrs.max?.required).toBeFalsy();
+  });
+
+  it('marks details, card, figure, tabs, and tab as container directives', () => {
+    expect(STANDARD_COMPONENTS.details?.kind).toBe('container');
+    expect(STANDARD_COMPONENTS.card?.kind).toBe('container');
+    expect(STANDARD_COMPONENTS.figure?.kind).toBe('container');
+    expect(STANDARD_COMPONENTS.tabs?.kind).toBe('container');
+    expect(STANDARD_COMPONENTS.tab?.kind).toBe('container');
+  });
+
+  it('marks badge as an inline directive, matching its :badge[...] form', () => {
+    expect(STANDARD_COMPONENTS.badge?.kind).toBe('inline');
+  });
+
+  it("badge's variant attribute is a closed enum including neutral as a value", () => {
+    expect(STANDARD_COMPONENTS.badge?.attributes.variant?.enum).toEqual([
+      'neutral',
+      'info',
+      'success',
+      'warning',
+      'danger',
+    ]);
+  });
+
+  it("figure's src attribute is required and alt is optional", () => {
+    const attrs = STANDARD_COMPONENTS.figure?.attributes ?? {};
+    expect(attrs.src?.required).toBe(true);
+    expect(attrs.alt?.required).toBeFalsy();
+  });
+
+  it("details's title and open attributes are both optional", () => {
+    const attrs = STANDARD_COMPONENTS.details?.attributes ?? {};
+    expect(attrs.title?.required).toBeFalsy();
+    expect(attrs.open?.required).toBeFalsy();
+  });
+
+  it('tabs takes no attributes of its own', () => {
+    expect(STANDARD_COMPONENTS.tabs?.attributes).toEqual({});
+  });
+
+  it("tab's label attribute is optional", () => {
+    expect(STANDARD_COMPONENTS.tab?.attributes.label?.required).toBeFalsy();
   });
 });
 

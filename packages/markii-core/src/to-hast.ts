@@ -123,8 +123,17 @@ const SAFE_URL_PROTOCOLS = new Set(['http', 'https', 'mailto', 'tel']);
  * (`" javascript:..."`, whose slice-before-colon is `" javascript"`, which
  * never matches a bare protocol name) while still allowing a same-origin
  * path that happens to contain a colon later on.
+ *
+ * Exported (not just used by `sanitizeUrls` below) because a directive
+ * *attribute* that a renderer maps straight to a DOM URL prop — e.g.
+ * `@markii/react`'s `figure` component putting a `src` attribute into
+ * `<img src>` — never passes through `sanitizeUrls`, which only walks the
+ * hast tree `remark-rehype` itself produces from markdown links/images.
+ * Such a renderer must run the attribute value through this same check
+ * itself, rather than re-implementing URL-scheme parsing, to get the exact
+ * same guarantee.
  */
-function isSafeUrl(url: string): boolean {
+export function isSafeUrl(url: string): boolean {
   const colon = url.indexOf(':');
   if (colon === -1) return true;
 

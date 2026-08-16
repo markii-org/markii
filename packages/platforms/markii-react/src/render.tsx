@@ -1,4 +1,4 @@
-import { Fragment } from 'react';
+import { Fragment, isValidElement } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { jsx, jsxs } from 'react/jsx-runtime';
 import { toJsxRuntime } from 'hast-util-to-jsx-runtime';
@@ -40,6 +40,52 @@ interface DirectiveElementProps {
   'data-mk-attrs'?: string;
   'data-mk-kind'?: string;
   children?: ReactNode;
+}
+
+/**
+ * What a container component can learn about one of its own React
+ * `children` elements, if that element is one of `renderMark`'s own
+ * not-yet-resolved directive placeholders — see `readDirectiveChild`.
+ */
+export interface DirectiveChild {
+  name: string;
+  attributes: DirectiveAttributes;
+  children?: ReactNode;
+}
+
+/**
+ * Reads a directive name/attributes/pre-rendered body back off `node`, if
+ * `node` is one of `renderMark`'s own directive elements — returns
+ * `undefined` for anything else (plain text, a fragment, an element
+ * belonging to some other component). Never throws.
+ *
+ * Exists because every `<mk-directive>` hast tag becomes exactly one shared
+ * React component (`DirectiveElement`, built by `createDirectiveElement`
+ * above) regardless of which directive name it carries — the name-specific
+ * registry component (e.g. `Tab`) is only produced when React actually
+ * *invokes* that element during reconciliation, which for a child element
+ * hasn't happened yet by the time its parent's own render function runs.
+ * So a container component that needs to recognize "one of my children is a
+ * `tab` directive" (e.g. `Tabs`, DESIGN.md's tabs/tab pair) cannot do it by
+ * checking `child.type` — every directive child shares the same `type`
+ * until rendered. This helper is the supported way to do that recognition
+ * instead: it reads the same `data-mk-name`/`data-mk-attrs` props
+ * `createDirectiveElement` itself reads, parsed with the same
+ * `parseAttributes` used for every other directive, so a container
+ * component never has to know the wire encoding (JSON-in-a-data-attribute)
+ * to use it.
+ */
+export function readDirectiveChild(
+  node: ReactNode,
+): DirectiveChild | undefined {
+  if (!isValidElement<DirectiveElementProps>(node)) return undefined;
+  const name = node.props['data-mk-name'];
+  if (!name) return undefined;
+  return {
+    name,
+    attributes: parseAttributes(node.props['data-mk-attrs']),
+    children: node.props.children,
+  };
 }
 
 /** The reserved directive name for render-time value interpolation (§8: `:value[name]`). */

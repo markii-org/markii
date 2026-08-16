@@ -1,13 +1,26 @@
 import { getContract } from '@markii/stdlib';
 import type { Registry } from '../registry';
+import { Badge } from './badge';
 import { Callout } from './callout';
+import { Card } from './card';
+import { Details } from './details';
+import { Figure } from './figure';
 import { Kbd } from './kbd';
 import { Rating } from './rating';
+import { Tab } from './tab';
+import { Tabs } from './tabs';
 
+export { Badge } from './badge';
+export type { BadgeVariant } from './badge';
 export { Callout } from './callout';
 export type { CalloutType } from './callout';
+export { Card } from './card';
+export { Details } from './details';
+export { Figure } from './figure';
 export { Kbd } from './kbd';
 export { Rating } from './rating';
+export { Tab, DEFAULT_TAB_LABEL } from './tab';
+export { Tabs } from './tabs';
 export { ScriptMarker } from './script-marker';
 export type { ScriptMarkerProps } from './script-marker';
 export { UnknownDirective } from './unknown-directive';
@@ -30,9 +43,15 @@ function inlineFromContract(name: string): boolean {
   return getContract(name)?.kind === 'inline';
 }
 
-/** The three built-in demo components, pre-registered under their names. */
+/** The built-in demo components, pre-registered under their names. */
 export const defaultRegistry: Registry = {
   callout: { component: Callout, inline: inlineFromContract('callout') },
   kbd: { component: Kbd, inline: inlineFromContract('kbd') },
   rating: { component: Rating, inline: inlineFromContract('rating') },
+  details: { component: Details, inline: inlineFromContract('details') },
+  card: { component: Card, inline: inlineFromContract('card') },
+  badge: { component: Badge, inline: inlineFromContract('badge') },
+  figure: { component: Figure, inline: inlineFromContract('figure') },
+  tabs: { component: Tabs, inline: inlineFromContract('tabs') },
+  tab: { component: Tab, inline: inlineFromContract('tab') },
 };

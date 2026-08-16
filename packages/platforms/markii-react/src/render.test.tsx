@@ -93,7 +93,7 @@ describe('renderMark', () => {
     const inlineFallback = container.querySelector('.mk-unknown--inline');
     expect(inlineFallback?.tagName).toBe('SPAN');
     expect(inlineFallback).toHaveTextContent('unknown component');
-    expect(inlineFallback).toHaveTextContent('badge');
+    expect(inlineFallback).toHaveTextContent('sparkle');
 
     const blockFallbacks = container.querySelectorAll('.mk-unknown--block');
     expect(blockFallbacks).toHaveLength(2);

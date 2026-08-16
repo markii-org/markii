@@ -51,12 +51,12 @@ export interface ComponentContract {
 }
 
 /**
- * The standard component set, seeded from the three components that ship
- * with `@markii/react` today (`packages/platforms/markii-react/src/components/
- * {callout,kbd,rating}.tsx`). Each contract was written by reading the real
- * implementation — `kind` from how the component is registered in
- * `defaultRegistry`, `attributes` from exactly the props the component
- * reads (no invented attributes).
+ * The standard component set, seeded from the components that ship with
+ * `@markii/react` today (`packages/platforms/markii-react/src/components/
+ * {callout,kbd,rating,details,card,badge,figure,tabs,tab}.tsx`). Each
+ * contract was written by reading the real implementation — `kind` from how
+ * the component is registered in `defaultRegistry`, `attributes` from
+ * exactly the props the component reads (no invented attributes).
  *
  * Keyed by directive name, matching `defaultRegistry`'s shape so a renderer
  * can iterate `Object.entries(STANDARD_COMPONENTS)` the same way it iterates
@@ -110,6 +110,96 @@ export const STANDARD_COMPONENTS: Record<string, ComponentContract> = {
     },
     description:
       'A leaf directive rendering a row of stars, e.g. `::rating{value=3 max=5}`. Has no body — both attributes are optional and degrade gracefully rather than throwing.',
+  },
+  details: {
+    name: 'details',
+    kind: 'container',
+    attributes: {
+      title: {
+        type: 'string',
+        required: false,
+        description:
+          'Summary text shown on the always-visible header. Defaults to `Details` when absent.',
+      },
+      open: {
+        type: 'string',
+        required: false,
+        description:
+          'Bare attribute (e.g. `{open}`). When present, the disclosure starts expanded; absent means it starts folded.',
+      },
+    },
+    description:
+      'A collapsible disclosure, e.g. `:::details{title="More"} ... :::`. Body is the directive\'s inner markdown, hidden until expanded.',
+  },
+  card: {
+    name: 'card',
+    kind: 'container',
+    attributes: {
+      title: {
+        type: 'string',
+        required: false,
+        description:
+          'Optional header text shown above the body. Absent means no title line is rendered.',
+      },
+    },
+    description:
+      'A titled panel, e.g. `:::card{title="Notes"} ... :::`. Body is the directive\'s inner markdown, rendered as-is.',
+  },
+  badge: {
+    name: 'badge',
+    kind: 'inline',
+    attributes: {
+      variant: {
+        type: 'string',
+        required: false,
+        enum: ['neutral', 'info', 'success', 'warning', 'danger'],
+        description:
+          'Visual/semantic variant, selecting the pill color. Defaults to `neutral` when absent or not one of the allowed values.',
+      },
+    },
+    description:
+      'A status pill for an inline text directive, e.g. `:badge[New]{variant=success}`. Its inner content is the label text.',
+  },
+  figure: {
+    name: 'figure',
+    kind: 'container',
+    attributes: {
+      src: {
+        type: 'string',
+        required: true,
+        description:
+          'Image URL. Required; an unsafe scheme (e.g. `javascript:`) is dropped and no image is rendered.',
+      },
+      alt: {
+        type: 'string',
+        required: false,
+        description:
+          'Image alt text. Defaults to the empty string when absent.',
+      },
+    },
+    description:
+      'An image with a rich caption, e.g. `:::figure{src="cat.png" alt="A cat"} A cat, napping. ::: `. Body is the directive\'s inner markdown, rendered as the caption.',
+  },
+  tabs: {
+    name: 'tabs',
+    kind: 'container',
+    attributes: {},
+    description:
+      'A tabbed panel switcher, e.g. `::::tabs :::tab{label="A"} ... ::: :::tab{label="B"} ... ::: ::::`. Takes no attributes of its own; its body is a sequence of `tab` containers, one per panel, and it shows only the active one. The enclosing fence must use MORE colons than its `tab` children (directive container nesting rule), hence `::::tabs` wrapping `:::tab`.',
+  },
+  tab: {
+    name: 'tab',
+    kind: 'container',
+    attributes: {
+      label: {
+        type: 'string',
+        required: false,
+        description:
+          'Tab button text, read by the enclosing `tabs` component. Defaults to `Tab` when absent.',
+      },
+    },
+    description:
+      'One panel of a `tabs` component, e.g. `:::tab{label="A"} ... :::`. Body is the directive\'s inner markdown, shown only while this tab is active. Rendered standalone (outside a `tabs` parent) it simply shows its panel.',
   },
 };
 

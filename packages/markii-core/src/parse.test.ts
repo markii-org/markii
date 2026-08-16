@@ -144,7 +144,7 @@ describe('parse', () => {
       tree,
       'containerDirective',
     ) as ContainerDirective[];
-    expect(text[0]?.name).toBe('badge');
+    expect(text[0]?.name).toBe('sparkle');
     expect(leaf[0]?.name).toBe('timeline');
     // mdast-util-directive represents a bare (valueless) attribute as an
     // empty string at the parse layer; the render layer normalizes this to

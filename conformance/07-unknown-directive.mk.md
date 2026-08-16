@@ -1,4 +1,4 @@
-Inline unknown: :badge[beta]{color=purple}
+Inline unknown: :sparkle[beta]{color=purple}
 
 ::timeline{src="repo.json" collapsed}
 
