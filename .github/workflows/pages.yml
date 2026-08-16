@@ -1,0 +1,59 @@
+name: Deploy playground to GitHub Pages
+
+# Builds and publishes apps/playground (the .smd demo/reference app) to
+# GitHub Pages as a project site served at /markii/. This deploys the DEMO
+# app only — the @markii/* libraries are not published here (see
+# release.yml for the npm release scaffold).
+#
+# One-time setup required in the repo: Settings -> Pages -> Source:
+# "GitHub Actions".
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one Pages deployment at a time; let in-flight deployments finish
+# rather than cancelling them mid-publish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Project sites are served under /<repo>/, so the playground must be
+      # built with that base path or asset URLs will 404. VITE_BASE is read
+      # by apps/playground/vite.config.ts; local `npm run dev`/`build` are
+      # unaffected since the env var is unset there and defaults to '/'.
+      - name: Build playground
+        run: VITE_BASE=/markii/ npm run build --workspace apps/playground
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/playground/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
