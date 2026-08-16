@@ -1,5 +1,5 @@
 import type { ReactElement, ReactNode } from 'react';
-import type { MarkComponentProps } from '../registry';
+import type { MarkComponentProps } from '../registry.js';
 
 const EMPTY_VALUE = '—';
 

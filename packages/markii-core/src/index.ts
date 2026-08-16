@@ -4,10 +4,10 @@
 // subpath instead of here so a browser bundler consuming `@markii/core` (e.g.
 // via `@markii/react`) never has to reason about Node built-ins reachable from
 // its entry point.
-export { parse } from './parse';
-export { toHast, isSafeUrl } from './to-hast';
+export { parse } from './parse.js';
+export { toHast, isSafeUrl } from './to-hast.js';
 export {
   extractScripts,
   parseMetaAttributes,
   type ScriptBlock,
-} from './scripts';
+} from './scripts.js';

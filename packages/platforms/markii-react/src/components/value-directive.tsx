@@ -1,6 +1,6 @@
 import type { ReactElement, ReactNode } from 'react';
 import type { ValueStore } from '@markii/runtime';
-import { resolveStorePath } from '../store-path';
+import { resolveStorePath } from '../store-path.js';
 
 export interface ValueDirectiveProps {
   store: ValueStore | undefined;

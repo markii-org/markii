@@ -1,5 +1,5 @@
 import type { ExecuteResult, ScriptExecutor } from '@markii/runtime';
-import { runScript, type RunScriptOptions } from './sandbox';
+import { runScript, type RunScriptOptions } from './sandbox.js';
 
 /**
  * Slice 2 of the scripting-usability layer (DESIGN.md §8): the reusable

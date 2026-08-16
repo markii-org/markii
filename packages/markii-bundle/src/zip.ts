@@ -1,8 +1,8 @@
 import { inflateSync, strFromU8, zipSync } from 'fflate';
-import { BundleZipError } from './errors';
-import { normalizeBundlePath } from './paths';
-import type { BundleStorage } from './storage';
-import { normalizeOrThrow } from './storage';
+import { BundleZipError } from './errors.js';
+import { normalizeBundlePath } from './paths.js';
+import type { BundleStorage } from './storage.js';
+import { normalizeOrThrow } from './storage.js';
 
 /**
  * Wraps an in-memory `Map<normalized path, bytes>` as a `BundleStorage`.

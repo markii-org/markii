@@ -1,8 +1,8 @@
-import { ScriptCapabilityError } from './errors';
-import { isWriteAllowed } from './paths';
-import type { BundleFsGrant } from './paths';
-import type { BundleManifest, BundlePermissions } from './manifest';
-import type { BundleStorage } from './storage';
+import { ScriptCapabilityError } from './errors.js';
+import { isWriteAllowed } from './paths.js';
+import type { BundleFsGrant } from './paths.js';
+import type { BundleManifest, BundlePermissions } from './manifest.js';
+import type { BundleStorage } from './storage.js';
 
 /**
  * The capability-restricted view of a bundle a future Lua runtime (§8, §10,

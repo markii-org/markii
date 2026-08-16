@@ -1,5 +1,5 @@
 import type { ScriptView } from '@markii/bundle';
-import { CAPABILITY_ERROR_TAG } from './errors';
+import { CAPABILITY_ERROR_TAG } from './errors.js';
 
 /** A GET/POST/PATCH result handed back to Lua as `{status=..., body=...}`. */
 export interface NetResponse {

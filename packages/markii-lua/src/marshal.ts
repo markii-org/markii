@@ -1,5 +1,5 @@
-import type { ScriptMarshalReason } from './errors';
-import { MARSHAL_ERROR_TAG } from './errors';
+import type { ScriptMarshalReason } from './errors.js';
+import { MARSHAL_ERROR_TAG } from './errors.js';
 
 /** Marshal limits: caps on the shape of a script's return value. */
 export interface MarshalLimits {

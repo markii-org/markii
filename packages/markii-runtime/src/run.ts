@@ -1,5 +1,5 @@
 import type { ScriptBlock } from '@markii/core';
-import type { StoredValue, ValueStore } from './store';
+import type { StoredValue, ValueStore } from './store.js';
 
 /**
  * Slice 2 of the scripting-usability layer (DESIGN.md §8): the run

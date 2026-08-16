@@ -1,17 +1,47 @@
 {
   "name": "@markii/runtime",
   "version": "0.1.0",
-  "private": true,
+  "description": "Host-side scripting glue for Mark (.mk.md): a null-proto value store and document-script execution with trigger-tier gating (auto/scheduled stay read-only). Framework-agnostic; the script executor is injected by the host (e.g. @markii/lua).",
+  "keywords": [
+    "markdown",
+    "mark",
+    "mk.md",
+    "scripting",
+    "value-store"
+  ],
+  "license": "MIT",
+  "author": "sadigaxund",
+  "homepage": "https://github.com/sadigaxund/markii#readme",
+  "bugs": "https://github.com/sadigaxund/markii/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sadigaxund/markii.git",
+    "directory": "packages/markii-runtime"
+  },
   "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "test": "vitest run",
     "build": "tsc --noEmit -p tsconfig.json",
+    "build:dist": "rm -rf dist && tsc -p tsconfig.build.json",
     "lint": "eslint ."
   },
   "dependencies": {
-    "@markii/core": "*"
+    "@markii/core": "0.1.0"
   }
 }

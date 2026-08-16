@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
-import { renderMark, defaultRegistry } from '@markii/react';
+import { renderMark } from '@markii/react';
+import { defaultRegistry } from '@markii/react/components';
 import { extractScripts, parse } from '@markii/core';
 import { createValueStore, runDocumentScripts } from '@markii/runtime';
 import type { RunSummary } from '@markii/runtime';

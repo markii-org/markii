@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    // Every `vitest.config.ts`/`vite.config.ts` in this repo imports the
+    // shared `scripts/workspace-aliases.config.ts` helper (below) using an
+    // explicit `.ts` specifier — Vite's config loader (esbuild-based, not
+    // `tsc`) resolves that fine, but plain `tsc --noEmit` requires this flag
+    // to accept a literal `.ts` import path. Dev-only; the real dist build
+    // (`tsconfig.build.json`) doesn't extend this file and never imports
+    // that helper, so it never needs this.
+    "allowImportingTsExtensions": true,
+    // Dev/typecheck-only path mapping: every `@markii/*` package resolves
+    // straight to that package's `src/index.ts` (or the matching subpath
+    // source file), NOT through `node_modules/@markii/*`'s `package.json`
+    // `exports` (which point at built `dist/` output for real npm
+    // consumers — see each package's `tsconfig.build.json`). This is what
+    // keeps `npm test`/`npm run build`/`npm run dev` resolving to SOURCE
+    // with no build step required, even after publishing is wired up.
+    //
+    // Used by every package's (and the playground's) plain `tsconfig.json`
+    // — i.e. the `tsc --noEmit` typecheck run by each workspace's `build`
+    // script — never by `tsconfig.build.json` (the real dist-emitting
+    // build), which extends `tsconfig.base.json` directly so it resolves
+    // cross-package types the way a real published consumer would: through
+    // `node_modules` to each dependency's already-built `dist/`.
+    "baseUrl": ".",
+    "paths": {
+      "@markii/core": ["packages/markii-core/src/index.ts"],
+      "@markii/core/corpus": ["packages/markii-core/src/corpus.ts"],
+      "@markii/stdlib": ["packages/markii-stdlib/src/index.ts"],
+      "@markii/runtime": ["packages/markii-runtime/src/index.ts"],
+      "@markii/bundle": ["packages/markii-bundle/src/index.ts"],
+      "@markii/bundle/fs": ["packages/markii-bundle/src/fs.ts"],
+      "@markii/lua": ["packages/markii-lua/src/index.ts"],
+      "@markii/react": ["packages/platforms/markii-react/src/index.ts"],
+      "@markii/react/components": [
+        "packages/platforms/markii-react/src/components/index.ts"
+      ]
+    }
+  }
+}

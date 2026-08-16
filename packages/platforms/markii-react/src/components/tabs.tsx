@@ -1,8 +1,8 @@
 import { Children, useMemo, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
-import { readDirectiveChild } from '../render';
-import type { MarkComponentProps } from '../registry';
-import { DEFAULT_TAB_LABEL, TabPanel } from './tab';
+import { readDirectiveChild } from '../render.js';
+import type { MarkComponentProps } from '../registry.js';
+import { DEFAULT_TAB_LABEL, TabPanel } from './tab.js';
 
 const TAB_DIRECTIVE_NAME = 'tab';
 

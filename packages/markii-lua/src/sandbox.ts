@@ -6,22 +6,22 @@ import {
   type CapabilityTier,
   type NetGrants,
   type NetProvider,
-} from './capabilities';
+} from './capabilities.js';
 import {
   CAPABILITY_ERROR_TAG,
   MARSHAL_ERROR_TAG,
   ScriptLimitError,
-} from './errors';
-import type { ScriptFailure, ScriptMarshalReason } from './errors';
-import { createEmptyLuaEngine } from './globals';
-import { DEFAULT_LIMITS, installLimits, type ScriptLimits } from './limits';
+} from './errors.js';
+import type { ScriptFailure, ScriptMarshalReason } from './errors.js';
+import { createEmptyLuaEngine } from './globals.js';
+import { DEFAULT_LIMITS, installLimits, type ScriptLimits } from './limits.js';
 import {
   buildMarshalPrelude,
   DEFAULT_MARSHAL_LIMITS,
   finalizeMarshaledValue,
   type MarshalLimits,
   wrapUserCode,
-} from './marshal';
+} from './marshal.js';
 
 export interface RunScriptOptions {
   code: string;

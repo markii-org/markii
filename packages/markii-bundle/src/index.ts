@@ -9,36 +9,39 @@ export type {
   BundleManifest,
   BundlePermissions,
   ManifestParseResult,
-} from './manifest';
+} from './manifest.js';
 export {
   CURRENT_SPEC_VERSION,
   createDefaultManifest,
   parseManifest,
-} from './manifest';
+} from './manifest.js';
 
 export type {
   BundleFsGrant,
   BundleWritePolicy,
   NormalizePathResult,
-} from './paths';
-export { isWriteAllowed, normalizeBundlePath } from './paths';
+} from './paths.js';
+export { isWriteAllowed, normalizeBundlePath } from './paths.js';
 
-export type { BundleStorage } from './storage';
-export { normalizeOrThrow } from './storage';
+export type { BundleStorage } from './storage.js';
+export { normalizeOrThrow } from './storage.js';
 
 export {
   BundlePathError,
   BundleZipError,
   ScriptCapabilityError,
-} from './errors';
+} from './errors.js';
 
-export type { OpenZipBundleOptions } from './zip';
+export type { OpenZipBundleOptions } from './zip.js';
 export {
   DEFAULT_MAX_ZIP_ENTRY_BYTES,
   DEFAULT_MAX_ZIP_TOTAL_BYTES,
   exportZipBundle,
   openZipBundle,
-} from './zip';
+} from './zip.js';
 
-export type { ScriptView } from './script-view';
-export { createScriptView, grantAllDeclaredPermissions } from './script-view';
+export type { ScriptView } from './script-view.js';
+export {
+  createScriptView,
+  grantAllDeclaredPermissions,
+} from './script-view.js';

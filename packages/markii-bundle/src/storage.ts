@@ -1,5 +1,5 @@
-import { BundlePathError } from './errors';
-import { normalizeBundlePath } from './paths';
+import { BundlePathError } from './errors.js';
+import { normalizeBundlePath } from './paths.js';
 
 /**
  * Common shape both bundle forms (zip, directory) implement. Every method

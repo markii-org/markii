@@ -4,4 +4,4 @@ export {
   type AttributeSchema,
   type ComponentContract,
   type ComponentKind,
-} from './contracts';
+} from './contracts.js';

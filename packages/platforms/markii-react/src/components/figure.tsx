@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react';
 import { isSafeUrl } from '@markii/core';
-import type { MarkComponentProps } from '../registry';
+import type { MarkComponentProps } from '../registry.js';
 
 const DEFAULT_ALT = '';
 

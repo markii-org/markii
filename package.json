@@ -11,6 +11,7 @@
   "scripts": {
     "test": "npm run test --workspaces --if-present",
     "build": "npm run build --workspaces --if-present",
+    "build:dist": "npm run build:dist -w @markii/core && npm run build:dist -w @markii/stdlib && npm run build:dist -w @markii/bundle && npm run build:dist -w @markii/runtime && npm run build:dist -w @markii/lua && npm run build:dist -w @markii/react",
     "lint": "eslint . && prettier --check .",
     "dev": "npm run dev --workspace apps/playground"
   },

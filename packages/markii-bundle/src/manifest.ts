@@ -1,4 +1,4 @@
-import type { BundleFsGrant } from './paths';
+import type { BundleFsGrant } from './paths.js';
 
 /**
  * `manifest.json`'s contract (spec §9–§11). `mark` is the only required

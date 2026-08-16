@@ -1,38 +1,15 @@
-# SCAFFOLD — NOT YET LIVE.
+# Publishes the six @markii/* library packages (packages/*, packages/platforms/*)
+# to npm — NOT apps/playground, which stays `"private": true` and is skipped
+# automatically by `npm publish --workspaces`.
 #
-# This workflow is dormant: it only runs on a `v*.*.*` tag push, and no such
-# tag exists yet, so it will not fire spuriously. It publishes the @markii/*
-# library packages (packages/*, packages/platforms/*) to npm — NOT
-# apps/playground, which is not a publishable package.
-#
-# Prerequisites before this can actually succeed (none of these are done
-# yet; do not push a v*.*.* tag until they are):
-#
-#   1. Per-library-package changes (packages/markii-core, markii-bundle,
-#      markii-lua, markii-runtime, markii-stdlib, and
-#      packages/platforms/markii-react), for each of @markii/core,
-#      @markii/bundle, @markii/lua, @markii/runtime, @markii/stdlib,
-#      @markii/react:
-#        - remove `"private": true` from package.json
-#        - add `"publishConfig": { "access": "public" }` (required for a
-#          scoped package, @markii/*, to publish as non-private)
-#        - add a real build step that emits compiled JS + .d.ts to dist/
-#          (current `build` script is only `tsc --noEmit`, i.e. type-check
-#          only, no emit — there is nothing to publish yet)
-#        - repoint `main`/`module`/`types` and the `exports` map from
-#          `./src/*.ts` to the built `./dist/*` files
-#        - add `repository`, `license`, `description`, and `files` (or a
-#          `.npmignore`) metadata so `npm publish` ships the right contents
-#   2. The `@markii` scope on npmjs.com must be created/owned by the
+# Prerequisites for a real run:
+#   1. The `@markii` scope on npmjs.com must be created/owned by the
 #      publishing account (or an npm org) with permission to publish these
 #      package names.
-#   3. An `NPM_TOKEN` repo secret (npm automation/publish token for that
+#   2. An `NPM_TOKEN` repo secret (npm automation/publish token for that
 #      scope) must be added under Settings -> Secrets and variables ->
 #      Actions.
-#
-# Until all of the above are done, a tag push will make this job fail at
-# `npm publish` (or publish broken/empty packages) — do not tag a release
-# before productionizing the packages.
+#   3. Push a `v*.*.*` tag to trigger this workflow.
 
 name: Release (npm)
 
@@ -58,6 +35,10 @@ jobs:
       - run: npm test
 
       - run: npm run build
+
+      # Builds compiled JS + .d.ts to dist/ for all six library packages, in
+      # dependency order (core/stdlib/bundle, then runtime/lua, then react).
+      - run: npm run build:dist
 
       # Publishes every publishable workspace (private:true workspaces,
       # e.g. apps/playground and the root, are skipped automatically by

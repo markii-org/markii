@@ -1,15 +1,52 @@
 {
   "name": "@markii/core",
   "version": "0.1.0",
-  "private": true,
+  "description": "Framework-agnostic reference parser for Mark (.mk.md): CommonMark + directives to mdast, and mdast to a sanitized hast tree. Zero React dependency.",
+  "keywords": [
+    "markdown",
+    "mark",
+    "mk.md",
+    "mdast",
+    "hast",
+    "unified",
+    "directive",
+    "parser"
+  ],
+  "license": "MIT",
+  "author": "sadigaxund",
+  "homepage": "https://github.com/sadigaxund/markii#readme",
+  "bugs": "https://github.com/sadigaxund/markii/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sadigaxund/markii.git",
+    "directory": "packages/markii-core"
+  },
   "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts",
-    "./corpus": "./src/corpus.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./corpus": {
+      "types": "./dist/corpus.d.ts",
+      "import": "./dist/corpus.js",
+      "default": "./dist/corpus.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "test": "vitest run",
     "build": "tsc --noEmit -p tsconfig.json",
+    "build:dist": "rm -rf dist && tsc -p tsconfig.build.json",
     "lint": "eslint .",
     "corpus:regen": "node scripts/regen-corpus.ts"
   },

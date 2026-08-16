@@ -12,15 +12,15 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
-import { BundlePathError } from './errors';
-import { createDefaultManifest, CURRENT_SPEC_VERSION } from './manifest';
-import type { BundleStorage } from './storage';
-import { normalizeOrThrow } from './storage';
+import { BundlePathError } from './errors.js';
+import { createDefaultManifest, CURRENT_SPEC_VERSION } from './manifest.js';
+import type { BundleStorage } from './storage.js';
+import { normalizeOrThrow } from './storage.js';
 import {
   exportZipBundle,
   openZipBundle,
   type OpenZipBundleOptions,
-} from './zip';
+} from './zip.js';
 
 function isErrnoException(err: unknown): err is NodeJS.ErrnoException {
   return err instanceof Error && 'code' in err;

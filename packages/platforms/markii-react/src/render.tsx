@@ -5,11 +5,11 @@ import { toJsxRuntime } from 'hast-util-to-jsx-runtime';
 import { toHast, parseMetaAttributes } from '@markii/core';
 import type { ValueStatus, ValueStore } from '@markii/runtime';
 import type { Element as HastElement } from 'hast';
-import type { DirectiveAttributes, Registry } from './registry';
-import { ScriptMarker } from './components/script-marker';
-import { UnknownDirective } from './components/unknown-directive';
-import { ValueDirective } from './components/value-directive';
-import { resolveStorePath } from './store-path';
+import type { DirectiveAttributes, Registry } from './registry.js';
+import { ScriptMarker } from './components/script-marker.js';
+import { UnknownDirective } from './components/unknown-directive.js';
+import { ValueDirective } from './components/value-directive.js';
+import { resolveStorePath } from './store-path.js';
 
 function parseAttributes(json: string | undefined): DirectiveAttributes {
   if (!json) return {};

@@ -1,19 +1,51 @@
 {
   "name": "@markii/lua",
   "version": "0.1.0",
-  "private": true,
+  "description": "Sandboxed Lua 5.4 (wasmoon) execution runtime for Mark's document scripting: an empty-env global whitelist, two-tier capability-gated net/cache/bundle access, instruction-count/wall-clock/memory limits, and depth/size-capped Lua<->JS marshaling.",
+  "keywords": [
+    "markdown",
+    "mark",
+    "mk.md",
+    "lua",
+    "wasmoon",
+    "sandbox",
+    "scripting"
+  ],
+  "license": "MIT",
+  "author": "sadigaxund",
+  "homepage": "https://github.com/sadigaxund/markii#readme",
+  "bugs": "https://github.com/sadigaxund/markii/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sadigaxund/markii.git",
+    "directory": "packages/markii-lua"
+  },
   "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "test": "vitest run",
     "build": "tsc --noEmit -p tsconfig.json",
+    "build:dist": "rm -rf dist && tsc -p tsconfig.build.json",
     "lint": "eslint ."
   },
   "dependencies": {
-    "@markii/bundle": "*",
-    "@markii/runtime": "*",
+    "@markii/bundle": "0.1.0",
+    "@markii/runtime": "0.1.0",
     "wasmoon": "^1.16.0"
   }
 }

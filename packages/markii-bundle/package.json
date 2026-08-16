@@ -1,15 +1,50 @@
 {
   "name": "@markii/bundle",
   "version": "0.1.0",
-  "private": true,
+  "description": "Bundle (.mkbundle) storage and policy layer for Mark: manifest handling, the bundle-relative path-jail, zip (fflate) and Node directory storage forms, and a capability-restricted script view. No React, no parsing.",
+  "keywords": [
+    "markdown",
+    "mark",
+    "mk.md",
+    "bundle",
+    "zip",
+    "fflate"
+  ],
+  "license": "MIT",
+  "author": "sadigaxund",
+  "homepage": "https://github.com/sadigaxund/markii#readme",
+  "bugs": "https://github.com/sadigaxund/markii/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sadigaxund/markii.git",
+    "directory": "packages/markii-bundle"
+  },
   "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts",
-    "./fs": "./src/fs.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./fs": {
+      "types": "./dist/fs.d.ts",
+      "import": "./dist/fs.js",
+      "default": "./dist/fs.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "test": "vitest run",
     "build": "tsc --noEmit -p tsconfig.json",
+    "build:dist": "rm -rf dist && tsc -p tsconfig.build.json",
     "lint": "eslint ."
   },
   "dependencies": {

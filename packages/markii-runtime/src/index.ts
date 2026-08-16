@@ -3,7 +3,7 @@ export {
   type StoredValue,
   type ValueStatus,
   type ValueStore,
-} from './store';
+} from './store.js';
 
 export {
   runDocumentScripts,
@@ -17,4 +17,4 @@ export {
   type RunSummaryEntry,
   type RunTrigger,
   type ScriptExecutor,
-} from './run';
+} from './run.js';

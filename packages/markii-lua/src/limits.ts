@@ -1,5 +1,5 @@
 import { LuaEventMasks, type LuaThread } from 'wasmoon';
-import type { ScriptLimitKind } from './errors';
+import type { ScriptLimitKind } from './errors.js';
 
 /** Resource limits for one `runScript` call. All configurable; defaults are conservative. */
 export interface ScriptLimits {

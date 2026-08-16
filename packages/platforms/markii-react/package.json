@@ -1,22 +1,62 @@
 {
   "name": "@markii/react",
   "version": "0.1.0",
-  "private": true,
+  "description": "The reference React renderer for Mark (.mk.md): a registry-driven hast-to-React renderer (`.`), an optional standard component set + defaultRegistry (`./components`), and the document stylesheet (`./doc.css`).",
+  "keywords": [
+    "markdown",
+    "mark",
+    "mk.md",
+    "react",
+    "renderer",
+    "directive",
+    "components"
+  ],
+  "license": "MIT",
+  "author": "sadigaxund",
+  "homepage": "https://github.com/sadigaxund/markii#readme",
+  "bugs": "https://github.com/sadigaxund/markii/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sadigaxund/markii.git",
+    "directory": "packages/platforms/markii-react"
+  },
   "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "sideEffects": [
+    "**/*.css"
+  ],
   "exports": {
-    ".": "./src/index.ts",
-    "./doc.css": "./src/doc.css"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./components": {
+      "types": "./dist/components/index.d.ts",
+      "import": "./dist/components/index.js",
+      "default": "./dist/components/index.js"
+    },
+    "./doc.css": "./dist/doc.css"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "test": "vitest run",
     "build": "tsc --noEmit -p tsconfig.json",
+    "build:dist": "rm -rf dist && tsc -p tsconfig.build.json && cp src/doc.css dist/doc.css",
     "lint": "eslint ."
   },
   "dependencies": {
     "hast-util-to-jsx-runtime": "^2.3.6",
-    "@markii/core": "*",
-    "@markii/runtime": "*",
-    "@markii/stdlib": "*"
+    "@markii/core": "0.1.0",
+    "@markii/runtime": "0.1.0",
+    "@markii/stdlib": "0.1.0"
   },
   "peerDependencies": {
     "react": "^18.3.1"

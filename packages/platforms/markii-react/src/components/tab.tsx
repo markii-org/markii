@@ -1,5 +1,5 @@
 import type { ReactElement, ReactNode } from 'react';
-import type { MarkComponentProps } from '../registry';
+import type { MarkComponentProps } from '../registry.js';
 
 /** Default label used when a `tab` directive has no `label` attribute. */
 export const DEFAULT_TAB_LABEL = 'Tab';

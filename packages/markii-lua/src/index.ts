@@ -8,22 +8,22 @@ export type {
   ScriptFailure,
   ScriptLimitKind,
   ScriptMarshalReason,
-} from './errors';
+} from './errors.js';
 export {
   CAPABILITY_ERROR_TAG,
   MARSHAL_ERROR_TAG,
   ScriptLimitError,
-} from './errors';
+} from './errors.js';
 
-export type { CreateEmptyLuaEngineOptions } from './globals';
+export type { CreateEmptyLuaEngineOptions } from './globals.js';
 export {
   ALLOWED_GLOBALS,
   DENIED_GLOBALS,
   createEmptyLuaEngine,
-} from './globals';
+} from './globals.js';
 
-export type { LimitHandle, ScriptLimits } from './limits';
-export { DEFAULT_LIMITS, installLimits } from './limits';
+export type { LimitHandle, ScriptLimits } from './limits.js';
+export { DEFAULT_LIMITS, installLimits } from './limits.js';
 
 export type {
   CacheEntry,
@@ -33,26 +33,26 @@ export type {
   NetGrants,
   NetProvider,
   NetResponse,
-} from './capabilities';
+} from './capabilities.js';
 export {
   DEFAULT_MAX_FETCH_BYTES,
   bytesToLuaString,
   buildCapabilities,
   luaStringToBytes,
-} from './capabilities';
+} from './capabilities.js';
 
-export type { MarshalLimits } from './marshal';
+export type { MarshalLimits } from './marshal.js';
 export {
   DEFAULT_MARSHAL_LIMITS,
   buildMarshalPrelude,
   finalizeMarshaledValue,
   wrapUserCode,
-} from './marshal';
+} from './marshal.js';
 
-export { NOT_YET_SUPPORTED_MESSAGE, buildRequireStub } from './require';
+export { NOT_YET_SUPPORTED_MESSAGE, buildRequireStub } from './require.js';
 
-export type { RunScriptOptions, RunScriptResult } from './sandbox';
-export { runScript } from './sandbox';
+export type { RunScriptOptions, RunScriptResult } from './sandbox.js';
+export { runScript } from './sandbox.js';
 
-export type { LuaExecutorConfig } from './executor';
-export { createLuaExecutor } from './executor';
+export type { LuaExecutorConfig } from './executor.js';
+export { createLuaExecutor } from './executor.js';

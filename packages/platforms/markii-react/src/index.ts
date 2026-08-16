@@ -1,4 +1,11 @@
-export { renderMark } from './render';
+// This is @markii/react's renderer-only entry point ("."): `renderMark` and
+// the registry types/helpers, with NO import of `./components` — a consumer
+// who brings their own registry (via `createRegistry`/`mergeRegistries`)
+// must not pull in the standard component set (Callout, Stat, ...), their
+// `@markii/stdlib` dependency, or `doc.css` merely by importing from here.
+// The batteries-included standard components + `defaultRegistry` live at
+// the `@markii/react/components` subpath instead (see `./components/index.ts`).
+export { renderMark } from './render.js';
 export {
   createRegistry,
   mergeRegistries,
@@ -6,17 +13,4 @@ export {
   type Registry,
   type RegistryEntry,
   type MarkComponentProps,
-} from './registry';
-export {
-  Callout,
-  Kbd,
-  Rating,
-  ScriptMarker,
-  UnknownDirective,
-  ValueDirective,
-  defaultRegistry,
-  type CalloutType,
-  type ScriptMarkerProps,
-  type UnknownDirectiveProps,
-  type ValueDirectiveProps,
-} from './components';
+} from './registry.js';

@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react';
-import type { MarkComponentProps } from '../registry';
+import type { MarkComponentProps } from '../registry.js';
 
 /**
  * `:kbd[Ctrl+S]` — a styled keycap for an inline text directive. Rendered
