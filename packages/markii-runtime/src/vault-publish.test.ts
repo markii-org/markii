@@ -150,7 +150,15 @@ describe('adversarial:vault prototype safety', () => {
 
   it('the read seam exposes no write method at runtime', () => {
     const { store: vaultStore } = createVaultStore();
-    expect((vaultStore as Record<string, unknown>).set).toBeUndefined();
-    expect((vaultStore as Record<string, unknown>).publish).toBeUndefined();
+    // `VaultStore` has no index signature, so TypeScript rejects a direct
+    // cast to `Record<string, unknown>` (TS2352: the types do not overlap
+    // sufficiently). Going through `unknown` is the strict-mode-legal way to
+    // say what this test means: inspect the runtime object for members the
+    // *type* deliberately does not declare — which is the whole point of
+    // asserting that the read seam exposes no writer at runtime, not merely
+    // that it is untyped at compile time.
+    const seam = vaultStore as unknown as Record<string, unknown>;
+    expect(seam.set).toBeUndefined();
+    expect(seam.publish).toBeUndefined();
   });
 });
