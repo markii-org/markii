@@ -300,15 +300,24 @@ Open VSX.
   (throwing get, Proxy value, throwing during dotted-path walk); applies to
   renderMark and renderMarkNode alike. Spec: renderer requirement extends
   "never throws" to hostile host stores.
-- J2 (awaiting user): frontmatter tolerance — remark-frontmatter in core so
-  `---` YAML blocks parse as a frontmatter node (dropped in render, exposed
-  in AST + a typed `uses` accessor); conformance fixtures. `uses:` SEMANTICS
-  (pack hints UI) stay in the packs arc.
-- J3 (awaiting user): registry-level aliases — `aliases` in the registry
-  (name → target name + preset attributes), resolved at lookup; spec note
-  that aliases are registry/app-level, never in-note. Note-level macro
-  definitions REJECTED (assessment 2026-08-17): preprocessor-in-a-note
-  violates cleanliness + non-language non-goals.
+- J2 (APPROVED 2026-08-17, minimal; QUEUED behind Phase I to avoid lockfile
+  collisions): frontmatter tolerance — remark-frontmatter in core
+  (stack-approved) so `---` YAML blocks parse as a frontmatter node
+  (dropped in render, exposed in AST) + a hand-rolled `uses` accessor for
+  the simple list forms ONLY (`uses: [a, b]` and block list; anything else
+  → undefined, never an error; NO yaml dependency — manifest.ts
+  philosophy); conformance fixtures (frontmatter present/absent/malformed,
+  `---` mid-document unchanged as thematic break). `uses:` SEMANTICS (pack
+  hints UI) stay in the packs arc.
+- J3 (APPROVED 2026-08-17, registry-level; QUEUED behind Phase I):
+  `aliases` in the registry (alias name → target name + preset attributes;
+  author-written attributes override the alias's presets — closest to the
+  text wins), resolved at
+  registry lookup, one level (no alias-to-alias chains), unknown target →
+  standard fallback; layout wrappers may migrate onto it if trivial; spec
+  note: aliases are registry/app-level, never defined in a note (note-level
+  macros REJECTED — preprocessor-in-a-note violates cleanliness +
+  non-language non-goals).
 - Backlog (undecided): directive form/kind mismatch rule (`:center[x]` →
   div-in-p) — spec + renderer degrade-to-fallback.
 
