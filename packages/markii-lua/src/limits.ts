@@ -121,7 +121,7 @@ export interface LimitHandle {
  * AUTHORITATIVE kill for that class of failure is not this hook at all —
  * it's the host's EXTERNAL, terminatable-isolate watchdog (dedicated Web
  * Worker/`worker_thread` + an outside wall-clock timer calling
- * `terminate()`), now normative in DESIGN.md §10 ("In-process limits are
+ * `terminate()`), now normative in docs/security.md ("In-process limits are
  * best-effort; the terminatable isolate is the real guarantee"). This
  * module's hook reduces how often that external kill is needed and gives
  * fast, precise, in-band error classification for the common compute-bound

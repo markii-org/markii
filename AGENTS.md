@@ -2,8 +2,9 @@
 
 An extensible markdown format: CommonMark + generic directives that render the
 author's own React components. **The product is the file format and its reference
-library — not an app.** Read `DESIGN.md` (the spec) before writing any code; it is
-the source of truth for syntax, architecture, and scope.
+library — not an app.** Read the `docs/` pages before writing any code —
+`docs/spec.md` is the normative core and, with the topic pages beside it, the
+source of truth for syntax, architecture, and scope.
 
 This file is the single project-instruction file for all agents and tools.
 `CLAUDE.md` is a pointer stub — never add content there.
@@ -30,7 +31,9 @@ who they serve — with the third acting as the overriding scope test:
 ## Repo layout (npm workspaces)
 
 ```
-DESIGN.md            the format spec — source of truth
+docs/                the spec + documentation — source of truth. spec.md is the
+                     normative core; format/scripting/bundles/security/
+                     integration/packs.md carry the full material per topic
 conformance/         language-agnostic corpus: *.mk.md inputs + expected-AST *.json
 packages/markii-core    framework-agnostic reference impl — ZERO React dependency:
   src/parse.ts       text → mdast AST (unified + remark-parse + remark-directive)
@@ -47,21 +50,21 @@ packages/platforms/markii-react   the reference L1 renderer, a platform adapter
                      center/right/wide/narrow/full via createLayoutWrapper;
                      failure-presentation.ts — the ONE home of failure wording)
   src/doc.css        document rhythm + component internals
-packages/markii-runtime host-side scripting glue (spec §8) — neutral, no React,
+packages/markii-runtime host-side scripting glue (docs/scripting.md) — neutral, no React,
                         no wasmoon; stays runtime-agnostic (executor injected):
   src/store.ts       ValueStore + createValueStore (null-proto, hasOwn-guarded)
   src/run.ts         runDocumentScripts + trigger→tier gate (auto/scheduled=read-only)
-packages/markii-stdlib  standard component contracts (spec §13.3/§13.6) — neutral,
+packages/markii-stdlib  standard component contracts (docs/integration.md) — neutral,
                         zero deps, no React; the seam every renderer implements against:
   src/contracts.ts   ComponentKind/AttributeSchema/ComponentContract types,
                      STANDARD_COMPONENTS (callout/kbd/rating), getContract()
-packages/markii-bundle  .mkbundle bundle handling (spec §9–11, L2) — no React, no parsing:
+packages/markii-bundle  .mkbundle bundle handling (docs/bundles.md, L2) — no React, no parsing:
   src/manifest.ts    manifest.json types + hand-rolled validation (no schema deps)
   src/paths.ts       path-jail: bundle-relative path normalization/rejection
   src/zip.ts         zip form via fflate (browser-safe main entry)
   src/fs.ts          directory form via node:fs (Node-only "./fs" subpath export)
   src/script-view.ts capability-restricted view for future script runtime (§11)
-packages/markii-lua     Lua sandbox runtime (spec §8/§10/§11, L3) — no React, no parsing:
+packages/markii-lua     Lua sandbox runtime (docs/security.md, L3) — no React, no parsing:
   src/globals.ts     empty-env whitelist: curated string/table/math only
   src/capabilities.ts net/cache/bundle tables; two-tier (manual vs auto) gating
   src/limits.ts      instruction-count hook, wall-clock/memory/fetch-size caps
@@ -132,9 +135,10 @@ same commit as the change that triggers them:
 
 - **Parser-visible behavior** (anything an AST consumer can observe) → a
   conformance fixture in `conformance/` plus colocated tests. No exceptions.
-- **Format semantics or a feature contract** → `DESIGN.md` (the spec) updated
-  in the same commit; code and spec must never diverge. Once `docs/` pages
-  exist for the area, update those in the same commit too.
+- **Format semantics or a feature contract** → the `docs/` pages updated in
+  the same commit: `docs/spec.md` for the normative rule, the topic page
+  (format/scripting/bundles/…) for the explanation. Code and spec must never
+  diverge.
 - **Security-relevant finding or fix** (sandbox, sanitizer, capability gating,
   path jail) → the security documentation in `docs/` updated in the same
   commit: what was found, what changed, professional tone, evidence kept.
@@ -162,7 +166,8 @@ same commit as the change that triggers them:
   parallel they own disjoint directories.
 - Verify before reporting done: `npm test`, `npm run build`, `npm run lint`
   must all pass from the repo root. Report actual command output, not claims.
-- Do not edit DESIGN.md or AGENTS.md; propose changes in your report instead.
+- Do not edit the `docs/` pages or AGENTS.md; propose changes in your report
+  instead. (The orchestrator owns spec and docs edits.)
 
 ## Commands (repo root)
 

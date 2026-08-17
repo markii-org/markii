@@ -138,7 +138,7 @@ export function luaStringToBytes(s: string): Uint8Array {
 /**
  * Builds the raw, host-facing async functions to inject as flat globals,
  * and the trusted Lua prelude that wraps them into the ergonomic `net` /
- * `cache` / `bundle` tables the DESIGN.md host API documents (`net.fetch_json(url)`,
+ * `cache` / `bundle` tables the docs/spec.md host API documents (`net.fetch_json(url)`,
  * `cache.get(key, ttl, fn)`, `bundle.read/write/exists(path)`).
  *
  * ## Why "raw flat globals + a Lua prelude" instead of `global.set('net', {...})`
@@ -169,7 +169,7 @@ export function luaStringToBytes(s: string): Uint8Array {
  * `js_promise` userdata with `:await()`/`:next()`/`:catch()` methods; the
  * CALLER must explicitly invoke `:await()` to get the resolved value
  * (verified empirically: without it, a script sees the raw promise
- * userdata, not the awaited result). Since `DESIGN.md`'s example script
+ * userdata, not the awaited result). Since `docs/spec.md`'s example script
  * (`local repo = net.fetch_json(url)`) is written as if this were
  * synchronous, the awaiting is done for the author, once, HERE — inside
  * the prelude's Lua wrapper — never exposed to the untrusted script.

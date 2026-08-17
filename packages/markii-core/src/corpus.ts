@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 /**
  * The language-agnostic conformance corpus: `*.mk.md` inputs plus
- * expected-AST `*.json` siblings, living at the repo root (see DESIGN.md
+ * expected-AST `*.json` siblings, living at the repo root (see docs/spec.md
  * §13). This module is deliberately parser-agnostic — it only
  * loads/compares corpus data — so it's usable from any package's tests (or
  * a future non-JS implementation's tooling), not just `@markii/core`'s own

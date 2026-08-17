@@ -5,7 +5,7 @@ import { defaultRegistry } from './index';
 
 // Directive container nesting requires the outer fence to use MORE colons
 // than its nested children, hence `::::tabs` wrapping `:::tab` (matching
-// DESIGN.md's own nested-callout fixture, `::::callout` wrapping `:::callout`).
+// docs/spec.md's own nested-callout fixture, `::::callout` wrapping `:::callout`).
 const TWO_TABS = [
   '::::tabs',
   ':::tab{label="First"}',

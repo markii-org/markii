@@ -6,7 +6,7 @@ import { loadCorpusCases, stripPositions } from './corpus';
  * Runs the language-agnostic conformance corpus (repo-root `conformance/`)
  * against this package's own `parse()`. Any implementation — ours or a
  * third party's — is expected to reproduce the same position-free AST for
- * each `*.mk.md` / `*.json` pair (see DESIGN.md §13).
+ * each `*.mk.md` / `*.json` pair (see docs/integration.md).
  */
 describe('conformance corpus', () => {
   const cases = loadCorpusCases();

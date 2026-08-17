@@ -7,7 +7,7 @@ import { runScript, type RunScriptOptions } from './sandbox.js';
 import type { ScriptFailure } from './errors.js';
 
 /**
- * Slice 2 of the scripting-usability layer (DESIGN.md §8): the reusable
+ * Slice 2 of the scripting-usability layer (docs/scripting.md): the reusable
  * adapter from this package's `runScript` to `@markii/runtime`'s
  * language-agnostic `ScriptExecutor` shape, so `runDocumentScripts` can run
  * a document's script blocks through the real Lua sandbox without

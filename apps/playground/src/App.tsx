@@ -35,7 +35,7 @@ const DEBOUNCE_MS = 200;
  * for every script the returned executor runs".
  *
  * SECURITY NOTE (spec §10): this executor runs wasmoon **on the main
- * thread**. Per DESIGN.md §10, a real host MUST run note scripts in a
+ * thread**. Per docs/security.md, a real host MUST run note scripts in a
  * dedicated, terminatable Web Worker with an EXTERNAL wall-clock watchdog
  * that calls `terminate()` — in-VM limits alone cannot guarantee a hostile
  * or hung script can be stopped. Running on the main thread here is
@@ -82,7 +82,7 @@ export function App(): ReactElement {
   const [source, setSource] = useState(DEMO_DOC);
   const [debounced, setDebounced] = useState(DEMO_DOC);
   const [runState, setRunState] = useState<RunState>({ phase: 'idle' });
-  // The value store is a mutable, note-scoped object per DESIGN.md §8 — it
+  // The value store is a mutable, note-scoped object per docs/scripting.md — it
   // must persist for the life of the session (one store, created once),
   // never rebuilt per render, or a run's results would vanish on the next
   // keystroke. `useRef` (not `useState`) because the store's identity never
@@ -172,7 +172,7 @@ export function App(): ReactElement {
         Values are cached in the value store; rendering never runs scripts —
         only clicking Run does. Demo runs scripts on the main thread for
         simplicity; a production host must run them in a terminatable Web Worker
-        with an external watchdog (DESIGN.md §10).
+        with an external watchdog (docs/security.md).
       </footer>
     </div>
   );

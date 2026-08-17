@@ -11,7 +11,7 @@ function isColsValue(value: string): value is ColsValue {
 }
 
 /**
- * `:::row{cols=3} ... :::` — DESIGN.md §4's one layout *container*. Its
+ * `:::row{cols=3} ... :::` — docs/format.md's one layout *container*. Its
  * block children become equal-width cells that wrap responsively and stack
  * on narrow viewports (`doc.css`'s `.mk-row` grid); a plain markdown viewer
  * simply stacks them, since a container directive's inner markdown is
@@ -19,7 +19,7 @@ function isColsValue(value: string): value is ColsValue {
  * only knob is `cols`, an exact match of `'2' | '3' | '4'`; an absent or
  * invalid value (`cols=99`, `cols=-1`, `cols=abc`, `cols="2.0"`, `cols=" 2"`)
  * degrades to plain `mk-row` (auto-fit) rather than an error, matching
- * DESIGN.md's "An invalid or absent `cols` degrades to auto-fit, never an
+ * docs/spec.md's "An invalid or absent `cols` degrades to auto-fit, never an
  * error." No outer margin: the document stylesheet (`.doc > * + *`) owns
  * spacing between this and its siblings.
  */

@@ -29,7 +29,7 @@ const MISSING: StorePathResolution = { value: undefined, status: 'missing' };
 
 /**
  * The one-character prefix that routes a `data=`/`:value[]` name at the
- * vault store instead of the note store (DESIGN.md §8, "Vault-published
+ * vault store instead of the note store (docs/scripting.md, "Vault-published
  * values"): "Readers use an `@` prefix ... The whole mental model is one
  * sentence: bare name = mine, `@name` = the vault's."
  */
@@ -104,7 +104,7 @@ function walkSegments(
 /**
  * Resolves a `data=`/`:value[]` name against `store`, walking a dotted path
  * (`repo.stars`) into whatever object/array the root name's stored value
- * turns out to be (DESIGN.md §8: `data=<name>` / `:value[<name>]`). A bare
+ * turns out to be (docs/scripting.md: `data=<name>` / `:value[<name>]`). A bare
  * name with no dot (`stars`) behaves exactly as a direct `store.get(name)`
  * always has — this is a superset, not a new mode.
  *
@@ -140,7 +140,7 @@ export function resolveStorePath(
 /**
  * Resolves a `data=`/`:value[]` name against a `ValueScope`, routing an
  * `@`-prefixed name (`@gh.stars`) at `scope.vault` instead of `scope.store`
- * (DESIGN.md §8: "bare name = mine, `@name` = the vault's"). Exactly one
+ * (docs/scripting.md: "bare name = mine, `@name` = the vault's"). Exactly one
  * leading `@` is stripped before the remainder is resolved — `@@gh` looks
  * up the literal vault name `@gh` (which simply misses), never loop-strips.
  * A bare `@` (empty root after stripping) is `missing` without ever

@@ -1,5 +1,5 @@
 /**
- * Slice 1's pure read path (DESIGN.md §8): the note-scoped value store that
+ * Slice 1's pure read path (docs/scripting.md): the note-scoped value store that
  * rendering reads from. Nothing here executes a script, fetches anything,
  * or knows Lua exists — this module only holds whatever a future runner
  * (Slice 2) or a bundle-cache hydration step has already written, keyed by
@@ -40,7 +40,7 @@ export interface StoredValue {
 /**
  * Read/write access to the note-scoped value store. Script blocks "may
  * appear anywhere markdown may... but `name`s land in one note-scoped value
- * store regardless of position" (DESIGN.md §8) — this interface is that
+ * store regardless of position" (docs/scripting.md) — this interface is that
  * store. Rendering only ever calls `get`/`has`/`snapshot`; `set` exists for
  * whatever publishes values into the store (a script runner, a bundle
  * cache-loader) — entirely out of scope for Slice 1.

@@ -260,7 +260,7 @@ describe('renderMarkNode: hostile cases degrade identically standalone vs in-doc
   });
 });
 
-describe('renderMarkNode: bare-only `open` (DESIGN.md §8)', () => {
+describe('renderMarkNode: bare-only `open` (docs/scripting.md)', () => {
   it('opens for a genuinely bare `open` attribute', () => {
     const [node] = parseTopLevel('```lua {name=x open}\nreturn 1\n```');
     const { container } = render(renderMarkNode(node!, defaultRegistry));

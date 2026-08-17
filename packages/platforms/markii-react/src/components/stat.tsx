@@ -68,7 +68,7 @@ function pick(
  * value (from either source) renders `—` rather than a blank box; a missing
  * or errored binding degrades the same way. Never throws.
  *
- * Failure presentation mirrors `ValueDirective` exactly (DESIGN.md §8,
+ * Failure presentation mirrors `ValueDirective` exactly (docs/scripting.md,
  * AGENTS.md's cleanliness principle): the BODY stays quiet — `—`, or
  * whatever static attributes supplied — and a failed/stale binding surfaces
  * only as a `title` tooltip plus a modifier class on the root element

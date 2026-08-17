@@ -40,7 +40,7 @@ function stringifyStoredValue(value: unknown): string {
 }
 
 /**
- * `:value[name]` (DESIGN.md §8) — renders a named value from the value
+ * `:value[name]` (docs/scripting.md) — renders a named value from the value
  * store inline. `name` may be a dotted path (`repo.stars`) reaching into a
  * stored object/array, resolved via `resolveScopedPath` (`../store-path`) —
  * a bare name works exactly as before. An `@`-prefixed name (`@gh.stars`)

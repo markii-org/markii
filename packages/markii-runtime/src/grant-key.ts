@@ -1,5 +1,5 @@
 /**
- * DESIGN.md §10 ("Security model"): "Grants are remembered per note, keyed
+ * docs/security.md ("Security model"): "Grants are remembered per note, keyed
  * by a hash of the note's full *executable closure* — its inline scripts,
  * `src=` script files, required bundle-local modules, vault-library
  * modules, and the versions of any pack modules it requires. If any of that
@@ -115,7 +115,7 @@ export interface GrantClosureScript {
 /**
  * One installed pack's identity, plus its module sources when the host has
  * them. A pack's `version` alone must move the key even if the host never
- * fetched its source — DESIGN.md §10 keys the grant to "the versions of any
+ * fetched its source — docs/security.md keys the grant to "the versions of any
  * pack modules it requires", not only to code the host happens to have
  * bytes for.
  */
@@ -134,7 +134,7 @@ export interface GrantClosurePack {
 }
 
 /**
- * The full executable closure a grant is keyed to (DESIGN.md §10). Every
+ * The full executable closure a grant is keyed to (docs/security.md). Every
  * field here must be populated by the host from whatever it has already
  * resolved; `computeGrantKey` does no resolution of its own.
  */
@@ -306,7 +306,7 @@ function toHex(buffer: ArrayBuffer): string {
 }
 
 /**
- * Computes the grant key for a note's executable closure (DESIGN.md §10):
+ * Computes the grant key for a note's executable closure (docs/security.md):
  * the lowercase hex SHA-256 digest of the closure's canonical serialization
  * — see this module's top doc comment for the exact byte form. Pure and
  * side-effect free: this function does not parse, fetch, or read anything;

@@ -199,7 +199,7 @@
 }
 
 /*
- * Failure-kind modifiers (`@markii/runtime`'s `FailureKind`, DESIGN.md §8) —
+ * Failure-kind modifiers (`@markii/runtime`'s `FailureKind`, docs/scripting.md) —
  * layered on top of `.mk-value--missing`, only ever added when the
  * resolution's root entry carried a `failureKind` on a genuine error (see
  * `ValueDirective`). Each just tints the dashed-underline treatment a
@@ -520,7 +520,7 @@
   border-radius: 6px;
 }
 
-/* ---------- data-binding state (DESIGN.md §8) ---------- */
+/* ---------- data-binding state (docs/scripting.md) ---------- */
 
 /*
  * The block twins of the `.mk-value--*` markers above: a data-bound
@@ -564,7 +564,7 @@
   border-bottom: 2px solid #7c3aed;
 }
 
-/* ---------- layout presets (DESIGN.md §4) ---------- */
+/* ---------- layout presets (docs/format.md) ---------- */
 
 /*
  * `render.tsx` only wraps a directive in a `mk-width-*`/`mk-align-*` `<div>`
@@ -602,7 +602,7 @@
 
 /*
  * The five `:::center`/`:::right`/`:::wide`/`:::narrow`/`:::full` layout
- * wrappers (DESIGN.md §4, `layout-wrapper.tsx`) reuse the `mk-width-*`/
+ * wrappers (docs/format.md, `layout-wrapper.tsx`) reuse the `mk-width-*`/
  * `mk-align-*` classes above and add `mk-layout` on top for the rules below,
  * which only make sense on a container that has its OWN plain-markdown
  * children (a table, an image, a paragraph) rather than on the bare

@@ -1,7 +1,7 @@
 import type { StoredValue } from './store.js';
 
 /**
- * Slice 3 of the scripting-usability layer (DESIGN.md §8, "Vault-published
+ * Slice 3 of the scripting-usability layer (docs/scripting.md, "Vault-published
  * values (the bulletin board)"): the APP-SCOPED store that a `publish`-
  * flagged script block's result lands in, as distinct from `store.ts`'s
  * NOTE-scoped `ValueStore`. "The store is app-side (§9): publishing adds no

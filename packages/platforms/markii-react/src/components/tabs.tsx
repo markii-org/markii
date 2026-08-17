@@ -41,7 +41,7 @@ function collectTabs(children: ReactNode): TabEntry[] {
 /**
  * `::::tabs :::tab{label="..."} ... ::: ::::` — a tabbed panel switcher.
  * (The wrapping fence needs more colons than its `tab` children, per the
- * directive container nesting rule — same as `DESIGN.md`'s own nested
+ * directive container nesting rule — same as `docs/spec.md`'s own nested
  * `callout` example.)
  * Inspects its own React children for `tab` directives (see `collectTabs`)
  * and renders a `role="tablist"` button bar plus the single active panel;

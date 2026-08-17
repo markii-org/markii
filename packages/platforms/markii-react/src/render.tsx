@@ -80,7 +80,7 @@ export interface DirectiveChild {
  * *invokes* that element during reconciliation, which for a child element
  * hasn't happened yet by the time its parent's own render function runs.
  * So a container component that needs to recognize "one of my children is a
- * `tab` directive" (e.g. `Tabs`, DESIGN.md's tabs/tab pair) cannot do it by
+ * `tab` directive" (e.g. `Tabs`, docs/spec.md's tabs/tab pair) cannot do it by
  * checking `child.type` — every directive child shares the same `type`
  * until rendered. This helper is the supported way to do that recognition
  * instead: it reads the same `data-mk-name`/`data-mk-attrs` props
@@ -259,7 +259,7 @@ function renderDirectiveContent(
 
 /**
  * Builds the React component used to replace every `<mk-directive>` hast
- * element (tagged by `@markii/core`'s `toHast`): resolves DESIGN.md §4's
+ * element (tagged by `@markii/core`'s `toHast`): resolves docs/format.md's
  * reserved layout-preset attributes (`width`/`align`) for EVERY directive,
  * inline or block, then delegates the rest of the work — registry lookup,
  * `:value[...]`, the unknown-directive fallback — to
@@ -283,7 +283,7 @@ function createDirectiveElement(
     const kind = props['data-mk-kind'];
     const rawAttributes = parseAttributes(props['data-mk-attrs']);
 
-    // Reserved layout keys (DESIGN.md §4: `width`/`align`) are stripped for
+    // Reserved layout keys (docs/format.md: `width`/`align`) are stripped for
     // EVERY directive, inline or block — a text directive's component must
     // never see them either. Intercepted here, before the registry lookup
     // inside `renderDirectiveContent`, so it applies identically to a
@@ -324,7 +324,7 @@ function createDirectiveElement(
 const CODE_META_ATTR = 'data-mk-meta';
 
 /**
- * The bare-only meta attribute (DESIGN.md §8) that opts a script marker into
+ * The bare-only meta attribute (docs/scripting.md) that opts a script marker into
  * rendering already-expanded. Bare-only like `@markii/core`'s `publish`: only
  * the genuinely valueless spelling (`{name=x open}`) counts — `open=true`,
  * `open=false`, and `open=""` are all different, unrecognized attributes and
@@ -384,7 +384,7 @@ interface PreElementProps {
 
 /**
  * Overrides hast-util-to-jsx-runtime's default `<pre>` conversion so a
- * script code block (DESIGN.md §8: a fence whose meta carries a
+ * script code block (docs/scripting.md: a fence whose meta carries a
  * `{name=...}` attribute group) renders as a collapsed, expandable
  * `ScriptMarker` instead of a raw `<pre><code>` wall. Reads the raw hast
  * node (passed via `toJsxRuntime`'s `passNode` option) purely to reach the
@@ -397,7 +397,7 @@ interface PreElementProps {
  * rendering — the same graceful-degradation spirit as the unknown-directive
  * fallback (Architecture rule 3).
  *
- * The `name` must also pass `@markii/core`'s `isValidScriptName` (DESIGN.md
+ * The `name` must also pass `@markii/core`'s `isValidScriptName` (docs/spec.md
  * §8's `[A-Za-z_][A-Za-z0-9_-]*` charset — dots in particular are reserved,
  * since `data=`/`:value[]` read a dot as path traversal). A block whose name
  * fails that check is NOT a script: `extractScripts` skips it, so it can

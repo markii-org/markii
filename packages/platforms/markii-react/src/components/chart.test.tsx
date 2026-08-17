@@ -219,7 +219,7 @@ describe('Chart', () => {
 
   it('ignores a component-level `width`/`height` attribute entirely, rendering at the built-in default geometry', () => {
     // `Chart` no longer reads `attributes.width`/`attributes.height` at all
-    // (charts size to their container per DESIGN.md §4's layout presets, not
+    // (charts size to their container per docs/format.md's layout presets, not
     // a pixel attribute) — rendered directly with those keys present (as if
     // something upstream failed to strip them), they must have zero effect.
     const { container } = render(
@@ -233,7 +233,7 @@ describe('Chart', () => {
   });
 
   it('renders `::chart{... width=999 height=999}` through renderMark with the built-in default geometry, never throwing', () => {
-    // `width` is a reserved layout-preset key (DESIGN.md §4), stripped
+    // `width` is a reserved layout-preset key (docs/format.md), stripped
     // before `Chart` ever sees `attributes` — `height` is not reserved but
     // `Chart` no longer reads it either way. Either way the directive's
     // `width=999 height=999` has no effect on the chart's own geometry.
@@ -257,7 +257,7 @@ describe('Chart', () => {
     expect(svg?.getAttribute('height')).toBe('60');
   });
 
-  it('treats `::chart{width=wide}` as a layout preset, not a chart size override — the DESIGN.md §4 collision', () => {
+  it('treats `::chart{width=wide}` as a layout preset, not a chart size override — the docs/format.md collision', () => {
     const { container } = render(
       renderMark('::chart{values="1,2,3" width=wide}', defaultRegistry),
     );

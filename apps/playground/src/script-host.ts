@@ -8,7 +8,7 @@ import type {
 
 /**
  * The playground's host-side implementations of `@markii/lua`'s capability
- * interfaces (DESIGN.md §8/§10/§11). The Lua sandbox has no ambient network
+ * interfaces (docs/scripting.md/§10/§11). The Lua sandbox has no ambient network
  * or storage of its own by design — the host injects these. This is a *dev
  * harness* implementation: a real app would route `net.get` through its own
  * SSRF/allowlist policy surface and back `cache` with durable bundle

@@ -4,7 +4,7 @@ import type { StoredValue, ValueStore } from './store.js';
 import type { VaultWriter } from './vault.js';
 
 /**
- * Slice 2 of the scripting-usability layer (DESIGN.md §8): the run
+ * Slice 2 of the scripting-usability layer (docs/scripting.md): the run
  * orchestrator that executes a document's script blocks and writes their
  * results into the `ValueStore` Slice 1 built. This module never imports a
  * concrete language runtime (no `@markii/lua`, no wasmoon) — it only knows
@@ -15,7 +15,7 @@ import type { VaultWriter } from './vault.js';
  */
 
 /**
- * How a batch of scripts was invoked — DESIGN.md §8's three triggers:
+ * How a batch of scripts was invoked — docs/scripting.md's three triggers:
  * - `'manual'`    — an explicit run/run-all click.
  * - `'auto'`      — opt-in run-on-open.
  * - `'scheduled'` — opt-in periodic run.
@@ -23,7 +23,7 @@ import type { VaultWriter } from './vault.js';
 export type RunTrigger = 'manual' | 'auto' | 'scheduled';
 
 /**
- * DESIGN.md §8's two-tier capability gate a concrete script executor (e.g.
+ * docs/scripting.md's two-tier capability gate a concrete script executor (e.g.
  * `@markii/lua`'s `runScript`) enforces: `'manual'` unlocks every manifest
  * grant, including effectful ops; `'auto'` is read-only regardless of what
  * was granted.
@@ -31,7 +31,7 @@ export type RunTrigger = 'manual' | 'auto' | 'scheduled';
 export type ExecutionTier = 'manual' | 'auto';
 
 /**
- * DESIGN.md §8's trigger x capability table, expressed as a pure lookup —
+ * docs/scripting.md's trigger x capability table, expressed as a pure lookup —
  * THIS IS THE SECURITY GATE for the whole run path. `'manual'` is the only
  * trigger that can ever produce the full-grants `'manual'` tier; `'auto'`
  * and `'scheduled'` both map to the read-only `'auto'` tier, unconditionally.
@@ -107,7 +107,7 @@ export interface RunSummaryEntry {
    */
   failureKind?: FailureKind;
   /**
-   * Publish outcome (DESIGN.md §8's vault). Set ONLY for a script block
+   * Publish outcome (docs/scripting.md's vault). Set ONLY for a script block
    * whose fence carried the bare `publish` attribute (`ScriptBlock.publish
    * === true`) AND whose run succeeded (`status === 'fresh'`) — a
    * non-publish block never gets this field, and a publish-flagged block
@@ -129,7 +129,7 @@ export interface RunSummaryEntry {
  * The result of one `runDocumentScripts` call. `results` has one entry per
  * script block actually run, in document order — including every
  * duplicate-named attempt, not deduplicated. When `scripts` contained
- * repeated `name`s, `duplicateNames` lists which ones; per DESIGN.md §8
+ * repeated `name`s, `duplicateNames` lists which ones; per docs/scripting.md
  * ("`name`s land in one note-scoped value store regardless of position"),
  * the store ends up holding whatever the LAST run for that name produced
  * (document order) — `results` still records every individual attempt.
@@ -151,14 +151,14 @@ export interface RunDocumentScriptsOptions {
   trigger: RunTrigger;
   store: ValueStore;
   /**
-   * Resolves a `src=` long-script reference (DESIGN.md §8) to its Lua
+   * Resolves a `src=` long-script reference (docs/scripting.md) to its Lua
    * source text. Optional: a document with only inline script blocks never
    * needs it. If a block has `src` set and this is not provided, that one
    * block is recorded as an error (never a thrown exception).
    */
   loadSource?: (src: string) => Promise<string> | string;
   /**
-   * The publish grant (DESIGN.md §8: "Publishing requires a grant ...
+   * The publish grant (docs/scripting.md: "Publishing requires a grant ...
    * because it writes beyond the note"). ITS PRESENCE IS THE GRANT — there
    * is no separate flag to enable publishing, and no per-script grant
    * check; a host that hands in a `vault` is thereby authorizing every
@@ -310,7 +310,7 @@ async function runOne(
 /**
  * Runs every script block in `scripts`, in document order, against
  * `executor`, and writes each outcome into `store`. This is the RUN PATH:
- * "Rendering is pure; running is an event" (DESIGN.md §8) — this function
+ * "Rendering is pure; running is an event" (docs/scripting.md) — this function
  * is the event. It never throws; a single script failing (bad `src`,
  * `loadSource` throwing, the executor rejecting/throwing, or an ordinary
  * `ok: false` result) is recorded as that one script's error status and the
@@ -319,7 +319,7 @@ async function runOne(
  * `trigger` is mapped to an `ExecutionTier` via `tierForTrigger` exactly
  * once, up front, and that same tier is used for every script in the
  * batch — the security gate is applied per batch-invocation, not
- * per-script, matching DESIGN.md §8 (a run is manual, auto, or scheduled as
+ * per-script, matching docs/scripting.md (a run is manual, auto, or scheduled as
  * a whole; individual scripts don't choose their own tier).
  *
  * Publishing (§8's vault): after a `publish`-flagged block's run SUCCEEDS,
@@ -355,7 +355,7 @@ export async function runDocumentScripts(
     const outcome = await runOne(script, executor, tier, loadSource);
     store.set(script.name, outcome.storedValue);
 
-    // Publishing (DESIGN.md §8): only for a block that both asked to
+    // Publishing (docs/scripting.md): only for a block that both asked to
     // publish (bare `publish` on its fence — see `ScriptBlock.publish`) and
     // actually succeeded. A failed run has nothing to publish; `runOne`
     // already recorded its failure in `outcome.entry.status`/`.error`, and

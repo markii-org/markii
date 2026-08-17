@@ -533,7 +533,7 @@ describe('runDocumentScripts', () => {
   });
 });
 
-describe('runDocumentScripts: publishing (DESIGN.md §8 vault)', () => {
+describe('runDocumentScripts: publishing (docs/scripting.md vault)', () => {
   it('publish-flagged block with no `vault` option: note store still gets the value, publish is "not-granted", no error', async () => {
     const store = createValueStore();
     const executor: ScriptExecutor = async () => ({ ok: true, value: 42 });

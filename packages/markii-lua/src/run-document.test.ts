@@ -13,7 +13,7 @@ const FAST_LIMITS: Partial<ScriptLimits> = {
 };
 
 /**
- * End-to-end proof of the Slice 2 run path (DESIGN.md §8) through the REAL
+ * End-to-end proof of the Slice 2 run path (docs/scripting.md) through the REAL
  * Lua sandbox (wasmoon) — not a mock executor: `ScriptBlock`-shaped values
  * (the same shape `@markii/core`'s `extractScripts` produces for
  * ` ```lua {name=...}` ` fences) go through `createLuaExecutor` ->

@@ -4,7 +4,7 @@ import { createValueStore, createVaultStore } from '@markii/runtime';
 import { renderMark } from '../render';
 import { defaultRegistry } from './index';
 
-describe('ValueDirective — @-prefixed vault reads (DESIGN.md §8)', () => {
+describe('ValueDirective — @-prefixed vault reads (docs/scripting.md)', () => {
   it(':value[@gh.stars] renders the value end-to-end through renderMark with a vault', () => {
     const { store: vault } = createVaultStore({
       initial: { gh: { value: { stars: 42 }, status: 'fresh' } },
@@ -94,7 +94,7 @@ describe('ValueDirective — @-prefixed vault reads (DESIGN.md §8)', () => {
   });
 });
 
-describe('ValueDirective — failure-kind-derived presentation (DESIGN.md §8)', () => {
+describe('ValueDirective — failure-kind-derived presentation (docs/scripting.md)', () => {
   it.each([
     ['script-error', 'script error'],
     ['capability-denied', 'needs permission'],

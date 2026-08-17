@@ -1,6 +1,6 @@
 /**
  * The neutral, framework-agnostic definition of Mark's standard component
- * *contracts* (DESIGN.md §13.3/§13.6): name + kind + attribute schema +
+ * *contracts* (docs/integration.md/§13.6): name + kind + attribute schema +
  * semantics, as pure data — zero React, zero dependency on any other
  * `@markii/*` package. A renderer (today `@markii/react`, tomorrow a
  * hypothetical `@markii/gnome`) implements these same contracts against its
@@ -9,7 +9,7 @@
  *
  * A contract never describes markup, styling, or a component
  * implementation — only what a directive named `name` means: how it is
- * written (`kind`, matching the three directive forms from DESIGN.md §2/§13:
+ * written (`kind`, matching the three directive forms from docs/format.md/§13:
  * `inline` -> `:name[...]`, `leaf` -> `::name{...}`, `container` ->
  * `:::name{...} ... :::`) and what attributes it accepts.
  */
@@ -25,7 +25,7 @@ export type ComponentKind = 'inline' | 'leaf' | 'container';
 
 /**
  * Schema for one directive attribute. All directive attributes arrive as
- * raw strings (or `null` for a bare attribute) — DESIGN.md never gives
+ * raw strings (or `null` for a bare attribute) — docs/spec.md never gives
  * directives a typed attribute grammar (Architecture rule 5: "no
  * expressions, conditionals, or loops in attributes"). `type` is kept as an
  * explicit field, rather than assumed, so the schema has somewhere to grow
@@ -51,7 +51,7 @@ export interface ComponentContract {
 }
 
 /**
- * Builds one of DESIGN.md §4's five layout-wrapper container contracts —
+ * Builds one of docs/format.md's five layout-wrapper container contracts —
  * `center`/`right`/`wide`/`narrow`/`full` — which are otherwise identical in
  * shape (`kind: 'container'`, no attributes) and differ only in `name` and
  * the preset-specific half of `description`. A tiny helper rather than five
@@ -72,7 +72,7 @@ function layoutWrapperContract(
     kind: 'container',
     attributes: {},
     description:
-      `${whatItDoes} Takes no attributes — DESIGN.md §4 gives these five ` +
+      `${whatItDoes} Takes no attributes — docs/format.md gives these five ` +
       'wrapper names a closed, attribute-free form; unlike a `width`/`align` ' +
       'attribute on a directive, a wrapper also reaches plain markdown a ' +
       'directive attribute mechanism structurally cannot (a GFM table or a ' +
@@ -312,7 +312,7 @@ export const STANDARD_COMPONENTS: Record<string, ComponentContract> = {
       },
     },
     description:
-      'A leaf directive rendering a minimal hand-rolled inline SVG chart, e.g. `::chart{kind=line values="1,3,2,5"}`. Sizes to its container — use DESIGN.md §4\'s `width`/`align` layout presets to control its footprint, not a pixel attribute. Data binding (§8): `data=name` resolves against the value store — expects an array of numbers (typically a Lua script returning a table), or an array of `{value}` objects. Non-finite/non-numeric entries are filtered out and the point count is capped; an empty or all-invalid series renders a small neutral empty state rather than a broken chart. Never throws, and never places unescaped text into the emitted SVG markup.',
+      'A leaf directive rendering a minimal hand-rolled inline SVG chart, e.g. `::chart{kind=line values="1,3,2,5"}`. Sizes to its container — use docs/format.md\'s `width`/`align` layout presets to control its footprint, not a pixel attribute. Data binding (§8): `data=name` resolves against the value store — expects an array of numbers (typically a Lua script returning a table), or an array of `{value}` objects. Non-finite/non-numeric entries are filtered out and the point count is capped; an empty or all-invalid series renders a small neutral empty state rather than a broken chart. Never throws, and never places unescaped text into the emitted SVG markup.',
   },
   row: {
     name: 'row',
@@ -327,7 +327,7 @@ export const STANDARD_COMPONENTS: Record<string, ComponentContract> = {
       },
     },
     description:
-      "DESIGN.md §4's one layout container, e.g. `:::row{cols=3} ... :::`. Its block children become equal-width cells that wrap responsively and stack on narrow viewports — and simply stack in a plain markdown viewer. No spans, no per-cell sizing, no other knobs.",
+      "docs/format.md's one layout container, e.g. `:::row{cols=3} ... :::`. Its block children become equal-width cells that wrap responsively and stack on narrow viewports — and simply stack in a plain markdown viewer. No spans, no per-cell sizing, no other knobs.",
   },
   center: layoutWrapperContract(
     'center',
@@ -339,11 +339,11 @@ export const STANDARD_COMPONENTS: Record<string, ComponentContract> = {
   ),
   wide: layoutWrapperContract(
     'wide',
-    "Sizes its scope's content to DESIGN.md §4's wide-column width preset, e.g. `:::wide ... :::`.",
+    "Sizes its scope's content to docs/format.md's wide-column width preset, e.g. `:::wide ... :::`.",
   ),
   narrow: layoutWrapperContract(
     'narrow',
-    "Sizes its scope's content to DESIGN.md §4's narrow-column width preset, e.g. `:::narrow ... :::`.",
+    "Sizes its scope's content to docs/format.md's narrow-column width preset, e.g. `:::narrow ... :::`.",
   ),
   full: layoutWrapperContract(
     'full',

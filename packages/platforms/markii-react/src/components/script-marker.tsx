@@ -5,7 +5,7 @@ export interface ScriptMarkerProps {
   name: string;
   /** The fence's language tag (`lua` for ` ```lua {name=...}` `), or `''` if the fence had none. */
   lang: string;
-  /** The `src=` bundle-relative long-script path (DESIGN.md §8), if present — the fence is then a one-line reference with an empty body. */
+  /** The `src=` bundle-relative long-script path (docs/scripting.md), if present — the fence is then a one-line reference with an empty body. */
   src?: string;
   /** The fence's own body text, exactly as authored (empty for a `src=` reference). */
   code: string;
@@ -14,7 +14,7 @@ export interface ScriptMarkerProps {
 }
 
 /**
- * Collapsed, expandable marker for a script code block (DESIGN.md §8: a
+ * Collapsed, expandable marker for a script code block (docs/scripting.md: a
  * fenced code block whose meta carries a `{name=...}` attribute group).
  * Renders a native `<details>` — folded by default, works with zero JS —
  * whose `<summary>` is a compact `⚙ name` marker (plus language, or the

@@ -1,9 +1,9 @@
 # TODO — 0.1.x / 0.2 upgrade session
 
 Authoritative, persistent work queue for the upgrade session. If a session resets
-or context is lost: re-read `AGENTS.md` → `DESIGN.md` → this file, then continue
-top-down. `DESIGN.md` is the source of truth for *what the format is*; this file
-only tracks *work state*. Mark items `[x]` as they land, with the commit hash.
+or context is lost: re-read `AGENTS.md` → `docs/spec.md` → this file, then
+continue top-down. The `docs/` pages are the source of truth for *what the
+format is*; this file only tracks *work state*. Mark items `[x]` as they land, with the commit hash.
 
 ## Ground rules (binding, from AGENTS.md + session agreements)
 
@@ -230,7 +230,14 @@ the single home of failure wording. Original scope for reference:
   subtle. (The old "kind-specific text in bodies" backlog item is REJECTED —
   see Parked.)
 
-## Phase G — docs re-authoring (approved 2026-08-17)
+## Phase G — docs re-authoring — DONE (orchestrator-authored)
+
+Delivered: DESIGN.md retired into seven docs/ pages (README index + format /
+scripting / bundles / security / integration / packs / spec), all 113
+DESIGN.md §-references in source comments remapped to the new pages,
+lua-sandbox-audit.md folded into docs/security.md's "verification status"
+section (professional tone; original preserved in git history at f7d54e8).
+Gap findings reported to user separately. Original scope for reference:
 
 Move DESIGN.md into `docs/`, re-authored as human documentation: coherent
 flow, plain language, no jargon-dense sentences, no long inline code runs.
@@ -246,7 +253,11 @@ rewrite and report to the user BEFORE changing any design decision. Fix every
 DESIGN.md cross-reference (AGENTS.md, README, source comments) per the
 maintenance map.
 
-## Phase H — README rewrite (approved 2026-08-17)
+## Phase H — README rewrite — DONE (orchestrator-authored)
+
+Delivered per the agreed structure: hook + snippet, getting started +
+platform table, integrate/extend links into docs/, short footer. ~80 lines.
+Original scope for reference:
 
 Thin README that links instead of explains: 1) tagline + tiny .mk.md snippet
 beside its rendered result (the hook); 2) getting started — install + platform

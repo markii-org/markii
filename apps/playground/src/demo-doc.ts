@@ -67,7 +67,7 @@ Status pills for inline use: :badge[stable]{variant=success}
 ## Details (collapsible)
 
 :::details{title="Why Lua for scripting?"}
-Small (~200KB), WASM-embeddable, and reads like pseudocode — see DESIGN.md
+Small (~200KB), WASM-embeddable, and reads like pseudocode — see docs/spec.md
 §8 for the full rationale. Folded by default; click the summary to expand.
 :::
 
@@ -100,7 +100,7 @@ by a root-relative path so it works offline.
 
 ## Layout: a row of stats
 
-DESIGN.md §4's one layout container — equal-width cells that wrap
+docs/format.md's one layout container — equal-width cells that wrap
 responsively and simply stack in a plain markdown viewer:
 
 :::row{cols=3}

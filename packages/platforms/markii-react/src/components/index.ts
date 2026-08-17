@@ -50,7 +50,7 @@ export type { ValueDirectiveProps } from './value-directive.js';
  * `inline: true`) or a leaf/container directive (`kind: 'leaf' |
  * 'container'` -> `inline: false`). The component *implementation* still
  * lives here in `@markii/react` — only the kind classification is pulled
- * from the neutral contract (DESIGN.md §13.3/§13.6). Falls back to `false`
+ * from the neutral contract (docs/integration.md/§13.6). Falls back to `false`
  * if `name` has no standard contract, matching the leaf/container default.
  */
 function inlineFromContract(name: string): boolean {

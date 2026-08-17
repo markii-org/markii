@@ -424,7 +424,7 @@ describe('renderMark — data=name attribute binding', () => {
   });
 });
 
-describe('renderMark — collapsed script marker (DESIGN.md §8)', () => {
+describe('renderMark — collapsed script marker (docs/scripting.md)', () => {
   it('renders a script code block (meta carries {name=...}) as a collapsed, folded mk-script marker, not a bare <pre>', () => {
     const { container } = render(
       renderMark(
@@ -472,7 +472,7 @@ describe('renderMark — collapsed script marker (DESIGN.md §8)', () => {
     expect(code?.textContent).toBe('print("hi")\n');
   });
 
-  // DESIGN.md §8: a script `name` must match `[A-Za-z_][A-Za-z0-9_-]*`. A
+  // docs/scripting.md: a script `name` must match `[A-Za-z_][A-Za-z0-9_-]*`. A
   // name outside that charset means the block is NOT a script — `@markii/core`'s
   // `extractScripts` skips it, so it can never run. Folding it to a `⚙ name`
   // marker here would advertise a runnable block the runtime will never
@@ -642,7 +642,7 @@ describe('renderMark — GFM (tables, task lists, strikethrough, autolinks)', ()
   });
 });
 
-describe('renderMark — layout presets (DESIGN.md §4: width/align)', () => {
+describe('renderMark — layout presets (docs/format.md: width/align)', () => {
   function echoRegistry(): {
     registry: Registry;
     seenAttributes: () => DirectiveAttributes | undefined;
@@ -895,7 +895,7 @@ describe('renderMark — layout presets (DESIGN.md §4: width/align)', () => {
   });
 });
 
-describe('renderMark — @-prefixed vault-scoped reads (DESIGN.md §8)', () => {
+describe('renderMark — @-prefixed vault-scoped reads (docs/scripting.md)', () => {
   it(':value[@gh.stars] resolves from the vault when a vault is supplied', () => {
     const { store: vault } = createVaultStore({
       initial: { gh: { value: { stars: 42 }, status: 'fresh' } },

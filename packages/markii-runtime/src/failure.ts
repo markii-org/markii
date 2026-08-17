@@ -1,6 +1,6 @@
 /**
  * The closed, runtime-owned failure taxonomy for a script execution outcome
- * (DESIGN.md §8). This is the ONE vocabulary every concrete `ScriptExecutor`
+ * (docs/scripting.md). This is the ONE vocabulary every concrete `ScriptExecutor`
  * (e.g. `@markii/lua`'s `createLuaExecutor`) is expected to map its own
  * language-specific failure shape down to, and the one vocabulary
  * `@markii/react` (and any other renderer) is expected to branch its

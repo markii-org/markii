@@ -2,7 +2,7 @@ import type { FailureKind, ValueStatus } from '@markii/runtime';
 
 /**
  * The ONE place UI text and CSS-class hooks for `@markii/runtime`'s failure
- * taxonomy (`FailureKind`, DESIGN.md §8) live. `@markii/runtime` itself
+ * taxonomy (`FailureKind`, docs/scripting.md) live. `@markii/runtime` itself
  * carries no presentation — it classifies, this module words and styles —
  * and every renderer-side consumer (`ValueDirective` for `:value[...]`, the
  * data-bound `stat`/`progress`/`chart` components) goes through here, so the

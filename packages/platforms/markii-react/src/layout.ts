@@ -1,7 +1,7 @@
 import type { DirectiveAttributes } from './registry.js';
 
 /**
- * The closed set of layout-preset attributes (DESIGN.md §4): a small,
+ * The closed set of layout-preset attributes (docs/format.md): a small,
  * non-freeform-CSS vocabulary any block directive can carry regardless of
  * which component renders it. These two keys are reserved — always
  * intercepted before a component sees its `attributes`, whether or not
@@ -72,7 +72,7 @@ function alignClassFor(value: string | null | undefined): string | undefined {
 }
 
 /**
- * Splits DESIGN.md §4's closed layout-attribute set (`width`, `align`) off
+ * Splits docs/format.md's closed layout-attribute set (`width`, `align`) off
  * `attributes`, returning the remaining attributes untouched (mirrors
  * `render.tsx`'s `resolveDataAttribute` for the `data=` key: same shape,
  * same never-throw contract) plus the combined class string those two

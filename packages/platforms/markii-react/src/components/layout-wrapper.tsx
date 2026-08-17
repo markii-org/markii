@@ -2,7 +2,7 @@ import type { ComponentType, ReactElement } from 'react';
 import type { MarkComponentProps } from '../registry.js';
 
 /**
- * The closed set of layout-wrapper container names (DESIGN.md §4): five
+ * The closed set of layout-wrapper container names (docs/format.md): five
  * aliases of the one shared implementation below (`createLayoutWrapper`).
  * Unlike the `width`/`align` *attributes* (`layout.ts`), these are directive
  * *names* — the only way to carry a §4 layout preset to plain markdown that
@@ -50,13 +50,13 @@ const WRAPPER_CLASSES: Record<string, string> = Object.assign(
 );
 
 /**
- * Creates the registry component for one of DESIGN.md §4's five layout-
+ * Creates the registry component for one of docs/format.md's five layout-
  * wrapper container names — `:::center`, `:::right`, `:::wide`, `:::narrow`,
  * `:::full`. One shared implementation, bound to `preset` at registration
  * time (see `components/index.ts`), so five registry entries share one
  * function body instead of five near-identical copies.
  *
- * Deliberately never reads `attributes`: DESIGN.md §4 gives these wrappers
+ * Deliberately never reads `attributes`: docs/format.md gives these wrappers
  * no attribute-bearing form. Writing one anyway (`:::center{foo=bar}`) is
  * valid directive syntax, but `foo` is simply never looked at — the same as
  * any attribute a component doesn't declare. `width`/`align` written on a

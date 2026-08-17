@@ -2,7 +2,7 @@ import { visit } from 'unist-util-visit';
 import type { Code, Root } from 'mdast';
 
 /**
- * Slice 1 of the scripting-usability layer (DESIGN.md §8): this module only
+ * Slice 1 of the scripting-usability layer (docs/scripting.md): this module only
  * *reads* script blocks out of an already-parsed AST — it never executes
  * anything, imports no Lua/wasmoon, and knows nothing about a value store.
  * A script block is, at the parse layer, an ordinary fenced code block (see
@@ -19,7 +19,7 @@ import type { Code, Root } from 'mdast';
  * ` ```lua {src=scripts/etl.lua name=stars}` ` with an empty body"); `code`
  * is still the fence's own body (empty for a `src=` reference).
  *
- * `publish`, when present, is always `true` — DESIGN.md §8: "**Publishing is
+ * `publish`, when present, is always `true` — docs/scripting.md: "**Publishing is
  * declarative**: the bare `publish` attribute on the script fence, no API to
  * call." "Bare" is load-bearing: it is set ONLY when the fence spells the
  * key with no `=value` at all (` ```lua {name=gh publish}` `, per
@@ -84,7 +84,7 @@ function findAttributeGroup(source: string): string | undefined {
 const ATTRIBUTE_TOKEN = /([A-Za-z_][\w-]*)(?:=(?:"([^"]*)"|'([^']*)'|(\S+)))?/g;
 
 /**
- * The full charset a script `name` may use (DESIGN.md §8). Deliberately NOT
+ * The full charset a script `name` may use (docs/scripting.md). Deliberately NOT
  * `g`-flagged: a `g`-flagged `RegExp` carries `lastIndex` state across
  * `.test()` calls (the exec-loop cursor from a previous match survives to
  * the next call on the same instance), which silently makes alternating
@@ -96,7 +96,7 @@ const ATTRIBUTE_TOKEN = /([A-Za-z_][\w-]*)(?:=(?:"([^"]*)"|'([^']*)'|(\S+)))?/g;
 const SCRIPT_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_-]*$/;
 
 /**
- * Whether `name` is a legal script `name` (DESIGN.md §8). Dots are
+ * Whether `name` is a legal script `name` (docs/scripting.md). Dots are
  * deliberately excluded from the charset — `data=`/`:value[]` read a dot in
  * a name as path traversal (`repo.stars` means "field `stars` of value
  * `repo`"), which would make a dotted *script* name unreachable from either
@@ -149,7 +149,7 @@ export function parseMetaAttributes(
  * Whether `key` appears in `meta`'s `{...}` attribute group written
  * genuinely bare (`key` with no `=value` at all — none of the three value
  * alternatives in `ATTRIBUTE_TOKEN` matched). This is the ONE shared
- * mechanism for a bare-only boolean fence-meta attribute (DESIGN.md §8:
+ * mechanism for a bare-only boolean fence-meta attribute (docs/scripting.md:
  * "Boolean fence-meta attributes (`publish`, the reference renderer's
  * `open`) are bare-only: writing any value — `publish=true` no less than
  * `publish=false` — is not the boolean form and counts as absent. Fail
@@ -198,7 +198,7 @@ export function isBareAttribute(
  * Walks a parsed mdast `Root` and returns every script block, in document
  * order. A `code` node is a script iff its `meta` carries a `{...}`
  * attribute group with a non-empty `name` that also matches the script-name
- * charset (DESIGN.md §8, `isValidScriptName`); a code block with no meta,
+ * charset (docs/scripting.md, `isValidScriptName`); a code block with no meta,
  * meta with no `name`, or a `name` outside the charset (e.g. a dotted
  * `repo.stars`) is ordinary code and is skipped — same display-only
  * degradation either way, never an error and never a console message. Pure

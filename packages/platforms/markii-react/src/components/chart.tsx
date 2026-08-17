@@ -146,7 +146,7 @@ function scalePoints(
  * Missing/error binding with no static fallback renders a small neutral
  * empty state rather than a broken or empty `<svg>`. Never throws.
  *
- * Failure presentation mirrors `ValueDirective` exactly (DESIGN.md §8,
+ * Failure presentation mirrors `ValueDirective` exactly (docs/scripting.md,
  * AGENTS.md's cleanliness principle): the BODY stays quiet — the same
  * neutral `no data` state, or the plotted static fallback series — and a
  * failed/stale binding surfaces only as a tooltip plus a modifier class on
@@ -167,7 +167,7 @@ export function Chart({
 }: MarkComponentProps): ReactElement {
   const rawKind = attributes.kind ?? DEFAULT_KIND;
   const kind: ChartKind = isChartKind(rawKind) ? rawKind : DEFAULT_KIND;
-  // Charts size to their container — DESIGN.md §4's `width`/`align` layout
+  // Charts size to their container — docs/format.md's `width`/`align` layout
   // presets are the sizing story, not a component-level pixel attribute
   // (which would also be unreachable: `width` is a reserved layout key,
   // stripped before this component ever sees `attributes`). The SVG itself

@@ -91,7 +91,7 @@ const smdEditorTheme = EditorView.theme({
  * (`@codemirror/lang-markdown`), line wrapping, and a small hand-picked set
  * of editing conveniences (history/undo, bracket matching, active-line
  * highlight). Deliberately excludes autocomplete and linting — out of scope
- * per DESIGN.md §7.5 (no directive-aware language server, "maybe never").
+ * per docs/integration.md (no directive-aware language server, "maybe never").
  */
 export function createEditorExtensions(
   onDocChange: (text: string) => void,

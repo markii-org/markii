@@ -61,7 +61,7 @@ function readProgressFields(data: unknown): ProgressFields {
  * clamped to `[0, max]` and `max` is guarded to be positive. Missing/error
  * binding renders a `0%` bar rather than crashing.
  *
- * Failure presentation mirrors `ValueDirective` exactly (DESIGN.md §8,
+ * Failure presentation mirrors `ValueDirective` exactly (docs/scripting.md,
  * AGENTS.md's cleanliness principle): the BODY stays quiet — the ordinary
  * bar, at `0%` when nothing resolved — and a failed/stale binding surfaces
  * only as a `title` tooltip plus a modifier class on the root element

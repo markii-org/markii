@@ -6,7 +6,7 @@ import type { FailureKind, ValueStatus } from '@markii/runtime';
  * A bare attribute (present but valueless, e.g. `{collapsed}`) arrives as
  * `null`. A key that was never written is simply absent from the object.
  *
- * One key is special: `data` (DESIGN.md §8 — "`{data=stars}` feeds it to a
+ * One key is special: `data` (docs/scripting.md — "`{data=stars}` feeds it to a
  * component"). The renderer intercepts `data` before a component ever sees
  * `attributes` — it is resolved against the value store and delivered as
  * the separate `data`/`dataStatus` props below, never left behind as a raw
