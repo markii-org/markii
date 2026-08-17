@@ -1,9 +1,10 @@
-import { Component, useEffect, useMemo, useState } from 'react';
+import { Component, useEffect, useMemo, useRef, useState } from 'react';
 import type { ErrorInfo, ReactElement, ReactNode } from 'react';
 import { renderMark } from '@markii/react';
 import { defaultRegistry } from '@markii/react/components';
 import { isHostToWebviewMessage, isNewerRevision } from '../protocol.js';
 import type { WebviewToHostMessage } from '../protocol.js';
+import { applyDocumentBase } from './document-images.js';
 import {
   getPersistedState,
   getVsCodeApi,
@@ -92,6 +93,7 @@ function initialState(): PersistedState {
  */
 export function Preview(): ReactElement {
   const [state, setState] = useState<PersistedState>(initialState);
+  const documentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // Mount-only: this handshake happens exactly once per webview instance.
@@ -104,7 +106,11 @@ export function Preview(): ReactElement {
       if (!isHostToWebviewMessage(data)) return;
       setState((previous) =>
         isNewerRevision(previous.revision, data.revision)
-          ? { text: data.text, revision: data.revision }
+          ? {
+              text: data.text,
+              revision: data.revision,
+              baseUri: data.baseUri,
+            }
           : previous,
       );
     }
@@ -127,9 +133,30 @@ export function Preview(): ReactElement {
     [state.text],
   );
 
+  // Relative image sources are resolved against the document's folder AFTER
+  // each render, in the DOM, rather than anywhere inside the renderer — see
+  // `document-images.ts` for why that boundary is where it is. Re-runs
+  // whenever the rendered tree or the folder changes.
+  useEffect(() => {
+    const container = documentRef.current;
+    if (container) {
+      applyDocumentBase(container, state.baseUri);
+    }
+  }, [rendered, state.baseUri]);
+
   return (
     <PreviewErrorBoundary resetKey={state.revision}>
-      <div className="doc">{rendered}</div>
+      {/*
+        `key` is the base URI so that switching to a document in a DIFFERENT
+        folder remounts the tree instead of letting React reuse an `<img>`
+        whose `src` prop is unchanged (`nice.png` in both documents) — a
+        reused element keeps the absolute URL the effect above already wrote
+        into it, which would point at the OLD folder. Remounting restores the
+        relative source, and the effect re-resolves it against the new base.
+      */}
+      <div className="doc" ref={documentRef} key={state.baseUri ?? ''}>
+        {rendered}
+      </div>
     </PreviewErrorBoundary>
   );
 }

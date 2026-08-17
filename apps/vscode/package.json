@@ -45,7 +45,7 @@
         {
           "command": "markii.openPreview",
           "when": "resourceFilename =~ /\\.mk\\.md$/",
-          "group": "navigation"
+          "group": "navigation@1"
         }
       ],
       "commandPalette": [
@@ -55,6 +55,14 @@
         }
       ]
     },
+    "keybindings": [
+      {
+        "command": "markii.openPreview",
+        "key": "ctrl+shift+v",
+        "mac": "cmd+shift+v",
+        "when": "editorTextFocus && resourceFilename =~ /\\.mk\\.md$/"
+      }
+    ],
     "grammars": [
       {
         "scopeName": "markdown.markii.injection",

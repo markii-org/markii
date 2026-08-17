@@ -85,6 +85,9 @@ apps/vscode          the "Mark" VS Code extension (v1: preview only) — an
                      files allowed to import `vscode` (vitest cannot resolve
                      it, so all testable logic lives in plain modules)
   src/protocol.ts    host<->webview message contract + hostile-shape guards
+  src/resource-roots.ts  localResourceRoots coverage logic (vscode-free);
+                     src/webview/document-images.ts resolves relative img
+                     srcs against the document's baseUri (img only, no <base>)
   src/webview-html.ts  the CSP shell: nonce'd script, no remote hosts
   src/webview/       the bundled React preview (renderMark + defaultRegistry)
                      and theme.css, mapping --vscode-* colors onto doc.css

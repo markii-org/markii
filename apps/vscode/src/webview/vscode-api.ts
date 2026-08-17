@@ -6,10 +6,14 @@
  * exists to guarantee exactly one call for the whole session.
  */
 
+import { isSafeBaseUri } from '../protocol.js';
+
 /** The persisted-state shape this extension actually stores — see `preview.tsx`. */
 export interface PersistedState {
   readonly text: string;
   readonly revision: number;
+  /** The last `baseUri` this webview was given (`protocol.ts`), so a rehydrated preview resolves relative images correctly in the instant before the host's re-post arrives. Absent for a document with no folder. */
+  readonly baseUri?: string;
 }
 
 /** The subset of the real `acquireVsCodeApi()` return value this extension uses. */
@@ -45,6 +49,19 @@ function isPersistedState(value: unknown): value is PersistedState {
     !hasOwn(value, 'revision') ||
     typeof value.revision !== 'number' ||
     !Number.isInteger(value.revision)
+  ) {
+    return false;
+  }
+  // Same rule as the wire format (`isHostToWebviewMessage`): absent or
+  // `undefined` is fine, anything present must pass the ONE base-URI check,
+  // which lives in `protocol.ts` rather than being restated here. Persisted
+  // state is attacker-reachable in principle (it round-trips through the
+  // editor's webview state store), so a hostile base saved by an older or
+  // tampered state must not come back as a valid one.
+  if (
+    hasOwn(value, 'baseUri') &&
+    value.baseUri !== undefined &&
+    !isSafeBaseUri(value.baseUri)
   ) {
     return false;
   }

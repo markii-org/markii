@@ -12,8 +12,13 @@ No setup. After installing the extension:
 
 1. Open any file ending in `.mk.md` (create one if you like — it's an
    ordinary text file).
-2. Click the preview icon in the editor title bar, or run **Mark: Open
-   Preview** from the command palette.
+2. Press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd>
+   (<kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd> on macOS). You can also
+   click the preview icon at the right of the editor title bar, or run
+   **Mark: Open Preview** from the command palette.
+
+In a `.mk.md` file that shortcut opens the Mark preview; in a plain `.md`
+file it still opens VS Code's built-in markdown preview, unchanged.
 
 The preview opens beside the editor, follows whichever `.mk.md` file is
 active, updates as you type, and matches your VS Code theme.
@@ -31,6 +36,24 @@ Press :kbd[Ctrl+Shift+P] anytime.
 ```
 
 Directive syntax is also highlighted in the editor itself.
+
+## Images
+
+Both local and remote images work:
+
+```markdown
+:::figure{src="nice.png" alt="A picture"}
+A picture that lives next to this note.
+:::
+
+![from the web](https://example.com/chart.png)
+```
+
+A relative `src` is resolved against the folder the note itself is in, so
+`nice.png` means the `nice.png` sitting beside it and `img/nice.png` means
+one in a subfolder. Images from anywhere else — outside the folder of the
+note and outside your open workspace — are not loaded, which is the
+editor's own rule for what a preview may read.
 
 ## What v1 does and doesn't
 

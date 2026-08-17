@@ -73,7 +73,12 @@ export function buildWebviewHtml(options: WebviewHtmlOptions): string {
   - img-src allows https: and data: so document images and figure
     directives can load — the same posture VS Code's own built-in markdown
     preview takes — at the cost that opening a document with a remote image
-    contacts that image's host.
+    contacts that image's host. Its cspSource term is what additionally
+    permits LOCAL images: a relative src is rewritten to the document
+    folder's asWebviewUri form (webview/document-images.ts), which is a
+    cspSource URL. That widens nothing on its own — which local files may
+    actually be served is decided by the panel's localResourceRoots
+    (preview-panel.ts), not by this policy.
 -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${cspSource} https: data:; style-src ${cspSource} 'unsafe-inline'; font-src ${cspSource}; script-src 'nonce-${nonce}';">
 <link rel="stylesheet" href="${styleUri}">

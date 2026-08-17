@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   isHostToWebviewMessage,
   isNewerRevision,
+  isSafeBaseUri,
   isWebviewToHostMessage,
 } from './protocol';
+
+const WEBVIEW_BASE = 'https://file+.vscode-resource.vscode-cdn.net/home/u/n/';
 
 describe('isHostToWebviewMessage', () => {
   it('accepts a well-formed update message', () => {
@@ -103,6 +106,127 @@ describe('isHostToWebviewMessage', () => {
       text: 'hi',
     });
     expect(isHostToWebviewMessage(hostile)).toBe(false);
+  });
+
+  it('accepts a well-formed baseUri', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'update',
+        revision: 1,
+        text: 'hi',
+        baseUri: WEBVIEW_BASE,
+      }),
+    ).toBe(true);
+  });
+
+  it('accepts a message with no baseUri at all (a document with no folder)', () => {
+    expect(
+      isHostToWebviewMessage({ type: 'update', revision: 1, text: 'hi' }),
+    ).toBe(true);
+  });
+
+  it('accepts an explicitly undefined baseUri, which structured clone preserves', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'update',
+        revision: 1,
+        text: 'hi',
+        baseUri: undefined,
+      }),
+    ).toBe(true);
+  });
+
+  it('rejects a non-string baseUri', () => {
+    for (const baseUri of [42, null, true, {}, ['x']]) {
+      expect(
+        isHostToWebviewMessage({
+          type: 'update',
+          revision: 1,
+          text: 'hi',
+          baseUri,
+        }),
+      ).toBe(false);
+    }
+  });
+
+  it('rejects a javascript: baseUri', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'update',
+        revision: 1,
+        text: 'hi',
+        baseUri: 'javascript:alert(1)',
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects a giant baseUri', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'update',
+        revision: 1,
+        text: 'hi',
+        baseUri: `https://host/${'a'.repeat(100_000)}`,
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects a baseUri that only inherits from its prototype', () => {
+    const proto = { baseUri: WEBVIEW_BASE };
+    const inherited: unknown = Object.assign(Object.create(proto), {
+      type: 'update',
+      revision: 1,
+      text: 'hi',
+    });
+    // Inherited, so not read at all — the message is still valid, it simply
+    // carries no base URI.
+    expect(isHostToWebviewMessage(inherited)).toBe(true);
+  });
+});
+
+describe('isSafeBaseUri', () => {
+  it('accepts the asWebviewUri https form', () => {
+    expect(isSafeBaseUri(WEBVIEW_BASE)).toBe(true);
+  });
+
+  it('accepts the older vscode-resource forms', () => {
+    expect(isSafeBaseUri('vscode-resource:/home/u/n/')).toBe(true);
+    expect(isSafeBaseUri('vscode-webview-resource://abc/file/home/u/')).toBe(
+      true,
+    );
+  });
+
+  it('rejects non-strings', () => {
+    expect(isSafeBaseUri(undefined)).toBe(false);
+    expect(isSafeBaseUri(null)).toBe(false);
+    expect(isSafeBaseUri(42)).toBe(false);
+    expect(isSafeBaseUri({ toString: () => WEBVIEW_BASE })).toBe(false);
+  });
+
+  it('rejects the empty string', () => {
+    expect(isSafeBaseUri('')).toBe(false);
+  });
+
+  it('rejects a relative (non-absolute) URI', () => {
+    expect(isSafeBaseUri('/home/u/n/')).toBe(false);
+    expect(isSafeBaseUri('notes/')).toBe(false);
+  });
+
+  it('rejects dangerous schemes', () => {
+    expect(isSafeBaseUri('javascript:alert(1)')).toBe(false);
+    expect(isSafeBaseUri('data:text/html,<script>alert(1)</script>')).toBe(
+      false,
+    );
+    expect(isSafeBaseUri('blob:https://host/abc')).toBe(false);
+    expect(isSafeBaseUri('file:///etc/')).toBe(false);
+  });
+
+  it('rejects a scheme hidden behind leading whitespace', () => {
+    expect(isSafeBaseUri(' javascript:alert(1)')).toBe(false);
+  });
+
+  it('rejects a string beyond the length cap', () => {
+    expect(isSafeBaseUri(`https://host/${'a'.repeat(4096)}`)).toBe(false);
   });
 });
 
