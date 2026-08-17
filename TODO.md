@@ -196,9 +196,17 @@ live-preview, NOT editor glue (CodeMirror integration is a separate future
 
 ## Parked / awaiting user
 
-- README.md has an **uncommitted** `# Mark` → `# Mark II` title edit. Asked
-  twice, no answer yet. Do NOT commit README.md until the user decides
-  (memory records a "Mark II" rebrand as previously rejected).
+- README.md `# Mark` → `# Mark II` title edit: USER-APPROVED (2026-08-17) to
+  keep — fold the commit into the next housework/demo-app commit, no
+  dedicated commit needed. Do not revert.
+- Next release must be **0.2.0**, never 0.1.x: this session added API
+  (renderMarkNode, nodeToHast, VaultStore/Writer, computeGrantKey, renderMark
+  4th param) and changed behavior (chart width/height removed, open=false no
+  longer opens, dotted script names now display-only, messageForFailure
+  deleted). Needs version bumps + CHANGELOG section before tagging.
+- Full adversarial sandbox re-audit of @markii/lua internals (globals
+  whitelist, limits/interrupt-evasion, marshal, require jail, xpcall fix):
+  explained to user, recommended, awaiting go/no-go.
 - NPM_TOKEN repo secret — required before any future npm version publishes.
 - Second non-React renderer (§13 toolkit-neutrality proof).
 - Phase-3 "registry growth": user's personal component library location still

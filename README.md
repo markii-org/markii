@@ -1,4 +1,4 @@
-# Mark
+# Mark II
 
 [![CI](https://github.com/sadigaxund/markii/actions/workflows/ci.yml/badge.svg)](https://github.com/sadigaxund/markii/actions/workflows/ci.yml)
 
