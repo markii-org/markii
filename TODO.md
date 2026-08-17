@@ -211,7 +211,13 @@ live-preview, NOT editor glue (CodeMirror integration is a separate future
 - README.md `# Mark` → `# Mark II` title edit: USER-APPROVED (2026-08-17) to
   keep — fold the commit into the next housework/demo-app commit, no
   dedicated commit needed. Do not revert.
-- **0.2.0 release** (main pending decision). MUST be 0.2.0, never 0.1.x —
+- **0.2.0 RELEASED 2026-08-17** ✅ — tag v0.2.0 (signed), all six @markii/*
+  live on npm at 0.2.0 (verified via npm view), GitHub Release created with
+  tarballs. Release commit 023fe10. NPM_TOKEN worked (classic one-token
+  model). Lockfile carries a harmless pre-rename ghost entry
+  `packages/markii-react`@0.1.0 (dir doesn't exist; CI tolerates it) — clean
+  up opportunistically someday, not urgent.
+- ~~**0.2.0 release** (done above). MUST be 0.2.0, never 0.1.x —~~
   this session added API (renderMarkNode, nodeToHast, VaultStore/Writer,
   computeGrantKey, renderMark 4th param) and changed behavior (chart width/
   height removed, open=false no longer opens, dotted script names now
