@@ -1,6 +1,6 @@
 {
   "name": "markii-vscode",
-  "displayName": "Mark",
+  "displayName": "Mark II",
   "description": "Preview for Mark (.mk.md) documents: CommonMark plus directives that render components.",
   "version": "0.2.0",
   "private": true,

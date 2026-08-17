@@ -9,6 +9,11 @@ source of truth for syntax, architecture, and scope.
 This file is the single project-instruction file for all agents and tools.
 `CLAUDE.md` is a pointer stub — never add content there.
 
+Naming policy (user-set 2026-08-18): product-facing TITLES say **Mark II**
+(README title, docs index, extension display name, playground); running
+prose and the format name say **Mark** ("a Mark document"). Never treat
+"II" as a version — spec versioning is plain semver.
+
 ## Product principles (binding)
 
 Judge every feature and change against three concerns, in this order of

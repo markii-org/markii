@@ -1,4 +1,4 @@
-# Mark for VS Code
+# Mark II for VS Code
 
 A preview for Mark (`.mk.md`) documents: CommonMark plus directives that
 render your own React components (callouts, cards, tabs, dashboard stats,

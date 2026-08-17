@@ -231,8 +231,13 @@ holding the document plus its assets. See [bundles.md](bundles.md).
 
 ## The name
 
-The format is called Mark. The file extension is `.mk.md`, bundles are
-`.mkbundle`, and the reference packages are published under the `@markii`
-npm scope, since bare `mark` was taken. The name is permanent branding and
-carries no version: the spec itself uses ordinary semantic versioning, and
-"Mark II" style numbering is flavor, not a version scheme.
+The format is called Mark, and the brand it ships under is Mark II — the
+same pun the `@markii` npm scope spells out. The two are used consistently:
+product-facing titles (the repository, the documentation, the VS Code
+extension, the playground) say Mark II, while running prose and the format
+name itself say Mark — "a Mark document", never "a Mark II document". The
+file extension is `.mk.md` and bundles are `.mkbundle`.
+
+The name carries no version: the spec uses ordinary semantic versioning,
+and the "II" is the Iron Man suit motif, flavor rather than a version
+scheme. Do not read Mark II as "version 2".

@@ -6,7 +6,8 @@ when wording differs, this page and the conformance corpus win. Key words
 MUST, SHOULD, and MAY are used in their usual normative sense.
 
 The spec is versioned with plain semver and is currently pre-1.0. The
-format's name, Mark, carries no version information. A bundle records the
+format's name, Mark (branded Mark II in titles), carries no version
+information. A bundle records the
 spec version it targets in its manifest's required `mark` field.
 
 ## 1. Document syntax

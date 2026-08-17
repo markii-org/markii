@@ -1,4 +1,4 @@
-# Mark documentation
+# Mark II documentation
 
 Mark is a markdown format that renders your own components inline. These
 pages are the full documentation; the repository README is only the front
