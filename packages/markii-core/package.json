@@ -51,6 +51,8 @@
     "corpus:regen": "node scripts/regen-corpus.ts"
   },
   "dependencies": {
+    "@types/hast": "^3.0.5",
+    "@types/mdast": "^4.0.4",
     "mdast-util-directive": "^3.1.0",
     "remark-directive": "^4.0.0",
     "remark-gfm": "^4.0.1",
@@ -60,8 +62,6 @@
     "unist-util-visit": "^5.1.0"
   },
   "devDependencies": {
-    "@types/hast": "^3.0.5",
-    "@types/mdast": "^4.0.4",
     "prettier": "^3.9.6"
   }
 }
