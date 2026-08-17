@@ -85,9 +85,21 @@ export const DEFAULT_MARSHAL_LIMITS: MarshalLimits = {
  */
 export function buildMarshalPrelude(limits: MarshalLimits): string {
   return `
+-- Captured into locals AT PRELUDE-DEFINITION TIME (this chunk is doString'd
+-- once per engine, before any untrusted user code runs), so the walk below
+-- closes over these as upvalues fixed to the genuine primitives -- immune to
+-- a later script doing e.g. \`error = function() end\` in the shared globals
+-- table before this walk runs. See finding F-1 in the sandbox audit: the
+-- walk previously resolved error/type/pairs/math.floor as DYNAMIC GLOBAL
+-- lookups, which a script could rebind to neuter its own caps.
+local error, type, pairs, floor, sfind = error, type, pairs, math.floor, string.find
+
 local function __smd_marshal(value, seen, depth, budget)
   local t = type(value)
   if t == "nil" or t == "boolean" or t == "string" or t == "number" then
+    if t == "string" and sfind(value, "\\0", 1, true) then
+      error("${MARSHAL_ERROR_TAG}:nul-byte")
+    end
     budget.n = budget.n + 1
     if budget.n > budget.maxNodes then error("${MARSHAL_ERROR_TAG}:nodes") end
     return value
@@ -101,7 +113,7 @@ local function __smd_marshal(value, seen, depth, budget)
     local isArray = true
     for k, _ in pairs(value) do
       count = count + 1
-      if type(k) ~= "number" or k < 1 or math.floor(k) ~= k then
+      if type(k) ~= "number" or k < 1 or floor(k) ~= k then
         isArray = false
       end
     end

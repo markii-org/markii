@@ -153,6 +153,8 @@ function extractMarshalReason(message: string): ScriptMarshalReason {
       return 'cycle';
     case 'key-type':
       return 'key-type';
+    case 'nul-byte':
+      return 'nul-byte';
     case 'type':
       return 'type';
     default:
@@ -427,6 +429,23 @@ export async function runScript(
       };
     }
     return { ok: true, value: finalized.value };
+  } catch (err) {
+    // Backstop for the never-throws guarantee: every expected failure mode
+    // above returns before reaching here (limit breaches, capability
+    // denials, marshal rejections, ordinary runtime errors are all
+    // returned, not thrown). This catch exists for anything UNEXPECTED that
+    // throws synchronously inside the try — e.g. `finalizeMarshaledValue`
+    // recursing deep enough to overflow the JS call stack, which today is
+    // safe only INCIDENTALLY because wasmoon's own `getValue` conversion
+    // overflows first on sufficiently deep input (see the sandbox audit's
+    // finding F-1 "also recommended" note) — so that guarantee no longer
+    // depends on that ordering holding forever. Classified the same as any
+    // other unclassified failure: a plain `'runtime'` failure, never a raw
+    // throw out of `runScript`.
+    return {
+      ok: false,
+      error: { kind: 'runtime', message: describeError(err) },
+    };
   } finally {
     limitHandle?.dispose();
     if (thread !== undefined && threadStackIndex !== undefined) {

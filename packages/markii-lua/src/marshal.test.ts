@@ -174,6 +174,49 @@ describe('marshal — mixed/sparse tables have no faithful JSON shape and are re
   });
 });
 
+describe('marshal — embedded NUL bytes are rejected at the Lua boundary (Finding F-2)', () => {
+  // wasmoon truncates a returned Lua string at its first NUL byte when
+  // converting to JS, silently losing data. By the time that happens the
+  // NUL is already gone on the JS side, so detection has to happen here,
+  // in the Lua-side walk, via `string.find(value, "\0", 1, true)` (plain
+  // find, not pattern matching) before the value ever reaches wasmoon's
+  // string conversion.
+  it('a top-level string containing a NUL is rejected as nul-byte', async () => {
+    const r = await runMarshaled('return "a" .. string.char(0) .. "b"');
+    expect(r.ok).toBe(false);
+    expect(!r.ok && r.message).toContain('MARK_MARSHAL:nul-byte');
+  });
+
+  it('a NUL nested inside a table value is rejected as nul-byte', async () => {
+    const r = await runMarshaled(
+      'return { note = "a" .. string.char(0) .. "b" }',
+    );
+    expect(r.ok).toBe(false);
+    expect(!r.ok && r.message).toContain('MARK_MARSHAL:nul-byte');
+  });
+
+  it('an ordinary string with no NUL is unaffected (no false positive)', async () => {
+    const r = await runMarshaled('return "perfectly ordinary string"');
+    expect(r.ok && r.raw).toBe('perfectly ordinary string');
+  });
+});
+
+describe('marshal — global-rebinding immunity (Finding F-1)', () => {
+  // The prelude captures error/type/pairs/math.floor into locals at
+  // prelude-definition time, so the walk's caps hold even if a script run
+  // in the SAME globals table later rebinds those names. This suite
+  // exercises the prelude directly (not through runScript) to isolate the
+  // prelude's own behavior; sandbox.test.ts covers the full
+  // user-code-then-walk ordering that the actual vulnerability depended on.
+  it('rebinding math.floor does not change what the walk treats as an integer key', async () => {
+    const r = await runMarshaled(
+      'math.floor = function(x) return x end; return { [1.5] = "x" }',
+    );
+    expect(r.ok).toBe(false);
+    expect(!r.ok && r.message).toContain('MARK_MARSHAL:key-type');
+  });
+});
+
 describe('finalizeMarshaledValue — NaN/Infinity policy', () => {
   it('NaN (0/0) is rejected, not silently coerced to null', async () => {
     const r = await runMarshaled('return 0/0');

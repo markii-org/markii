@@ -57,7 +57,13 @@ export type ScriptLimitKind = 'instructions' | 'timeout' | 'memory';
 
 /** Why a return value was rejected by the marshaller; see `./marshal`. */
 export type ScriptMarshalReason =
-  'depth' | 'nodes' | 'cycle' | 'type' | 'key-type' | 'non-finite-number';
+  | 'depth'
+  | 'nodes'
+  | 'cycle'
+  | 'type'
+  | 'key-type'
+  | 'non-finite-number'
+  | 'nul-byte';
 
 /**
  * The full discriminated failure shape `runScript` returns. `kind`:
@@ -69,8 +75,11 @@ export type ScriptMarshalReason =
  *   flavor — see below.
  * - `'marshal'` — the script's return value could not be safely converted
  *   to a JSON-serializable JS value (function/userdata/thread, a cycle,
- *   too deep, too many nodes, a non-string table key, or a non-finite
- *   number). `reason` says which.
+ *   too deep, too many nodes, a non-string table key, a non-finite
+ *   number, or a string containing an embedded NUL byte — wasmoon silently
+ *   truncates a Lua string at its first NUL when converting to JS, so this
+ *   is rejected on the Lua side before that truncation can happen).
+ *   `reason` says which.
  * - `'runtime'` — an ordinary Lua error (syntax error, `error()` call,
  *   type error, stack overflow, etc.) not covered by the above.
  */

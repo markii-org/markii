@@ -5,9 +5,10 @@ import {
   openZipBundle,
   type BundleManifest,
 } from '@markii/bundle';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { DENIED_GLOBALS } from './globals';
 import type { ScriptLimits } from './limits';
+import * as marshalModule from './marshal';
 import { runScript, type RunScriptOptions } from './sandbox';
 
 function u8(text: string): Uint8Array {
@@ -400,6 +401,96 @@ describe('runScript — marshalling', () => {
   });
 });
 
+describe('runScript — marshal caps are immune to global rebinding (Finding F-1)', () => {
+  // The marshal prelude's walk used to resolve error/type/pairs/math.floor
+  // as DYNAMIC GLOBAL lookups, executed AFTER the untrusted user chunk had
+  // already run in the same globals table -- so a script rebinding those
+  // names could neuter its own caps. The fix captures them into locals at
+  // prelude-DEFINITION time (before user code ever runs), so the walk
+  // closes over the genuine primitives as upvalues regardless of what the
+  // script does to the globals table afterward.
+  //
+  // Mutation check (reasoned from the audit, not re-run: reverting the fix
+  // to `math.floor(k) ~= k` / bare global `error`/`type`/`pairs` restores
+  // the dynamic lookup, and with `error` rebound to a no-op before the walk
+  // runs, `error("MARK_MARSHAL:nodes")` inside the walk becomes a silent
+  // no-op call instead of a raise -- the walk keeps going, `__smd_marshal`
+  // returns the full 100,000-element table, and this test would observe
+  // `ok: true` with a 100k-length array instead of the expected
+  // `ok: false, reason: 'nodes'`. This exactly reproduces the audit's
+  // probe A1 result.
+  it('rebinding `error` to a no-op does not defeat the node cap', async () => {
+    const r = await run(
+      `
+      error = function() end
+      local t = {}
+      for i = 1, 100000 do t[i] = i end
+      return t
+      `,
+      { marshalLimits: { maxNodes: 20_000, maxDepth: 32 } },
+    );
+    expect(r.ok).toBe(false);
+    expect(!r.ok && r.error.kind).toBe('marshal');
+    expect(!r.ok && r.error.reason).toBe('nodes');
+  });
+
+  it('rebinding `type` to mislabel values does not defeat the depth cap', async () => {
+    const r = await run(
+      `
+      local realType = type
+      type = function(v) return "string" end
+      local t = { n = 1 }
+      for i = 1, 200 do t = { n = t } end
+      return t
+      `,
+      { marshalLimits: { maxNodes: 100_000, maxDepth: 10 } },
+    );
+    expect(r.ok).toBe(false);
+    expect(!r.ok && r.error.kind).toBe('marshal');
+    expect(!r.ok && r.error.reason).toBe('depth');
+  });
+
+  it('rebinding `math.floor` does not defeat the key-type cap on a fractional key', async () => {
+    const r = await run(
+      `
+      math.floor = function(x) return x end
+      return { [1.5] = "x" }
+      `,
+    );
+    expect(r.ok).toBe(false);
+    expect(!r.ok && r.error.kind).toBe('marshal');
+    expect(!r.ok && r.error.reason).toBe('key-type');
+  });
+});
+
+describe('runScript — embedded NUL bytes in returned strings are rejected (Finding F-2)', () => {
+  // wasmoon truncates a Lua string at its first NUL byte when converting to
+  // JS -- by the time a NUL-containing string reaches JS it has already
+  // silently lost data, so detection has to happen on the Lua side (in the
+  // marshal walk, via `string.find`) before that truncation occurs.
+  it('a top-level returned string with an embedded NUL is rejected, not silently truncated', async () => {
+    const r = await run('return "a" .. string.char(0) .. "b"');
+    expect(r.ok).toBe(false);
+    expect(!r.ok && r.error.kind).toBe('marshal');
+    expect(!r.ok && r.error.reason).toBe('nul-byte');
+  });
+
+  it('a NUL nested inside a returned table string is rejected the same way', async () => {
+    const r = await run('return { note = "a" .. string.char(0) .. "b" }');
+    expect(r.ok).toBe(false);
+    expect(!r.ok && r.error.kind).toBe('marshal');
+    expect(!r.ok && r.error.reason).toBe('nul-byte');
+  });
+
+  it('an ordinary string with no NUL still round-trips fine (no false positive)', async () => {
+    const r = await run('return "a normal string, no null bytes here"');
+    expect(r).toEqual({
+      ok: true,
+      value: 'a normal string, no null bytes here',
+    });
+  });
+});
+
 describe('runScript — isolation across runs', () => {
   it('a global set in one run is absent in the next', async () => {
     const r1 = await run('leaked = 42; return leaked');
@@ -442,5 +533,53 @@ describe('runScript — wasmUri option threads to the engine (CDN-avoidance, see
       wasmUri: wasmPath,
     });
     expect(r).toEqual({ ok: true, value: 'X' });
+  });
+});
+
+describe('runScript — never raw-throws, even for an UNEXPECTED JS exception (audit F-1 "also recommended")', () => {
+  // Every EXPECTED failure mode already returns a typed failure from inside
+  // the try (limit breaches, capability denials, marshal rejections,
+  // ordinary Lua runtime errors). This test targets the backstop `catch`
+  // that now wraps the rest of the try block, for anything UNEXPECTED that
+  // throws synchronously -- the audit's example was `finalizeMarshaledValue`
+  // recursing deep enough to overflow the JS stack, which was previously
+  // safe only INCIDENTALLY (wasmoon's own conversion overflows first on
+  // deep input today; nothing guaranteed that ordering would hold forever).
+  //
+  // Deterministically reproducing an actual stack overflow at exactly the
+  // right depth (deep enough to survive Lua's own recursion limit and
+  // wasmoon's JS conversion, shallow enough — or rather deep enough only in
+  // `finalizeMarshaledValue`'s own walk — to overflow only THIS function) is
+  // inherently fragile and non-reproducible across engines/hardware. So
+  // instead this forces the exact failure mode the audit named, directly
+  // and reliably: `finalizeMarshaledValue` (a named export `sandbox.ts`
+  // calls directly) is made to throw synchronously via `vi.spyOn` on the
+  // live module binding, and a normal, otherwise-successful run is used to
+  // reach that call. If the new `catch` were removed, this throw would
+  // reject the returned promise instead of resolving it to a typed
+  // failure -- `expect(...).resolves...` below would fail with an unhandled
+  // rejection rather than the assertion.
+  it('an unexpected throw from finalizeMarshaledValue is caught and reported as a typed runtime failure, not a rejected promise', async () => {
+    const spy = vi
+      .spyOn(marshalModule, 'finalizeMarshaledValue')
+      .mockImplementation(() => {
+        throw new Error('unexpected: simulated JS-side failure');
+      });
+    try {
+      await expect(run('return 1 + 1')).resolves.toEqual({
+        ok: false,
+        error: {
+          kind: 'runtime',
+          message: 'unexpected: simulated JS-side failure',
+        },
+      });
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('sanity: with the spy restored, the same script still succeeds normally', async () => {
+    const r = await run('return 1 + 1');
+    expect(r).toEqual({ ok: true, value: 2 });
   });
 });

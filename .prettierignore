@@ -9,3 +9,6 @@ package-lock.json
 DESIGN.md
 CLAUDE.md
 TODO.md
+
+# Orchestrator-owned prose (long-form; not Prettier-managed).
+docs/
