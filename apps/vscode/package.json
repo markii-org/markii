@@ -1,0 +1,87 @@
+{
+  "name": "markii-vscode",
+  "displayName": "Mark",
+  "description": "Preview for Mark (.mk.md) documents: CommonMark plus directives that render components.",
+  "version": "0.2.0",
+  "private": true,
+  "license": "MIT",
+  "publisher": "sadigaxund",
+  "author": "sadigaxund",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sadigaxund/markii.git",
+    "directory": "apps/vscode"
+  },
+  "categories": [
+    "Programming Languages",
+    "Visualization"
+  ],
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onLanguage:markdown"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "markdown",
+        "extensions": [
+          ".mk.md"
+        ]
+      }
+    ],
+    "commands": [
+      {
+        "command": "markii.openPreview",
+        "title": "Open Preview",
+        "category": "Mark",
+        "icon": "$(open-preview)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "markii.openPreview",
+          "when": "resourceFilename =~ /\\.mk\\.md$/",
+          "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "markii.openPreview",
+          "when": "editorLangId == markdown"
+        }
+      ]
+    },
+    "grammars": [
+      {
+        "scopeName": "markdown.markii.injection",
+        "path": "./syntaxes/markii-directives.injection.json",
+        "injectTo": [
+          "text.html.markdown"
+        ]
+      }
+    ]
+  },
+  "scripts": {
+    "build": "tsc --noEmit -p tsconfig.json && node esbuild.config.mjs --production",
+    "watch": "node esbuild.config.mjs --watch",
+    "test": "vitest run",
+    "lint": "eslint .",
+    "package": "npm run build && vsce package --no-dependencies"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "@markii/react": "*"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "@types/vscode": "^1.90.0",
+    "@vscode/vsce": "^3.6.0",
+    "esbuild": "^0.28.2"
+  }
+}

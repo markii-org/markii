@@ -271,12 +271,22 @@ Depends on Phase G for link targets.
 `apps/vscode/` — an app/consumer like the playground, NOT a platform renderer
 (it consumes @markii/react).
 
-v1 (build now): webview preview panel bundling core+stdlib+react+react-dom
-via esbuild, CSP-compliant, RENDERING ONLY (pure; scripts show as collapsed
-markers, no Run); live update on edit (debounced postMessage); `*.mk.md`
-language association + TextMate injection grammar for directive/fence-meta
-highlighting; `.vsix` packaging via @vscode/vsce (package only, NO publish).
-Deps approved for this workspace only: @types/vscode, @vscode/vsce, esbuild.
+v1 DONE 2026-08-18 (this commit; Opus-orchestrated, adversarially verified
+against the BUNDLED artifact — 19 webview probes + 16 CSP probes + static
+bundle audit all pass): `apps/vscode/` webview preview (CSP nonce-only
+script, rendering-only, debounced follow of the active editor, ready
+handshake + monotonic revisions, VS Code-themed via color-mix over
+--vscode-* with a theme-coverage drift test), TextMate injection grammar,
+`.vsix` packaging (117 KB). 104 workspace tests; repo 1102. Note: fence-meta
+highlighting is inert by design — VS Code's markdown grammar claims the
+fence line from column 0, so the injected rule can only match the `{…}`
+span. Known: no @vscode/test-electron integration test (deps capped);
+activation wiring verified by typecheck + manual F5; launch.json documented
+in the workspace README, not committed. Original v1 scope: webview preview
+panel bundling core+stdlib+react+react-dom via esbuild, CSP-compliant,
+RENDERING ONLY; live update on edit; TextMate injection grammar; vsce
+package only, NO publish. Deps (approved, this workspace only):
+@types/vscode, @vscode/vsce, esbuild.
 
 v2 (later arc, NOT v1): Run support — Lua in a terminatable worker_thread
 (satisfies the isolate requirement), capabilities in the Node extension

@@ -73,12 +73,26 @@ packages/markii-lua     Lua sandbox runtime (docs/security.md, L3) — no React,
   src/sandbox.ts     runScript(): assemble env + limits + caps, run, marshal result
   src/executor.ts    createLuaExecutor(): adapts runScript to @markii/runtime's ScriptExecutor
 apps/playground      thin Vite dev harness to view .mk.md files. NOT the product.
+apps/vscode          the "Mark" VS Code extension (v1: preview only) — an
+                     app/consumer of @markii/react, never a renderer:
+  src/extension.ts   activation + the markii.openPreview command
+  src/preview-panel.ts  the single webview panel; with extension.ts the ONLY
+                     files allowed to import `vscode` (vitest cannot resolve
+                     it, so all testable logic lives in plain modules)
+  src/protocol.ts    host<->webview message contract + hostile-shape guards
+  src/webview-html.ts  the CSP shell: nonce'd script, no remote hosts
+  src/webview/       the bundled React preview (renderMark + defaultRegistry)
+                     and theme.css, mapping --vscode-* colors onto doc.css
+                     without forking it (theme-coverage.test.ts guards drift)
+  syntaxes/          TextMate injection grammar for the three directive forms
+  esbuild.config.mjs two bundles: extension host (node/cjs, vscode external)
+                     and webview (browser/iife); @markii/* aliased to src/
 ```
 
 Platform renderers live under `packages/platforms/*` (a workspace root alongside
 `packages/*` and `apps/*`); the neutral core packages stay directly under
 `packages/*`. Future non-React renderers go under `packages/platforms/` too.
-Consumer applications (the playground, a future VS Code extension) go under
+Consumer applications (the playground, the VS Code extension) go under
 `apps/*` — they consume platform renderers, they are not renderers themselves.
 
 Import rule: @markii/core must never import React or anything from @markii/react;
@@ -152,7 +166,9 @@ same commit as the change that triggers them:
   semver impact for the next release.
 - **New workspace/package** → the repo-layout section of this file, the root
   `package.json` `build:dist` chain, and the release workflow's package list
-  under `.github/`.
+  under `.github/`. A non-published _app_ workspace (playground, vscode)
+  joins the repo layout only; `build:dist` and the release workflow list
+  npm packages.
 - **New stdlib component** → contract in `@markii/stdlib`, component + tests
   in `@markii/react`, `doc.css` for its internals (never outer margins), and
   the component list in this file's repo layout.

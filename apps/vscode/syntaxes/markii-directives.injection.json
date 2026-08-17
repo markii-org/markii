@@ -1,0 +1,141 @@
+{
+  "comment": "Injection grammar for Mark (.mk.md) generic directives on top of VS Code's bundled markdown grammar (text.html.markdown). See docs/format.md for the three directive forms (container :::name{...}, leaf ::name{...}, inline :name[label]{attrs}) and the shared {...} attribute-block grammar, and docs/scripting.md for the fence-meta {name=...} group. Scope names are conventional TextMate scopes suffixed .markii so stock themes color them without extra configuration.",
+  "scopeName": "markdown.markii.injection",
+  "injectionSelector": "L:text.html.markdown -comment -string",
+  "patterns": [
+    { "include": "#directive-container-open" },
+    { "include": "#directive-container-close" },
+    { "include": "#directive-leaf" },
+    { "include": "#directive-inline" },
+    { "include": "#fence-meta-attributes" }
+  ],
+  "repository": {
+    "attribute-pair": {
+      "comment": "key=value in any of the three forms: key=\"double quoted\", key='single quoted', key=bare. Quoted values may contain escaped quotes; bare values run until whitespace or a brace.",
+      "match": "([A-Za-z_][-\\w]*)(=)(?:(\"(?:[^\"\\\\]|\\\\.)*\")|('(?:[^'\\\\]|\\\\.)*')|([^\\s{}]+))",
+      "captures": {
+        "1": { "name": "entity.other.attribute-name.markii" },
+        "2": { "name": "punctuation.separator.key-value.markii" },
+        "3": { "name": "string.quoted.double.markii" },
+        "4": { "name": "string.quoted.single.markii" },
+        "5": { "name": "constant.other.markii" }
+      }
+    },
+    "attribute-flag": {
+      "comment": "A bare flag attribute (no `=value`), e.g. `collapsed` or `publish`. Only tried where attribute-pair did not already match, since attribute-pair is listed first.",
+      "match": "[A-Za-z_][-\\w]*",
+      "name": "entity.other.attribute-name.markii"
+    },
+    "attribute-id-shorthand": {
+      "match": "(#)([A-Za-z][-\\w]*)",
+      "captures": {
+        "1": { "name": "punctuation.definition.entity.markii" },
+        "2": { "name": "entity.other.attribute-name.markii" }
+      }
+    },
+    "attribute-class-shorthand": {
+      "match": "(\\.)([A-Za-z][-\\w]*)",
+      "captures": {
+        "1": { "name": "punctuation.definition.entity.markii" },
+        "2": { "name": "entity.other.attribute-name.markii" }
+      }
+    },
+    "attributes-block": {
+      "comment": "The {...} attribute block shared by all three directive forms (docs/format.md). Defined once and included wherever a directive may carry attributes.",
+      "begin": "(\\{)",
+      "beginCaptures": {
+        "1": { "name": "punctuation.definition.attributes.begin.markii" }
+      },
+      "end": "(\\})",
+      "endCaptures": {
+        "1": { "name": "punctuation.definition.attributes.end.markii" }
+      },
+      "name": "meta.directive.attributes.markii",
+      "patterns": [
+        { "include": "#attribute-pair" },
+        { "include": "#attribute-id-shorthand" },
+        { "include": "#attribute-class-shorthand" },
+        { "include": "#attribute-flag" }
+      ]
+    },
+    "directive-label": {
+      "comment": "The optional [label] shared by all three directive forms.",
+      "begin": "(\\[)",
+      "beginCaptures": {
+        "1": { "name": "punctuation.definition.directive.label.begin.markii" }
+      },
+      "end": "(\\])",
+      "endCaptures": {
+        "1": { "name": "punctuation.definition.directive.label.end.markii" }
+      },
+      "name": "meta.directive.label.markii",
+      "contentName": "string.other.link.title.markii"
+    },
+    "directive-container-open": {
+      "comment": "Opening line of a container directive: three or more colons at line start, then a name, then optional [label] and {attrs}. docs/format.md's :::callout{type=warning title=\"Careful\"} form.",
+      "begin": "^(\\s*)(:{3,})([A-Za-z][-\\w]*)",
+      "beginCaptures": {
+        "2": { "name": "punctuation.definition.directive.markii" },
+        "3": { "name": "entity.name.tag.directive.markii" }
+      },
+      "end": "$",
+      "name": "meta.directive.container.markii",
+      "patterns": [
+        { "include": "#directive-label" },
+        { "include": "#attributes-block" }
+      ]
+    },
+    "directive-container-close": {
+      "comment": "Closing line of a container directive: three or more colons at line start and nothing else.",
+      "match": "^(\\s*)(:{3,})\\s*$",
+      "captures": {
+        "2": { "name": "punctuation.definition.directive.markii" }
+      },
+      "name": "meta.directive.container.markii"
+    },
+    "directive-leaf": {
+      "comment": "A leaf directive standing on its own line: exactly two colons at line start, then a name, then optional [label] and {attrs}. docs/format.md's ::stat{data=stars label=\"GitHub stars\"} form. Regex specificity keeps this from ever matching the opening line of a container: the third literal colon required by directive-container-open is not a letter, so '::' followed by ':' never satisfies this pattern's '[A-Za-z]' requirement.",
+      "begin": "^(\\s*)(::)([A-Za-z][-\\w]*)",
+      "beginCaptures": {
+        "2": { "name": "punctuation.definition.directive.markii" },
+        "3": { "name": "entity.name.tag.directive.markii" }
+      },
+      "end": "$",
+      "name": "meta.directive.leaf.markii",
+      "patterns": [
+        { "include": "#directive-label" },
+        { "include": "#attributes-block" }
+      ]
+    },
+    "directive-inline": {
+      "comment": "An inline directive anywhere in a line: :name[label]{attrs}. docs/format.md's :kbd[Ctrl+S] / :badge[beta]{color=purple} form — and also the label-less :badge{color=purple} form, since a directive's [label] is optional (docs/format.md: 'a name, an optional [label], and optional {attributes}'). The lookahead requires either the [label] bracket or the {attrs} brace to follow immediately (per the generic-directives grammar this format is built on) — that is also what keeps a bare ':' in prose from ever being treated as a directive: a name with neither bracket after it never matches. The negative lookbehind additionally guards against matching the ':' inside a URL scheme like https://example.com, since that colon is preceded by a word character.",
+      "begin": "(?<![\\w/:])(:)([A-Za-z][-\\w]*)(?=[\\[{])",
+      "beginCaptures": {
+        "1": { "name": "punctuation.definition.directive.markii" },
+        "2": { "name": "entity.name.tag.directive.markii" }
+      },
+      "end": "(?<=\\])(?!\\{)|(?<=\\})",
+      "name": "meta.directive.inline.markii",
+      "patterns": [
+        { "include": "#directive-label" },
+        { "include": "#attributes-block" }
+      ]
+    },
+    "fence-meta-attributes": {
+      "comment": "The {name=...} fence-meta group after a code fence's language word (docs/scripting.md, e.g. a lua-tagged fence with a {name=stars} meta group). Trade-off, read before touching this rule: VS Code's bundled markdown grammar has its own rule for the whole fence line (backticks + language + this meta group) that begins matching at column 0, and the tokenizer always prefers whichever candidate starts earliest in the line, so this injected rule — whose earliest possible start is at the '{' — can never win on a real fence line; the built-in fenced_code.block.language.attributes.markdown scope wins there instead, and that is the correct, accepted outcome (losing this highlight is far cheaper than risking the alternative). Do NOT reach for a wider lookbehind to try to anchor this to the actual fence line: Oniguruma (vscode-oniguruma, what VS Code tokenizes with) only accepts FIXED-width lookbehind, or an alternation of fixed-width branches — 'bounded' quantifiers like {3,6} or {1,20} are still variable-width and raise ONIG_ERR_INVALID_LOOK_BEHIND_PATTERN at grammar-compile time, which would break tokenization for every markdown file opened, not just fail quietly. So instead this rule uses a one-character fixed-width lookbehind (a preceding space/tab) plus a content requirement — a lookahead demanding a name= or src= key inside the braces (docs/scripting.md: only a block carrying name= or src= is runnable) — to keep it from claiming arbitrary {...} braces in prose. Both the lookbehind and the lookahead are zero-width: the begin match itself is only the '{' character, so this rule can never consume, tag, or otherwise claim the backticks or the language word, which is what would risk breaking embedded-language/code-block highlighting for the whole block.",
+      "begin": "(?<=[ \\t])(\\{)(?=[^}\\n]*\\b(?:name|src)\\s*=)",
+      "beginCaptures": {
+        "1": { "name": "punctuation.definition.attributes.begin.markii" }
+      },
+      "end": "(\\})",
+      "endCaptures": {
+        "1": { "name": "punctuation.definition.attributes.end.markii" }
+      },
+      "name": "meta.directive.fence-meta.markii",
+      "patterns": [
+        { "include": "#attribute-pair" },
+        { "include": "#attribute-flag" }
+      ]
+    }
+  }
+}
