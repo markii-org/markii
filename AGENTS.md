@@ -180,9 +180,10 @@ same commit as the change that triggers them:
 - **Rename/move of any top-level doc** → fix every cross-reference in the
   same commit: `README.md`, this file, `TODO.md`, `docs/`, and source
   comments (grep for the old name).
-- **Work state** → `TODO.md` is the authoritative queue; mark items done with
-  the commit hash. Decisions made in a session are recorded there (or in the
-  spec), never only in chat history.
+- **Work state** → `TODO.md` is the authoritative queue but is LOCAL-ONLY
+  (gitignored since 2026-08-18, pending items only); the public roadmap is
+  GitHub issues. Decisions with lasting effect go in the spec or an issue,
+  never only in chat history or the local queue.
 
 ## Session rules for agents
 

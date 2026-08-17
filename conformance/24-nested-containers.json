@@ -1,0 +1,106 @@
+{
+  "children": [
+    {
+      "attributes": {},
+      "children": [
+        {
+          "attributes": {},
+          "children": [
+            {
+              "children": [
+                {
+                  "checked": false,
+                  "children": [
+                    {
+                      "children": [
+                        {
+                          "type": "text",
+                          "value": "Item 1"
+                        }
+                      ],
+                      "type": "paragraph"
+                    }
+                  ],
+                  "spread": false,
+                  "type": "listItem"
+                }
+              ],
+              "ordered": false,
+              "spread": false,
+              "start": null,
+              "type": "list"
+            }
+          ],
+          "name": "center",
+          "type": "containerDirective"
+        },
+        {
+          "attributes": {},
+          "children": [
+            {
+              "children": [
+                {
+                  "checked": false,
+                  "children": [
+                    {
+                      "children": [
+                        {
+                          "type": "text",
+                          "value": "Item 2"
+                        }
+                      ],
+                      "type": "paragraph"
+                    }
+                  ],
+                  "spread": false,
+                  "type": "listItem"
+                }
+              ],
+              "ordered": false,
+              "spread": false,
+              "start": null,
+              "type": "list"
+            }
+          ],
+          "name": "center",
+          "type": "containerDirective"
+        }
+      ],
+      "name": "center",
+      "type": "containerDirective"
+    },
+    {
+      "attributes": {},
+      "children": [
+        {
+          "attributes": {},
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "inverted growth"
+                }
+              ],
+              "type": "paragraph"
+            }
+          ],
+          "name": "inner",
+          "type": "containerDirective"
+        }
+      ],
+      "name": "outer",
+      "type": "containerDirective"
+    },
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": ":::"
+        }
+      ],
+      "type": "paragraph"
+    }
+  ],
+  "type": "root"
+}

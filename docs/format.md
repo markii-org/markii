@@ -48,6 +48,29 @@ optional `{attributes}`. More colons means a bigger scope. That is the whole
 syntax. It never grows, because the name is open-ended: adding your hundredth
 component adds no new grammar, just a new name.
 
+When containers nest, the outer one carries the most colons:
+
+```
+::::card
+:::callout{type=note}
+The inner container uses three colons, the outer uses four.
+:::
+::::
+```
+
+This can feel inverted if you expect code-style indentation, where depth
+grows inward. But `:::` lines are fences, not scopes, and the rule is the
+same one markdown code fences already follow: a longer fence is a stronger
+one, so it can contain shorter ones. Think "bigger fence, bigger box" — the
+outermost box is the biggest. Indentation was never available for this job,
+because indentation already means something in markdown (four spaces starts
+a code block). A fence line with a name opens a container; a bare colon
+line only ever closes one, which is what keeps closings unambiguous. In
+everyday documents nesting rarely goes past one level, so nearly everything
+is written with plain `:::`. If the growth direction is written the wrong
+way around, nothing errors — the parser pairs the fences it can and leaves
+any stray `:::` visible as text, so the mistake is easy to see and fix.
+
 The syntax comes from the CommonMark "generic directives" proposal, so it is
 shared with other markdown tools rather than invented here.
 
