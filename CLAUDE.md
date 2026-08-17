@@ -91,6 +91,13 @@ corpus is plain data — no TypeScript in `conformance/`.
   recommended. Both must pass.
 - Dependencies: only what's listed under Stack. Adding anything else requires
   explicit approval from the orchestrator.
+- Components are SELF-BUILT: no third-party UI / component / charting library
+  (no MUI, Chakra, Recharts, etc.) — the standard set is hand-rolled
+  (the dashboard chart is dependency-free SVG, deliberately) so a component
+  can never break because an upstream package did. This is a hard rule for
+  the reference set (@markii/stdlib, @markii/react) and the recommended
+  posture generally. There is no "port an existing external component
+  library" path — external component-library dependencies are out of scope.
 
 ## Session rules for agents
 

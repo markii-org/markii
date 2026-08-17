@@ -211,15 +211,28 @@ live-preview, NOT editor glue (CodeMirror integration is a separate future
 - README.md `# Mark` → `# Mark II` title edit: USER-APPROVED (2026-08-17) to
   keep — fold the commit into the next housework/demo-app commit, no
   dedicated commit needed. Do not revert.
-- Next release must be **0.2.0**, never 0.1.x: this session added API
-  (renderMarkNode, nodeToHast, VaultStore/Writer, computeGrantKey, renderMark
-  4th param) and changed behavior (chart width/height removed, open=false no
-  longer opens, dotted script names now display-only, messageForFailure
-  deleted). Needs version bumps + CHANGELOG section before tagging.
-- Sandbox re-audit: DONE (f7d54e8) + both findings fixed (272f1b6). See the
-  Phase E section above. (Residual: audit the require jail when packs wire it;
-  the host external terminatable isolate is host territory.)
-- NPM_TOKEN repo secret — required before any future npm version publishes.
-- Second non-React renderer (§13 toolkit-neutrality proof).
-- Phase-3 "registry growth": user's personal component library location still
-  not provided.
+- **0.2.0 release** (main pending decision). MUST be 0.2.0, never 0.1.x —
+  this session added API (renderMarkNode, nodeToHast, VaultStore/Writer,
+  computeGrantKey, renderMark 4th param) and changed behavior (chart width/
+  height removed, open=false no longer opens, dotted script names now
+  display-only, messageForFailure deleted). Steps: bump the six package
+  versions, add a CHANGELOG 0.2.0 section, tag v0.2.0. To PUBLISH to npm it
+  needs the NPM_TOKEN secret (below); without it, GitHub-only release still
+  works. Note (2026-08-17): release.yml uses the CLASSIC one-token model
+  (loops all six with one NODE_AUTH_TOKEN), NOT trusted-publisher — so npm
+  setup is ONE @markii-scope automation token as repo secret NPM_TOKEN,
+  nothing per-package. Optional upgrade: convert release.yml to OIDC trusted
+  publishing (per-package trust config + id-token:write) — offered, not done.
+- NPM_TOKEN repo secret — user's action; required before any npm version publish.
+- Sandbox re-audit: DONE (f7d54e8) + both findings fixed (272f1b6).
+  Residual is NOT withheld work — it's not-yet-buildable / not-markii's:
+  the require-jail audit is blocked on the packs feature existing (require is
+  unwired), and the host terminatable-isolate + grant-key UX are the
+  embedding app's code, satisfied by DESIGN §10 documentation. Optional:
+  add a consolidated "L3 host responsibilities" checklist to §10.
+- Second non-React renderer (§13 toolkit-neutrality proof) — deferred to 0.2.1.
+- dataFailureKind → stat/progress/chart props (cosmetic marker specificity;
+  everything already degrades safely). Optional polish.
+- REMOVED (user call 2026-08-17): "port personal React component library" —
+  no external component-library dependencies; components are self-built only
+  (now a rule in CLAUDE.md coding standards).
