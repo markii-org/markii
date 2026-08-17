@@ -1,70 +1,70 @@
 # Mark II for VS Code
 
-A preview for Mark (`.mk.md`) documents: CommonMark plus directives that
-render your own React components (callouts, cards, tabs, dashboard stats,
-and more — see [`docs/format.md`](../../docs/format.md) for the full
-format).
+Preview for Mark (`.mk.md`) documents: CommonMark plus a small directive
+syntax that renders components — callouts, cards, tabs, dashboard stats,
+and more. See the
+[format guide](https://github.com/sadigaxund/markii/blob/main/docs/format.md)
+for the full picture.
 
-This is a consumer of `@markii/react`, not a renderer. The extension
-contains no parsing or rendering logic of its own; it hosts `@markii/react`
-in a webview and gets a preview for free from the reference renderer.
+## Getting started
 
-**This v1 is rendering only.** It never runs scripts. Script blocks (the
-` ```lua {name=...} ` form, see [`docs/scripting.md`](../../docs/scripting.md))
-render as the reference renderer's collapsed marker, never execute, and
-data-bound components (`stat`, `progress`, `chart`, `:value[...]`) show their
-standard empty states rather than live data.
+No setup. After installing the extension:
 
-## Running and debugging
+1. Open any file ending in `.mk.md` (create one if you like — it's an
+   ordinary text file).
+2. Click the preview icon in the editor title bar, or run **Mark: Open
+   Preview** from the command palette.
 
-1. Open the repository root in VS Code.
-2. From the repo root: `npm install`.
-3. Build the extension: `npm run build -w markii-vscode`.
-4. Launch it: press F5 ("Run Extension"), or from the command line:
+The preview opens beside the editor, follows whichever `.mk.md` file is
+active, updates as you type, and matches your VS Code theme.
 
-   ```
-   code --extensionDevelopmentPath=apps/vscode
-   ```
+Something to paste into a new file to see it work:
 
-A `.vscode/launch.json` is not committed to the repo. If you want F5 to work
-without the command line, add one locally with a single configuration:
+```markdown
+# Hello Mark
 
-```json
-{
-  "version": "0.2.0",
-  "configurations": [
-    {
-      "name": "Run Extension",
-      "type": "extensionHost",
-      "request": "launch",
-      "args": ["--extensionDevelopmentPath=${workspaceFolder}/apps/vscode"]
-    }
-  ]
-}
+:::callout{type=warning title="It works"}
+This is a **component**, not plain markdown.
+:::
+
+Press :kbd[Ctrl+Shift+P] anytime.
 ```
 
-## Preview
+Directive syntax is also highlighted in the editor itself.
 
-The command **Mark: Open Preview** opens a rendered preview of the active
-`.mk.md` file. It's also available as an editor-title button (the preview
-icon in the tab bar) whenever the active file matches `*.mk.md`.
+## What v1 does and doesn't
 
-## Syntax highlighting
+This version renders everything in the format: directives, the standard
+component set, layout wrappers, tables, frontmatter. It never runs
+scripts: script blocks (the ` ```lua {name=...} ` form) show as a
+collapsed marker and data-bound components (`stat`, `progress`, `chart`,
+`:value[...]`) show their quiet empty states. Script execution is a
+planned later version.
 
-An injection grammar (`syntaxes/markii-directives.injection.json`,
-`scopeName: markdown.markii.injection`) layers highlighting for directive
-syntax on top of VS Code's built-in markdown grammar: the three directive
-forms (`:::container{...}`, `::leaf{...}`, `:inline[label]{attrs}`) and the
-shared `{...}` attribute block. One trade-off applies to the fence-meta
-group (` ```lua {name=stars} `): the built-in markdown grammar claims the
-whole fence line first, so on a real fence line its own highlighting wins
-and the injected rule for that `{...}` group is inert — accepted because
-never risking the fence's own code-block highlighting matters more than
-coloring that one attribute group.
+The extension contains no rendering logic of its own — it hosts
+`@markii/react`, the format's reference renderer, in a webview. What the
+preview shows is by definition what the reference implementation renders.
 
-## Packaging
+## For contributors
 
-`npm run package -w markii-vscode` builds the extension and produces a
-`.vsix` file (gitignored). That's packaging only; publishing the `.vsix` to
-the Marketplace is a separate, manual step that requires a publisher
-account and is not part of this workflow.
+Everything below is for developing the extension inside the
+[markii monorepo](https://github.com/sadigaxund/markii) — none of it is
+needed to use the extension.
+
+Run and debug: open the repo root in VS Code, `npm install` from the repo
+root, `npm run build -w markii-vscode`, then launch with F5 ("Run
+Extension") or `code --extensionDevelopmentPath=apps/vscode`. A
+`.vscode/launch.json` is not committed; a single `extensionHost`
+configuration with `--extensionDevelopmentPath=${workspaceFolder}/apps/vscode`
+makes F5 work.
+
+Syntax highlighting is an injection grammar
+(`syntaxes/markii-directives.injection.json`) layered on the built-in
+markdown grammar. One trade-off: on a fence line (` ```lua {name=stars} `)
+the built-in grammar claims the whole line first, so the injected rule for
+that `{...}` group is inert there — accepted, because never disturbing the
+fence's own code highlighting matters more.
+
+Packaging: `npm run package -w markii-vscode` produces a `.vsix`
+(gitignored). Publishing to the Marketplace is a separate manual step
+requiring a publisher account.
