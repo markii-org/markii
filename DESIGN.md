@@ -312,7 +312,13 @@ runtimes without touching the format.
 - **Shared code** enters through a *sandboxed* `require` with exactly two
   sources: bundle-local modules (`require "scripts/util"`, same path-jail as
   `bundle.read`) and pack-shipped Lua modules (`require "ana/http"`, namespaced
-  like the pack's components). Pure Lua only.
+  like the pack's components). Pure Lua only. **The two are disambiguated by
+  reserved names:** the bundle's structural directories — `scripts`, `assets`,
+  `.cache` — always resolve inside the bundle and can never be a pack namespace,
+  so a name beginning with one of them (`require "scripts/…"`) is unambiguously
+  bundle-local and every other first segment is a pack namespace. The same
+  reservation applies to component names, so `:::scripts-x` can never shadow a
+  bundle path.
 - **Explicit non-goal: no package manager.** No luarocks, no network `require`,
   no dependency resolution — network require is code injection into a "note",
   C modules can't run in the WASM sandbox anyway, and packs already are the
