@@ -11,8 +11,13 @@
 #
 # Prerequisites for publishing a NEW version to npm:
 #   - The `@markii` scope is owned by the publishing account or org.
-#   - An `NPM_TOKEN` repo secret (npm automation token) is set under
-#     Settings -> Secrets and variables -> Actions.
+#   - Each @markii/* package has a Trusted Publisher configured on npmjs.com
+#     (Package Settings -> Trusted Publisher) pointing at THIS repo
+#     (sadigaxund/markii) and workflow file (release.yml). No token is used —
+#     the `id-token: write` permission below lets `npm publish` authenticate
+#     to npm over OIDC, and npm records build provenance automatically.
+#   - The legacy `NPM_TOKEN` secret is no longer read by this workflow; it can
+#     be left in place as a revert option, or deleted once OIDC is proven.
 #
 # The stable tarball names mean the newest assets are always reachable at:
 #   https://github.com/sadigaxund/markii/releases/latest/download/markii-core.tgz
@@ -39,6 +44,13 @@ env:
 jobs:
   publish-npm:
     runs-on: ubuntu-latest
+    # `id-token: write` is what lets `npm publish` authenticate to npm over
+    # OIDC (trusted publishing) with no token; `contents: read` is the
+    # default checkout scope, restated because naming `permissions` at all
+    # drops every other default to none.
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v5
 
@@ -53,9 +65,14 @@ jobs:
       - run: npm run build
       - run: npm run build:dist
 
+      # OIDC trusted publishing needs a recent npm CLI (>= 11.5.1); the npm
+      # bundled with Node 22 is older, so upgrade before publishing. Placed
+      # after ci/test/build so those run on the pinned, cached npm and only
+      # the publish step uses the upgraded one.
+      - name: Upgrade npm for OIDC trusted publishing
+        run: npm install -g npm@latest
+
       - name: Publish packages whose version is not yet on npm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
           for dir in $PACKAGE_DIRS; do
