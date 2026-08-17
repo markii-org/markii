@@ -365,7 +365,11 @@ runtimes without touching the format.
   syntax: the first `{...}` group in the fence's info string holds
   whitespace-separated `key`, `key=bare`, `key="quoted"`, or `key='quoted'`
   attributes, where quoted values may contain braces; implementations must
-  match the conformance fixtures covering its edge cases.
+  match the conformance fixtures covering its edge cases. Boolean fence-meta
+  attributes (`publish`, the reference renderer's `open`) are **bare-only**:
+  writing any value — `publish=true` no less than `publish=false` — is not
+  the boolean form and counts as absent. Fail closed: an unrecognized
+  spelling must never enable behavior.
 - **Script presentation is the renderer's choice, not the format's.** The
   reference renderer folds a runnable block to a collapsed one-line marker
   (`⚙ name · lua`) by default, expandable on demand; a renderer may instead show

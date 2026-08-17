@@ -117,9 +117,12 @@ Implementation via Opus-orchestrated Sonnet workers. Scope:
   unknown-directive fallback, rhythm intact, no outer margins introduced.
 - Playground demo update showing a `:::row` dashboard (optional, small).
 
-## Phase C — bulletin board implementation (vault-published values)
+## Phase C — bulletin board implementation (vault-published values) — DONE (commit 300b2bb)
 
-Pre-tasks carried over from Phase B (small, do first):
+Delivered incl. all pre-tasks; 741 tests / build / lint green; 56 adversarial
+probes. Notable API: VaultStore (read, no set) + VaultWriter (capability =
+grant) in @markii/runtime; renderMark 4th optional vault param; bare-only
+`publish`. Original scope for reference — pre-tasks carried over from B:
 - Strip reserved layout keys (`width`/`align`) on INLINE directives too — they
   are reserved everywhere; inline just never gets a wrapper (§4, updated).
 - Remove pixel `width`/`height` from the chart stdlib contract + component
@@ -143,6 +146,27 @@ Main scope (spec landed in Phase A, item A10):
 
 Spec-only for now (done in Phase A, item A6). App-side resolution rule
 (`./x.mk.md` → `./x.mkbundle`) belongs to hosts; nothing to build here yet.
+
+## Phase D2 — block-level render primitive (@markii/react) — NEXT
+
+From the approved backlog (a past agent overreached here — scope is STRICT):
+a PURE render primitive ONLY. NOT a Jupyter cell, NOT unrender-to-edit, NOT
+live-preview, NOT editor glue (CodeMirror integration is a separate future
+@markii/codemirror package, never core).
+
+- Pre-task: align the script marker's `open` fence attribute to bare-only
+  (spec §8 now pins boolean fence-meta attributes as bare-only, fail closed;
+  `open=false` currently opens). Core's bare-attribute detection should be
+  the shared mechanism, exported if needed.
+- @markii/core: a node-level hast converter — same pipeline as toHast
+  (directive tagging, code-meta preservation, remark-rehype, URL sanitizing)
+  applied to a single mdast block node / subtree from the positional AST.
+- @markii/react: renderMarkNode(node, registry, store?, vault?) mirroring
+  renderMark's contract exactly (same components map, same fallbacks, same
+  never-throw, same purity). Positions already come from the parser.
+- Tests: parity with renderMark on every node type incl. directives, script
+  markers, GFM tables; hostile nodes (unknown/prototype names) degrade the
+  same standalone as in-document.
 
 ## Phase E — security hardening (non-blocking; deliberately LAST per user)
 
