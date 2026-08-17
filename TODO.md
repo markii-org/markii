@@ -191,8 +191,23 @@ live-preview, NOT editor glue (CodeMirror integration is a separate future
 - BACKLOG (small, from E report): plumb dataFailureKind through
   resolveDataAttribute into component props so data-bound components
   (stat/progress/chart) show kind-specific text like the :value marker.
-- Full adversarial re-audit of @markii/lua sandbox internals (globals, limits,
-  marshal, the xpcall fix) — offered to user; run if ordered.
+- [x] Full adversarial re-audit of @markii/lua sandbox internals — DONE
+      (commit f7d54e8, docs/lua-sandbox-audit.md, evidence-backed, run by
+      Opus 4.8 after the silent downgrade). Verdict: core holds. Two findings,
+      NEITHER exploitable, fixes NOT yet applied (await go-ahead):
+      - F-1 (LOW, contained): marshal node/depth caps bypassable by rebinding
+        error/type/pairs/math.floor (dynamic global lookups; user code runs
+        first). Contained by memory cap + JS finalize + caught RangeError.
+        Fix: capture those into prelude locals in buildMarshalPrelude; add a
+        runScript catch-all so finalize can't ever raw-throw. Would go through
+        a Sonnet worker + verification per orchestration rules.
+      - F-2 (low correctness): NUL bytes in RETURNED strings silently
+        truncated by wasmoon (broader than the documented bundle scope). Fix:
+        widen the capabilities.ts note or reject NUL at the marshal boundary.
+      Not re-run (visible gaps, honest): the 4 xpcall/pcall HANG repros
+        (CI-safety — reviewed by reading limits.deadlock.test.ts); host
+        external isolate (none ships); require jail (unwired this phase, audit
+        when built).
 
 ## Parked / awaiting user
 
