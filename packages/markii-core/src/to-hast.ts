@@ -5,7 +5,7 @@ import remarkDirective from 'remark-directive';
 import remarkGfm from 'remark-gfm';
 import remarkRehype from 'remark-rehype';
 import { visit } from 'unist-util-visit';
-import type { Code, Root as MdastRoot } from 'mdast';
+import type { Code, Root as MdastRoot, RootContent } from 'mdast';
 import type { Element as HastElement, Root as HastRoot } from 'hast';
 import type {
   ContainerDirective,
@@ -183,6 +183,27 @@ function sanitizeUrls(tree: HastRoot): void {
 }
 
 /**
+ * The ONE source of truth for the mdast->hast pipeline's plugin list, shared
+ * by `toHast` (whole-document) and `nodeToHast` (single-node) below —
+ * exactly one `.use()` chain exists in this module so the two entry points
+ * cannot drift apart on directive tagging, code-meta preservation, or the
+ * remark-rehype conversion itself. Building a fresh processor per call
+ * (rather than a shared module-level instance) matches `unified`'s own
+ * immutable-processor model (`.use()` returns a new processor) and keeps
+ * each call's `.parse`/`.runSync` free of any state left over from a
+ * previous call.
+ */
+function createProcessor() {
+  return unified()
+    .use(remarkParse)
+    .use(remarkDirective)
+    .use(remarkGfm)
+    .use(tagDirectiveNodes)
+    .use(preserveCodeMeta)
+    .use(remarkRehype);
+}
+
+/**
  * Converts Mark text straight to a sanitized hast tree: parse (mdast, with
  * directive + GFM syntax extensions) -> tag directive nodes + preserve
  * code-fence meta for hast conversion -> remark-rehype (hast) -> strip
@@ -198,15 +219,107 @@ function sanitizeUrls(tree: HastRoot): void {
  * script marker).
  */
 export function toHast(text: string): HastRoot {
-  const processor = unified()
-    .use(remarkParse)
-    .use(remarkDirective)
-    .use(remarkGfm)
-    .use(tagDirectiveNodes)
-    .use(preserveCodeMeta)
-    .use(remarkRehype);
+  const processor = createProcessor();
   const mdastTree = processor.parse(text);
   const hastTree = processor.runSync(mdastTree) as HastRoot;
   sanitizeUrls(hastTree);
   return hastTree;
+}
+
+/**
+ * One mdast node as this package's `parse` produces it (a member of a
+ * `Root`'s `children` array — `mdast`'s own `RootContent` union). Re-exported
+ * under this package's naming so a consumer (e.g. `@markii/react`'s
+ * `renderMarkNode`) can type a "single already-parsed node" parameter without
+ * adding its own `@types/mdast` dependency — `@markii/core` already depends
+ * on it.
+ */
+export type MarkNode = RootContent;
+
+/**
+ * Deletes `data` from every node in `tree`, in place.
+ *
+ * Security-relevant, and specific to the single-node path. mdast `data` is
+ * the documented channel for overriding hast output — `mdast-util-to-hast`
+ * reads `data.hName`, `data.hProperties`, and `data.hChildren` and will emit
+ * *any* tag with *any* attributes a node asks for. `toHast` can never be
+ * handed such a node: it takes TEXT and parses it itself, and
+ * `remark-parse`/`remark-directive`/`remark-gfm` never populate `data` on the
+ * nodes they produce. `nodeToHast` instead accepts an already-built AST from
+ * the caller, so without this step a node carrying
+ * `data.hName = 'script'` + `data.hProperties = { src: 'javascript:...' }`
+ * would convert to a real `<script src="javascript:...">` hast element —
+ * bypassing `sanitizeUrls` entirely, since that only guards `a[href]` and
+ * `img[src]`. Any host that transforms the AST between `parse` and rendering
+ * (or renders a node built from untrusted input) would inherit an injection
+ * path that the document path simply does not have.
+ *
+ * Deleting `data` WHOLESALE, rather than allowlisting away the three known
+ * `h*` keys, is the deliberate choice: it is fail-closed by construction (a
+ * future `mdast-util-to-hast` release that honors a fourth `data.h*` key
+ * cannot silently reopen this hole, whereas a hardcoded three-name denylist
+ * would), and it costs nothing in fidelity — since parser-produced nodes
+ * carry no `data` at all, stripping it reproduces exactly the shape the
+ * document path feeds the pipeline. The pipeline's own tagging
+ * (`tagDirectiveNodes`, `preserveCodeMeta`) runs AFTER this and repopulates
+ * `data` itself, so directives and code fences are unaffected.
+ */
+function stripHastOverrides(tree: MdastRoot): void {
+  visit(tree, (node: { data?: unknown }) => {
+    if (node.data !== undefined) delete node.data;
+  });
+}
+
+/**
+ * An empty hast root, returned by `nodeToHast` when the pipeline itself
+ * throws on odd input (Architecture rule 3's never-throw guarantee, extended
+ * to the single-node path) — degraded output, never an exception.
+ */
+function emptyHastRoot(): HastRoot {
+  return { type: 'root', children: [] };
+}
+
+/**
+ * Converts a single already-parsed mdast node (as produced by this package's
+ * `parse`, e.g. one top-level child of its `Root`) to a sanitized hast tree,
+ * running the exact SAME pipeline as `toHast` — see `createProcessor` above,
+ * the one shared plugin-list source of truth — over a synthetic mdast `root`
+ * wrapping just this node. Directive tagging, code-meta preservation, and URL
+ * sanitizing (`sanitizeUrls`) all run identically to the whole-document path;
+ * the only difference is skipping `processor.parse` (there is no text to
+ * parse — `node` is already an AST) and wrapping in a throwaway root instead
+ * of using the document's own.
+ *
+ * Pure: `node` is deep-cloned (`structuredClone` — mdast nodes are plain
+ * JSON-safe data) before the pipeline runs, so the plugins' in-place
+ * `data.hName`/`data.hProperties` mutations never touch the caller's node.
+ *
+ * Hardened: because this entry point takes an AST rather than text, the
+ * clone is also stripped of every node's `data` — the caller-controllable
+ * hast-override channel — before the pipeline runs, so a hand-built or
+ * transformed node cannot dictate the emitted tag/attributes (e.g. a
+ * `data.hName: 'script'` injection). See `stripHastOverrides`.
+ *
+ * Never throws, matching `toHast`'s and Architecture rule 3's
+ * never-throw-on-odd-input guarantee: an inline/text-level node at the root
+ * of the synthetic tree, a `code` node with malformed `meta`, or a
+ * container-directive subtree left over from an unclosed fence may all
+ * produce degraded hast (in the worst case, an empty root — `emptyHastRoot`),
+ * but the call itself cannot fail.
+ */
+export function nodeToHast(node: MarkNode): HastRoot {
+  try {
+    const cloned = structuredClone(node);
+    const root: MdastRoot = { type: 'root', children: [cloned] };
+    // Before the pipeline runs: drop any caller-supplied hast overrides
+    // (`data.hName`/`hProperties`/`hChildren`) so only this pipeline's own
+    // tagging can influence the hast output. See `stripHastOverrides`.
+    stripHastOverrides(root);
+    const processor = createProcessor();
+    const hastTree = processor.runSync(root) as HastRoot;
+    sanitizeUrls(hastTree);
+    return hastTree;
+  } catch {
+    return emptyHastRoot();
+  }
 }

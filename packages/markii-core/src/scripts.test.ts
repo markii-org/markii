@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parse } from './parse';
-import { extractScripts, isValidScriptName } from './scripts';
+import { extractScripts, isBareAttribute, isValidScriptName } from './scripts';
 
 describe('extractScripts', () => {
   it('extracts an inline script block by its `name` attribute', () => {
@@ -211,6 +211,35 @@ describe('extractScripts: `publish`', () => {
     const scripts = extractScripts(tree);
     expect(scripts).toHaveLength(1);
     expect(Object.hasOwn(scripts[0] as object, 'publish')).toBe(false);
+  });
+});
+
+describe('isBareAttribute', () => {
+  it('is true for a genuinely bare key', () => {
+    expect(isBareAttribute('{name=x open}', 'open')).toBe(true);
+  });
+
+  it.each(['true', 'false', ''])(
+    'is false for a valued spelling `open=%s` (a different, unrecognized attribute)',
+    (value) => {
+      const meta = value === '' ? '{name=x open=""}' : `{name=x open=${value}}`;
+      expect(isBareAttribute(meta, 'open')).toBe(false);
+    },
+  );
+
+  it('is false when the key is absent entirely', () => {
+    expect(isBareAttribute('{name=x}', 'open')).toBe(false);
+  });
+
+  it('is false when meta is null/undefined/empty', () => {
+    expect(isBareAttribute(null, 'open')).toBe(false);
+    expect(isBareAttribute(undefined, 'open')).toBe(false);
+    expect(isBareAttribute('', 'open')).toBe(false);
+  });
+
+  it('is exported and reused for `publish` too (same mechanism, no drift)', () => {
+    expect(isBareAttribute('{name=x publish}', 'publish')).toBe(true);
+    expect(isBareAttribute('{name=x publish=true}', 'publish')).toBe(false);
   });
 });
 

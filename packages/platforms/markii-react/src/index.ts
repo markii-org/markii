@@ -5,7 +5,7 @@
 // `@markii/stdlib` dependency, or `doc.css` merely by importing from here.
 // The batteries-included standard components + `defaultRegistry` live at
 // the `@markii/react/components` subpath instead (see `./components/index.ts`).
-export { renderMark } from './render.js';
+export { renderMark, renderMarkNode } from './render.js';
 export {
   createRegistry,
   mergeRegistries,

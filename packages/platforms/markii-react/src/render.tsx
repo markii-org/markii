@@ -2,9 +2,16 @@ import { Fragment, isValidElement } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { jsx, jsxs } from 'react/jsx-runtime';
 import { toJsxRuntime } from 'hast-util-to-jsx-runtime';
-import { toHast, parseMetaAttributes, isValidScriptName } from '@markii/core';
+import {
+  toHast,
+  nodeToHast,
+  parseMetaAttributes,
+  isValidScriptName,
+  isBareAttribute,
+} from '@markii/core';
+import type { MarkNode } from '@markii/core';
 import type { ValueStatus, ValueStore, VaultStore } from '@markii/runtime';
-import type { Element as HastElement } from 'hast';
+import type { Element as HastElement, Root as HastRoot } from 'hast';
 import type { DirectiveAttributes, Registry } from './registry.js';
 import { resolveLayoutAttributes } from './layout.js';
 import { ScriptMarker } from './components/script-marker.js';
@@ -291,7 +298,17 @@ function createDirectiveElement(
 /** The hast/DOM attribute `@markii/core`'s `toHast` preserves a code fence's raw `meta` string onto (see `to-hast.ts`'s `preserveCodeMeta`). */
 const CODE_META_ATTR = 'data-mk-meta';
 
-/** The bare (valueless) meta attribute that opts a script marker into rendering already-expanded. */
+/**
+ * The bare-only meta attribute (DESIGN.md §8) that opts a script marker into
+ * rendering already-expanded. Bare-only like `@markii/core`'s `publish`: only
+ * the genuinely valueless spelling (`{name=x open}`) counts — `open=true`,
+ * `open=false`, and `open=""` are all different, unrecognized attributes and
+ * must NOT open the marker (fail closed, per §8). Tested via `isBareAttribute`
+ * against the raw meta string, not `attrs.open === ''`/`Object.hasOwn`
+ * against the flattened `parseMetaAttributes` map — that map collapses a
+ * bare key and an explicitly-valued `open=""` to the same `''`, which would
+ * wrongly open for `open=""` too.
+ */
 const OPEN_ATTRIBUTE_KEY = 'open';
 
 /** The first element child of `node` named `tagName`, or `undefined` if there is none (or `node` itself is absent). */
@@ -378,7 +395,7 @@ function PreElement({ node, children }: PreElementProps): ReactElement {
             lang={getLanguage(codeNode)}
             src={attrs.src || undefined}
             code={getCodeText(codeNode)}
-            open={Object.hasOwn(attrs, OPEN_ATTRIBUTE_KEY)}
+            open={isBareAttribute(meta, OPEN_ATTRIBUTE_KEY)}
           />
         );
       }
@@ -391,9 +408,51 @@ function PreElement({ node, children }: PreElementProps): ReactElement {
 }
 
 /**
+ * Converts an already-sanitized hast tree to a React element tree via
+ * hast-util-to-jsx-runtime, with directive elements swapped for registry
+ * components (or the unknown-directive fallback) and script fences folded
+ * into `ScriptMarker`. The ONE shared `toJsxRuntime` call site for both
+ * `renderMark` (whole document) and `renderMarkNode` (a single node) — kept
+ * to exactly one place so the two entry points cannot drift apart on which
+ * `components` map, or which `toJsxRuntime` options, either one uses.
+ */
+function hastToReactTree(
+  hastTree: HastRoot,
+  registry: Registry,
+  store: ValueStore | undefined,
+  vault: VaultStore | undefined,
+): ReactElement {
+  const DirectiveElement = createDirectiveElement(registry, store, vault);
+  return toJsxRuntime(hastTree, {
+    Fragment,
+    jsx,
+    jsxs,
+    passNode: true,
+    components: { 'mk-directive': DirectiveElement, pre: PreElement },
+  }) as ReactElement;
+}
+
+/**
+ * The shared "failed to render" fallback box — identical markup/class names
+ * for `renderMark` and `renderMarkNode`, so a document-level failure and a
+ * node-level failure degrade indistinguishably (Architecture rule 3's
+ * never-throw spirit extended to the renderer's own internal errors, not
+ * just unknown directives).
+ */
+function renderFailureFallback(error: unknown): ReactElement {
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    <div className="mk-unknown mk-unknown--block" role="alert">
+      <p className="mk-unknown__label">failed to render document</p>
+      <pre className="mk-unknown__content">{message}</pre>
+    </div>
+  );
+}
+
+/**
  * Renders Super Markdown text to a React element tree using `registry` to
  * resolve directive names. Pipeline: `@markii/core`'s `toHast` (parse -> tag
- * directive nodes -> remark-rehype -> sanitize URLs) -> hast-util-to-jsx-runtime
+ * directive nodes -> remark-rehype -> sanitize URLs) -> `hastToReactTree`
  * (React elements), with directive elements swapped for registry components
  * (or the unknown-directive fallback) along the way. Never throws: parsing
  * is tolerant by construction, and unresolved directive names always render
@@ -429,21 +488,46 @@ export function renderMark(
 ): ReactElement {
   try {
     const hastTree = toHast(text);
-    const DirectiveElement = createDirectiveElement(registry, store, vault);
-    return toJsxRuntime(hastTree, {
-      Fragment,
-      jsx,
-      jsxs,
-      passNode: true,
-      components: { 'mk-directive': DirectiveElement, pre: PreElement },
-    }) as ReactElement;
+    return hastToReactTree(hastTree, registry, store, vault);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return (
-      <div className="mk-unknown mk-unknown--block" role="alert">
-        <p className="mk-unknown__label">failed to render document</p>
-        <pre className="mk-unknown__content">{message}</pre>
-      </div>
-    );
+    return renderFailureFallback(error);
+  }
+}
+
+/**
+ * The block-level twin of `renderMark`: renders one already-parsed mdast
+ * node (`@markii/core`'s `MarkNode` — e.g. a single top-level child of a
+ * `parse`d document) instead of a whole document's text. Same registry
+ * resolution (`createDirectiveElement`/`renderDirectiveContent`, including
+ * the unknown-directive and `Object.prototype`-name fallbacks), same
+ * `:value[...]`/`data=` store and vault resolution, same script-fence
+ * folding into `ScriptMarker` (`PreElement`), same never-throw "failed to
+ * render document" fallback box, and the same purity guarantee — this
+ * function has no state and no side effects, exactly like `renderMark`.
+ *
+ * Pipeline: `@markii/core`'s `nodeToHast` (deep-clones `node`, then the SAME
+ * tag/preserve-meta/remark-rehype/sanitize steps `toHast` runs) ->
+ * `hastToReactTree`, the one shared `toJsxRuntime` call site both this
+ * function and `renderMark` use, so the two cannot diverge on which
+ * `components` map or options either one passes. Positions on any element
+ * that carries them come straight from the parser (`@markii/core`'s
+ * `parse`), unchanged by this function or by `nodeToHast`.
+ *
+ * This is a pure, one-shot render of a static node — not a cell, not
+ * unrender-to-edit, not a live-preview surface, and it carries no
+ * memoization or state of its own; a caller that wants any of that builds it
+ * on top, out of scope for this function.
+ */
+export function renderMarkNode(
+  node: MarkNode,
+  registry: Registry,
+  store?: ValueStore,
+  vault?: VaultStore,
+): ReactElement {
+  try {
+    const hastTree = nodeToHast(node);
+    return hastToReactTree(hastTree, registry, store, vault);
+  } catch (error) {
+    return renderFailureFallback(error);
   }
 }

@@ -148,20 +148,32 @@ export function parseMetaAttributes(
 /**
  * Whether `key` appears in `meta`'s `{...}` attribute group written
  * genuinely bare (`key` with no `=value` at all — none of the three value
- * alternatives in `ATTRIBUTE_TOKEN` matched). Used only for `publish`
- * (DESIGN.md §8: "the bare `publish` attribute"; see `ScriptBlock.publish`'s
- * doc comment for why the bare/valued distinction matters).
+ * alternatives in `ATTRIBUTE_TOKEN` matched). This is the ONE shared
+ * mechanism for a bare-only boolean fence-meta attribute (DESIGN.md §8:
+ * "Boolean fence-meta attributes (`publish`, the reference renderer's
+ * `open`) are bare-only: writing any value — `publish=true` no less than
+ * `publish=false` — is not the boolean form and counts as absent. Fail
+ * closed: an unrecognized spelling must never enable behavior."). Used by
+ * `extractScripts` below for `publish`, and by `@markii/react`'s `PreElement`
+ * for `open` (see `ScriptBlock.publish`'s doc comment for why the
+ * bare/valued distinction matters).
  *
  * `parseMetaAttributes` collapses a bare key and an explicitly-empty quoted
  * value (`key=""`) to the same `''` result in its flat map — the right
  * choice for its general-purpose contract, but it erases exactly the
- * distinction `publish` needs (`{publish}` must enable publishing;
- * `{publish=""}` must not). So this walks the same token grammar directly
- * instead of going through that already-flattened map. Like
- * `parseMetaAttributes`, a key repeated in the group is "last occurrence
- * wins" (the loop keeps overwriting `bare` for each match of `key`).
+ * distinction a bare-only attribute needs (`{publish}` must enable
+ * publishing; `{publish=""}` must not — and likewise `{open}` vs.
+ * `{open=""}`/`{open=true}`/`{open=false}`). So this walks the same token
+ * grammar directly instead of going through that already-flattened map.
+ * Like `parseMetaAttributes`, a key repeated in the group is "last
+ * occurrence wins" (the loop keeps overwriting `bare` for each match of
+ * `key`).
+ *
+ * Exported so a renderer (e.g. `@markii/react`) that defines its own
+ * bare-only boolean fence-meta attribute reuses this exact grammar instead
+ * of duplicating (and risking drift from) the bare/valued distinction here.
  */
-function isBareAttribute(
+export function isBareAttribute(
   meta: string | null | undefined,
   key: string,
 ): boolean {

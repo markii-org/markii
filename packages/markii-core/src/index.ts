@@ -5,9 +5,10 @@
 // via `@markii/react`) never has to reason about Node built-ins reachable from
 // its entry point.
 export { parse } from './parse.js';
-export { toHast, isSafeUrl } from './to-hast.js';
+export { toHast, nodeToHast, isSafeUrl, type MarkNode } from './to-hast.js';
 export {
   extractScripts,
+  isBareAttribute,
   isValidScriptName,
   parseMetaAttributes,
   type ScriptBlock,
