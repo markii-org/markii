@@ -86,7 +86,7 @@ or parser.
 
 ```tsx
 const registry: Registry = {
-  callout:  { component: Callout,  props: CalloutProps },   // props = zod schema
+  callout:  { component: Callout,  props: CalloutProps },   // props = attribute schema (the neutral contract, see §13.3)
   timeline: { component: Timeline, props: TimelineProps },
   kbd:      { component: Kbd, inline: true },
 };
@@ -120,7 +120,13 @@ directive names are unbounded. There is no per-component syntax cost.
   perfectly readable markdown. The note survives outside your tool. Design rule to
   preserve this: *meaningful content goes in the directive body (markdown), only
   configuration goes in `{attrs}`*. A note where the prose lives in attribute strings
-  is a note you've lost.
+  is a note you've lost. The same test flags the format's worst-degrading
+  construct: inline `:value[...]` interpolation (§8) shows up as literal
+  directive syntax *mid-sentence* in a plain viewer, unlike `:::` fences,
+  which at least sit on their own lines around readable prose. It stays in
+  the format — live values in prose are worth having — but prose meant to
+  travel should prefer component bindings (`::stat{data=...}`), which degrade
+  to a clean line of their own.
 
 ## 4. Layout: alignment, margins, position (your biggest concern)
 
@@ -141,13 +147,22 @@ outsides.**
   ```
   :::chart{width=wide}      → narrow | normal (default) | wide | full
   ::img-pair{align=center}  → left | center | right (block-level alignment only)
+  :::row{cols=3} … :::      → cols: 2 | 3 | 4 (default: auto-fit)
   ```
 
   Each maps to a predefined class in the document theme. No `style=`, no arbitrary
   values. Freeform layout in notes is how documents rot; presets are how they stay
   consistent as your component set and theme evolve.
+- **`:::row` is the one layout *container*.** Its block children become
+  equal-width cells that wrap responsively and stack on narrow viewports —
+  and, in a plain markdown viewer, simply stack (the fence lines show, the
+  content stays readable). No spans, no per-cell sizing, no other knobs: it
+  exists so a dashboard of `::stat`s and `::chart`s can sit side by side, and
+  nothing more. An invalid or absent `cols` degrades to auto-fit, never an
+  error.
 - Text wrapping around components (floats): don't. It's the single largest source of
-  layout pain and reads badly at every width. Everything stacks.
+  layout pain and reads badly at every width. Everything stacks — side-by-side
+  placement is what `:::row` is for; floats stay banned.
 
 ## 5. Extensibility & sharing (nice-to-have, phase 3)
 
@@ -159,6 +174,8 @@ Timeline.tsx   the component (props typed; schema derivable from types or zod)
 ```
 
 Installing a pack merges its components into the registry under its namespace.
+A note never references a pack by filesystem path — packs are app-installed,
+and a note reaches them by namespace alone.
 An author references a pack component by an explicit **prefixed name they type
 themselves** — `:::ana-timeline` — never an auto-registered bare name. A
 directive name may not contain `:` (it is reserved syntax), so the namespace
@@ -179,6 +196,31 @@ uses: [ana]
 
 No import statements in the note body — the note stays prose.
 
+### Vaults and the vault library
+
+A **vault** (workspace) is just a directory of notes — `.mk.md` files and
+`.mkbundle` bundles side by side — plus, optionally, one shared Lua library.
+Nothing else lives there: component packs are installed in the *app* (they are
+compiled code that must build into the host, §13.6), and a note references
+everything shared by name, never by path.
+
+The **vault library** is the third `require` source (§8's other two are
+bundle-local `scripts/` and installed packs): a folder of plain `.lua` files
+inside the vault (say `my-vault/mylib/`) that the app maps to a namespace via
+app/vault configuration (`mylib → mylib/`). Notes write `require "mylib/etl"`
+— never a relative path, never `..` — and the sandbox resolves it through the
+app's mapping. Lua may live vault-side because it is interpreted source the
+sandbox runs from text; components may not, because they are compiled code
+executing in the app's own realm.
+
+Collision rules are flat and boring on purpose (no transitive resolution, no
+version ranges): installing two packs with the same namespace is rejected at
+install time; a vault-library namespace that shadows an installed pack
+resolves to the vault library, with a visible warning. A `require` whose
+namespace has no mapping in this vault fails soft, exactly like an unknown
+component: the consuming script reports "requires library `mylib`" instead of
+a raw error — and code meant to travel beyond one vault belongs in a pack.
+
 ## 6. File format
 
 - Extension: `.mk.md`. Content: CommonMark + GFM (tables, task lists,
@@ -190,6 +232,13 @@ No import statements in the note body — the note stays prose.
   of embedded HTML (§1), and dropping HTML removes an injection surface (§10).
   Layout/alignment is a directive concern (§4), never a raw `<div>`.
 - Frontmatter (YAML) optional, for `uses:` and note metadata.
+- Inter-note links are ordinary relative markdown links
+  (`[roadmap](./roadmap.mk.md)`) — pure CommonMark, working in every viewer
+  today. `[[wiki-link]]` syntax is an app affordance, not part of the format.
+  So that promoting a note to a bundle (§9) doesn't break links pointing at
+  it, a link to `./x.mk.md` SHOULD resolve to `./x.mkbundle` when a bundle of
+  that name exists. Anything richer — backlinks, stable note identity — is
+  app territory, deliberately unspecified here.
 
 ## 7. Build order
 
@@ -228,7 +277,8 @@ Rules that keep this a *note* and not a program:
 - Scripts **return values**; they never write into the document body. No
   self-modifying notes.
 - **Rendering is pure; running is an event.** Opening/rendering a note only reads
-  the last cached values from the bundle (§9) — it never executes a script — so a
+  last-known values from the host's value cache (§9 — the app's own store, or
+  a bundle's `.cache/`) — it never executes a script — so a
   note renders instantly and offline with last-known, stale-marked data, and
   re-opening costs zero network calls. Execution has three triggers, and the
   trigger caps what the script may do (the browser "user activation" rule —
@@ -298,7 +348,15 @@ runtimes without touching the format.
   ` ```lua ` block with no such attribute is display-only and never executes, so
   example code can sit in a note harmlessly. The attribute is the sole
   runnable-vs-display switch; no bespoke non-code syntax is introduced, precisely
-  so the block still degrades to highlighted code everywhere else.
+  so the block still degrades to highlighted code everywhere else. A script
+  `name` must match `[A-Za-z_][A-Za-z0-9_-]*` — dots in particular are
+  reserved, because `data=`/`:value[]` read a dot as path traversal
+  (`repo.stars`), which would make a dotted *name* unreachable. The meta
+  grammar itself is normative and deliberately mirrors directive-attribute
+  syntax: the first `{...}` group in the fence's info string holds
+  whitespace-separated `key`, `key=bare`, `key="quoted"`, or `key='quoted'`
+  attributes, where quoted values may contain braces; implementations must
+  match the conformance fixtures covering its edge cases.
 - **Script presentation is the renderer's choice, not the format's.** The
   reference renderer folds a runnable block to a collapsed one-line marker
   (`⚙ name · lua`) by default, expandable on demand; a renderer may instead show
@@ -332,6 +390,44 @@ runtimes without touching the format.
   capability API; `manifest.json`'s spec version tells future runtimes which
   semantics to honor.
 
+### Vault-published values (the bulletin board)
+
+A named value is note-scoped by default. Cross-note data sharing — the
+monitoring-dashboard case, where one note's ETL feeds many notes' components —
+goes through exactly one mechanism: a note can *publish* a value to a
+vault-level, app-managed store, and any note in the vault can read it.
+
+````
+```lua {name=gh publish}
+return cache.get("gh", 3600, function()
+  return net.fetch_json("https://api.github.com/repos/x/y")
+end)
+```
+
+::stat{data=@gh.stargazers_count label="Stars"}   ← any other note in the vault
+````
+
+- **Publishing is declarative**: the bare `publish` attribute on the script
+  fence, no API to call. After a successful run, the host copies the script's
+  returned value into the vault store under the script's name.
+- **Readers use an `@` prefix**: `{data=@gh.stargazers_count}` and
+  `:value[@gh.stars]` read the vault store; bare names stay note-local. The
+  whole mental model is one sentence: *bare name = mine, `@name` = the
+  vault's.*
+- **One writer per name.** The app rejects a second note publishing an
+  already-claimed name — the same flat-collision rule as pack namespaces
+  (§5). Readers are read-only; there is no shared mutable state, only
+  single-writer snapshots carrying the usual freshness status
+  (fresh/stale/missing), with the usual graceful degradation when absent.
+- **Reading is render-time and pure** — displaying `@gh.stars` executes
+  nothing and needs no grant. *Publishing* requires a grant ("this note wants
+  to publish `gh` to your vault"), because it writes beyond the note.
+- **The store is app-side** (§9): publishing adds no files to the vault.
+- This supersedes any sharing scheme based on reading another note's bundle.
+  The §11 jail is unchanged — a script only ever sees its *own* bundle.
+  Share *code* through packs and the vault library; share *data* by
+  publishing.
+
 ## 9. Bundle format: `.mk.md` file vs `.mk.md` bundle
 
 The long-scripts and images problems are the same problem, and it has a proven
@@ -359,12 +455,20 @@ note.mkbundle (file)    …or the same directory zipped, for sharing/export
 - `.cache/` is explicitly disposable. Deleting it must never lose authored content.
   It is dot-prefixed so editors and file explorers hide it by default — it is the
   host's to write, never the author's to edit.
-- A plain `.mk.md` has no `.cache/`, so running its scripts is possible but
-  *ephemeral*: the host keeps returned values in an in-memory store for the
-  session and persists nothing. Persistence — offline, last-known values — is
-  exactly what promoting the file to a bundle buys, and that promotion is a host
-  choice, never forced. Rendering a bare file stays pure: bound values show their
-  empty state until a run fills them in memory.
+- **Persistence is governed by three invariants, not by file form**: (1)
+  rendering never executes (§8); (2) the host never writes authored files — a
+  note is edited only by its author; (3) caches are disposable — deleting one
+  loses no authored content. Within those, *where* a host keeps last-run
+  values is host policy: an app SHOULD persist them in its own storage (keyed
+  by note identity) so that a plain `.mk.md` reopens with last-known values
+  while the vault directory stays byte-identical; the minimum a host may do is
+  an in-memory store for the session. Bundle `.cache/` is the *portable* form
+  of the same cache — the data travels inside the bundle when it is zipped and
+  shared — not the only sanctioned persistence. Promoting a file to a bundle
+  is therefore about portability (assets, long scripts, data that must travel
+  with the note), a host choice, never a toll for memory. Rendering a bare
+  file stays pure either way: bound values show their empty state until some
+  run — this session's or a persisted earlier one — fills them.
 
 ## 10. Security model
 
@@ -391,7 +495,20 @@ specific grants.**
 
   The prompt becomes meaningful: *"this note wants network access to
   api.github.com"* — a decision a human can actually make, unlike "trust this note."
-  Grants are remembered per note (hash-keyed, re-prompt if scripts change).
+  Grants are remembered per note, keyed by a hash of the note's full
+  *executable closure* — its inline scripts, `src=` script files, required
+  bundle-local modules, vault-library modules, and the versions of any pack
+  modules it requires. If any of that code changes, the grant is stale and
+  the host re-prompts; otherwise edited shared code would silently inherit
+  grants that were made to different code.
+- **The read-only tier is not a no-exfiltration tier.** A GET request carries
+  data outward through its URL — query strings, path segments — so a note
+  holding a `net` grant plus bundle reads can ship bundle contents to a
+  granted host with no click at all under an auto-run trigger. The per-host
+  allowlist is the real boundary; that is why `net` grants are per-host, and
+  why the permission prompt must be worded as what it is — *"this note can
+  **send data to** api.github.com"* — never the softer "wants network
+  access".
 - Resource limits: instruction-count hook (kills infinite loops), wall-clock timeout,
   memory cap, fetch response size cap.
 - **In-process limits are best-effort; the terminatable isolate is the real guarantee.**
@@ -437,8 +554,11 @@ app-scoped sandbox): **the bundle is the script's entire filesystem.**
 ## 12. Repository & implementation shape
 
 **Library-first.** The format is the product; apps are consumers. The reference
-implementation is a TypeScript library (`packages/markii-core`: parse, registry,
-render), its conformance fixtures (`.mk.md` inputs + expected outputs — for a file
+implementation is a TypeScript library split along the format's own seams
+(`@markii/core` parse/AST + corpus runner; `@markii/stdlib` component
+contracts; `@markii/react` registry + renderer; `@markii/runtime` value store
++ run orchestration; `@markii/lua` sandbox; `@markii/bundle` container), its
+conformance fixtures (`.mk.md` inputs + expected outputs — for a file
 format, the test suite is half the definition), and a thin Vite playground
 (`apps/playground`) that exists only so humans can see components render during
 development. Any future note-taking app, editor plugin, or third-party tool
@@ -478,7 +598,10 @@ any implementation must reproduce.)
 5. **Packaging follows the standard**: `@markii/core` (parse + AST types + corpus
    runner, **zero React dependency**) and `@markii/react` (our registry + React
    renderer — the reference L1 implementation, deliberately just one consumer of
-   `@markii/core` among possible many). Spec versions are semver; bundles record the
+   `@markii/core` among possible many). The remaining packages track the
+   conformance levels themselves: `@markii/stdlib` (the L1 component
+   contracts), `@markii/bundle` (L2), and `@markii/runtime` + `@markii/lua`
+   (L3). Spec versions are semver; bundles record the
    spec version in `manifest.json`.
 6. **Where the framework dependency lives — and where it never does.** The
    format is framework-free, but *component implementations* are renderer-bound:
