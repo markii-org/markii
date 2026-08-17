@@ -13,7 +13,7 @@
  * follow its `require`s into the bundle and the vault library, and read the
  * installed pack manifest) assembles a `GrantClosure` and hands it in.
  * `@markii/core`'s `ScriptBlock` is NOT imported here on purpose — this
- * package stays independent of the parser layer (see CLAUDE.md's import
+ * package stays independent of the parser layer (see AGENTS.md's import
  * rule); `GrantClosureScript` below is a local structural type that mirrors
  * the fields that matter to the closure.
  *

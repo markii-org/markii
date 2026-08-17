@@ -21,7 +21,7 @@ const FAST_LIMITS: Partial<ScriptLimits> = {
  *
  * These are built by hand here rather than by actually calling
  * `@markii/core`'s `extractScripts` on parsed markdown, because
- * `@markii/lua` must never depend on `@markii/core` — see CLAUDE.md's
+ * `@markii/lua` must never depend on `@markii/core` — see AGENTS.md's
  * import rule and this package's `no-restricted-imports` guard in the root
  * `eslint.config.js`. `extractScripts` itself is already covered by
  * `@markii/core`'s own `scripts.test.ts`; what this suite proves is the

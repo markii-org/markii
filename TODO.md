@@ -1,11 +1,11 @@
 # TODO — 0.1.x / 0.2 upgrade session
 
 Authoritative, persistent work queue for the upgrade session. If a session resets
-or context is lost: re-read `CLAUDE.md` → `DESIGN.md` → this file, then continue
+or context is lost: re-read `AGENTS.md` → `DESIGN.md` → this file, then continue
 top-down. `DESIGN.md` is the source of truth for *what the format is*; this file
 only tracks *work state*. Mark items `[x]` as they land, with the commit hash.
 
-## Ground rules (binding, from CLAUDE.md + session agreements)
+## Ground rules (binding, from AGENTS.md + session agreements)
 
 - The orchestrator (top session) is the only one who runs git. Subagents never
   commit, branch, or init — they report changes.
@@ -206,6 +206,61 @@ live-preview, NOT editor glue (CodeMirror integration is a separate future
         external isolate (none ships); require jail (unwired this phase, audit
         when built).
 
+## Phase F — layout wrapper containers + failure-marker parity (approved 2026-08-17)
+
+Spec landed in DESIGN.md §4 ("Layout wrapper containers" bullet). Scope:
+
+- F1: `:::center` / `:::right` / `:::wide` / `:::narrow` / `:::full` — one
+  underlying wrapper component in @markii/react (+ @markii/stdlib contract),
+  registered under all five aliases. Reuse/extend the existing
+  `mk-width-*`/`mk-align-*` doc.css presets; alignment wrappers also set
+  text alignment in scope; wrappers apply presets to plain markdown (tables,
+  images) that attributes structurally cannot reach. Conformance fixture for
+  the wrapper names. Adversarial checks: nesting (width inside align),
+  hostile children, unknown-directive fallback untouched, `.doc` rhythm
+  intact, no outer margins.
+- F2: failure-kind presentation parity — data-bound components
+  (stat/progress/chart) mirror `value-directive.tsx`: quiet empty/stale
+  state, `failureKind` surfaces ONLY as tooltip (`title`) + CSS class hook,
+  never as body text. "requires manual run" remains the one worded hint,
+  subtle. (The old "kind-specific text in bodies" backlog item is REJECTED —
+  see Parked.)
+
+## Phase G — docs re-authoring (approved 2026-08-17)
+
+Move DESIGN.md into `docs/`, re-authored as human documentation: coherent
+flow, plain language, no jargon-dense sentences, no long inline code runs.
+Proposed split: docs/format.md (syntax + layout), docs/scripting.md (values,
+publish, vault library), docs/bundles.md, docs/integration.md (embedding,
+renderers, conformance levels, "L3 host responsibilities" checklist),
+docs/packs.md, docs/security.md (capability model + load-bearing parts of
+lua-sandbox-audit.md rewritten in professional tone), docs/spec.md (short
+normative core + conformance-corpus contract). Apply the humanizer skill
+(https://raw.githubusercontent.com/blader/humanizer/refs/heads/main/SKILL.md)
+as a final pass on every page. Collect gap/misdesign findings during the
+rewrite and report to the user BEFORE changing any design decision. Fix every
+DESIGN.md cross-reference (AGENTS.md, README, source comments) per the
+maintenance map.
+
+## Phase H — README rewrite (approved 2026-08-17)
+
+Thin README that links instead of explains: 1) tagline + tiny .mk.md snippet
+beside its rendered result (the hook); 2) getting started — install + platform
+support table (React: available · VS Code: planned · more: planned); 3) short
+"integrate & extend" section pointing at docs/integration.md + docs/packs.md;
+4) compact footer (license, contributing). Target well under 150 lines.
+Depends on Phase G for link targets.
+
+## Phase I — VS Code extension (approved 2026-08-17)
+
+`apps/vscode/` — an app/consumer like the playground, NOT a platform renderer
+(it consumes @markii/react): webview preview panel bundling
+core+stdlib+react+react-dom via esbuild, CSP-compliant, scripting off or
+manual-only initially; `*.mk.md` language association + TextMate grammar
+injection for directive/fence-meta highlighting; publish via @vscode/vsce to
+the VS Marketplace (publisher account + Azure DevOps PAT — user's action) and
+to Open VSX.
+
 ## Parked / awaiting user
 
 - README.md `# Mark` → `# Mark II` title edit: USER-APPROVED (2026-08-17) to
@@ -237,8 +292,10 @@ live-preview, NOT editor glue (CodeMirror integration is a separate future
   embedding app's code, satisfied by DESIGN §10 documentation. Optional:
   add a consolidated "L3 host responsibilities" checklist to §10.
 - Second non-React renderer (§13 toolkit-neutrality proof) — deferred to 0.2.1.
-- dataFailureKind → stat/progress/chart props (cosmetic marker specificity;
-  everything already degrades safely). Optional polish.
+- ~~dataFailureKind → stat/progress/chart props~~ REJECTED (user call
+  2026-08-17, cleanliness principle): no kind-specific TEXT in component
+  bodies. Superseded by Phase F2 — tooltip (`title`) + CSS class hook only,
+  mirroring value-directive.tsx.
 - REMOVED (user call 2026-08-17): "port personal React component library" —
   no external component-library dependencies; components are self-built only
-  (now a rule in CLAUDE.md coding standards).
+  (now a rule in AGENTS.md coding standards).

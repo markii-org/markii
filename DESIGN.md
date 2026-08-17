@@ -162,7 +162,22 @@ outsides.**
   otherwise ignored — no wrapper, no effect. `align` takes visible effect
   only together with a `width` preset that makes the block narrower than the
   column; a full-width block has nothing to align.
-- **`:::row` is the one layout *container*.** Its block children become
+- **Layout wrapper containers** carry the same presets to plain markdown,
+  which cannot hold attributes (a table or an image has no `{...}` to write
+  them in — the attribute mechanism structurally reaches only directives).
+  Five container names — `:::center`, `:::right`, `:::wide`, `:::narrow`,
+  `:::full` — wrap any block content and apply the matching preset to
+  everything in their scope. They are aliases of one underlying wrapper
+  component; the value set is exactly the closed enums above, so there is
+  no `:::left` or `:::normal` (defaults need no wrapper), no
+  attribute-bearing form, and no freeform values. `:::center` and
+  `:::right` align narrower-than-column blocks (tables and images are
+  shrink-to-fit, so this works without a width preset) and set text
+  alignment within their scope; the width wrappers size their content to
+  the corresponding preset column. Nesting a width wrapper inside an
+  alignment wrapper composes. In a plain viewer they degrade like every
+  container: fence lines on their own lines around readable markdown.
+- **`:::row` is the one *multi-cell* layout container.** Its block children become
   equal-width cells that wrap responsively and stack on narrow viewports —
   and, in a plain markdown viewer, simply stack (the fence lines show, the
   content stays readable). No spans, no per-cell sizing, no other knobs: it

@@ -58,7 +58,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * Hand-rolled `manifest.json` validation (no schema library — see CLAUDE.md
+ * Hand-rolled `manifest.json` validation (no schema library — see AGENTS.md
  * dependency policy). Never throws: malformed JSON, a non-object root, or
  * any other malformed input all come back as `{ ok: false, errors }`.
  *

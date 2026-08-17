@@ -1,6 +1,6 @@
 // @markii/lua: the sandboxed Lua 5.4 (wasmoon) execution primitive backing
 // spec §8 (scripting), §10 (capability security), and §11 (bundle-scoped
-// filesystem). No React, no @markii/core, no @markii/react — see CLAUDE.md's
+// filesystem). No React, no @markii/core, no @markii/react — see AGENTS.md's
 // import rule and the ESLint guard in the root config. May depend on
 // @markii/bundle for the `ScriptView` capability type only.
 
