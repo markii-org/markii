@@ -43,7 +43,9 @@ packages/platforms/markii-react   the reference L1 renderer, a platform adapter
                      folds {name=…} script blocks into a collapsed marker)
   src/components/    the @markii/stdlib standard set (callout, card, badge,
                      details, figure, tabs/tab, kbd, rating; data-bound
-                     dashboard: stat, progress, chart)
+                     dashboard: stat, progress, chart; layout wrappers
+                     center/right/wide/narrow/full via createLayoutWrapper;
+                     failure-presentation.ts — the ONE home of failure wording)
   src/doc.css        document rhythm + component internals
 packages/markii-runtime host-side scripting glue (spec §8) — neutral, no React,
                         no wasmoon; stays runtime-agnostic (executor injected):

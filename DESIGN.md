@@ -327,7 +327,11 @@ Rules that keep this a *note* and not a program:
   (own-property access only, so it can't traverse into the prototype chain). The `.mk.md` source stays clean — values overlay the document.
 - Directives reference values by name (`data=stars`). If the value is missing or the
   script hasn't run, the component renders its empty/stale state — same graceful
-  degradation as unknown directives.
+  degradation as unknown directives. A *failed* binding is presented
+  identically whether it surfaces inline (`:value[…]`) or through a
+  data-bound component: a quiet placeholder with the reason as a tooltip
+  and a class hook, never as body text — the rendered page shows markers,
+  not machinery.
 
 **"Does this cross into Excel territory?"** Yes, deliberately — this is the notebook
 computing model, and fetch-data-into-a-chart is its best use case. The line to hold:

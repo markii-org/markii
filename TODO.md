@@ -206,9 +206,13 @@ live-preview, NOT editor glue (CodeMirror integration is a separate future
         external isolate (none ships); require jail (unwired this phase, audit
         when built).
 
-## Phase F — layout wrapper containers + failure-marker parity (approved 2026-08-17)
+## Phase F — layout wrapper containers + failure-marker parity — DONE (commit 287518b)
 
-Spec landed in DESIGN.md §4 ("Layout wrapper containers" bullet). Scope:
+Delivered via Opus-orchestrated agent, adversarially verified (prototype
+names, smuggled attributes, hostile children, failureKind spoofing — all
+held); gates re-run by orchestrator, 924 tests. Notable: one
+createLayoutWrapper factory behind five aliases; failure-presentation.ts is
+the single home of failure wording. Original scope for reference:
 
 - F1: `:::center` / `:::right` / `:::wide` / `:::narrow` / `:::full` — one
   underlying wrapper component in @markii/react (+ @markii/stdlib contract),
@@ -262,6 +266,12 @@ the VS Marketplace (publisher account + Azure DevOps PAT — user's action) and
 to Open VSX.
 
 ## Parked / awaiting user
+
+- BACKLOG (pre-existing, found during Phase F verification): a host-supplied
+  ValueStore whose get() throws propagates out of React's render phase —
+  renderMark's try/catch covers only parse/convert, while DirectiveElement
+  resolves data= later. Wrap directive resolution in a never-throw guard so
+  a hostile/buggy host store degrades to the fallback box.
 
 - README.md `# Mark` → `# Mark II` title edit: USER-APPROVED (2026-08-17) to
   keep — fold the commit into the next housework/demo-app commit, no
