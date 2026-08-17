@@ -705,6 +705,21 @@
   }
 }
 
+/* ---------- cell ---------- */
+
+/*
+ * `:::cell` (`cell.tsx`) is a TRANSPARENT grouping container: it has no
+ * border, background, padding, or outer margin of its own — its whole job is
+ * making several blocks count as ONE `.mk-row` grid cell, so anything visual
+ * here would betray that. `.mk-cell` therefore has no rule at all; only the
+ * rhythm-restoring rule below exists, mirroring `.mk-layout > * + *`:
+ * `.doc > * + *` sees the cell as a single box and never reaches inside it,
+ * so without this its children would sit flush against each other.
+ */
+.mk-cell > * + * {
+  margin-block-start: 1rem;
+}
+
 /* ---------- unknown directive fallback ---------- */
 
 .mk-unknown {

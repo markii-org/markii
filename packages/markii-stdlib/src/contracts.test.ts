@@ -46,11 +46,12 @@ describe('STANDARD_COMPONENTS', () => {
     }
   });
 
-  it('seeds exactly the eighteen components that exist in @markii/react today', () => {
+  it('seeds exactly the nineteen components that exist in @markii/react today', () => {
     expect(Object.keys(STANDARD_COMPONENTS).sort()).toEqual([
       'badge',
       'callout',
       'card',
+      'cell',
       'center',
       'chart',
       'details',
@@ -202,6 +203,18 @@ describe('STANDARD_COMPONENTS', () => {
     expect(attrs.cols?.required).toBeFalsy();
     expect(attrs.cols?.enum).toEqual(['2', '3', '4']);
   });
+  it('marks cell as an attribute-free container directive, matching its :::cell ... ::: form', () => {
+    expect(STANDARD_COMPONENTS.cell?.kind).toBe('container');
+    expect(STANDARD_COMPONENTS.cell?.attributes).toEqual({});
+  });
+
+  it("cell's description explains that it groups several blocks into one row cell", () => {
+    const description = STANDARD_COMPONENTS.cell?.description ?? '';
+    expect(description).toContain('row');
+    expect(description).toContain('ONE cell');
+    expect(description).toContain('Takes no attributes');
+  });
+
   it.each(['center', 'right', 'wide', 'narrow', 'full'] as const)(
     'marks the %s layout wrapper as a container directive with no attributes',
     (name) => {

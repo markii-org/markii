@@ -329,6 +329,13 @@ export const STANDARD_COMPONENTS: Record<string, ComponentContract> = {
     description:
       "docs/format.md's one layout container, e.g. `:::row{cols=3} ... :::`. Its block children become equal-width cells that wrap responsively and stack on narrow viewports — and simply stack in a plain markdown viewer. No spans, no per-cell sizing, no other knobs.",
   },
+  cell: {
+    name: 'cell',
+    kind: 'container',
+    attributes: {},
+    description:
+      "A transparent grouping container, e.g. `:::cell ... :::`. Its only job is making several blocks count as ONE cell of a `row`: a row's cells are its direct block children, so two blocks are two cells unless a `cell` groups them — and two adjacent task lists, which markdown merges into a single list, can only become two cells by putting one `cell` around each. Takes no attributes and adds no look of its own; outside a `row` it is inert. The enclosing `row` fence must use MORE colons than its `cell` children (directive container nesting rule), hence `::::row` wrapping `:::cell`.",
+  },
   center: layoutWrapperContract(
     'center',
     'Centers narrower-than-column plain markdown (a table, an image) within its scope and sets text alignment for everything in scope, e.g. `:::center ... :::`.',

@@ -190,6 +190,32 @@ narrow screens or in plain viewers.
 There are no spans, no per-cell sizes, and no other knobs. It exists so a
 dashboard of stats and charts can share a line, and nothing more.
 
+A row counts its direct block children as its cells, so two paragraphs are
+two cells. When one cell needs more than one block — a heading and a list,
+a chart and its caption — wrap them in `:::cell`:
+
+```
+::::row{cols=2}
+:::cell
+### This week
+- [ ] draft the brief
+- [ ] send it
+:::
+
+:::cell
+### Next week
+- [ ] review
+:::
+::::
+```
+
+The wrapper is invisible: no border, no spacing, nothing but the grouping.
+It also settles a case that is otherwise impossible. Markdown merges two
+adjacent lists into one, so two task lists can only become two cells when a
+`cell` separates them. Mind the colon growth — the outer `::::row` needs
+more colons than the `:::cell` fences inside it. Outside a row, `:::cell`
+does nothing at all.
+
 ### What layout deliberately cannot do
 
 Text does not wrap around components. Floating content is the single largest

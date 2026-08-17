@@ -3,6 +3,7 @@ import type { Registry } from '../registry.js';
 import { Badge } from './badge.js';
 import { Callout } from './callout.js';
 import { Card } from './card.js';
+import { Cell } from './cell.js';
 import { Chart } from './chart.js';
 import { Details } from './details.js';
 import { Figure } from './figure.js';
@@ -20,6 +21,7 @@ export type { BadgeVariant } from './badge.js';
 export { Callout } from './callout.js';
 export type { CalloutType } from './callout.js';
 export { Card } from './card.js';
+export { Cell } from './cell.js';
 export { Chart } from './chart.js';
 export { Details } from './details.js';
 export { Figure } from './figure.js';
@@ -38,7 +40,10 @@ export { Tabs } from './tabs.js';
 export { ScriptMarker } from './script-marker.js';
 export type { ScriptMarkerProps } from './script-marker.js';
 export { UnknownDirective } from './unknown-directive.js';
-export type { UnknownDirectiveProps } from './unknown-directive.js';
+export type {
+  DirectiveFallbackReason,
+  UnknownDirectiveProps,
+} from './unknown-directive.js';
 export { ValueDirective } from './value-directive.js';
 export type { ValueDirectiveProps } from './value-directive.js';
 
@@ -72,6 +77,7 @@ export const defaultRegistry: Registry = {
   progress: { component: Progress, inline: inlineFromContract('progress') },
   chart: { component: Chart, inline: inlineFromContract('chart') },
   row: { component: Row, inline: inlineFromContract('row') },
+  cell: { component: Cell, inline: inlineFromContract('cell') },
   center: {
     component: createLayoutWrapper('center'),
     inline: inlineFromContract('center'),

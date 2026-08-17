@@ -49,6 +49,19 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
   `LayoutWrapperPreset`; `defaultRegistry` gains the five names, and
   `@markii/stdlib`'s `STANDARD_COMPONENTS` gains their contracts. New
   conformance fixture `18-layout-wrappers`.
+- **`:::cell` grouping container (`@markii/react`, `@markii/stdlib`)**: a
+  transparent container whose only job is making several blocks count as ONE
+  cell of `:::row`. A row's cells are its direct block children, so two
+  blocks are two cells; a `cell` around them makes them one. It also settles
+  a case that was otherwise impossible: markdown merges two adjacent lists
+  into a single list, so two task lists could never be two row cells — one
+  `cell` around each separates them. Attribute-free, no look of its own
+  (a plain `<div class="mk-cell">`, no border, background, padding, or outer
+  margin — only a `doc.css` rule restoring rhythm between its own children),
+  and inert outside a row. `@markii/react/components` exports `Cell`,
+  `defaultRegistry` gains the `cell` name, and `@markii/stdlib`'s
+  `STANDARD_COMPONENTS` gains its contract. No conformance fixture: at parse
+  level `:::cell` is an ordinary container directive with no new AST shape.
 - **Failure presentation parity (`@markii/react`)**: `MarkComponentProps`
   gains optional `dataError` and `dataFailureKind`, so `stat`/`progress`/
   `chart` present a failed `data=` binding exactly the way `:value[...]`
@@ -59,6 +72,29 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Directive form/kind mismatch no longer emits invalid HTML
+  (`@markii/react`)**: a block component written as an inline directive —
+  `:center[x]`, `:row[x]`, `:callout[x]` — used to render its block element
+  inside the paragraph the directive was written in, i.e. a `<div>` inside a
+  `<p>`, which every HTML parser restructures (the paragraph is closed and
+  reopened), so the resulting DOM stopped matching the tree the renderer
+  built. Such a directive now degrades to the unknown-directive fallback
+  instead of rendering the component, and the fallback's ELEMENT follows the
+  directive's form: an inline directive gets the `<span>`-based marker, a
+  block directive the existing box. The label says which way round the
+  mismatch is — "block component `center` written inline" — and the fallback
+  carries an extra `mk-unknown--mismatch` class hook; the inner content is
+  still shown, and nothing throws. Kind is read from the registry entry's own
+  `inline` flag and nowhere else, so a component registered without one
+  behaves exactly as before — degradation happens only where the mismatch is
+  knowable — and a hostile entry whose `inline` getter throws fails permissive
+  rather than escaping the render. The reverse direction (an inline component
+  written as a leaf or container, `::kbd{}`, `:::badge ... :::`) deliberately
+  stays permissive: phrasing content in block flow is parsed exactly as
+  written and round-trips, so degrading it would cost the author their content
+  for no correctness gain. `@markii/react/components` exports the new
+  `DirectiveFallbackReason` type, and `UnknownDirectiveProps` gains an
+  optional `reason`.
 - **Never-throw against a hostile host store (`@markii/react`)**:
   `renderMark`/`renderMarkNode` only guarded parse and hast conversion, while
   a `data=`/`:value[...]` binding is resolved later, during React's render

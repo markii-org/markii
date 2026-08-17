@@ -17,7 +17,11 @@ import type {
   VaultStore,
 } from '@markii/runtime';
 import type { Element as HastElement, Root as HastRoot } from 'hast';
-import type { DirectiveAttributes, Registry } from './registry.js';
+import type {
+  DirectiveAttributes,
+  Registry,
+  RegistryEntry,
+} from './registry.js';
 import { resolveDirectiveAlias } from './registry.js';
 import { resolveLayoutAttributes } from './layout.js';
 import { ScriptMarker } from './components/script-marker.js';
@@ -178,6 +182,70 @@ declare global {
 }
 
 /**
+ * The `data-mk-kind` value `@markii/core`'s `toHast` writes for a TEXT
+ * (inline) directive — `:name[...]`. The other two values are
+ * `'leafDirective'` (`::name{...}`) and `'containerDirective'`
+ * (`:::name{...} ... :::`), both of which are block forms; anything else
+ * (including an absent attribute, e.g. a hand-built hast tree) is treated as
+ * block, matching the pre-existing `kind !== 'textDirective'` test.
+ */
+const TEXT_DIRECTIVE_KIND = 'textDirective';
+
+/**
+ * Whether `entry` is registered as a BLOCK component but the directive was
+ * written inline — docs/spec.md's form/kind mismatch, the one direction that
+ * must degrade rather than render.
+ *
+ * The source of truth is deliberately `RegistryEntry.inline`, the registry's
+ * own kind information, and nothing else. `@markii/stdlib`'s `ComponentKind`
+ * is where `defaultRegistry` DERIVES that flag from (see
+ * `components/index.ts`'s `inlineFromContract`), but the renderer must not
+ * consult the contracts directly: a host is free to register its own
+ * component under a standard name, and the standard contract would then be
+ * describing somebody else's component. The registry entry always describes
+ * the component actually registered.
+ *
+ * Only an EXPLICIT `inline: false` counts. `inline` is optional and
+ * documented as descriptive metadata, so `undefined` means "this registration
+ * says nothing about kind" — and a registration that says nothing must keep
+ * working exactly as it did before this rule existed. Degradation happens
+ * only where the mismatch is genuinely knowable.
+ *
+ * The reverse direction — an inline component written as a leaf or container
+ * (`::kbd{}`, `:::badge ... :::`) — deliberately stays permissive. The two
+ * directions are not symmetric in consequence: a `<div>` inside a `<p>` is
+ * restructured by every HTML parser (the paragraph is closed and reopened),
+ * so the DOM a reader ends up with is not the tree the renderer built, and a
+ * serialize/re-parse round trip (SSR, copy as HTML, an export) silently
+ * changes the document's structure. Phrasing content sitting in block flow
+ * is at worst non-conforming: `<span><p>x</p></span>` is parsed exactly as
+ * written, renders correctly, and round-trips. Degrading it would buy no
+ * correctness and would cost content — the author's inner markdown would be
+ * demoted into a fallback box over a purely notional violation — so the rule
+ * is scoped to the direction that actually corrupts the tree.
+ *
+ * Reading the flag is wrapped, because this is a NEW property read on a
+ * host-supplied object: a registry entry defined with a throwing `inline`
+ * getter (or a `Proxy` trapping it) would otherwise turn a rendering
+ * question into an exception escaping React's render phase, which
+ * docs/spec.md requirement 4 forbids. A read that fails is simply kind
+ * information we do not have, so it fails PERMISSIVE — identical to an
+ * absent flag, and identical to how this renderer behaved before the rule
+ * existed.
+ */
+function isFormMismatch(
+  entry: RegistryEntry,
+  kind: string | undefined,
+): boolean {
+  if (kind !== TEXT_DIRECTIVE_KIND) return false;
+  try {
+    return entry.inline === false;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Renders one directive's content (registry component, `:value[...]`
  * built-in, or the unknown-directive fallback) given its already
  * layout-stripped `attributes` — the part of `DirectiveElement` that does
@@ -220,11 +288,31 @@ function renderDirectiveContent(
   // `ComponentType` accepts all of them.
   const entry = Object.hasOwn(registry, name) ? registry[name] : undefined;
 
+  // Both fallback paths below share one element choice: the fallback's FORM
+  // follows the DIRECTIVE's form, never the component's kind. An inline
+  // directive always gets the `<span>`-based marker, because whatever we
+  // emit here lands inside the paragraph the directive was written in.
+  const inline = kind === TEXT_DIRECTIVE_KIND;
+
   if (entry?.component == null) {
+    return (
+      <UnknownDirective name={name || '(unnamed)'} inline={inline}>
+        {children}
+      </UnknownDirective>
+    );
+  }
+
+  // A registered component written in a form its kind does not match
+  // degrades to the same fallback INSTEAD of rendering — see
+  // `isFormMismatch` for why this is one-directional. Checked after the
+  // "is there a component at all" test so an unregistered name keeps
+  // reporting itself as unregistered, which is the more useful of the two.
+  if (isFormMismatch(entry, kind)) {
     return (
       <UnknownDirective
         name={name || '(unnamed)'}
-        inline={kind === 'textDirective'}
+        inline={inline}
+        reason="form-mismatch"
       >
         {children}
       </UnknownDirective>
@@ -310,7 +398,7 @@ function createDirectiveElement(
     // inside `renderDirectiveContent`, so it applies identically to a
     // registered component, the unknown-directive fallback, and a directive
     // named `constructor`/`toString`/`__proto__`.
-    const isBlockDirective = kind !== 'textDirective';
+    const isBlockDirective = kind !== TEXT_DIRECTIVE_KIND;
     const { attributes, className: layoutClassName } =
       resolveLayoutAttributes(aliasedAttributes);
 

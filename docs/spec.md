@@ -66,6 +66,8 @@ and no arbitrary values; an invalid value degrades to the default silently.
   plain markdown; the alignment wrappers also set text alignment in scope
 - `:::row{cols=2|3|4}`: the one multi-cell container; equal-width cells,
   responsive wrap; invalid or absent `cols` degrades to auto-fit
+- `:::cell`: groups several blocks into one `row` cell; attribute-free,
+  carries no presentation of its own, and is inert outside a row
 
 Components MUST NOT ship outer margins; the document stylesheet owns
 vertical rhythm. Block components are normal flow elements, never floated,
@@ -102,7 +104,16 @@ A conforming renderer:
    intercepted exactly as author-written ones are; and an alias whose
    target is unregistered MUST render requirement 3's fallback under the
    target's name. Aliases are configuration of the registry or the
-   application: a document MUST NOT be able to define them.
+   application: a document MUST NOT be able to define them;
+8. MUST NOT render a component in a directive form its registered kind
+   contradicts, where doing so would produce invalid nesting: a component
+   registered as a block, written as an inline directive, renders
+   requirement 3's fallback instead of the component. A fallback's form
+   MUST follow the directive's form rather than the component's kind — an
+   inline directive falls back to an inline element, a block directive to
+   a block one. A registration that carries no kind information renders
+   unchanged, and the reverse direction — an inline component written as
+   a leaf or container — MAY render.
 
 The contract is framework-neutral; the spec's normative text does not
 mention any UI framework.
