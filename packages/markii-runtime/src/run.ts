@@ -1,4 +1,5 @@
 import type { ScriptBlock } from '@markii/core';
+import { normalizeFailureKind, type FailureKind } from './failure.js';
 import type { StoredValue, ValueStore } from './store.js';
 import type { VaultWriter } from './vault.js';
 
@@ -59,17 +60,22 @@ export interface ExecuteSuccess {
 }
 
 /**
- * A failed script execution. `kind` is intentionally a plain `string`
- * (not a fixed union) here — `@markii/runtime` stays language-agnostic and
- * does not know the specific failure taxonomy of any one language runtime
- * (e.g. `@markii/lua`'s `'limit' | 'capability' | 'marshal' | 'runtime'`).
- * `runDocumentScripts` only ever special-cases the literal string
- * `'capability'`, by convention every executor is expected to use for a
- * denied-capability failure.
+ * A failed script execution. `kind` is the CLOSED `FailureKind` union
+ * (`./failure.ts`) — every concrete `ScriptExecutor` (e.g. `@markii/lua`'s
+ * `createLuaExecutor`) is expected to map its own language-specific failure
+ * shape (e.g. Lua's `'limit' | 'capability' | 'marshal' | 'runtime'`) down
+ * to this shared vocabulary before returning. Even though this is typed as
+ * `FailureKind` at compile time, an executor is untrusted third-party code
+ * at RUNTIME (a forged string, a stale value from an older executor
+ * version, ...) — `runDocumentScripts` therefore runs every incoming
+ * `kind` through `normalizeFailureKind` at the boundary regardless of what
+ * the type system already promises, so a hostile or buggy executor can
+ * never produce a `StoredValue`/`RunSummaryEntry` carrying an
+ * out-of-taxonomy `failureKind`.
  */
 export interface ExecuteFailure {
   ok: false;
-  error: { kind: string; message: string };
+  error: { kind: FailureKind; message: string };
 }
 
 export type ExecuteResult = ExecuteSuccess | ExecuteFailure;
@@ -93,6 +99,13 @@ export interface RunSummaryEntry {
   name: string;
   status: 'fresh' | 'error';
   error?: string;
+  /**
+   * Set alongside `error` on every `status: 'error'` entry — the closed
+   * `FailureKind` (`./failure.ts`) this failure was classified as. Already
+   * normalized (see `ExecuteFailure`'s doc comment), so a caller can branch
+   * on it directly without re-deriving trust. Absent for a `'fresh'` entry.
+   */
+  failureKind?: FailureKind;
   /**
    * Publish outcome (DESIGN.md §8's vault). Set ONLY for a script block
    * whose fence carried the bare `publish` attribute (`ScriptBlock.publish
@@ -173,25 +186,6 @@ function describeThrown(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-/**
- * §8: "An effectful call under an auto trigger fails cleanly; the
- * consuming component shows a 'requires manual run' marker." When the tier
- * a script ran at was the read-only `'auto'` tier and the executor reports
- * a `'capability'`-kind failure, the stored error message is rewritten to
- * clearly say so, so a component (or a human reading the value store) does
- * not have to re-derive "this needs a manual run" from a generic capability
- * message.
- */
-function messageForFailure(
-  tier: ExecutionTier,
-  error: ExecuteFailure['error'],
-): string {
-  if (tier === 'auto' && error.kind === 'capability') {
-    return `${error.message} (requires manual run: this capability is only available on a manual run)`;
-  }
-  return error.message;
-}
-
 interface RunOneOutcome {
   entry: RunSummaryEntry;
   storedValue: StoredValue;
@@ -203,6 +197,32 @@ interface RunOneOutcome {
  * throwing, the executor rejecting/throwing, or the executor reporting
  * `ok: false`) is caught here and turned into an `error`-status outcome, so
  * one bad script can never abort the rest of a `runDocumentScripts` batch.
+ *
+ * Failure classification (`failureKind`): the three failure paths this
+ * function owns OUTRIGHT — a `src=` block with no `loadSource` configured,
+ * `loadSource` itself throwing/rejecting, and the executor throwing or its
+ * returned promise rejecting (as opposed to resolving with `ok: false`) —
+ * are all classified as `'script-error'`. None of these are the executor
+ * reporting a considered, typed failure; they are this package's OWN
+ * plumbing failing (a missing host wire-up, or the executor misbehaving by
+ * throwing instead of returning `ExecuteResult`), so there is no more
+ * specific taxonomy member that legitimately applies — `'script-error'` is
+ * both correct (something about running the script went wrong) and the safe
+ * default (never guesses a more privileged-sounding kind like
+ * `'capability-denied'` or `'tier-blocked'` for a failure this package can't
+ * actually attribute to a capability decision). Only the fourth path —
+ * `result.ok === false` from a normally-returning executor — carries a
+ * `kind` the executor itself chose, and even that is passed through
+ * `normalizeFailureKind` before being trusted (see `ExecuteFailure`'s doc
+ * comment): the executor is untrusted third-party code at runtime.
+ *
+ * Stored/reported messages are the executor's `error.message` VERBATIM —
+ * this function never rewrites or appends to it (see `ExecuteFailure`'s doc
+ * comment; the previous `messageForFailure` auto-tier rewrite is gone: a
+ * `'tier-blocked'` failure's own message already says what happened, and a
+ * `'capability-denied'` failure is not a "needs manual run" situation at
+ * all, so rewriting every capability-kind auto-tier failure that way was
+ * simply wrong).
  */
 async function runOne(
   script: ScriptBlock,
@@ -226,8 +246,19 @@ async function runOne(
     const message = describeThrown(err);
     const ranAt = Date.now();
     return {
-      entry: { name: script.name, status: 'error', error: message },
-      storedValue: { value: undefined, status: 'error', error: message, ranAt },
+      entry: {
+        name: script.name,
+        status: 'error',
+        error: message,
+        failureKind: 'script-error',
+      },
+      storedValue: {
+        value: undefined,
+        status: 'error',
+        error: message,
+        failureKind: 'script-error',
+        ranAt,
+      },
     };
   }
 
@@ -238,8 +269,19 @@ async function runOne(
     const message = describeThrown(err);
     const ranAt = Date.now();
     return {
-      entry: { name: script.name, status: 'error', error: message },
-      storedValue: { value: undefined, status: 'error', error: message, ranAt },
+      entry: {
+        name: script.name,
+        status: 'error',
+        error: message,
+        failureKind: 'script-error',
+      },
+      storedValue: {
+        value: undefined,
+        status: 'error',
+        error: message,
+        failureKind: 'script-error',
+        ranAt,
+      },
     };
   }
 
@@ -251,10 +293,17 @@ async function runOne(
     };
   }
 
-  const message = messageForFailure(tier, result.error);
+  const failureKind = normalizeFailureKind(result.error.kind);
+  const message = result.error.message;
   return {
-    entry: { name: script.name, status: 'error', error: message },
-    storedValue: { value: undefined, status: 'error', error: message, ranAt },
+    entry: { name: script.name, status: 'error', error: message, failureKind },
+    storedValue: {
+      value: undefined,
+      status: 'error',
+      error: message,
+      failureKind,
+      ranAt,
+    },
   };
 }
 

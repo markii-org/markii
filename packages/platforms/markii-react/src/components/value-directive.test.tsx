@@ -93,3 +93,103 @@ describe('ValueDirective — @-prefixed vault reads (DESIGN.md §8)', () => {
     expect(container.querySelector('.mk-value--missing')).not.toBeNull();
   });
 });
+
+describe('ValueDirective — failure-kind-derived presentation (DESIGN.md §8)', () => {
+  it.each([
+    ['script-error', 'script error'],
+    ['capability-denied', 'needs permission'],
+    ['tier-blocked', 'requires manual run'],
+    ['limit', 'limit exceeded'],
+  ] as const)(
+    'an error entry with failureKind %s gets the mk-value--%s class and a title starting with "%s"',
+    (failureKind, phrase) => {
+      const store = createValueStore({
+        gh: {
+          value: null,
+          status: 'error',
+          error: 'underlying message',
+          failureKind,
+        },
+      });
+      const { container } = render(
+        renderMark(':value[gh]', defaultRegistry, store),
+      );
+      const el = container.querySelector(`.mk-value--${failureKind}`);
+      expect(el).not.toBeNull();
+      expect(el).toHaveClass('mk-value', 'mk-value--missing');
+      expect(el?.getAttribute('title')).toBe(`${phrase}: underlying message`);
+      // The bracketed name display is unchanged by failureKind.
+      expect(el).toHaveTextContent('{gh}');
+    },
+  );
+
+  it('an error entry with a failureKind but no message: title is just the phrase', () => {
+    const store = createValueStore({
+      gh: { value: null, status: 'error', failureKind: 'limit' },
+    });
+    const { container } = render(
+      renderMark(':value[gh]', defaultRegistry, store),
+    );
+    const el = container.querySelector('.mk-value--limit');
+    expect(el?.getAttribute('title')).toBe('limit exceeded');
+  });
+
+  it('an error entry with NO failureKind at all degrades to exactly the pre-existing behavior (no kind-modifier class, title is the raw message)', () => {
+    const store = createValueStore({
+      gh: { value: null, status: 'error', error: 'boom, no kind here' },
+    });
+    const { container } = render(
+      renderMark(':value[gh]', defaultRegistry, store),
+    );
+    const el = container.querySelector('.mk-value--missing');
+    expect(el).not.toBeNull();
+    expect(el?.className).toBe('mk-value mk-value--missing');
+    expect(el?.getAttribute('title')).toBe('boom, no kind here');
+  });
+
+  it('a plain missing name (no run ever happened) never gets a kind-modifier class or a title', () => {
+    const store = createValueStore();
+    const { container } = render(
+      renderMark(':value[nope]', defaultRegistry, store),
+    );
+    const el = container.querySelector('.mk-value--missing');
+    expect(el).not.toBeNull();
+    expect(el?.className).toBe('mk-value mk-value--missing');
+    expect(el?.hasAttribute('title')).toBe(false);
+  });
+
+  it('a partial dotted-path miss on an error root never invents kind-specific presentation (status is missing, not error)', () => {
+    const store = createValueStore({
+      repo: {
+        value: { stars: 1 },
+        status: 'error',
+        error: 'boom',
+        failureKind: 'tier-blocked',
+      },
+    });
+    const { container } = render(
+      renderMark(':value[repo.nope]', defaultRegistry, store),
+    );
+    const el = container.querySelector('.mk-value--missing');
+    expect(el).not.toBeNull();
+    // The root's failureKind is carried through on the resolution object
+    // (see store-path.test.ts), but ValueDirective only ever derives
+    // kind-specific presentation from a genuine `status === 'error'`
+    // resolution — a partial-path `'missing'` never gets a modifier class.
+    expect(container.querySelector('.mk-value--tier-blocked')).toBeNull();
+  });
+
+  it('never throws for any failureKind, including a value the taxonomy does not recognize (defensive, cast through unknown)', () => {
+    const store = createValueStore({
+      gh: {
+        value: null,
+        status: 'error',
+        error: 'x',
+        failureKind: 'not-a-real-kind' as never,
+      },
+    });
+    expect(() =>
+      render(renderMark(':value[gh]', defaultRegistry, store)),
+    ).not.toThrow();
+  });
+});

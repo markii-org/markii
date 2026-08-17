@@ -238,7 +238,7 @@ describe('runScript — capabilities: net', () => {
     expect(!r.ok && r.error.kind).toBe('runtime');
   });
 
-  it("tier 'auto': net.fetch_json works via a fake provider, net.post is absent", async () => {
+  it("tier 'auto': net.fetch_json works via a fake provider; net.post is a tier-blocked stub (a function, not nil) whose call fails as kind: 'capability', capability: 'tier-blocked'", async () => {
     const r = await run(
       `
       local data = net.fetch_json("https://api.example.com/x")
@@ -254,6 +254,21 @@ describe('runScript — capabilities: net', () => {
       },
     );
     expect(r).toEqual({ ok: true, value: true });
+
+    const call = await run(
+      'return net.post("https://api.example.com/x", "p")',
+      {
+        tier: 'auto',
+        net: {
+          get: async () => ({ status: 200, body: '{}' }),
+          post: async () => ({ status: 200, body: '{}' }),
+        },
+        netGrants: { get: [], post: ['api.example.com'] },
+      },
+    );
+    expect(call.ok).toBe(false);
+    expect(!call.ok && call.error.kind).toBe('capability');
+    expect(!call.ok && call.error.capability).toBe('tier-blocked');
   });
 
   it('fetch over the size cap is rejected as a typed capability failure', async () => {
@@ -319,13 +334,22 @@ describe('runScript — capabilities: bundle', () => {
     expect(!r.ok && r.error.kind).toBe('capability');
   });
 
-  it("tier 'auto': bundle.write is entirely absent", async () => {
-    const { view } = fixtureBundleView();
-    const r = await run('return type(bundle.write)', {
+  it("tier 'auto': bundle.write is a tier-blocked stub (a function, not nil); calling it fails as kind: 'capability', capability: 'tier-blocked' without writing anything", async () => {
+    const { view, storage } = fixtureBundleView();
+    const typeResult = await run('return type(bundle.write)', {
       tier: 'auto',
       bundle: view,
     });
-    expect(r).toEqual({ ok: true, value: 'nil' });
+    expect(typeResult).toEqual({ ok: true, value: 'function' });
+
+    const call = await run('bundle.write("cache/out.json", "hi")', {
+      tier: 'auto',
+      bundle: view,
+    });
+    expect(call.ok).toBe(false);
+    expect(!call.ok && call.error.kind).toBe('capability');
+    expect(!call.ok && call.error.capability).toBe('tier-blocked');
+    expect(await storage.read('cache/out.json')).toBeUndefined();
   });
 });
 

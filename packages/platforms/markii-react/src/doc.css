@@ -198,6 +198,31 @@
   font-style: italic;
 }
 
+/*
+ * Failure-kind modifiers (`@markii/runtime`'s `FailureKind`, DESIGN.md §8) —
+ * layered on top of `.mk-value--missing`, only ever added when the
+ * resolution's root entry carried a `failureKind` on a genuine error (see
+ * `ValueDirective`). Each just tints the dashed-underline treatment a
+ * distinct hue so a reader can tell "script bug" apart from "needs
+ * permission" / "needs a manual run" / "hit a resource limit" at a glance,
+ * with the full message still available via the `title` tooltip.
+ */
+.mk-value--script-error {
+  border-bottom: 1px dashed #ef4444;
+}
+
+.mk-value--capability-denied {
+  border-bottom: 1px dashed #d97706;
+}
+
+.mk-value--tier-blocked {
+  border-bottom: 1px dashed #2563eb;
+}
+
+.mk-value--limit {
+  border-bottom: 1px dashed #7c3aed;
+}
+
 /* ---------- script marker ---------- */
 
 .mk-script {

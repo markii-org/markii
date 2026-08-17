@@ -174,21 +174,23 @@ live-preview, NOT editor glue (CodeMirror integration is a separate future
   markers, GFM tables; hostile nodes (unknown/prototype names) degrade the
   same standalone as in-document.
 
-## Phase E — security hardening (non-blocking; deliberately LAST) — IN PROGRESS
+## Phase E — security hardening (non-blocking; deliberately LAST) — DONE
 
-In-repo scope now (E1/E2); host-app items stay parked:
-
-- E1: `messageForFailure` rework — structured, non-spoofable failure kinds
-  (script-error vs capability-denied vs tier-blocked vs limit) by error
-  identity/status code, never message-string matching; marker text derives
-  from the kind (known follow-up from the run-path slice).
-- E2: grant-closure key helper in @markii/runtime — computeGrantKey(closure)
-  → SHA-256 via globalThis.crypto.subtle (no new deps), stable sorted +
-  length-framed serialization covering note scripts + src files + vault-lib
-  modules + pack module versions (spec §10 A12).
-- PARKED (host-app territory): grant-closure hashing wired into real
-  permission-UX/run-trigger infra; permission prompt wording ("can send
-  data to X").
+- [x] E1: failure taxonomy — FailureKind union (script-error/capability-
+      denied/tier-blocked/limit) derived from a Lua-invisible JS-side
+      CapabilityDenials record + ScriptLimitError identity + LuaReturn
+      status codes; messageForFailure deleted; tier-blocking now
+      representable (auto-tier stubs record + throw, provider never
+      reached); forgery battery (incl. __tostring metatables) all
+      classify script-error.
+- [x] E2: computeGrantKey(closure) in @markii/runtime — SHA-256 via
+      crypto.subtle, canonical form markii-grant-key/1 (u32 UTF-8-byte
+      length framing, absent≠"" tag bytes, byte-sorted records).
+- PARKED (host-app territory): grant-key wired into real permission-UX/
+  run-trigger infra; permission prompt wording ("can send data to X").
+- BACKLOG (small, from E report): plumb dataFailureKind through
+  resolveDataAttribute into component props so data-bound components
+  (stat/progress/chart) show kind-specific text like the :value marker.
 - Full adversarial re-audit of @markii/lua sandbox internals (globals, limits,
   marshal, the xpcall fix) — offered to user; run if ordered.
 

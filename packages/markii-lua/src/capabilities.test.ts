@@ -4,7 +4,7 @@ import {
   openZipBundle,
   type BundleManifest,
 } from '@markii/bundle';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   buildCapabilities,
   type CacheEntry,
@@ -140,22 +140,65 @@ describe('buildCapabilities — net.fetch_json', () => {
 });
 
 describe('buildCapabilities — tier gate on effectful net ops', () => {
-  it("tier 'auto': net.post is absent even though POST hosts are granted; net.fetch_json still works", async () => {
+  it("tier 'auto': net.post is a TIER-BLOCKED STUB (not absent) even though POST hosts are granted; calling it throws and never reaches the provider; net.fetch_json still works", async () => {
+    const post = vi.fn(async () => ({ status: 200, body: '{}' }));
     const r = await run(
       `
       local getResult = net.fetch_json("https://api.example.com/x")
-      return type(net.post), getResult.ok
+      local ok, err = pcall(net.post, "https://api.example.com/x", "payload")
+      return type(net.post), getResult.ok, ok, err
       `,
       {
         tier: 'auto',
         net: {
           get: async () => ({ status: 200, body: '{"ok": true}' }),
-          post: async () => ({ status: 200, body: '{}' }),
+          post,
         },
         netGrants: { get: ['api.example.com'], post: ['api.example.com'] },
       },
     );
-    expect(r).toEqual({ ok: true, value: 'nil' });
+    expect(r.ok).toBe(true);
+    // MultiReturn is truncated to the first value by this test harness's
+    // `run` (see its doc comment) — `type(net.post)` alone already proves
+    // the stub exists (a function, not nil); the provider-never-called
+    // assertion below is the load-bearing one for "grants nothing new".
+    expect(r).toEqual({ ok: true, value: 'function' });
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it("tier 'auto': net.post's tier-blocked stub records a 'tier-blocked' denial on buildCapabilities' own denials handle, non-spoofably", async () => {
+    const engine = await createEmptyLuaEngine();
+    try {
+      const { rawGlobals, preludeLua, denials } = buildCapabilities({
+        tier: 'auto',
+        net: {
+          get: async () => ({ status: 200, body: '{}' }),
+          post: async () => ({ status: 200, body: '{}' }),
+        },
+        netGrants: { get: [], post: ['api.example.com'] },
+      });
+      for (const [name, fn] of Object.entries(rawGlobals)) {
+        engine.global.set(name, fn);
+      }
+      if (preludeLua.trim().length > 0) {
+        await engine.doString(preludeLua);
+      }
+      expect(denials.last()).toBeUndefined();
+      const thread = engine.global.newThread();
+      const idx = engine.global.getTop();
+      try {
+        thread.loadString('net.post("https://api.example.com/x", "p")');
+        await expect(thread.run(0)).rejects.toThrow();
+      } finally {
+        engine.global.remove(idx);
+      }
+      expect(denials.last()).toEqual({
+        reason: 'tier-blocked',
+        message: expect.stringContaining('auto tier'),
+      });
+    } finally {
+      engine.global.close();
+    }
   });
 
   it("tier 'manual': net.post is present and works for a granted host", async () => {
@@ -355,13 +398,51 @@ describe('buildCapabilities — bundle delegates to a real @markii/bundle Script
     expect(r.ok).toBe(false);
   });
 
-  it("tier 'auto': bundle.write is entirely absent (read-only tier)", async () => {
+  it("tier 'auto': bundle.write is a TIER-BLOCKED STUB (not absent, read-only tier) — calling it throws and never reaches the ScriptView's write", async () => {
+    const { view, storage } = fixtureBundle();
+    const writeSpy = vi.spyOn(view, 'write');
+    const r = await run(
+      `
+      local ok, err = pcall(bundle.write, "cache/out.json", "hi")
+      return type(bundle.write), ok, err
+      `,
+      { tier: 'auto', bundle: view },
+    );
+    expect(r).toEqual({ ok: true, value: 'function' });
+    expect(writeSpy).not.toHaveBeenCalled();
+    expect(await storage.read('cache/out.json')).toBeUndefined();
+  });
+
+  it("tier 'auto': bundle.write's tier-blocked stub records a 'tier-blocked' denial on buildCapabilities' own denials handle", async () => {
     const { view } = fixtureBundle();
-    const r = await run('return type(bundle.write)', {
-      tier: 'auto',
-      bundle: view,
-    });
-    expect(r).toEqual({ ok: true, value: 'nil' });
+    const engine = await createEmptyLuaEngine();
+    try {
+      const { rawGlobals, preludeLua, denials } = buildCapabilities({
+        tier: 'auto',
+        bundle: view,
+      });
+      for (const [name, fn] of Object.entries(rawGlobals)) {
+        engine.global.set(name, fn);
+      }
+      if (preludeLua.trim().length > 0) {
+        await engine.doString(preludeLua);
+      }
+      expect(denials.last()).toBeUndefined();
+      const thread = engine.global.newThread();
+      const idx = engine.global.getTop();
+      try {
+        thread.loadString('bundle.write("cache/out.json", "hi")');
+        await expect(thread.run(0)).rejects.toThrow();
+      } finally {
+        engine.global.remove(idx);
+      }
+      expect(denials.last()).toEqual({
+        reason: 'tier-blocked',
+        message: expect.stringContaining('auto tier'),
+      });
+    } finally {
+      engine.global.close();
+    }
   });
 
   it("tier 'auto': bundle.read still works", async () => {

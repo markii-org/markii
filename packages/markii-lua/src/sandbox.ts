@@ -7,11 +7,7 @@ import {
   type NetGrants,
   type NetProvider,
 } from './capabilities.js';
-import {
-  CAPABILITY_ERROR_TAG,
-  MARSHAL_ERROR_TAG,
-  ScriptLimitError,
-} from './errors.js';
+import { MARSHAL_ERROR_TAG, ScriptLimitError } from './errors.js';
 import type { ScriptFailure, ScriptMarshalReason } from './errors.js';
 import { createEmptyLuaEngine } from './globals.js';
 import { DEFAULT_LIMITS, installLimits, type ScriptLimits } from './limits.js';
@@ -166,15 +162,27 @@ function extractMarshalReason(message: string): ScriptMarshalReason {
 
 /**
  * Classifies an error thrown out of `thread.run()` into the discriminated
- * `ScriptFailure` shape. Message-prefix matching (`CAPABILITY_ERROR_TAG`,
- * `MARSHAL_ERROR_TAG`) is used rather than `instanceof` because wasmoon
- * does not preserve JS `Error` subclass identity across the Lua round trip
- * — see the doc comment on those tags in `./errors` for the empirical
- * evidence. Resource-limit breaches are ALL classified separately, BEFORE
- * this function is ever called, via non-spoofable out-of-band signals —
- * never through this message-based path, since a script can trivially
- * forge any message string (e.g. `error("MARK_LIMIT: ...")` or
- * `error("not enough memory")`) but cannot forge these:
+ * `ScriptFailure` shape, EXCLUDING capability failures — those are decided
+ * separately, BEFORE this function is ever consulted (see `runScript`
+ * below), by the `CapabilityDenials` out-of-band handle (`./capabilities`).
+ * This function only ever returns `'marshal'` or `'runtime'`.
+ *
+ * Message-prefix matching (`MARSHAL_ERROR_TAG`) is used here rather than
+ * `instanceof` because wasmoon does not preserve JS `Error` subclass
+ * identity across the Lua round trip — see the doc comment on that tag in
+ * `./errors` for the empirical evidence. This IS spoofable in principle (a
+ * script could `error("MARK_MARSHAL:type ...")`), but the consequence of
+ * that forgery is bounded and accepted: it only relabels one
+ * `'script-error'`-class failure (`'runtime'`) as another (`'marshal'`) —
+ * neither claims a capability was ever exercised, so there is no security
+ * property being defended here the way there is for `'capability'`/
+ * `'limit'`.
+ *
+ * Resource-limit breaches are ALL classified separately, BEFORE this
+ * function is ever called, via non-spoofable out-of-band signals — never
+ * through a message-based path, since a script can trivially forge any
+ * message string (e.g. `error("MARK_LIMIT: ...")` or `error("not enough
+ * memory")`) but cannot forge these:
  *   - instruction/wall-clock breaches: the JS closure flag from
  *     `./limits`' hook (see `runScript` below);
  *   - the async-hang backstop: `instanceof ScriptLimitError` on the
@@ -182,15 +190,14 @@ function extractMarshalReason(message: string): ScriptMarshalReason {
  *     boundary (see the guard's construction in `runScript`);
  *   - memory-cap breaches: the raw `LuaReturn.ErrorMem` C-API status code
  *     captured by `captureAssertOkStatus` (see its doc comment).
+ * Capability failures are classified the same non-spoofable way, via the
+ * `CapabilityDenials` handle — a script forging `error("MARK_CAPABILITY:
+ * ...")` no longer produces `kind: 'capability'`; with no genuine denial
+ * recorded, it falls through to THIS function and comes back `'runtime'`,
+ * exactly like any other `error()` call with no special meaning.
  */
 function classifyRuntimeError(err: unknown): ScriptFailure {
   const message = describeError(err);
-  if (message.includes(CAPABILITY_ERROR_TAG)) {
-    return {
-      kind: 'capability',
-      message: message.replace(`${CAPABILITY_ERROR_TAG}: `, ''),
-    };
-  }
   if (message.includes(MARSHAL_ERROR_TAG)) {
     return {
       kind: 'marshal',
@@ -225,11 +232,13 @@ function classifyRuntimeError(err: unknown): ScriptFailure {
  *    UNCONDITIONALLY and, if set, wins over whatever the run otherwise
  *    reported — see `./limits`'s doc comment for why this is the actual
  *    enforcement point for "not swallowed by the script's own `pcall`".
- * 7. Otherwise, a thrown error is classified by three non-spoofable
- *    out-of-band signals, in order, before ever falling back to
+ * 7. Otherwise, a thrown error is classified by non-spoofable out-of-band
+ *    signals, in order, before ever falling back to
  *    `classifyRuntimeError`'s message-based path: the wall-clock guard's
  *    own `ScriptLimitError` sentinel (`instanceof`, Defect 3), then the
- *    raw `LuaReturn.ErrorMem` status code (Defect 2). A successful return
+ *    raw `LuaReturn.ErrorMem` status code (Defect 2), then step 3's
+ *    `CapabilityDenials` handle (`denials.last()` — was ANY genuine
+ *    denial/tier-block recorded during this run?). A successful return
  *    goes through `finalizeMarshaledValue` for the final NaN/Infinity
  *    check and marker cleanup.
  * 8. `finally`: hook removed, thread popped, engine closed — every path,
@@ -253,7 +262,7 @@ export async function runScript(
   let guardTimer: ReturnType<typeof setTimeout> | undefined;
 
   try {
-    const { rawGlobals, preludeLua } = buildCapabilities({
+    const { rawGlobals, preludeLua, denials } = buildCapabilities({
       tier: options.tier,
       net: options.net,
       netGrants: options.netGrants,
@@ -367,6 +376,39 @@ export async function runScript(
             kind: 'limit',
             limit: 'memory',
             message: 'script exceeded its memory limit',
+          },
+        };
+      }
+      // Capability failures, identified the same non-spoofable way as the
+      // limit breaches above: `denials.last()` is a plain JS closure
+      // (`./capabilities`'s `CapabilityDenials`) that Lua can never see or
+      // touch, recorded BEFORE the corresponding throw at every genuine
+      // denial/tier-block site. If ANY denial was recorded during this run,
+      // it wins over whatever `classifyRuntimeError`'s message-based path
+      // would otherwise conclude — using the RECORDED message, never the
+      // message that came back out of Lua (which the script could have
+      // rewritten via its own `pcall`/`error` games).
+      //
+      // Known, accepted edge case (same precedent as the limit-breach flag
+      // in `./limits` winning unconditionally): a script that triggers a
+      // real denial, swallows it with its own `pcall`, and then throws its
+      // OWN unrelated error is still attributed to that genuine denial —
+      // `denials.last()` has no way to know the denial was "handled" by the
+      // script, and the failure genuinely did happen during this run. It
+      // can never work the other way around: a script can trigger zero
+      // denials and still forge `kind: 'capability'` — that path is now
+      // fully closed. If more than one denial is recorded in a single run
+      // (e.g. a caught GET denial followed by an uncaught POST tier-block),
+      // `last()` reports the LAST one, matching normal "most recent state
+      // wins" semantics for a single mutable JS closure variable.
+      const denial = denials.last();
+      if (denial) {
+        return {
+          ok: false,
+          error: {
+            kind: 'capability',
+            capability: denial.reason,
+            message: denial.message,
           },
         };
       }

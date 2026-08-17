@@ -81,10 +81,11 @@ describe('run path end-to-end (real wasmoon): ScriptBlock -> createLuaExecutor -
       store,
     });
 
-    // No effect: the real sandbox never even wires up `net.post` under the
-    // read-only 'auto' tier (see @markii/lua's capabilities.ts — confirmed
-    // by its own capabilities.test.ts: `type(net.post)` is `'nil'` under
-    // 'auto'), so the host-provided POST implementation was never invoked.
+    // No effect: the real sandbox wires `net.post` to a TIER-BLOCKED STUB
+    // under the read-only 'auto' tier (see @markii/lua's capabilities.ts —
+    // confirmed by its own capabilities.test.ts) that records a
+    // 'tier-blocked' denial and throws WITHOUT EVER reaching the
+    // host-provided POST implementation.
     expect(post).not.toHaveBeenCalled();
 
     expect(summary.tier).toBe('auto');
@@ -92,17 +93,20 @@ describe('run path end-to-end (real wasmoon): ScriptBlock -> createLuaExecutor -
     const stored = store.get('ship-it');
     expect(stored?.status).toBe('error');
     expect(stored?.value).toBeUndefined();
-    // Because `net.post` is left entirely undefined (rather than wired to
-    // a function that raises a tagged capability error) under 'auto', this
-    // particular failure surfaces as an ordinary Lua "attempt to call a
-    // nil value" runtime error, not a `'capability'`-kind one — so
-    // `runDocumentScripts`'s auto+capability "requires manual run" message
-    // rewrite does not fire for THIS specific real-sandbox case (that
-    // rewrite is exercised directly, with a mocked capability-kind
-    // failure, in @markii/runtime's own run.test.ts). What this test
+    // The failure is now genuinely classifiable: `net.post` is wired to a
+    // stub that records a `'tier-blocked'` denial on the sandbox's own
+    // out-of-band `CapabilityDenials` handle (never derived from any
+    // message text a script could forge) — `createLuaExecutor` maps that
+    // down to @markii/runtime's shared `failureKind: 'tier-blocked'`, and
+    // `runDocumentScripts` stores the executor's message VERBATIM (the old
+    // auto+capability "requires manual run" message-rewrite is gone
+    // entirely — see @markii/runtime's own run.test.ts). What this test
     // proves is the load-bearing security property itself: the effectful
     // call genuinely could not run under 'auto' — not merely that it was
-    // reported as denied — with zero observable effect on the host.
-    expect(stored?.error).toContain('nil value');
+    // reported as denied — with zero observable effect on the host, AND
+    // that the failure is now correctly attributed to the tier gate rather
+    // than collapsing into an undifferentiated runtime error.
+    expect(stored?.failureKind).toBe('tier-blocked');
+    expect(stored?.error?.toLowerCase()).toContain('auto tier');
   });
 });

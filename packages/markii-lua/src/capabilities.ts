@@ -63,6 +63,27 @@ export interface CapabilityConfig {
 
 export const DEFAULT_MAX_FETCH_BYTES = 2_000_000;
 
+/** One genuine capability denial, as recorded by `buildCapabilities`' `denials` handle — see its doc comment. */
+export interface CapabilityDenial {
+  reason: 'denied' | 'tier-blocked';
+  message: string;
+}
+
+/**
+ * Non-spoofable, out-of-band record of the LAST genuine capability denial
+ * that happened during one `buildCapabilities` call's lifetime (i.e. one
+ * `runScript` call — see `./sandbox`). This is a plain JS closure: no Lua
+ * value, no metatable, nothing a script running in the sandbox can ever
+ * read or write, mirroring the discipline `./limits`' breach flag already
+ * uses for resource-limit kills. `sandbox.ts`'s `classifyRuntimeError`
+ * consults `last()` — never any error message string that crossed the Lua
+ * boundary — to decide whether a failed run was genuinely a `'capability'`
+ * kind, and if so which `capability` flavor (`'denied'` vs `'tier-blocked'`).
+ */
+export interface CapabilityDenials {
+  last(): CapabilityDenial | undefined;
+}
+
 function capabilityError(message: string): Error {
   return new Error(`${CAPABILITY_ERROR_TAG}: ${message}`);
 }
@@ -162,10 +183,24 @@ export function luaStringToBytes(s: string): Uint8Array {
 export function buildCapabilities(config: CapabilityConfig): {
   rawGlobals: Record<string, (...args: never[]) => Promise<unknown>>;
   preludeLua: string;
+  denials: CapabilityDenials;
 } {
   const maxFetchBytes = config.maxFetchBytes ?? DEFAULT_MAX_FETCH_BYTES;
   const rawGlobals: Record<string, (...args: never[]) => Promise<unknown>> = {};
   const preludeParts: string[] = [];
+
+  // Out-of-band denial record — see `CapabilityDenials`'s doc comment. Every
+  // site below that throws a `capabilityError` records here FIRST, so
+  // `sandbox.ts` can classify the failure by this JS-only signal instead of
+  // by re-reading the (script-forgeable) error message.
+  let lastDenial: CapabilityDenial | undefined;
+  function recordDenial(
+    reason: CapabilityDenial['reason'],
+    message: string,
+  ): void {
+    lastDenial = { reason, message };
+  }
+  const denials: CapabilityDenials = { last: () => lastDenial };
 
   // --- net --------------------------------------------------------------
   // `fetch_json` and `post`/`patch` are gated INDEPENDENTLY of each other
@@ -175,10 +210,13 @@ export function buildCapabilities(config: CapabilityConfig): {
   // this function nested POST/PATCH wiring inside "if GET is granted",
   // which silently produced no `net.post` at all for a POST-only grant.
   const netGrants = config.netGrants ?? { get: [], post: [] };
+  // NOTE: no longer conditioned on `config.tier === 'manual'` for the POST
+  // half — under 'auto' with POST hosts granted, `net.post`/`net.patch` are
+  // now wired to TIER-BLOCKED STUBS below (not left undefined), so the
+  // `net` table itself must exist for those stubs to attach to.
   const netTableNeeded =
     config.net !== undefined &&
-    (netGrants.get.length > 0 ||
-      (config.tier === 'manual' && netGrants.post.length > 0));
+    (netGrants.get.length > 0 || netGrants.post.length > 0);
 
   if (netTableNeeded) {
     preludeParts.push('net = net or {}\n');
@@ -188,21 +226,23 @@ export function buildCapabilities(config: CapabilityConfig): {
     rawGlobals.__smd_net_get_raw = (async (url: string) => {
       const host = hostnameOf(url);
       if (!host || !netGrants.get.includes(host)) {
-        throw capabilityError(
-          `net access to host "${host ?? url}" not granted for GET`,
-        );
+        const message = `net access to host "${host ?? url}" not granted for GET`;
+        recordDenial('denied', message);
+        throw capabilityError(message);
       }
       const res = await config.net!.get(url);
       if (res.body.length > maxFetchBytes) {
-        throw capabilityError(
-          `fetch response for "${url}" exceeds the ${maxFetchBytes}-byte cap`,
-        );
+        const message = `fetch response for "${url}" exceeds the ${maxFetchBytes}-byte cap`;
+        recordDenial('denied', message);
+        throw capabilityError(message);
       }
       let parsed: unknown;
       try {
         parsed = JSON.parse(res.body);
       } catch {
-        throw capabilityError(`fetch response for "${url}" was not valid JSON`);
+        const message = `fetch response for "${url}" was not valid JSON`;
+        recordDenial('denied', message);
+        throw capabilityError(message);
       }
       return parsed;
     }) as (...args: never[]) => Promise<unknown>;
@@ -214,10 +254,14 @@ net.fetch_json = function(url) return __smd_net_get(url):await() end
 `);
   }
 
-  // POST/PATCH are effectful — only wired at all under the 'manual' tier,
-  // and only for hosts the effective grant set allows for POST. Under
-  // 'auto' these are simply never defined: calling `net.post` fails as
-  // "attempt to call a nil value", a clean typed failure (spec §8: "An
+  // POST/PATCH are effectful. Under the 'manual' tier, wired to the real
+  // provider for hosts the effective grant set allows for POST. Under
+  // 'auto', even when POST hosts ARE granted, they are wired to STUBS
+  // that record a 'tier-blocked' denial and throw WITHOUT EVER reaching
+  // `config.net.post`/`.patch` — this grants nothing new (the provider is
+  // never called), it only makes "granted but tier-forbidden" a
+  // classifiable, non-spoofable outcome instead of collapsing into an
+  // ordinary "attempt to call a nil value" runtime error (spec §8: "An
   // effectful call under an auto trigger fails cleanly").
   if (
     config.tier === 'manual' &&
@@ -227,9 +271,9 @@ net.fetch_json = function(url) return __smd_net_get(url):await() end
     rawGlobals.__smd_net_post_raw = (async (url: string, body: string) => {
       const host = hostnameOf(url);
       if (!host || !netGrants.post.includes(host)) {
-        throw capabilityError(
-          `net access to host "${host ?? url}" not granted for POST`,
-        );
+        const message = `net access to host "${host ?? url}" not granted for POST`;
+        recordDenial('denied', message);
+        throw capabilityError(message);
       }
       return config.net!.post!(url, body);
     }) as (...args: never[]) => Promise<unknown>;
@@ -237,6 +281,30 @@ net.fetch_json = function(url) return __smd_net_get(url):await() end
 local __smd_net_post = __smd_net_post_raw
 __smd_net_post_raw = nil
 net.post = function(url, body) return __smd_net_post(url, body):await() end
+`);
+  } else if (
+    // Mirrors the 'manual' condition above EXACTLY except for the tier, so
+    // the read-only tier never exposes a wider method surface than the
+    // full-grant tier would: a stub appears only where a real `net.post`
+    // would have appeared under 'manual'. Without the `config.net?.post`
+    // half, a host whose provider implements no POST at all would still
+    // show `net.post` under 'auto' (as a tier-block stub) while showing
+    // nothing under 'manual' — an inconsistency a feature-detecting script
+    // (`if net.post then`) would read exactly backwards.
+    config.tier === 'auto' &&
+    config.net?.post &&
+    netGrants.post.length > 0
+  ) {
+    rawGlobals.__smd_net_post_tier_blocked_raw = (async () => {
+      const message =
+        'net.post is granted but not permitted under the read-only auto tier (requires a manual run)';
+      recordDenial('tier-blocked', message);
+      throw capabilityError(message);
+    }) as (...args: never[]) => Promise<unknown>;
+    preludeParts.push(`
+local __smd_net_post_blocked = __smd_net_post_tier_blocked_raw
+__smd_net_post_tier_blocked_raw = nil
+net.post = function(url, body) return __smd_net_post_blocked(url, body):await() end
 `);
   }
 
@@ -248,9 +316,9 @@ net.post = function(url, body) return __smd_net_post(url, body):await() end
     rawGlobals.__smd_net_patch_raw = (async (url: string, body: string) => {
       const host = hostnameOf(url);
       if (!host || !netGrants.post.includes(host)) {
-        throw capabilityError(
-          `net access to host "${host ?? url}" not granted for PATCH`,
-        );
+        const message = `net access to host "${host ?? url}" not granted for PATCH`;
+        recordDenial('denied', message);
+        throw capabilityError(message);
       }
       return config.net!.patch!(url, body);
     }) as (...args: never[]) => Promise<unknown>;
@@ -258,6 +326,23 @@ net.post = function(url, body) return __smd_net_post(url, body):await() end
 local __smd_net_patch = __smd_net_patch_raw
 __smd_net_patch_raw = nil
 net.patch = function(url, body) return __smd_net_patch(url, body):await() end
+`);
+  } else if (
+    // Same mirroring as the POST stub above — see its comment.
+    config.tier === 'auto' &&
+    config.net?.patch &&
+    netGrants.post.length > 0
+  ) {
+    rawGlobals.__smd_net_patch_tier_blocked_raw = (async () => {
+      const message =
+        'net.patch is granted but not permitted under the read-only auto tier (requires a manual run)';
+      recordDenial('tier-blocked', message);
+      throw capabilityError(message);
+    }) as (...args: never[]) => Promise<unknown>;
+    preludeParts.push(`
+local __smd_net_patch_blocked = __smd_net_patch_tier_blocked_raw
+__smd_net_patch_tier_blocked_raw = nil
+net.patch = function(url, body) return __smd_net_patch_blocked(url, body):await() end
 `);
   }
 
@@ -318,23 +403,26 @@ end
   // Delegates entirely to the injected `ScriptView` (`@markii/bundle`), which
   // already enforces the path-jail and the read/write:cache/ split (spec
   // §11). This module adds nothing on top except the tier gate for
-  // `bundle.write` (absent entirely under 'auto' — read-only tier) and the
-  // byte<->Lua-string conversion.
+  // `bundle.write` (a tier-blocked stub under 'auto' — read-only tier) and
+  // the byte<->Lua-string conversion.
   if (config.bundle) {
     const view = config.bundle;
     // `ScriptView` (@markii/bundle) throws its own `ScriptCapabilityError` /
     // `BundlePathError` for a denied or path-jail-violating call — those
-    // are re-tagged here with `CAPABILITY_ERROR_TAG` so `sandbox.ts`'s
-    // message-based classification (see `./errors`'s doc comment on why
-    // that's necessary) reports them as `kind: 'capability'` uniformly,
-    // the same as a net host-allowlist denial, rather than falling
-    // through to the generic `'runtime'` bucket.
+    // are re-tagged here with `CAPABILITY_ERROR_TAG` (a cosmetic prefix
+    // only, see `./errors`'s doc comment) AND recorded on the `denials`
+    // handle as reason `'denied'`, so `sandbox.ts` reports them as
+    // `kind: 'capability', capability: 'denied'` uniformly, the same as a
+    // net host-allowlist denial, rather than falling through to the
+    // generic `'runtime'` bucket.
     rawGlobals.__smd_bundle_read_raw = (async (path: string) => {
       let data: Uint8Array | undefined;
       try {
         data = await view.read(path);
       } catch (err) {
-        throw capabilityError(describeThrown(err));
+        const message = describeThrown(err);
+        recordDenial('denied', message);
+        throw capabilityError(message);
       }
       return data === undefined ? null : bytesToLuaString(data);
     }) as (...args: never[]) => Promise<unknown>;
@@ -342,7 +430,9 @@ end
       try {
         return await view.exists(path);
       } catch (err) {
-        throw capabilityError(describeThrown(err));
+        const message = describeThrown(err);
+        recordDenial('denied', message);
+        throw capabilityError(message);
       }
     }) as (...args: never[]) => Promise<unknown>;
 
@@ -364,7 +454,9 @@ bundle.exists = function(path) return __smd_bundle_exists(path):await() end
         try {
           await view.write(path, luaStringToBytes(data));
         } catch (err) {
-          throw capabilityError(describeThrown(err));
+          const message = describeThrown(err);
+          recordDenial('denied', message);
+          throw capabilityError(message);
         }
         return true;
       }) as (...args: never[]) => Promise<unknown>;
@@ -373,10 +465,27 @@ local __smd_bundle_write = __smd_bundle_write_raw
 __smd_bundle_write_raw = nil
 bundle.write = function(path, data) return __smd_bundle_write(path, data):await() end
 `);
+    } else {
+      // Under 'auto': `bundle.write` is wired to a TIER-BLOCKED STUB that
+      // records a 'tier-blocked' denial and throws WITHOUT EVER reaching
+      // `view.write` — the bundle view's own write path is never touched,
+      // so this grants nothing new; it only makes "write is available but
+      // this tier forbids it" classifiable instead of collapsing into an
+      // ordinary "attempt to call a nil value" runtime error (spec §8:
+      // "bundle/cache reads, cache writes only" under the read-only tier).
+      rawGlobals.__smd_bundle_write_tier_blocked_raw = (async () => {
+        const message =
+          'bundle.write is not permitted under the read-only auto tier (requires a manual run)';
+        recordDenial('tier-blocked', message);
+        throw capabilityError(message);
+      }) as (...args: never[]) => Promise<unknown>;
+      preludeParts.push(`
+local __smd_bundle_write_blocked = __smd_bundle_write_tier_blocked_raw
+__smd_bundle_write_tier_blocked_raw = nil
+bundle.write = function(path, data) return __smd_bundle_write_blocked(path, data):await() end
+`);
     }
-    // Under 'auto', `bundle.write` is simply never defined — spec §8's
-    // read-only tier table: "bundle/cache reads, cache writes only".
   }
 
-  return { rawGlobals, preludeLua: preludeParts.join('\n') };
+  return { rawGlobals, preludeLua: preludeParts.join('\n'), denials };
 }

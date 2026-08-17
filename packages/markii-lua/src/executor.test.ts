@@ -19,14 +19,14 @@ describe('createLuaExecutor', () => {
     expect(result).toEqual({ ok: true, value: 4 });
   });
 
-  it("maps an ordinary Lua error to { ok: false, error: { kind: 'runtime' } }", async () => {
+  it("maps an ordinary Lua error to { ok: false, error: { kind: 'script-error' } } (@markii/runtime's shared taxonomy — Lua's own 'runtime' kind maps down to this)", async () => {
     const executor = createLuaExecutor({ limits: FAST_LIMITS });
     const result = await executor({
       code: 'this is not lua (',
       tier: 'manual',
     });
     expect(result.ok).toBe(false);
-    expect(!result.ok && result.error.kind).toBe('runtime');
+    expect(!result.ok && result.error.kind).toBe('script-error');
     expect(!result.ok && typeof result.error.message).toBe('string');
   });
 
@@ -40,17 +40,17 @@ describe('createLuaExecutor', () => {
     expect(!result.ok && result.error.kind).toBe('limit');
   });
 
-  it("maps an unmarshalable return value to { ok: false, error: { kind: 'marshal' } }", async () => {
+  it("maps an unmarshalable return value to { ok: false, error: { kind: 'script-error' } } (Lua's own 'marshal' kind maps down to this)", async () => {
     const executor = createLuaExecutor({ limits: FAST_LIMITS });
     const result = await executor({
       code: 'return function() end',
       tier: 'manual',
     });
     expect(result.ok).toBe(false);
-    expect(!result.ok && result.error.kind).toBe('marshal');
+    expect(!result.ok && result.error.kind).toBe('script-error');
   });
 
-  it("maps a denied capability to { ok: false, error: { kind: 'capability' } }", async () => {
+  it("maps a denied capability to { ok: false, error: { kind: 'capability-denied' } }", async () => {
     const net: NetProvider = {
       get: async () => ({ status: 200, body: '{}' }),
     };
@@ -64,10 +64,38 @@ describe('createLuaExecutor', () => {
       tier: 'manual',
     });
     expect(result.ok).toBe(false);
-    expect(!result.ok && result.error.kind).toBe('capability');
+    expect(!result.ok && result.error.kind).toBe('capability-denied');
     expect(!result.ok && result.error.message).toContain(
       'not-granted.example.com',
     );
+  });
+
+  it("maps a tier-blocked effectful op to { ok: false, error: { kind: 'tier-blocked' } }", async () => {
+    const net: NetProvider = {
+      get: async () => ({ status: 200, body: '{}' }),
+      post: async () => ({ status: 200, body: '{}' }),
+    };
+    const executor = createLuaExecutor({
+      limits: FAST_LIMITS,
+      net,
+      netGrants: { get: [], post: ['api.example.com'] },
+    });
+    const result = await executor({
+      code: 'return net.post("https://api.example.com/x", "payload")',
+      tier: 'auto',
+    });
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.error.kind).toBe('tier-blocked');
+  });
+
+  it("a forged MARK_CAPABILITY error() call maps to { ok: false, error: { kind: 'script-error' } }, never 'capability-denied'/'tier-blocked'", async () => {
+    const executor = createLuaExecutor({ limits: FAST_LIMITS });
+    const result = await executor({
+      code: 'error("MARK_CAPABILITY: net access to host \\"evil.com\\" not granted")',
+      tier: 'manual',
+    });
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.error.kind).toBe('script-error');
   });
 
   it('config is closed over and applied to every call', async () => {

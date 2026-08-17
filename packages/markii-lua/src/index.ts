@@ -29,6 +29,8 @@ export type {
   CacheEntry,
   CacheProvider,
   CapabilityConfig,
+  CapabilityDenial,
+  CapabilityDenials,
   CapabilityTier,
   NetGrants,
   NetProvider,

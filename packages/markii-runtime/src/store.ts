@@ -7,6 +7,8 @@
  * this store is the pure side of that split.
  */
 
+import type { FailureKind } from './failure.js';
+
 /**
  * Freshness of one stored value:
  * - `fresh`   — produced by the most recent successful run.
@@ -21,6 +23,17 @@ export interface StoredValue {
   value: unknown;
   status: ValueStatus;
   error?: string;
+  /**
+   * Set alongside `error` on every `status: 'error'` outcome (see
+   * `./run.ts`'s `runDocumentScripts`) — the closed `FailureKind` (`./
+   * failure.ts`) the failure was classified as, already run through
+   * `normalizeFailureKind` at the run-path boundary so it is safe for a
+   * renderer to branch on directly. Absent for a non-error status, and
+   * absent for an error `StoredValue` written by something other than the
+   * run path (e.g. a hand-constructed fixture) — a renderer must still
+   * degrade gracefully when this is missing.
+   */
+  failureKind?: FailureKind;
   ranAt?: number;
 }
 

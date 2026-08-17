@@ -10,7 +10,7 @@ const okExec = () =>
 const failExec = () =>
   Promise.resolve({
     ok: false,
-    error: { kind: 'runtime', message: 'boom' },
+    error: { kind: 'script-error', message: 'boom' },
   } satisfies ExecuteResult);
 
 function block(name: string, publish?: true): ScriptBlock {

@@ -1,4 +1,9 @@
-import type { ValueStatus, ValueStore, VaultStore } from '@markii/runtime';
+import type {
+  FailureKind,
+  ValueStatus,
+  ValueStore,
+  VaultStore,
+} from '@markii/runtime';
 
 /** What resolving a (possibly dotted) name against a `ValueStore` produces. */
 export interface StorePathResolution {
@@ -6,6 +11,18 @@ export interface StorePathResolution {
   status: ValueStatus;
   /** The root entry's error message, if it has one — carried through regardless of how the rest of the path resolved, matching what callers read off a plain `store.get(name)` today. */
   error?: string;
+  /**
+   * The root entry's `failureKind` (`@markii/runtime`'s closed `FailureKind`
+   * union), carried through EXACTLY the way `error` already is (see
+   * `walkSegments`): present whenever the root entry itself carried one —
+   * regardless of whether the rest of the dotted path resolved in full or
+   * degraded to `'missing'` partway through, mirroring `error`'s existing
+   * carry-through rule so the two fields can never diverge. Absent when the
+   * root entry didn't carry one (a hand-constructed fixture or a
+   * pre-taxonomy stored value may not). A component reading this must still
+   * degrade gracefully when it's absent.
+   */
+  failureKind?: FailureKind;
 }
 
 const MISSING: StorePathResolution = { value: undefined, status: 'missing' };
@@ -49,7 +66,12 @@ export interface ValueScope {
  *   treated the same as an unknown segment.
  */
 function walkSegments(
-  entry: { value: unknown; status: ValueStatus; error?: string },
+  entry: {
+    value: unknown;
+    status: ValueStatus;
+    error?: string;
+    failureKind?: FailureKind;
+  },
   segments: readonly string[],
 ): StorePathResolution {
   let current: unknown = entry.value;
@@ -61,12 +83,22 @@ function walkSegments(
       typeof current !== 'object' ||
       !Object.hasOwn(current, segment)
     ) {
-      return { value: undefined, status: 'missing', error: entry.error };
+      return {
+        value: undefined,
+        status: 'missing',
+        error: entry.error,
+        failureKind: entry.failureKind,
+      };
     }
     current = (current as Record<string, unknown>)[segment];
   }
 
-  return { value: current, status: entry.status, error: entry.error };
+  return {
+    value: current,
+    status: entry.status,
+    error: entry.error,
+    failureKind: entry.failureKind,
+  };
 }
 
 /**

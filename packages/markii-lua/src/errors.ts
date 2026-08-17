@@ -13,16 +13,40 @@
  * checks on the far side are useless (verified empirically against
  * wasmoon 1.16.0: `new MyError('x')` thrown inside an injected async
  * function round-trips as `Error: MyError: x`, not `MyError`). So
- * classification of capability/marshal failures raised *from inside Lua
- * execution* is done by tagging the error message with one of the
- * `*_ERROR_TAG` prefixes below and pattern-matching on it in `sandbox.ts`
- * after the run fails. Resource-limit breaches are NOT classified this way
- * — they're tracked out-of-band via a plain JS closure flag set inside the
- * instruction hook (see `./limits`), which Lua code can never see or touch,
- * so that classification is exact regardless of what any error message says.
+ * classification of marshal failures raised *from inside Lua execution* is
+ * done by tagging the error message with `MARSHAL_ERROR_TAG` and
+ * pattern-matching on it in `sandbox.ts` after the run fails (a forged
+ * marshal tag only relabels one script-error-class failure as another —
+ * see `classifyRuntimeError`'s doc comment).
+ *
+ * Capability failures are classified DIFFERENTLY, and NOT by message
+ * matching (this used to be message-tag-based too — `error("MARK_CAPABILITY:
+ * ...")` from a script would forge a `kind: 'capability'` result, which is
+ * exactly the bug this taxonomy closes). See `./capabilities`'s
+ * `CapabilityDenials` handle: every genuine denial is recorded on a plain JS
+ * closure BEFORE the corresponding throw, entirely out of Lua's reach, and
+ * `sandbox.ts` consults that handle — never the message that came back out
+ * of the VM — to decide `kind: 'capability'`. This mirrors the discipline
+ * already used for resource-limit breaches: they're tracked out-of-band via
+ * a plain JS closure flag set inside the instruction hook (see `./limits`)
+ * and the raw `LuaReturn.ErrorMem` C-API status code (see
+ * `captureAssertOkStatus` in `./sandbox`), neither of which Lua code can see
+ * or touch, so classification is exact regardless of what any error message
+ * says.
  */
 
-/** Prefix tag for a capability (permission) denial raised into Lua from a host-provided function. */
+/**
+ * Prefix tag applied to the `Error` message thrown into Lua for a capability
+ * (permission) denial. PURELY COSMETIC as of the capability-denial JS-closure
+ * rework (see the module doc comment above): it makes a message readable to
+ * a human/log, and nothing else. It is NOT, and must never again become, a
+ * classification signal — `sandbox.ts`'s `classifyRuntimeError` does not
+ * (and must not) inspect it; a script forging `error("MARK_CAPABILITY:
+ * ...")` produces a message containing this tag but classifies as an
+ * ordinary `'runtime'`/`'script-error'` failure, exactly like any other
+ * `error()` call, because no genuine denial was ever recorded on the
+ * `CapabilityDenials` handle for that run.
+ */
 export const CAPABILITY_ERROR_TAG = 'MARK_CAPABILITY';
 
 /** Prefix tag for a marshal-time rejection raised from the in-Lua marshal walk (see `./marshal`). */
@@ -41,7 +65,8 @@ export type ScriptMarshalReason =
  *   clock, or memory). `limit` says which.
  * - `'capability'` — the script attempted something its granted
  *   capabilities don't allow (ungranted host, effectful op under an
- *   auto-run tier, disallowed bundle path/write).
+ *   auto-run tier, disallowed bundle path/write). `capability` says which
+ *   flavor — see below.
  * - `'marshal'` — the script's return value could not be safely converted
  *   to a JSON-serializable JS value (function/userdata/thread, a cycle,
  *   too deep, too many nodes, a non-string table key, or a non-finite
@@ -54,6 +79,20 @@ export interface ScriptFailure {
   message: string;
   limit?: ScriptLimitKind;
   reason?: ScriptMarshalReason;
+  /**
+   * Set only when `kind === 'capability'`, discriminating WHICH flavor of
+   * capability failure this was — derived exclusively from `./capabilities`'
+   * `CapabilityDenials` handle (a plain JS closure, never from any message
+   * text; see the module doc comment):
+   * - `'denied'`      — the grant was absent, or the host actively refused
+   *   (an ungranted net host, a bundle path-jail rejection, a fetch-size
+   *   cap). A manual run with the SAME grants would fail identically.
+   * - `'tier-blocked'` — the capability genuinely exists in the granted set,
+   *   but the current execution tier (`'auto'`) forbids exercising it. A
+   *   manual run of the exact same script, with the exact same grants,
+   *   would succeed.
+   */
+  capability?: 'denied' | 'tier-blocked';
 }
 
 /**

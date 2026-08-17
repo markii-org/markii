@@ -147,6 +147,44 @@ describe('resolveStorePath', () => {
     });
     expect(resolveStorePath(store, 'stars.value').status).toBe('missing');
   });
+
+  it('carries the root entry failureKind through for a bare name', () => {
+    const store = createValueStore({
+      stars: {
+        value: null,
+        status: 'error',
+        error: 'net access to host "evil.com" not granted',
+        failureKind: 'capability-denied',
+      },
+    });
+    expect(resolveStorePath(store, 'stars')).toEqual({
+      value: null,
+      status: 'error',
+      error: 'net access to host "evil.com" not granted',
+      failureKind: 'capability-denied',
+    });
+  });
+
+  it('carries the root entry failureKind through even when a partial dotted path degrades to missing', () => {
+    const store = createValueStore({
+      repo: {
+        value: { stars: 42 },
+        status: 'error',
+        error: 'boom',
+        failureKind: 'tier-blocked',
+      },
+    });
+    const result = resolveStorePath(store, 'repo.nope');
+    expect(result.status).toBe('missing');
+    expect(result.failureKind).toBe('tier-blocked');
+  });
+
+  it('a root entry with no failureKind at all leaves it undefined (pre-taxonomy / hand-built fixture)', () => {
+    const store = createValueStore({
+      stars: { value: null, status: 'error', error: 'boom' },
+    });
+    expect(resolveStorePath(store, 'stars').failureKind).toBeUndefined();
+  });
 });
 
 describe('resolveScopedPath', () => {
@@ -323,6 +361,25 @@ describe('resolveScopedPath', () => {
       value: null,
       status: 'error',
       error: 'fetch failed',
+    });
+  });
+
+  it('carries a vault entry failureKind through exactly as the note-local path does, so the two scopes can never diverge', () => {
+    const { store: vault } = createVaultStore({
+      initial: {
+        gh: {
+          value: null,
+          status: 'error',
+          error: 'net.post is not permitted under the auto tier',
+          failureKind: 'tier-blocked',
+        },
+      },
+    });
+    expect(resolveScopedPath({ vault }, '@gh')).toEqual({
+      value: null,
+      status: 'error',
+      error: 'net.post is not permitted under the auto tier',
+      failureKind: 'tier-blocked',
     });
   });
 });

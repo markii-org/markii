@@ -1,5 +1,10 @@
-import type { ExecuteResult, ScriptExecutor } from '@markii/runtime';
+import type {
+  ExecuteResult,
+  FailureKind,
+  ScriptExecutor,
+} from '@markii/runtime';
 import { runScript, type RunScriptOptions } from './sandbox.js';
+import type { ScriptFailure } from './errors.js';
 
 /**
  * Slice 2 of the scripting-usability layer (DESIGN.md §8): the reusable
@@ -27,6 +32,35 @@ import { runScript, type RunScriptOptions } from './sandbox.js';
 export type LuaExecutorConfig = Omit<RunScriptOptions, 'code' | 'tier'>;
 
 /**
+ * Maps this package's own `ScriptFailure.kind` (`'limit' | 'capability' |
+ * 'marshal' | 'runtime'`, further discriminated by `ScriptFailure.
+ * capability` for the `'capability'` case) down to `@markii/runtime`'s
+ * closed, shared `FailureKind` union (`'script-error' | 'capability-denied'
+ * | 'tier-blocked' | 'limit'`):
+ * - `'limit'`                                 -> `'limit'`
+ * - `'capability'` with `capability === 'tier-blocked'` -> `'tier-blocked'`
+ * - `'capability'` otherwise (i.e. `'denied'`, or — defensively — absent)
+ *                                              -> `'capability-denied'`
+ * - `'marshal'` / `'runtime'`                 -> `'script-error'`
+ *
+ * This is the one place the Lua-specific taxonomy and the runtime-shared
+ * one meet; every other module in this package only knows `ScriptFailure`.
+ */
+function toRuntimeFailureKind(failure: ScriptFailure): FailureKind {
+  switch (failure.kind) {
+    case 'limit':
+      return 'limit';
+    case 'capability':
+      return failure.capability === 'tier-blocked'
+        ? 'tier-blocked'
+        : 'capability-denied';
+    case 'marshal':
+    case 'runtime':
+      return 'script-error';
+  }
+}
+
+/**
  * Builds a `ScriptExecutor` (`@markii/runtime`) backed by this package's
  * `runScript`. `config` is captured once and reused for every script the
  * returned executor runs; the returned function's only per-call inputs are
@@ -34,10 +68,11 @@ export type LuaExecutorConfig = Omit<RunScriptOptions, 'code' | 'tier'>;
  * signature. `runScript` never throws (see `./sandbox`'s doc comment), so
  * this adapter doesn't need its own try/catch — it only reshapes the
  * result: `ok: true` passes `value` through untouched; `ok: false` maps
- * `runScript`'s `ScriptFailure` (`{ kind, message, ... }`) down to the
- * narrower `{ kind: string; message: string }` `ExecuteFailure` shape
- * `@markii/runtime` expects, dropping the Lua-specific `limit`/`reason`
- * fields (still visible in `message` for anyone reading the stored error).
+ * `runScript`'s `ScriptFailure` (`{ kind, message, ... }`) down to
+ * `@markii/runtime`'s closed `ExecuteFailure` shape via
+ * `toRuntimeFailureKind`, dropping the Lua-specific `limit`/`reason`/
+ * `capability` sub-fields (still visible in `message` for anyone reading
+ * the stored error).
  */
 export function createLuaExecutor(
   config: LuaExecutorConfig = {},
@@ -49,7 +84,10 @@ export function createLuaExecutor(
     }
     return {
       ok: false,
-      error: { kind: result.error.kind, message: result.error.message },
+      error: {
+        kind: toRuntimeFailureKind(result.error),
+        message: result.error.message,
+      },
     };
   };
 }

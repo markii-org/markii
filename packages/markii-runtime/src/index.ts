@@ -6,6 +6,19 @@ export {
 } from './store.js';
 
 export {
+  FAILURE_KINDS,
+  normalizeFailureKind,
+  type FailureKind,
+} from './failure.js';
+
+export {
+  computeGrantKey,
+  type GrantClosure,
+  type GrantClosurePack,
+  type GrantClosureScript,
+} from './grant-key.js';
+
+export {
   createVaultStore,
   type CreateVaultStoreOptions,
   type VaultPublishFailure,

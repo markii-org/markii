@@ -67,7 +67,10 @@ describe('runDocumentScripts', () => {
     const store = createValueStore();
     const executor: ScriptExecutor = async ({ code }) => {
       if (code === 'boom') {
-        return { ok: false, error: { kind: 'runtime', message: 'kaboom' } };
+        return {
+          ok: false,
+          error: { kind: 'script-error', message: 'kaboom' },
+        };
       }
       return { ok: true, value: code };
     };
@@ -89,7 +92,12 @@ describe('runDocumentScripts', () => {
 
     expect(summary.results).toEqual([
       { name: 'a', status: 'fresh' },
-      { name: 'b', status: 'error', error: 'kaboom' },
+      {
+        name: 'b',
+        status: 'error',
+        error: 'kaboom',
+        failureKind: 'script-error',
+      },
       { name: 'c', status: 'fresh' },
     ]);
     expect(summary.freshCount).toBe(2);
@@ -255,7 +263,7 @@ describe('runDocumentScripts', () => {
     const executor: ScriptExecutor = async ({ code }) => {
       if (code === 'throws') throw new Error('boom');
       if (code === 'fails') {
-        return { ok: false, error: { kind: 'runtime', message: 'nope' } };
+        return { ok: false, error: { kind: 'script-error', message: 'nope' } };
       }
       return { ok: true, value: code };
     };
@@ -279,11 +287,11 @@ describe('runDocumentScripts', () => {
     expect(store.get('c')).toMatchObject({ value: 'ok', status: 'fresh' });
   });
 
-  it('rewrites a capability-kind failure under the auto tier to say it requires a manual run', async () => {
+  it('never rewrites or appends to a tier-blocked failure message under the auto tier — the executor message is stored verbatim', async () => {
     const store = createValueStore();
     const executor: ScriptExecutor = async (): Promise<ExecuteResult> => ({
       ok: false,
-      error: { kind: 'capability', message: 'net.post is not permitted' },
+      error: { kind: 'tier-blocked', message: 'net.post is not permitted' },
     });
 
     const summary = await runDocumentScripts({
@@ -295,16 +303,19 @@ describe('runDocumentScripts', () => {
 
     const stored = store.get('post-stats');
     expect(stored?.status).toBe('error');
-    expect(stored?.error).toContain('net.post is not permitted');
-    expect(stored?.error?.toLowerCase()).toContain('manual run');
-    expect(summary.results[0]?.error?.toLowerCase()).toContain('manual run');
+    expect(stored?.error).toBe('net.post is not permitted');
+    expect(stored?.failureKind).toBe('tier-blocked');
+    expect(summary.results[0]?.error).toBe('net.post is not permitted');
+    expect(summary.results[0]?.failureKind).toBe('tier-blocked');
+    // The old " (requires manual run" rewrite is gone entirely.
+    expect(stored?.error).not.toContain('requires manual run');
   });
 
-  it('does NOT rewrite a capability-kind failure under the manual tier', async () => {
+  it('never rewrites a capability-denied failure message under the manual tier', async () => {
     const store = createValueStore();
     const executor: ScriptExecutor = async (): Promise<ExecuteResult> => ({
       ok: false,
-      error: { kind: 'capability', message: 'host not granted' },
+      error: { kind: 'capability-denied', message: 'host not granted' },
     });
 
     await runDocumentScripts({
@@ -315,13 +326,14 @@ describe('runDocumentScripts', () => {
     });
 
     expect(store.get('x')?.error).toBe('host not granted');
+    expect(store.get('x')?.failureKind).toBe('capability-denied');
   });
 
-  it('does NOT rewrite a non-capability-kind failure under the auto tier', async () => {
+  it('never rewrites a script-error-kind failure message under the auto tier', async () => {
     const store = createValueStore();
     const executor: ScriptExecutor = async (): Promise<ExecuteResult> => ({
       ok: false,
-      error: { kind: 'runtime', message: 'syntax error' },
+      error: { kind: 'script-error', message: 'syntax error' },
     });
 
     await runDocumentScripts({
@@ -332,6 +344,133 @@ describe('runDocumentScripts', () => {
     });
 
     expect(store.get('x')?.error).toBe('syntax error');
+    expect(store.get('x')?.failureKind).toBe('script-error');
+  });
+
+  it('a capability-denied failure under the auto tier is stored verbatim too — capability-denied is never conflated with tier-blocked', async () => {
+    const store = createValueStore();
+    const executor: ScriptExecutor = async (): Promise<ExecuteResult> => ({
+      ok: false,
+      error: { kind: 'capability-denied', message: 'host not granted' },
+    });
+
+    const summary = await runDocumentScripts({
+      scripts: [block({ name: 'x' })],
+      executor,
+      trigger: 'auto',
+      store,
+    });
+
+    expect(store.get('x')?.error).toBe('host not granted');
+    expect(store.get('x')?.failureKind).toBe('capability-denied');
+    expect(summary.results[0]?.failureKind).toBe('capability-denied');
+  });
+
+  it('an executor returning a garbage/forged failure kind never throws and lands as script-error', async () => {
+    const store = createValueStore();
+    const executor: ScriptExecutor = async () =>
+      ({
+        ok: false,
+        error: { kind: 'capability', message: 'forged kind' },
+      }) as unknown as ExecuteResult;
+
+    const summary = await runDocumentScripts({
+      scripts: [block({ name: 'x' })],
+      executor,
+      trigger: 'manual',
+      store,
+    });
+
+    expect(store.get('x')?.failureKind).toBe('script-error');
+    expect(store.get('x')?.error).toBe('forged kind');
+    expect(summary.results[0]?.failureKind).toBe('script-error');
+  });
+
+  it('an executor returning __proto__ as a forged kind never throws and lands as script-error', async () => {
+    const store = createValueStore();
+    const executor: ScriptExecutor = async () =>
+      ({
+        ok: false,
+        error: { kind: '__proto__', message: 'x' },
+      }) as unknown as ExecuteResult;
+
+    const summary = await runDocumentScripts({
+      scripts: [block({ name: 'x' })],
+      executor,
+      trigger: 'manual',
+      store,
+    });
+
+    expect(store.get('x')?.failureKind).toBe('script-error');
+    expect(summary.results[0]?.failureKind).toBe('script-error');
+  });
+
+  it('failureKind lands on both StoredValue and RunSummaryEntry for every failure path', async () => {
+    const store = createValueStore();
+    const executor: ScriptExecutor = async () => ({
+      ok: false,
+      error: { kind: 'limit', message: 'exceeded' },
+    });
+
+    const summary = await runDocumentScripts({
+      scripts: [block({ name: 'x' })],
+      executor,
+      trigger: 'manual',
+      store,
+    });
+
+    expect(store.get('x')?.failureKind).toBe('limit');
+    expect(summary.results[0]?.failureKind).toBe('limit');
+  });
+
+  it('a fresh (successful) entry never carries a failureKind', async () => {
+    const store = createValueStore();
+    const executor: ScriptExecutor = async () => ({ ok: true, value: 1 });
+
+    const summary = await runDocumentScripts({
+      scripts: [block({ name: 'x' })],
+      executor,
+      trigger: 'manual',
+      store,
+    });
+
+    expect(store.get('x')?.failureKind).toBeUndefined();
+    expect(summary.results[0]?.failureKind).toBeUndefined();
+  });
+
+  it('the internal runtime failures (missing loadSource, loadSource throwing, executor throwing) all classify as script-error', async () => {
+    const storeA = createValueStore();
+    await runDocumentScripts({
+      scripts: [block({ name: 'a', code: '', src: 'x.lua' })],
+      executor: async () => ({ ok: true, value: 'unreachable' }),
+      trigger: 'manual',
+      store: storeA,
+    });
+    expect(storeA.get('a')?.failureKind).toBe('script-error');
+
+    const storeB = createValueStore();
+    await runDocumentScripts({
+      scripts: [block({ name: 'b', code: '', src: 'x.lua' })],
+      executor: async () => ({ ok: true, value: 'unreachable' }),
+      trigger: 'manual',
+      store: storeB,
+      loadSource: () => {
+        throw new Error('disk on fire');
+      },
+    });
+    expect(storeB.get('b')?.failureKind).toBe('script-error');
+
+    const storeC = createValueStore();
+    const throwingExecutor: ScriptExecutor = (() => {
+      throw new Error('executor exploded');
+    }) as unknown as ScriptExecutor;
+    await runDocumentScripts({
+      scripts: [block({ name: 'c' })],
+      executor: throwingExecutor,
+      trigger: 'manual',
+      store: storeC,
+    });
+    expect(storeC.get('c')?.failureKind).toBe('script-error');
   });
 
   it('duplicate names: the last run in document order wins in the store, and the summary flags the duplicate', async () => {
@@ -473,7 +612,7 @@ describe('runDocumentScripts: publishing (DESIGN.md §8 vault)', () => {
     };
     const executor: ScriptExecutor = async () => ({
       ok: false,
-      error: { kind: 'runtime', message: 'boom' },
+      error: { kind: 'script-error', message: 'boom' },
     });
 
     const summary = await runDocumentScripts({
