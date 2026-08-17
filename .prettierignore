@@ -13,3 +13,5 @@ TODO.md
 # Orchestrator-owned prose (long-form; not Prettier-managed).
 docs/
 TODO.md
+# conformance fixtures are byte-exact test data — formatters must not rewrite them
+conformance/
