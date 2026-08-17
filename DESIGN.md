@@ -153,6 +153,15 @@ outsides.**
   Each maps to a predefined class in the document theme. No `style=`, no arbitrary
   values. Freeform layout in notes is how documents rot; presets are how they stay
   consistent as your component set and theme evolve.
+
+  `width` and `align` are **reserved attribute names**: the renderer
+  intercepts them on every directive — valid value or not, block or inline —
+  and a component never sees them among its attributes (a component wanting
+  its own size knob must name it something else; pixel sizing contradicts the
+  closed-preset rule anyway). On inline directives they are stripped and
+  otherwise ignored — no wrapper, no effect. `align` takes visible effect
+  only together with a `width` preset that makes the block narrower than the
+  column; a full-width block has nothing to align.
 - **`:::row` is the one layout *container*.** Its block children become
   equal-width cells that wrap responsively and stack on narrow viewports —
   and, in a plain markdown viewer, simply stack (the fence lines show, the

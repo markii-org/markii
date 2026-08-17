@@ -85,7 +85,12 @@ user-approved**. Edit DESIGN.md accordingly:
       only two packages where six exist.
 - [ ] Commit Phase A (DESIGN.md + this file).
 
-## Phase B — feature 1: layout presets (§4) — NEXT after A
+## Phase B — feature 1: layout presets (§4) — DONE (commit 3f56c6c)
+
+Delivered via Opus-orchestrated Sonnet workers, adversarially verified (52
+probes), gates green (623 tests). Leftovers moved to Phase C pre-tasks:
+inline-directive stripping of reserved layout keys, chart pixel-sizing
+removal, optional playground `:::row` demo. Original scope for reference:
 
 Implementation via Opus-orchestrated Sonnet workers. Scope:
 
@@ -114,7 +119,14 @@ Implementation via Opus-orchestrated Sonnet workers. Scope:
 
 ## Phase C — bulletin board implementation (vault-published values)
 
-After B. Spec lands in Phase A (A10); code scope:
+Pre-tasks carried over from Phase B (small, do first):
+- Strip reserved layout keys (`width`/`align`) on INLINE directives too — they
+  are reserved everywhere; inline just never gets a wrapper (§4, updated).
+- Remove pixel `width`/`height` from the chart stdlib contract + component
+  (charts size to their container; layout presets are the sizing story).
+- Optional: playground demo section showing a `:::row` dashboard.
+
+Main scope (spec landed in Phase A, item A10):
 
 - @markii/core: `extractScripts` exposes a `publish` boolean read from the
   fence meta (bare attribute). (Name-charset enforcement already lands in B.)
