@@ -1,0 +1,42 @@
+{
+  "children": [
+    {
+      "type": "thematicBreak"
+    },
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "uses: [ana]"
+        }
+      ],
+      "type": "paragraph"
+    },
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "An opening "
+        },
+        {
+          "type": "inlineCode",
+          "value": "---"
+        },
+        {
+          "type": "text",
+          "value": " with no closing fence is not frontmatter. It degrades to\nordinary markdown — a thematic break followed by paragraphs — never to an\nerror, and no "
+        },
+        {
+          "type": "inlineCode",
+          "value": "yaml"
+        },
+        {
+          "type": "text",
+          "value": " node appears in the tree."
+        }
+      ],
+      "type": "paragraph"
+    }
+  ],
+  "type": "root"
+}

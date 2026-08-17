@@ -264,3 +264,29 @@ describe('nodeToHast: caller-supplied hast overrides are stripped (injection gua
     expect(JSON.stringify(nodeToHast(code!))).toContain('data-mk-meta');
   });
 });
+
+describe('nodeToHast: a frontmatter node degrades quietly', () => {
+  it('returns an empty root for a yaml node handed in on its own', () => {
+    const [yamlNode] = parse('---\nuses: [ana]\n---\n\nBody.\n').children;
+    expect(yamlNode?.type).toBe('yaml');
+    const tree = nodeToHast(yamlNode!);
+    expect(tree).toEqual({ type: 'root', children: [] });
+    expect(JSON.stringify(tree)).not.toContain('uses');
+  });
+
+  it('matches toHast: neither path renders frontmatter content', () => {
+    const source = '---\ntitle: Secret\n---\n\nBody.\n';
+    const [yamlNode] = parse(source).children;
+    expect(JSON.stringify(nodeToHast(yamlNode!))).not.toContain('Secret');
+    expect(JSON.stringify(toHast(source))).not.toContain('Secret');
+  });
+
+  it('never throws on a hand-built yaml node with a hostile value', () => {
+    const node: MarkNode = {
+      type: 'yaml',
+      value: '__proto__: {polluted: true}\nuses: [<script>]',
+    };
+    expect(() => nodeToHast(node)).not.toThrow();
+    expect(JSON.stringify(nodeToHast(node))).not.toContain('script');
+  });
+});

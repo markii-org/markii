@@ -63,6 +63,17 @@ The reference renderer ships a standard set: `callout`, `card`, `badge`,
 components, `stat`, `progress`, and `chart`. These are defaults, not a fixed
 vocabulary. You can restyle them, replace them, or add your own.
 
+A registry may also carry aliases: a second name for a component it already
+holds, optionally with preset attributes, so `warn` can stand for
+`callout{type=warning}`. An alias is resolved when the name is looked up,
+one hop only, so an alias pointing at another alias is not followed. A real
+registered component always beats an alias of the same name, attributes
+written in the document always beat the alias's presets, and an alias
+pointing at a component nobody registered shows the usual fallback box
+under the target's name. Aliases belong to the application or the pack,
+never to a note: a note that could define its own names would be a
+preprocessor in disguise, and the raw file would stop saying what it means.
+
 ### Unknown names never break the page
 
 If a document uses `:::timeline` and the renderer has no `timeline`
@@ -186,10 +197,23 @@ HTML also removes a whole class of injection problems before they start.
 
 ## Frontmatter and links
 
-A document may open with optional YAML frontmatter for metadata. Its one
-format-defined key is `uses:`, which names the component packs a note
-expects. It is purely informative; it lets a renderer say "this note uses
-pack `ana`, which is not installed" instead of showing bare fallback boxes.
+A document may open with optional YAML frontmatter for metadata. The
+reference parser recognizes it: a leading `---` block becomes a metadata
+node in the syntax tree and is dropped from the rendered page, because
+metadata is never content. Everywhere else `---` keeps its ordinary
+meaning, so a horizontal rule mid-document is still a horizontal rule, and
+an opening fence that is never closed degrades to ordinary markdown rather
+than swallowing the file.
+
+Its one format-defined key is `uses:`, which names the component packs a
+note expects, written either inline as `uses: [ana, gh]` or as a list of
+`- name` lines beneath it. It is purely informative; it lets a renderer say
+"this note uses pack `ana`, which is not installed" instead of showing bare
+fallback boxes. The rest of the block belongs to whoever wrote it: the
+reference implementation reads `uses:` in those two shapes and hands the
+remaining text back raw, deliberately carrying no YAML library. A `uses:`
+written any other way is simply not read; the note still renders, and
+nothing is reported as an error.
 
 Links between notes are ordinary relative markdown links, like
 `[roadmap](./roadmap.mk.md)`. They work in every viewer today. Wiki-style

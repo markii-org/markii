@@ -25,8 +25,16 @@ leafDirective, and containerDirective, each with `name`, string-valued
 Raw HTML MUST NOT be rendered; an implementation drops `html` nodes.
 Directives MUST NOT parse inside code fences. Malformed or unclosed
 directive syntax MUST degrade to text, never to an error. Optional YAML
-frontmatter MAY open a document; its one format-defined key is `uses`, a
-list of pack names, and it is informative only.
+frontmatter MAY open a document, delimited by `---` lines, and is
+recognized only as the document's first construct. It MUST parse to a
+distinct metadata node and MUST NOT be rendered. A `---` sequence anywhere
+else keeps its ordinary CommonMark meaning, and an unterminated opening
+fence MUST degrade to ordinary markdown, never to an error. Frontmatter's
+one format-defined key is `uses`, a list of pack names, informative only.
+An implementation MUST read the flow form (`uses: [a, b]`) and the
+block-sequence form (`- name` lines); it MUST NOT fail on any other shape,
+and treating an unreadable `uses` as absent is conforming. Reading
+frontmatter MUST NOT require a YAML parser.
 
 Directive names SHOULD be lowercase-kebab. A name MUST NOT contain `:`.
 Namespaced names from packs join the namespace and name with `-` or `_`.
@@ -83,7 +91,17 @@ A conforming renderer:
 5. is side-effect-free on open: rendering MUST NOT execute scripts, and
    value reads are pure lookups of last-known state;
 6. presents a failed value binding as a quiet placeholder with the reason
-   out of the text flow (such as a tooltip), never as body text.
+   out of the text flow (such as a tooltip), never as body text;
+7. MAY resolve directive names through registry-level aliases: an alias
+   names one target and optional preset attributes. An alias MUST be
+   resolved at lookup time and MUST NOT be followed more than one hop; a
+   registered component MUST take precedence over an alias of the same
+   name; attributes written in the document MUST take precedence over an
+   alias's presets; presets that are reserved attributes MUST be
+   intercepted exactly as author-written ones are; and an alias whose
+   target is unregistered MUST render requirement 3's fallback under the
+   target's name. Aliases are configuration of the registry or the
+   application: a document MUST NOT be able to define them.
 
 The contract is framework-neutral; the spec's normative text does not
 mention any UI framework.

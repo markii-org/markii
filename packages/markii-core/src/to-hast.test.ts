@@ -144,3 +144,33 @@ describe('code-fence meta preservation (hast level)', () => {
     expect(code?.properties['data-mk-meta']).toBeUndefined();
   });
 });
+
+/**
+ * Frontmatter is metadata, never content: a leading `---` block must leave
+ * no trace in the rendered tree. `mdast-util-to-hast` maps `yaml` to its
+ * `ignore` handler today, but this is a guarantee of the format rather than
+ * an incidental upstream default, so it is pinned here — if a future
+ * dependency release started emitting the block as text, this fails loudly
+ * instead of silently spilling `title:`/`uses:` lines into every document.
+ */
+describe('frontmatter (hast level)', () => {
+  it('drops a leading frontmatter block entirely', () => {
+    const tree = toHast('---\ntitle: Notes\nuses: [ana]\n---\n\n# Hello\n');
+    const serialized = JSON.stringify(tree);
+    expect(serialized).not.toContain('title: Notes');
+    expect(serialized).not.toContain('uses');
+    expect(findElement(tree, 'h1')).toBeDefined();
+    expect(findElement(tree, 'hr')).toBeUndefined();
+  });
+
+  it('still renders a mid-document --- as an <hr>', () => {
+    const tree = toHast('Before.\n\n---\n\nAfter.\n');
+    expect(findElement(tree, 'hr')).toBeDefined();
+  });
+
+  it('renders an unclosed opening --- as an <hr> plus ordinary text', () => {
+    const tree = toHast('---\ntitle: Notes\n\nBody.\n');
+    expect(findElement(tree, 'hr')).toBeDefined();
+    expect(JSON.stringify(tree)).toContain('title: Notes');
+  });
+});

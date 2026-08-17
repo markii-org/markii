@@ -9,8 +9,14 @@ export { renderMark, renderMarkNode } from './render.js';
 export {
   createRegistry,
   mergeRegistries,
+  registryAliases,
+  resolveDirectiveAlias,
+  REGISTRY_ALIASES,
   type DirectiveAttributes,
   type Registry,
+  type RegistryAlias,
+  type RegistryAliases,
   type RegistryEntry,
+  type ResolvedDirective,
   type MarkComponentProps,
 } from './registry.js';

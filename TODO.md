@@ -310,8 +310,12 @@ Open VSX.
   (throwing get, Proxy value, throwing during dotted-path walk); applies to
   renderMark and renderMarkNode alike. Spec: renderer requirement extends
   "never throws" to hostile host stores.
-- J2 (APPROVED 2026-08-17, minimal; QUEUED behind Phase I to avoid lockfile
-  collisions): frontmatter tolerance — remark-frontmatter in core
+- [x] J2 DONE 2026-08-18 (this commit; Opus-built + probe-verified; 5 new
+  conformance fixtures 19–23, fixtures 01–18 byte-identical; core 185
+  tests): remark-frontmatter in both plugin chains, extractFrontmatter/
+  extractFrontmatterUses hand-rolled (flow + block-list only), yaml node
+  dropped in toHast AND nodeToHast (test-pinned). Original scope:
+  frontmatter tolerance — remark-frontmatter in core
   (stack-approved) so `---` YAML blocks parse as a frontmatter node
   (dropped in render, exposed in AST) + a hand-rolled `uses` accessor for
   the simple list forms ONLY (`uses: [a, b]` and block list; anything else
@@ -319,7 +323,13 @@ Open VSX.
   philosophy); conformance fixtures (frontmatter present/absent/malformed,
   `---` mid-document unchanged as thematic break). `uses:` SEMANTICS (pack
   hints UI) stay in the packs arc.
-- J3 (APPROVED 2026-08-17, registry-level; QUEUED behind Phase I):
+- [x] J3 DONE 2026-08-18 (this commit; 37 alias tests, react 443): aliases
+  under a SYMBOL key on Registry (string keys stay directive names; no
+  breaking change), resolved in createDirectiveElement BEFORE layout
+  interception, one hop, real-entry-wins, author-attrs-win, per-name alias
+  merge in mergeRegistries, `value` excluded. Layout wrappers NOT migrated
+  (DOM-identity criterion fails — documented in layout-wrapper.tsx).
+  Original scope:
   `aliases` in the registry (alias name → target name + preset attributes;
   author-written attributes override the alias's presets — closest to the
   text wins), resolved at

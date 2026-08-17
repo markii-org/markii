@@ -2,6 +2,7 @@ import { unified } from 'unified';
 import type { Plugin } from 'unified';
 import remarkParse from 'remark-parse';
 import remarkDirective from 'remark-directive';
+import remarkFrontmatter from 'remark-frontmatter';
 import remarkGfm from 'remark-gfm';
 import remarkRehype from 'remark-rehype';
 import { visit } from 'unist-util-visit';
@@ -192,10 +193,21 @@ function sanitizeUrls(tree: HastRoot): void {
  * immutable-processor model (`.use()` returns a new processor) and keeps
  * each call's `.parse`/`.runSync` free of any state left over from a
  * previous call.
+ *
+ * The plugin list mirrors `parse.ts` exactly (frontmatter, directives, GFM),
+ * so what `parse` accepts and what this pipeline renders can never disagree
+ * about the grammar. Frontmatter needs no tagging step of its own: a leading
+ * `---` block becomes an mdast `yaml` node, and `mdast-util-to-hast`'s
+ * default handler for `yaml` is its `ignore` handler, so the block is
+ * DROPPED from the hast tree rather than leaking into the rendered document
+ * as text (pinned by `to-hast.test.ts`, since that drop is a rendering
+ * guarantee of the format, not an incidental upstream default). Metadata is
+ * read from the AST via `frontmatter.ts`, never rendered.
  */
 function createProcessor() {
   return unified()
     .use(remarkParse)
+    .use(remarkFrontmatter)
     .use(remarkDirective)
     .use(remarkGfm)
     .use(tagDirectiveNodes)

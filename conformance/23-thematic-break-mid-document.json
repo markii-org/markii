@@ -1,0 +1,34 @@
+{
+  "children": [
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "A "
+        },
+        {
+          "type": "inlineCode",
+          "value": "---"
+        },
+        {
+          "type": "text",
+          "value": " line inside the document keeps its ordinary CommonMark meaning."
+        }
+      ],
+      "type": "paragraph"
+    },
+    {
+      "type": "thematicBreak"
+    },
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "Enabling frontmatter must not change this: the line above is a thematic\nbreak, not the start of a metadata block."
+        }
+      ],
+      "type": "paragraph"
+    }
+  ],
+  "type": "root"
+}

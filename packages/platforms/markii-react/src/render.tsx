@@ -18,6 +18,7 @@ import type {
 } from '@markii/runtime';
 import type { Element as HastElement, Root as HastRoot } from 'hast';
 import type { DirectiveAttributes, Registry } from './registry.js';
+import { resolveDirectiveAlias } from './registry.js';
 import { resolveLayoutAttributes } from './layout.js';
 import { ScriptMarker } from './components/script-marker.js';
 import { UnknownDirective } from './components/unknown-directive.js';
@@ -259,7 +260,8 @@ function renderDirectiveContent(
 
 /**
  * Builds the React component used to replace every `<mk-directive>` hast
- * element (tagged by `@markii/core`'s `toHast`): resolves docs/format.md's
+ * element (tagged by `@markii/core`'s `toHast`): resolves the registry's
+ * alias table, then docs/format.md's
  * reserved layout-preset attributes (`width`/`align`) for EVERY directive,
  * inline or block, then delegates the rest of the work — registry lookup,
  * `:value[...]`, the unknown-directive fallback — to
@@ -279,9 +281,28 @@ function createDirectiveElement(
   vault: VaultStore | undefined,
 ): (props: DirectiveElementProps) => ReactElement {
   return function DirectiveElement(props: DirectiveElementProps): ReactElement {
-    const name = props['data-mk-name'] ?? '';
+    const written = props['data-mk-name'] ?? '';
     const kind = props['data-mk-kind'];
     const rawAttributes = parseAttributes(props['data-mk-attrs']);
+
+    // Registry aliases (`registry.ts`) are resolved FIRST, so everything
+    // downstream — layout interception, `data=` binding, the registry
+    // lookup, the unknown fallback — treats the resolved name and merged
+    // attributes exactly as if the author had written them. In particular
+    // an alias preset of `width=wide` is intercepted by
+    // `resolveLayoutAttributes` below like any author-written `width`,
+    // rather than reaching a component as a stray attribute.
+    //
+    // `value` is excluded: `:value[...]` is a renderer built-in
+    // (`renderDirectiveContent`), not a registry entry, so an alias NAMED
+    // `value` is inert — it can no more be aliased over than it can be
+    // registered over. An alias whose TARGET is `value` does reach the
+    // built-in, which is simply rule 3 of `resolveDirectiveAlias`: the
+    // target resolves as if the author had typed it.
+    const { name, attributes: aliasedAttributes } =
+      written === VALUE_DIRECTIVE_NAME
+        ? { name: written, attributes: rawAttributes }
+        : resolveDirectiveAlias(registry, written, rawAttributes);
 
     // Reserved layout keys (docs/format.md: `width`/`align`) are stripped for
     // EVERY directive, inline or block — a text directive's component must
@@ -291,7 +312,7 @@ function createDirectiveElement(
     // named `constructor`/`toString`/`__proto__`.
     const isBlockDirective = kind !== 'textDirective';
     const { attributes, className: layoutClassName } =
-      resolveLayoutAttributes(rawAttributes);
+      resolveLayoutAttributes(aliasedAttributes);
 
     const element = renderDirectiveContent(
       name,

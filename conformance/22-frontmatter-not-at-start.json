@@ -1,0 +1,36 @@
+{
+  "children": [
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "Frontmatter is recognized only as the very first construct of a document."
+        }
+      ],
+      "type": "paragraph"
+    },
+    {
+      "type": "thematicBreak"
+    },
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "uses: [ana]"
+        }
+      ],
+      "depth": 2,
+      "type": "heading"
+    },
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "The block above is not metadata: it is a thematic break, a setext heading,\nand ordinary text, exactly as CommonMark reads it."
+        }
+      ],
+      "type": "paragraph"
+    }
+  ],
+  "type": "root"
+}

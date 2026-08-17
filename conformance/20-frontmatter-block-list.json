@@ -1,0 +1,34 @@
+{
+  "children": [
+    {
+      "type": "yaml",
+      "value": "uses:\n  - ana\n  - 'gh'\ntitle: Dashboard"
+    },
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "The block-sequence form of "
+        },
+        {
+          "type": "inlineCode",
+          "value": "uses:"
+        },
+        {
+          "type": "text",
+          "value": " is the second shape the hand-rolled\naccessor reads. The AST still holds one "
+        },
+        {
+          "type": "inlineCode",
+          "value": "yaml"
+        },
+        {
+          "type": "text",
+          "value": " node with the raw text."
+        }
+      ],
+      "type": "paragraph"
+    }
+  ],
+  "type": "root"
+}

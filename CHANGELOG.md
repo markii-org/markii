@@ -8,6 +8,37 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Frontmatter tolerance (`@markii/core`)**: `parse` and `toHast` now run
+  `remark-frontmatter`, so a leading `---` YAML block parses as a `yaml`
+  node — exposed in the AST, dropped from the rendered output — instead of
+  being read as a thematic break plus stray text. Everywhere else `---` keeps
+  its ordinary CommonMark meaning: mid-document it is still a thematic break,
+  an unclosed opening fence still degrades to ordinary markdown, and a
+  frontmatter-shaped block that is not the document's first construct is not
+  frontmatter. New exports `extractFrontmatter` (`{ raw, uses? }`, from
+  source text or an already-parsed tree) and `extractFrontmatterUses` read
+  the one format-defined key. The reader is hand-rolled and there is NO YAML
+  dependency: it understands `uses: [a, b]` and the block-list form, quoting
+  and whitespace tolerated, and returns `undefined` — never a throw, never a
+  partial list — for anything else. New conformance fixtures
+  `19-frontmatter`, `20-frontmatter-block-list`, `21-frontmatter-unclosed`,
+  `22-frontmatter-not-at-start`, `23-thematic-break-mid-document`.
+- **Registry aliases (`@markii/react`)**: a registry can now give an existing
+  component a second name with preset attributes — `warn` standing for
+  `callout{type=warning}` — via a new optional second argument to
+  `createRegistry`, or the exported `REGISTRY_ALIASES` symbol on a
+  hand-built registry. Resolution happens at lookup time, one hop only (an
+  alias pointing at another alias lands on the unknown-directive fallback,
+  never chains); a real registered component always beats an alias of the
+  same name; author-written attributes always beat the alias's presets; a
+  preset `width`/`align` goes through the same reserved-attribute
+  interception as an author-written one; and an alias to an unregistered
+  target renders the standard fallback for the TARGET name. `mergeRegistries`
+  merges alias tables per name with the same last-wins semantics it gives
+  components. Aliases are registry/app-level configuration and are never
+  definable inside a note. Also exported: `registryAliases`,
+  `resolveDirectiveAlias`, and the `RegistryAlias`/`RegistryAliases`/
+  `ResolvedDirective` types.
 - **Layout wrapper containers (`@markii/react`, `@markii/stdlib`)**:
   `:::center`, `:::right`, `:::wide`, `:::narrow`, `:::full` — five registry
   aliases of one wrapper component that carry DESIGN.md §4's closed layout

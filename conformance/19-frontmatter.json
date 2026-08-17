@@ -1,0 +1,54 @@
+{
+  "children": [
+    {
+      "type": "yaml",
+      "value": "title: Release notes\nuses: [ana, gh]"
+    },
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "Release notes"
+        }
+      ],
+      "depth": 1,
+      "type": "heading"
+    },
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "Frontmatter parses as a "
+        },
+        {
+          "type": "inlineCode",
+          "value": "yaml"
+        },
+        {
+          "type": "text",
+          "value": " node carrying the raw block text — the parser\nnever interprets YAML — and the renderer drops it from the output."
+        }
+      ],
+      "type": "paragraph"
+    },
+    {
+      "attributes": {
+        "type": "note"
+      },
+      "children": [
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": "The body after the closing fence is ordinary markdown."
+            }
+          ],
+          "type": "paragraph"
+        }
+      ],
+      "name": "callout",
+      "type": "containerDirective"
+    }
+  ],
+  "type": "root"
+}

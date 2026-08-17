@@ -11,6 +11,20 @@ import type { MarkComponentProps } from '../registry.js';
  * deliberately no `left`/`normal` alias (defaults need no wrapper at all)
  * and no attribute-bearing form.
  */
+/*
+ * Deliberately NOT built on the registry alias mechanism (`registry.ts`),
+ * despite "alias" appearing in the sentence below in its ordinary English
+ * sense. A registry alias maps a name onto ANOTHER REGISTERED NAME plus
+ * preset attributes; these five map onto no shared public name, so aliasing
+ * them would mean inventing one (`:::layout{preset=wide}`) and adding it to
+ * the format — more public surface, not less. The preset attributes would
+ * also have to be `width=`/`align=`, which the renderer intercepts BEFORE a
+ * component sees them, producing `<div class="mk-width-wide">` around the
+ * component instead of the single `<div class="mk-layout mk-width-wide">`
+ * these emit — different DOM, and `doc.css`'s `.mk-layout > * + *` rhythm
+ * rule would stop matching. Five two-line registry entries sharing one
+ * implementation is the simpler arrangement; leave it alone.
+ */
 export const LAYOUT_WRAPPER_PRESETS = [
   'center',
   'right',
