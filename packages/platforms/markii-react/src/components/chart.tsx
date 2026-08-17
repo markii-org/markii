@@ -22,22 +22,6 @@ const PADDING = 4;
  */
 const MAX_POINTS = 200;
 
-/**
- * Sane bounds for a `width`/`height` attribute. Mirrors the `MAX_POINTS`
- * philosophy: a hostile or merely careless value (e.g. `width="1e9"`) must
- * not translate into a giant viewBox / DOM footprint.
- */
-const MIN_SIZE = 1;
-const MAX_SIZE = 2000;
-
-/** Parses `size` (a `height`/`width` attribute) defensively: non-numeric/non-positive input falls back to `fallback`; any finite positive value is clamped to `[MIN_SIZE, MAX_SIZE]`. */
-function parseSize(size: string | null | undefined, fallback: number): number {
-  if (size === null || size === undefined) return fallback;
-  const parsed = Number(size);
-  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
-  return Math.min(Math.max(parsed, MIN_SIZE), MAX_SIZE);
-}
-
 /** Clamps `value` into `[0, 1]`; a non-finite input (should not occur post-`scalePoints` guards, but checked defensively) maps to the neutral mid-point `0.5`. */
 function clamp01(value: number): number {
   if (!Number.isFinite(value)) return 0.5;
@@ -168,8 +152,14 @@ export function Chart({
 }: MarkComponentProps): ReactElement {
   const rawKind = attributes.kind ?? DEFAULT_KIND;
   const kind: ChartKind = isChartKind(rawKind) ? rawKind : DEFAULT_KIND;
-  const width = parseSize(attributes.width, DEFAULT_WIDTH);
-  const height = parseSize(attributes.height, DEFAULT_HEIGHT);
+  // Charts size to their container — DESIGN.md §4's `width`/`align` layout
+  // presets are the sizing story, not a component-level pixel attribute
+  // (which would also be unreachable: `width` is a reserved layout key,
+  // stripped before this component ever sees `attributes`). The SVG itself
+  // keeps a fixed, built-in viewBox/coordinate system as an implementation
+  // detail of the geometry math below.
+  const width = DEFAULT_WIDTH;
+  const height = DEFAULT_HEIGHT;
 
   const points = resolvePoints(data, dataStatus, attributes.values);
 

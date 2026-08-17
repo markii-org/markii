@@ -3,14 +3,14 @@ import type { ReactElement, ReactNode } from 'react';
 import { jsx, jsxs } from 'react/jsx-runtime';
 import { toJsxRuntime } from 'hast-util-to-jsx-runtime';
 import { toHast, parseMetaAttributes, isValidScriptName } from '@markii/core';
-import type { ValueStatus, ValueStore } from '@markii/runtime';
+import type { ValueStatus, ValueStore, VaultStore } from '@markii/runtime';
 import type { Element as HastElement } from 'hast';
 import type { DirectiveAttributes, Registry } from './registry.js';
 import { resolveLayoutAttributes } from './layout.js';
 import { ScriptMarker } from './components/script-marker.js';
 import { UnknownDirective } from './components/unknown-directive.js';
 import { ValueDirective } from './components/value-directive.js';
-import { resolveStorePath } from './store-path.js';
+import { resolveScopedPath } from './store-path.js';
 
 function parseAttributes(json: string | undefined): DirectiveAttributes {
   if (!json) return {};
@@ -104,18 +104,21 @@ interface ResolvedDataBinding {
 
 /**
  * Splits a `data=<name>` attribute (if present) off `attributes`, resolves
- * `<name>` against `store` — `<name>` may be a dotted path (`repo.stars`)
- * reaching into a stored object/array, or a bare name, via
- * `resolveStorePath` (`./store-path`) — and returns the resolved binding
- * plus the remaining attributes (every other attribute is untouched — this
- * only ever special-cases the `data` key). Never throws: no store, an
- * empty/bare `data` attribute, an unknown root name, and an unresolved path
- * segment all degrade to `dataStatus: 'missing'` with `data: undefined`,
- * the same graceful-degradation spirit as the unknown-directive fallback.
+ * `<name>` against `store`/`vault` — `<name>` may be a dotted path
+ * (`repo.stars`) reaching into a stored object/array, or a bare name, and an
+ * `@`-prefixed name (`@gh.stars`) routes at `vault` instead of `store` (§8)
+ * — via `resolveScopedPath` (`./store-path`) — and returns the resolved
+ * binding plus the remaining attributes (every other attribute is
+ * untouched — this only ever special-cases the `data` key). Never throws:
+ * no store/vault, an empty/bare `data` attribute, an unknown root name, and
+ * an unresolved path segment all degrade to `dataStatus: 'missing'` with
+ * `data: undefined`, the same graceful-degradation spirit as the
+ * unknown-directive fallback.
  */
 function resolveDataAttribute(
   attributes: DirectiveAttributes,
   store: ValueStore | undefined,
+  vault: VaultStore | undefined,
 ): ResolvedDataBinding {
   if (!Object.hasOwn(attributes, DATA_ATTRIBUTE_KEY)) {
     return { attributes };
@@ -126,7 +129,7 @@ function resolveDataAttribute(
     return { attributes: rest, data: undefined, dataStatus: 'missing' };
   }
 
-  const resolved = resolveStorePath(store, rawName);
+  const resolved = resolveScopedPath({ store, vault }, rawName);
   return {
     attributes: rest,
     data: resolved.value,
@@ -162,13 +165,18 @@ function renderDirectiveContent(
   children: ReactNode,
   registry: Registry,
   store: ValueStore | undefined,
+  vault: VaultStore | undefined,
 ): ReactElement {
   // `:value[name]` (§8) is a renderer built-in, resolved before any
   // registry lookup — like the unknown-directive fallback, it is not
   // something a pack can register over; it is part of the render-time
   // interpolation contract itself.
   if (name === VALUE_DIRECTIVE_NAME) {
-    return <ValueDirective store={store}>{children}</ValueDirective>;
+    return (
+      <ValueDirective store={store} vault={vault}>
+        {children}
+      </ValueDirective>
+    );
   }
 
   // `Object.hasOwn` (rather than `registry[name]` / `name in registry`)
@@ -196,7 +204,7 @@ function renderDirectiveContent(
   }
 
   const Component = entry.component;
-  const binding = resolveDataAttribute(attributes, store);
+  const binding = resolveDataAttribute(attributes, store, vault);
   // `data`/`dataStatus` are only spread in when the directive actually had
   // a `data=` attribute (`'data' in binding`) — NOT whenever
   // `binding.data` happens to be defined. Without this check, JSX would
@@ -220,9 +228,12 @@ function renderDirectiveContent(
 /**
  * Builds the React component used to replace every `<mk-directive>` hast
  * element (tagged by `@markii/core`'s `toHast`): resolves DESIGN.md §4's
- * layout-preset attributes (`width`/`align`) for block directives, then
- * delegates the rest of the work — registry lookup, `:value[...]`, the
- * unknown-directive fallback — to `renderDirectiveContent`. Never throws.
+ * reserved layout-preset attributes (`width`/`align`) for EVERY directive,
+ * inline or block, then delegates the rest of the work — registry lookup,
+ * `:value[...]`, the unknown-directive fallback — to
+ * `renderDirectiveContent`. Only a block (non-`textDirective`) directive
+ * actually gets wrapped in a layout `<div>`; an inline directive's resolved
+ * class, if any, is discarded. Never throws.
  *
  * Typed as a plain function (not React's `ComponentType`, whose declared
  * return type is the broader `ReactNode`) because hast-util-to-jsx-runtime's
@@ -233,23 +244,22 @@ function renderDirectiveContent(
 function createDirectiveElement(
   registry: Registry,
   store: ValueStore | undefined,
+  vault: VaultStore | undefined,
 ): (props: DirectiveElementProps) => ReactElement {
   return function DirectiveElement(props: DirectiveElementProps): ReactElement {
     const name = props['data-mk-name'] ?? '';
     const kind = props['data-mk-kind'];
     const rawAttributes = parseAttributes(props['data-mk-attrs']);
 
-    // Layout presets (DESIGN.md §4) apply only to block directives
-    // (leaf/container) — a text directive (`kind === 'textDirective'`)
-    // ignores `width`/`align` entirely, so its component still sees
-    // whatever attributes the author wrote, unstripped. Intercepted here,
-    // before the registry lookup inside `renderDirectiveContent`, so it
-    // applies identically to a registered component, the unknown-directive
-    // fallback, and a directive named `constructor`/`toString`/`__proto__`.
+    // Reserved layout keys (DESIGN.md §4: `width`/`align`) are stripped for
+    // EVERY directive, inline or block — a text directive's component must
+    // never see them either. Intercepted here, before the registry lookup
+    // inside `renderDirectiveContent`, so it applies identically to a
+    // registered component, the unknown-directive fallback, and a directive
+    // named `constructor`/`toString`/`__proto__`.
     const isBlockDirective = kind !== 'textDirective';
-    const { attributes, className: layoutClassName } = isBlockDirective
-      ? resolveLayoutAttributes(rawAttributes)
-      : { attributes: rawAttributes, className: undefined };
+    const { attributes, className: layoutClassName } =
+      resolveLayoutAttributes(rawAttributes);
 
     const element = renderDirectiveContent(
       name,
@@ -258,12 +268,19 @@ function createDirectiveElement(
       props.children,
       registry,
       store,
+      vault,
     );
 
-    // Only wrap when at least one layout class actually resulted — this
-    // keeps DOM output unchanged from before layout presets existed for the
-    // overwhelmingly common case of a directive with no width/align.
-    return layoutClassName ? (
+    // The wrapper `<div>` applies ONLY to block directives (leaf/container),
+    // and only when at least one layout class actually resulted. An inline
+    // (`textDirective`) directive never gets a wrapper — a `<div>` inside a
+    // paragraph would be invalid HTML and would break the `.doc > * + *`
+    // rhythm rule — so its resolved `layoutClassName`, if any, is simply
+    // discarded here; the reserved keys were already stripped above
+    // regardless. This also keeps DOM output unchanged from before layout
+    // presets existed for the overwhelmingly common case of a block
+    // directive with no width/align.
+    return isBlockDirective && layoutClassName ? (
       <div className={layoutClassName}>{element}</div>
     ) : (
       element
@@ -387,20 +404,32 @@ function PreElement({ node, children }: PreElementProps): ReactElement {
  * gracefully rather than failing: with no store, `:value[name]` renders its
  * missing-value marker and every `data=name` attribute resolves to
  * `dataStatus: 'missing'`, but the document still renders completely.
- * Threaded as a plain function argument (not a wrapping React context
- * provider) to match `registry`, the entry point's other piece of
- * configuration — `renderMark` is a plain function called directly to
- * produce a `ReactElement`, not a component mounted inside its own tree, so
- * there is no existing provider layer for a context to hook into here.
+ *
+ * `vault` is the optional app-scoped read seam (`@markii/runtime`'s
+ * `VaultStore`, §8's "vault-published values") that an `@`-prefixed name
+ * (`data=@gh.stars`, `:value[@gh.stars]`) resolves against instead of
+ * `store` — "bare name = mine, `@name` = the vault's". Reading the vault is
+ * render-time and pure, exactly like reading `store`: it executes nothing
+ * and needs no grant. With no `vault` supplied, every `@name` degrades to
+ * `dataStatus`/status `'missing'` the same way an absent `store` degrades a
+ * bare name — the document still renders completely.
+ *
+ * Both `store` and `vault` are threaded as plain function arguments (not a
+ * wrapping React context provider) to match `registry`, the entry point's
+ * other piece of configuration — `renderMark` is a plain function called
+ * directly to produce a `ReactElement`, not a component mounted inside its
+ * own tree, so there is no existing provider layer for a context to hook
+ * into here.
  */
 export function renderMark(
   text: string,
   registry: Registry,
   store?: ValueStore,
+  vault?: VaultStore,
 ): ReactElement {
   try {
     const hastTree = toHast(text);
-    const DirectiveElement = createDirectiveElement(registry, store);
+    const DirectiveElement = createDirectiveElement(registry, store, vault);
     return toJsxRuntime(hastTree, {
       Fragment,
       jsx,

@@ -158,6 +158,62 @@ describe('extractScripts', () => {
   });
 });
 
+describe('extractScripts: `publish`', () => {
+  it('sets `publish: true` for the bare `publish` attribute', () => {
+    const tree = parse('```lua {name=gh publish}\nreturn 1\n```');
+    const scripts = extractScripts(tree);
+    expect(scripts).toHaveLength(1);
+    expect(scripts[0]?.publish).toBe(true);
+  });
+
+  it('leaves `publish` absent (not just falsy) when the fence has no `publish` key at all', () => {
+    const tree = parse('```lua {name=gh}\nreturn 1\n```');
+    const scripts = extractScripts(tree);
+    expect(scripts).toHaveLength(1);
+    expect(Object.hasOwn(scripts[0] as object, 'publish')).toBe(false);
+    expect('publish' in (scripts[0] as object)).toBe(false);
+  });
+
+  it.each(['true', 'yes', '1', 'false', ''])(
+    'does not treat `publish=%s` (a valued form) as the bare attribute',
+    (value) => {
+      const meta =
+        value === ''
+          ? '```lua {name=gh publish=""}'
+          : `\`\`\`lua {name=gh publish=${value}}`;
+      const tree = parse(`${meta}\nreturn 1\n\`\`\``);
+      const scripts = extractScripts(tree);
+      expect(scripts).toHaveLength(1);
+      expect(Object.hasOwn(scripts[0] as object, 'publish')).toBe(false);
+    },
+  );
+
+  it('`{publish}` alone (no `name`) is not a script at all', () => {
+    const tree = parse('```lua {publish}\nreturn 1\n```');
+    expect(extractScripts(tree)).toHaveLength(0);
+  });
+
+  it('`{name=a.b publish}` is not a script — an invalid name gates before `publish` is ever read', () => {
+    const tree = parse('```lua {name=a.b publish}\nreturn 1\n```');
+    expect(extractScripts(tree)).toHaveLength(0);
+  });
+
+  it('`publish` combines with `src`', () => {
+    const tree = parse('```lua {name=gh publish src=scripts/x.lua}\n```');
+    const scripts = extractScripts(tree);
+    expect(scripts).toHaveLength(1);
+    expect(scripts[0]?.publish).toBe(true);
+    expect(scripts[0]?.src).toBe('scripts/x.lua');
+  });
+
+  it('a `publish` substring inside a quoted attribute value is not the `publish` attribute', () => {
+    const tree = parse('```lua {name=gh title="a publish b"}\nreturn 1\n```');
+    const scripts = extractScripts(tree);
+    expect(scripts).toHaveLength(1);
+    expect(Object.hasOwn(scripts[0] as object, 'publish')).toBe(false);
+  });
+});
+
 describe('isValidScriptName', () => {
   it.each([
     'x',

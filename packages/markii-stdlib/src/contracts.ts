@@ -277,21 +277,9 @@ export const STANDARD_COMPONENTS: Record<string, ComponentContract> = {
         description:
           'Comma-separated numbers for static authoring, e.g. `values="1,3,2,5"`. Ignored in favor of a bound `data=` array when both are present. Non-numeric entries are dropped.',
       },
-      height: {
-        type: 'string',
-        required: false,
-        description:
-          'SVG viewport height in pixels, as a numeric string. Defaults to a sane built-in size; non-numeric/non-positive input falls back to the default.',
-      },
-      width: {
-        type: 'string',
-        required: false,
-        description:
-          'SVG viewport width in pixels, as a numeric string. Defaults to a sane built-in size; non-numeric/non-positive input falls back to the default.',
-      },
     },
     description:
-      'A leaf directive rendering a minimal hand-rolled inline SVG chart, e.g. `::chart{kind=line values="1,3,2,5"}`. Data binding (§8): `data=name` resolves against the value store — expects an array of numbers (typically a Lua script returning a table), or an array of `{value}` objects. Non-finite/non-numeric entries are filtered out and the point count is capped; an empty or all-invalid series renders a small neutral empty state rather than a broken chart. Never throws, and never places unescaped text into the emitted SVG markup.',
+      'A leaf directive rendering a minimal hand-rolled inline SVG chart, e.g. `::chart{kind=line values="1,3,2,5"}`. Sizes to its container — use DESIGN.md §4\'s `width`/`align` layout presets to control its footprint, not a pixel attribute. Data binding (§8): `data=name` resolves against the value store — expects an array of numbers (typically a Lua script returning a table), or an array of `{value}` objects. Non-finite/non-numeric entries are filtered out and the point count is capped; an empty or all-invalid series renders a small neutral empty state rather than a broken chart. Never throws, and never places unescaped text into the emitted SVG markup.',
   },
   row: {
     name: 'row',

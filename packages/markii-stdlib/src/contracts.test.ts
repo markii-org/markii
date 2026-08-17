@@ -172,14 +172,9 @@ describe('STANDARD_COMPONENTS', () => {
     }
   });
 
-  it("chart's attributes are exactly kind, values, height, and width, all optional", () => {
+  it("chart's attributes are exactly kind and values, all optional — no pixel width/height (charts size to their container)", () => {
     const attrs = STANDARD_COMPONENTS.chart?.attributes ?? {};
-    expect(Object.keys(attrs).sort()).toEqual([
-      'height',
-      'kind',
-      'values',
-      'width',
-    ]);
+    expect(Object.keys(attrs).sort()).toEqual(['kind', 'values']);
     for (const schema of Object.values(attrs)) {
       expect(schema.required).toBeFalsy();
     }

@@ -4,7 +4,7 @@ import { forwardRef, memo } from 'react';
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { conformanceDir } from '@markii/core/corpus';
-import { createValueStore } from '@markii/runtime';
+import { createValueStore, createVaultStore } from '@markii/runtime';
 import { renderMark } from './render';
 import { defaultRegistry } from './components';
 import type {
@@ -741,14 +741,81 @@ describe('renderMark — layout presets (DESIGN.md §4: width/align)', () => {
     expect(seenAttributes()).toEqual({ title: 'kept' });
   });
 
-  it('does NOT wrap or strip layout attributes on an inline (text) directive', () => {
+  it('strips reserved layout keys from an inline (text) directive but never wraps it', () => {
     const { container } = render(
       renderMark(':kbd[Ctrl+S]{align=center}', defaultRegistry),
     );
+    // No layout class anywhere in the tree — an inline directive never gets
+    // a wrapper, so the resolved class string is simply discarded.
     expect(container.querySelector('.mk-align-center')).toBeNull();
+    expect(container.querySelector('[class*="mk-width-"]')).toBeNull();
+    expect(container.querySelector('[class*="mk-align-"]')).toBeNull();
     const kbd = container.querySelector('kbd.mk-kbd');
     expect(kbd).not.toBeNull();
     expect(kbd).toHaveTextContent('Ctrl+S');
+  });
+
+  it('strips width/align from the attributes an inline registered component receives, with no wrapper div', () => {
+    let seen: DirectiveAttributes | undefined;
+    const registry: Registry = {
+      probe: {
+        component: ({ attributes }: MarkComponentProps) => {
+          seen = attributes;
+          return <span className="probe">x</span>;
+        },
+        inline: true,
+      },
+    };
+    const { container } = render(
+      renderMark(
+        ':probe[hi]{width=narrow align=center title="kept"}',
+        registry,
+      ),
+    );
+    expect(seen).toEqual({ title: 'kept' });
+    expect(container.querySelector('[class*="mk-width-"]')).toBeNull();
+    expect(container.querySelector('[class*="mk-align-"]')).toBeNull();
+    expect(container.querySelector('div')).toBeNull();
+    expect(container.querySelector('.probe')).not.toBeNull();
+  });
+
+  it('still strips an invalid width/align value from an inline directive, with no wrapper and no class', () => {
+    let seen: DirectiveAttributes | undefined;
+    const registry: Registry = {
+      probe: {
+        component: ({ attributes }: MarkComponentProps) => {
+          seen = attributes;
+          return <span className="probe">x</span>;
+        },
+        inline: true,
+      },
+    };
+    const { container } = render(
+      renderMark(
+        ":probe[hi]{width='javascript:alert(1)' align=constructor}",
+        registry,
+      ),
+    );
+    expect(seen).toEqual({});
+    expect(container.querySelector('[class*="mk-width-"]')).toBeNull();
+    expect(container.querySelector('[class*="mk-align-"]')).toBeNull();
+    expect(container.querySelector('div')).toBeNull();
+    expect(container.innerHTML).not.toContain('javascript:');
+  });
+
+  it('renders the inline unknown-directive fallback (no wrapper) for an inline unregistered directive carrying layout attrs, never throwing', () => {
+    expect(() =>
+      render(renderMark(':mystery[hi]{width=wide align=center}', {})),
+    ).not.toThrow();
+    const { container } = render(
+      renderMark(':mystery[hi]{width=wide align=center}', {}),
+    );
+    expect(container.querySelector('[class*="mk-width-"]')).toBeNull();
+    expect(container.querySelector('[class*="mk-align-"]')).toBeNull();
+    expect(container.querySelector('div')).toBeNull();
+    const fallback = container.querySelector('.mk-unknown--inline');
+    expect(fallback).not.toBeNull();
+    expect(fallback).toHaveTextContent('mystery');
   });
 
   it('never throws for an inline directive carrying layout attributes', () => {
@@ -825,6 +892,132 @@ describe('renderMark — layout presets (DESIGN.md §4: width/align)', () => {
     expect(buttons[0]).toHaveTextContent('A');
     expect(buttons[1]).toHaveTextContent('B');
     expect(container.querySelector('.mk-tab')).toHaveTextContent('panel A');
+  });
+});
+
+describe('renderMark — @-prefixed vault-scoped reads (DESIGN.md §8)', () => {
+  it(':value[@gh.stars] resolves from the vault when a vault is supplied', () => {
+    const { store: vault } = createVaultStore({
+      initial: { gh: { value: { stars: 42 }, status: 'fresh' } },
+    });
+    const { container } = render(
+      renderMark(':value[@gh.stars]', defaultRegistry, undefined, vault),
+    );
+    expect(container.querySelector('.mk-value')).toHaveTextContent('42');
+    expect(container.querySelector('.mk-value--missing')).toBeNull();
+  });
+
+  it(':value[@gh.stars] renders the missing marker with no vault supplied', () => {
+    const { container } = render(
+      renderMark(':value[@gh.stars]', defaultRegistry),
+    );
+    const missing = container.querySelector('.mk-value--missing');
+    expect(missing).not.toBeNull();
+    expect(missing).toHaveTextContent('{@gh.stars}');
+  });
+
+  it('data=@gh.stars resolves from the vault, not the note store', () => {
+    const { store: vault } = createVaultStore({
+      initial: { gh: { value: { stars: 7 }, status: 'fresh' } },
+    });
+    const store = createValueStore({
+      gh: { value: { stars: 999 }, status: 'fresh' },
+    });
+    let seen: MarkComponentProps | undefined;
+    const registry: Registry = {
+      probe: {
+        component: (props: MarkComponentProps) => {
+          seen = props;
+          return <div className="probe" />;
+        },
+        inline: false,
+      },
+    };
+    render(renderMark('::probe{data=@gh.stars}', registry, store, vault));
+    expect(seen?.data).toBe(7);
+    expect(seen?.dataStatus).toBe('fresh');
+  });
+
+  it('a vault-stale value gets the stale class through :value[]', () => {
+    const { store: vault } = createVaultStore({
+      initial: { gh: { value: 41, status: 'stale' } },
+    });
+    const { container } = render(
+      renderMark(':value[@gh]', defaultRegistry, undefined, vault),
+    );
+    const stale = container.querySelector('.mk-value--stale');
+    expect(stale).not.toBeNull();
+    expect(stale).toHaveTextContent('41');
+  });
+
+  it(':value[@] renders the missing marker without throwing', () => {
+    expect(() =>
+      render(renderMark(':value[@]', defaultRegistry)),
+    ).not.toThrow();
+    const { container } = render(renderMark(':value[@]', defaultRegistry));
+    expect(container.querySelector('.mk-value--missing')).not.toBeNull();
+  });
+
+  it(':value[@__proto__] renders the missing marker without throwing', () => {
+    const { store: vault } = createVaultStore();
+    expect(() =>
+      render(
+        renderMark(':value[@__proto__]', defaultRegistry, undefined, vault),
+      ),
+    ).not.toThrow();
+    const { container } = render(
+      renderMark(':value[@__proto__]', defaultRegistry, undefined, vault),
+    );
+    expect(container.querySelector('.mk-value--missing')).not.toBeNull();
+  });
+});
+
+describe('renderMark — backward compatibility and render purity', () => {
+  it('the 3-arg call (no vault) still resolves bare data=/:value[] names exactly as before', () => {
+    const store = createValueStore({
+      stars: { value: 42, status: 'fresh', ranAt: 1000 },
+    });
+    let seen: MarkComponentProps | undefined;
+    const registry: Registry = {
+      probe: {
+        component: (props: MarkComponentProps) => {
+          seen = props;
+          return <div className="probe" />;
+        },
+        inline: false,
+      },
+    };
+    const { container } = render(
+      renderMark('::probe{data=stars}\n\n:value[stars]', registry, store),
+    );
+    expect(seen?.data).toBe(42);
+    expect(seen?.dataStatus).toBe('fresh');
+    expect(container.querySelector('.mk-value')).toHaveTextContent('42');
+  });
+
+  it('rendering a document that reads data=@x and :value[@y] never writes the vault', () => {
+    const { store: vault } = createVaultStore({
+      initial: {
+        x: { value: 1, status: 'fresh' },
+        y: { value: 2, status: 'fresh' },
+      },
+    });
+    const before = vault.snapshot();
+    let seen: MarkComponentProps | undefined;
+    const registry: Registry = {
+      probe: {
+        component: (props: MarkComponentProps) => {
+          seen = props;
+          return <div className="probe" />;
+        },
+        inline: false,
+      },
+    };
+    render(
+      renderMark('::probe{data=@x}\n\n:value[@y]', registry, undefined, vault),
+    );
+    expect(seen?.data).toBe(1);
+    expect(vault.snapshot()).toEqual(before);
   });
 });
 

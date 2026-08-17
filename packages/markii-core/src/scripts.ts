@@ -18,12 +18,35 @@ import type { Code, Root } from 'mdast';
  * long-script file (§8: "the block becomes a one-line reference,
  * ` ```lua {src=scripts/etl.lua name=stars}` ` with an empty body"); `code`
  * is still the fence's own body (empty for a `src=` reference).
+ *
+ * `publish`, when present, is always `true` — DESIGN.md §8: "**Publishing is
+ * declarative**: the bare `publish` attribute on the script fence, no API to
+ * call." "Bare" is load-bearing: it is set ONLY when the fence spells the
+ * key with no `=value` at all (` ```lua {name=gh publish}` `, per
+ * `parseMetaAttributes`'s bare-key convention of yielding `''`). Any valued
+ * spelling — `publish=true`, `publish=yes`, `publish=1`, even `publish=false`
+ * or `publish=""` — is a DIFFERENT, undefined attribute, not the one the
+ * format specifies, and is silently ignored (the block simply does not
+ * publish), matching the format's "unrecognized input degrades, never
+ * throws" rule. This is deliberately fail-closed rather than lenient:
+ * publishing "writes beyond the note" (§8), so guessing at an unrecognized
+ * spelling risks writing to the shared vault when the author didn't mean to
+ * — silently NOT publishing is always the safe wrong answer, silently
+ * publishing never is. In particular `publish=false` must never be treated
+ * as an opt-out toggle that flips a default-on behavior; there is no such
+ * toggle, only the presence or absence of the one bare form.
+ *
+ * The field is only ever set when true, so a non-publishing block's shape is
+ * byte-identical to a `ScriptBlock` from before this field existed (no
+ * `publish: false` litter). Use `Object.hasOwn`/`'publish' in block` to test
+ * for absence, not falsiness.
  */
 export interface ScriptBlock {
   name: string;
   lang: string;
   src?: string;
   code: string;
+  publish?: true;
   position?: Code['position'];
 }
 
@@ -123,6 +146,43 @@ export function parseMetaAttributes(
 }
 
 /**
+ * Whether `key` appears in `meta`'s `{...}` attribute group written
+ * genuinely bare (`key` with no `=value` at all — none of the three value
+ * alternatives in `ATTRIBUTE_TOKEN` matched). Used only for `publish`
+ * (DESIGN.md §8: "the bare `publish` attribute"; see `ScriptBlock.publish`'s
+ * doc comment for why the bare/valued distinction matters).
+ *
+ * `parseMetaAttributes` collapses a bare key and an explicitly-empty quoted
+ * value (`key=""`) to the same `''` result in its flat map — the right
+ * choice for its general-purpose contract, but it erases exactly the
+ * distinction `publish` needs (`{publish}` must enable publishing;
+ * `{publish=""}` must not). So this walks the same token grammar directly
+ * instead of going through that already-flattened map. Like
+ * `parseMetaAttributes`, a key repeated in the group is "last occurrence
+ * wins" (the loop keeps overwriting `bare` for each match of `key`).
+ */
+function isBareAttribute(
+  meta: string | null | undefined,
+  key: string,
+): boolean {
+  if (!meta) return false;
+  const group = findAttributeGroup(meta);
+  if (group === undefined) return false;
+
+  ATTRIBUTE_TOKEN.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let bare = false;
+  while ((match = ATTRIBUTE_TOKEN.exec(group)) !== null) {
+    if (match[1] !== key) continue;
+    bare =
+      match[2] === undefined &&
+      match[3] === undefined &&
+      match[4] === undefined;
+  }
+  return bare;
+}
+
+/**
  * Walks a parsed mdast `Root` and returns every script block, in document
  * order. A `code` node is a script iff its `meta` carries a `{...}`
  * attribute group with a non-empty `name` that also matches the script-name
@@ -146,6 +206,13 @@ export function extractScripts(tree: Root): ScriptBlock[] {
       code: node.value,
     };
     if (attrs.src) block.src = attrs.src;
+    // Bare-only, per `ScriptBlock.publish`'s doc comment and
+    // `isBareAttribute`'s: a plain `attrs.publish === ''` check can't tell
+    // `{publish}` from `{publish=""}` (both flatten to `''`), so this asks
+    // the token grammar directly instead of trusting the flattened map.
+    if (isBareAttribute(node.meta, 'publish')) {
+      block.publish = true;
+    }
     if (node.position) block.position = node.position;
     blocks.push(block);
   });

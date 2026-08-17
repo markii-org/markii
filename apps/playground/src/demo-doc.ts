@@ -98,6 +98,19 @@ external URL — the URL sanitizer blocks those; see \`figure.tsx\`):
 by a root-relative path so it works offline.
 :::
 
+## Layout: a row of stats
+
+DESIGN.md §4's one layout container — equal-width cells that wrap
+responsively and simply stack in a plain markdown viewer:
+
+:::row{cols=3}
+::stat{value=42 label="stars"}
+
+::stat{value=7 label="forks"}
+
+::stat{value="1.2k" label="downloads"}
+:::
+
 ## GFM: tables, task lists, strikethrough
 
 | Component  | Kind      | Data-bound |

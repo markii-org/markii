@@ -1,6 +1,8 @@
 import type { ScriptBlock } from '@markii/core';
 import { describe, expect, it } from 'vitest';
 import { createValueStore } from './store';
+import { createVaultStore } from './vault';
+import type { VaultWriter } from './vault';
 import {
   runDocumentScripts,
   tierForTrigger,
@@ -389,5 +391,231 @@ describe('runDocumentScripts', () => {
     expect(summary.freshCount).toBe(0);
     expect(summary.errorCount).toBe(0);
     expect(summary.duplicateNames).toEqual([]);
+  });
+});
+
+describe('runDocumentScripts: publishing (DESIGN.md §8 vault)', () => {
+  it('publish-flagged block with no `vault` option: note store still gets the value, publish is "not-granted", no error', async () => {
+    const store = createValueStore();
+    const executor: ScriptExecutor = async () => ({ ok: true, value: 42 });
+
+    const summary = await runDocumentScripts({
+      scripts: [block({ name: 'gh', publish: true })],
+      executor,
+      trigger: 'manual',
+      store,
+    });
+
+    expect(store.get('gh')).toMatchObject({ value: 42, status: 'fresh' });
+    expect(summary.results).toEqual([
+      { name: 'gh', status: 'fresh', publish: 'not-granted' },
+    ]);
+    expect(summary.errorCount).toBe(0);
+    expect(summary.publishedCount).toBe(0);
+  });
+
+  it.each(['auto', 'scheduled', 'manual'] as RunTrigger[])(
+    'publish-flagged block + a vault writer publishes under trigger %s',
+    async (trigger) => {
+      const store = createValueStore();
+      const { store: vaultStore, writer } = createVaultStore();
+      const executor: ScriptExecutor = async () => ({ ok: true, value: 7 });
+
+      const summary = await runDocumentScripts({
+        scripts: [block({ name: 'gh', publish: true })],
+        executor,
+        trigger,
+        store,
+        vault: writer,
+      });
+
+      expect(vaultStore.get('gh')).toMatchObject({ value: 7, status: 'fresh' });
+      expect(summary.results[0]).toMatchObject({
+        name: 'gh',
+        status: 'fresh',
+        publish: 'published',
+      });
+      expect(summary.publishedCount).toBe(1);
+    },
+  );
+
+  it('a non-publish block with a vault writer never calls the writer', async () => {
+    const store = createValueStore();
+    let calls = 0;
+    const writer: VaultWriter = {
+      publish: () => {
+        calls++;
+        return { ok: true };
+      },
+    };
+    const executor: ScriptExecutor = async () => ({ ok: true, value: 1 });
+
+    const summary = await runDocumentScripts({
+      scripts: [block({ name: 'gh' })],
+      executor,
+      trigger: 'manual',
+      store,
+      vault: writer,
+    });
+
+    expect(calls).toBe(0);
+    expect(summary.results[0]?.publish).toBeUndefined();
+  });
+
+  it('a publish-flagged block whose executor fails: writer is never called and `publish` is left undefined', async () => {
+    const store = createValueStore();
+    let calls = 0;
+    const writer: VaultWriter = {
+      publish: () => {
+        calls++;
+        return { ok: true };
+      },
+    };
+    const executor: ScriptExecutor = async () => ({
+      ok: false,
+      error: { kind: 'runtime', message: 'boom' },
+    });
+
+    const summary = await runDocumentScripts({
+      scripts: [block({ name: 'gh', publish: true })],
+      executor,
+      trigger: 'manual',
+      store,
+      vault: writer,
+    });
+
+    expect(calls).toBe(0);
+    expect(summary.results[0]?.status).toBe('error');
+    expect(summary.results[0]?.publish).toBeUndefined();
+    expect(summary.publishedCount).toBe(0);
+  });
+
+  it('a writer returning ok:false: publish is "rejected", publishError is set, note status stays fresh, errorCount stays 0', async () => {
+    const store = createValueStore();
+    const writer: VaultWriter = {
+      publish: () => ({
+        ok: false,
+        error: { kind: 'claimed', message: 'gh is already claimed' },
+      }),
+    };
+    const executor: ScriptExecutor = async () => ({ ok: true, value: 1 });
+
+    const summary = await runDocumentScripts({
+      scripts: [block({ name: 'gh', publish: true })],
+      executor,
+      trigger: 'manual',
+      store,
+      vault: writer,
+    });
+
+    expect(store.get('gh')).toMatchObject({ value: 1, status: 'fresh' });
+    expect(summary.results[0]).toMatchObject({
+      name: 'gh',
+      status: 'fresh',
+      publish: 'rejected',
+      publishError: 'gh is already claimed',
+    });
+    expect(summary.errorCount).toBe(0);
+    expect(summary.publishedCount).toBe(0);
+  });
+
+  it('a writer that throws synchronously: rejected, no exception escapes runDocumentScripts', async () => {
+    const store = createValueStore();
+    const writer: VaultWriter = {
+      publish: () => {
+        throw new Error('writer exploded');
+      },
+    };
+    const executor: ScriptExecutor = async () => ({ ok: true, value: 1 });
+
+    const summary = await runDocumentScripts({
+      scripts: [block({ name: 'gh', publish: true })],
+      executor,
+      trigger: 'manual',
+      store,
+      vault: writer,
+    });
+
+    expect(summary.results[0]).toMatchObject({
+      status: 'fresh',
+      publish: 'rejected',
+      publishError: 'writer exploded',
+    });
+  });
+
+  it('a writer whose returned promise rejects: rejected, no exception escapes runDocumentScripts', async () => {
+    const store = createValueStore();
+    const writer: VaultWriter = {
+      publish: async () => {
+        throw new Error('writer promise rejected');
+      },
+    };
+    const executor: ScriptExecutor = async () => ({ ok: true, value: 1 });
+
+    const summary = await runDocumentScripts({
+      scripts: [block({ name: 'gh', publish: true })],
+      executor,
+      trigger: 'manual',
+      store,
+      vault: writer,
+    });
+
+    expect(summary.results[0]).toMatchObject({
+      status: 'fresh',
+      publish: 'rejected',
+      publishError: 'writer promise rejected',
+    });
+  });
+
+  it('duplicate publish-flagged names: both attempts are recorded and both publish', async () => {
+    const store = createValueStore();
+    const { writer } = createVaultStore();
+    const executor: ScriptExecutor = async ({ code }) => ({
+      ok: true,
+      value: code,
+    });
+
+    const summary = await runDocumentScripts({
+      scripts: [
+        block({ name: 'gh', publish: true, code: 'first' }),
+        block({ name: 'gh', publish: true, code: 'second' }),
+      ],
+      executor,
+      trigger: 'manual',
+      store,
+      vault: writer,
+    });
+
+    expect(summary.results).toEqual([
+      { name: 'gh', status: 'fresh', publish: 'published' },
+      { name: 'gh', status: 'fresh', publish: 'published' },
+    ]);
+    expect(summary.duplicateNames).toEqual(['gh']);
+    expect(summary.publishedCount).toBe(2);
+  });
+
+  it('publishedCount only counts entries with publish === "published"', async () => {
+    const store = createValueStore();
+    const writer: VaultWriter = {
+      publish: (name) =>
+        name === 'good'
+          ? { ok: true }
+          : { ok: false, error: { kind: 'claimed', message: 'no' } },
+    };
+    const executor: ScriptExecutor = async () => ({ ok: true, value: 1 });
+
+    const summary = await runDocumentScripts({
+      scripts: [
+        block({ name: 'good', publish: true }),
+        block({ name: 'bad', publish: true }),
+        block({ name: 'unflagged' }),
+      ],
+      executor,
+      trigger: 'manual',
+      store,
+      vault: writer,
+    });
+
+    expect(summary.publishedCount).toBe(1);
   });
 });

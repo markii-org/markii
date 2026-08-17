@@ -1,9 +1,10 @@
 import type { ReactElement, ReactNode } from 'react';
-import type { ValueStore } from '@markii/runtime';
-import { resolveStorePath } from '../store-path.js';
+import type { ValueStore, VaultStore } from '@markii/runtime';
+import { resolveScopedPath } from '../store-path.js';
 
 export interface ValueDirectiveProps {
   store: ValueStore | undefined;
+  vault?: VaultStore;
   children?: ReactNode;
 }
 
@@ -40,21 +41,26 @@ function stringifyStoredValue(value: unknown): string {
 /**
  * `:value[name]` (DESIGN.md §8) — renders a named value from the value
  * store inline. `name` may be a dotted path (`repo.stars`) reaching into a
- * stored object/array, resolved via `resolveStorePath` (`../store-path`) —
- * a bare name works exactly as before. Built into the renderer (see
- * `render.tsx`'s `createDirectiveElement`), not a registry entry: it is
- * part of the render-time interpolation contract, resolved before any
- * component lookup. Never throws: no store, an empty name, or a path the
- * store doesn't (yet) resolve all render the same graceful missing-value
- * marker — the same degrade-gracefully spirit as the unknown-directive
- * fallback, just for values instead of components.
+ * stored object/array, resolved via `resolveScopedPath` (`../store-path`) —
+ * a bare name works exactly as before. An `@`-prefixed name (`@gh.stars`)
+ * resolves against `vault` instead of `store` (§8: "bare name = mine,
+ * `@name` = the vault's") and degrades through every missing/stale/error
+ * path identically to a bare name — the marker shows the name exactly as
+ * written, including the `@`. Built into the renderer (see `render.tsx`'s
+ * `createDirectiveElement`), not a registry entry: it is part of the
+ * render-time interpolation contract, resolved before any component
+ * lookup. Never throws: no store/vault, an empty name, or a path that
+ * doesn't (yet) resolve all render the same graceful missing-value marker —
+ * the same degrade-gracefully spirit as the unknown-directive fallback,
+ * just for values instead of components.
  */
 export function ValueDirective({
   store,
+  vault,
   children,
 }: ValueDirectiveProps): ReactElement {
   const name = extractPlainText(children).trim();
-  const resolved = name ? resolveStorePath(store, name) : undefined;
+  const resolved = name ? resolveScopedPath({ store, vault }, name) : undefined;
 
   if (
     !resolved ||

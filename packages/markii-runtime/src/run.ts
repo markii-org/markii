@@ -1,5 +1,6 @@
 import type { ScriptBlock } from '@markii/core';
 import type { StoredValue, ValueStore } from './store.js';
+import type { VaultWriter } from './vault.js';
 
 /**
  * Slice 2 of the scripting-usability layer (DESIGN.md §8): the run
@@ -92,6 +93,23 @@ export interface RunSummaryEntry {
   name: string;
   status: 'fresh' | 'error';
   error?: string;
+  /**
+   * Publish outcome (DESIGN.md §8's vault). Set ONLY for a script block
+   * whose fence carried the bare `publish` attribute (`ScriptBlock.publish
+   * === true`) AND whose run succeeded (`status === 'fresh'`) — a
+   * non-publish block never gets this field, and a publish-flagged block
+   * whose run FAILED never gets it either (its `status` already says
+   * `'error'`; there is nothing to publish).
+   * - `'published'`    — `vault.publish` accepted the value.
+   * - `'rejected'`     — a writer was present but declined (see
+   *   `publishError`); the note's own `status` STAYS `'fresh'` regardless —
+   *   a vault rejection is not a script failure.
+   * - `'not-granted'`  — no `vault` was supplied to `runDocumentScripts` at
+   *   all; publishing was flagged but no grant existed to act on it.
+   */
+  publish?: 'published' | 'rejected' | 'not-granted';
+  /** Set only when `publish === 'rejected'`; the writer's rejection message. */
+  publishError?: string;
 }
 
 /**
@@ -110,6 +128,8 @@ export interface RunSummary {
   freshCount: number;
   errorCount: number;
   duplicateNames: string[];
+  /** Count of `results` entries with `publish === 'published'`. */
+  publishedCount: number;
 }
 
 export interface RunDocumentScriptsOptions {
@@ -124,6 +144,29 @@ export interface RunDocumentScriptsOptions {
    * block is recorded as an error (never a thrown exception).
    */
   loadSource?: (src: string) => Promise<string> | string;
+  /**
+   * The publish grant (DESIGN.md §8: "Publishing requires a grant ...
+   * because it writes beyond the note"). ITS PRESENCE IS THE GRANT — there
+   * is no separate flag to enable publishing, and no per-script grant
+   * check; a host that hands in a `vault` is thereby authorizing every
+   * `publish`-flagged block in this batch to write to it. Absent =>
+   * publish-flagged blocks simply do not publish (`publish: 'not-granted'`
+   * on their `RunSummaryEntry`); this is NOT an error and the run still
+   * succeeds.
+   *
+   * Publishing is allowed under BOTH execution tiers (`'manual'` and
+   * `'auto'`) whenever a writer is present — the grant is the gate here,
+   * NOT the trigger/tier. This is deliberately orthogonal to
+   * `tierForTrigger`'s security gate: that gate governs what CAPABILITIES a
+   * script may exercise while running (network access, cache writes, ...)
+   * via the tier passed to the executor; it says nothing about whether the
+   * host is willing to copy an already-computed, already-successful return
+   * value into its own vault afterward. A read-only `'auto'`-tier run can
+   * still publish, because publishing isn't a capability the SCRIPT
+   * exercises — it's something the HOST does with a value the script already
+   * (successfully) produced.
+   */
+  vault?: VaultWriter;
 }
 
 function describeThrown(err: unknown): string {
@@ -230,6 +273,15 @@ async function runOne(
  * per-script, matching DESIGN.md §8 (a run is manual, auto, or scheduled as
  * a whole; individual scripts don't choose their own tier).
  *
+ * Publishing (§8's vault): after a `publish`-flagged block's run SUCCEEDS,
+ * if `options.vault` was supplied its `publish` is called with the same
+ * `StoredValue` just written to `store` — see `RunDocumentScriptsOptions.
+ * vault`'s doc comment for why the grant, not the trigger/tier, is what
+ * gates this. A writer that rejects, throws, or has its promise reject
+ * never aborts the batch and never changes the note's own `status` (which
+ * stays `'fresh'`) — only `RunSummaryEntry.publish`/`.publishError` record
+ * the outcome. This function still never throws.
+ *
  * Duplicate `name`s: every attempt gets its own `RunSummary.results` entry,
  * but `store.set` is called once per script in document order, so the LAST
  * run for a given name is what's left in the store afterward — see
@@ -238,7 +290,7 @@ async function runOne(
 export async function runDocumentScripts(
   options: RunDocumentScriptsOptions,
 ): Promise<RunSummary> {
-  const { scripts, executor, trigger, store, loadSource } = options;
+  const { scripts, executor, trigger, store, loadSource, vault } = options;
   const tier = tierForTrigger(trigger);
 
   const results: RunSummaryEntry[] = [];
@@ -252,15 +304,46 @@ export async function runDocumentScripts(
     seenNames.add(script.name);
 
     const outcome = await runOne(script, executor, tier, loadSource);
-    results.push(outcome.entry);
     store.set(script.name, outcome.storedValue);
+
+    // Publishing (DESIGN.md §8): only for a block that both asked to
+    // publish (bare `publish` on its fence — see `ScriptBlock.publish`) and
+    // actually succeeded. A failed run has nothing to publish; `runOne`
+    // already recorded its failure in `outcome.entry.status`/`.error`, and
+    // `publish` is left `undefined` on that entry (per `RunSummaryEntry`'s
+    // doc comment) rather than getting a misleading 'not-granted'/'rejected'.
+    if (script.publish === true && outcome.entry.status === 'fresh') {
+      if (!vault) {
+        outcome.entry.publish = 'not-granted';
+      } else {
+        let result: Awaited<ReturnType<VaultWriter['publish']>>;
+        try {
+          result = await vault.publish(script.name, outcome.storedValue);
+        } catch (err) {
+          result = {
+            ok: false,
+            error: { kind: 'error', message: describeThrown(err) },
+          };
+        }
+        if (result.ok) {
+          outcome.entry.publish = 'published';
+        } else {
+          outcome.entry.publish = 'rejected';
+          outcome.entry.publishError = result.error.message;
+        }
+      }
+    }
+
+    results.push(outcome.entry);
   }
 
   let freshCount = 0;
   let errorCount = 0;
+  let publishedCount = 0;
   for (const entry of results) {
     if (entry.status === 'fresh') freshCount++;
     else errorCount++;
+    if (entry.publish === 'published') publishedCount++;
   }
 
   return {
@@ -270,5 +353,6 @@ export async function runDocumentScripts(
     freshCount,
     errorCount,
     duplicateNames: [...duplicateNames],
+    publishedCount,
   };
 }

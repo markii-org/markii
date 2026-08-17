@@ -217,30 +217,44 @@ describe('Chart', () => {
     }
   });
 
-  it('clamps an absurdly large `width`/`height` attribute to a sane maximum instead of a giant viewBox', () => {
-    // Rendered as `<Chart>` directly (not through `renderMark`): `width` is
-    // one of DESIGN.md §4's reserved layout-preset attribute names, so
-    // `render.tsx`'s layout interception strips it off a `::chart{...}`
-    // block directive before `Chart` ever sees it — see the `renderMark —
-    // ::chart{width=wide} is a layout preset` test below for that behavior.
-    // This test exists purely to keep exercising `Chart`'s own `parseSize`
-    // clamping, independent of how the directive attribute gets there.
+  it('ignores a component-level `width`/`height` attribute entirely, rendering at the built-in default geometry', () => {
+    // `Chart` no longer reads `attributes.width`/`attributes.height` at all
+    // (charts size to their container per DESIGN.md §4's layout presets, not
+    // a pixel attribute) — rendered directly with those keys present (as if
+    // something upstream failed to strip them), they must have zero effect.
     const { container } = render(
-      <Chart attributes={{ values: '1,2,3', width: '1e9' }} />,
+      <Chart attributes={{ values: '1,2,3', width: '999', height: '999' }} />,
     );
     const svg = container.querySelector('svg.mk-chart');
-    const width = Number(svg?.getAttribute('width'));
-    expect(width).toBeLessThan(1e9);
-    expect(width).toBeLessThanOrEqual(2000);
-    expect(svg?.getAttribute('viewBox')).not.toMatch(/1000000000/);
+    expect(svg).not.toBeNull();
+    expect(svg?.getAttribute('width')).toBe('240');
+    expect(svg?.getAttribute('height')).toBe('60');
+    expect(svg?.getAttribute('viewBox')).toBe('0 0 240 60');
+  });
 
-    const { container: heightContainer } = render(
-      <Chart attributes={{ values: '1,2,3', height: '1e9' }} />,
+  it('renders `::chart{... width=999 height=999}` through renderMark with the built-in default geometry, never throwing', () => {
+    // `width` is a reserved layout-preset key (DESIGN.md §4), stripped
+    // before `Chart` ever sees `attributes` — `height` is not reserved but
+    // `Chart` no longer reads it either way. Either way the directive's
+    // `width=999 height=999` has no effect on the chart's own geometry.
+    expect(() =>
+      render(
+        renderMark(
+          '::chart{kind=line values="1,2,3" width=999 height=999}',
+          defaultRegistry,
+        ),
+      ),
+    ).not.toThrow();
+    const { container } = render(
+      renderMark(
+        '::chart{kind=line values="1,2,3" width=999 height=999}',
+        defaultRegistry,
+      ),
     );
-    const heightSvg = heightContainer.querySelector('svg.mk-chart');
-    const height = Number(heightSvg?.getAttribute('height'));
-    expect(height).toBeLessThan(1e9);
-    expect(height).toBeLessThanOrEqual(2000);
+    const svg = container.querySelector('svg.mk-chart');
+    expect(svg).not.toBeNull();
+    expect(svg?.getAttribute('width')).toBe('240');
+    expect(svg?.getAttribute('height')).toBe('60');
   });
 
   it('treats `::chart{width=wide}` as a layout preset, not a chart size override — the DESIGN.md §4 collision', () => {
