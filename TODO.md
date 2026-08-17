@@ -147,7 +147,13 @@ Main scope (spec landed in Phase A, item A10):
 Spec-only for now (done in Phase A, item A6). App-side resolution rule
 (`./x.mk.md` → `./x.mkbundle`) belongs to hosts; nothing to build here yet.
 
-## Phase D2 — block-level render primitive (@markii/react) — NEXT
+## Phase D2 — block-level render primitive — DONE (commits 7567d02 + 9904cfd)
+
+Delivered + hardened: shared-pipeline nodeToHast/renderMarkNode, bare-only
+`open`, caller-supplied data.hName injection closed (mutation-verified), and
+the latent Phase C TS2352 build break fixed. 785 tests, all gates exit 0.
+Process notes: a worker ran `git stash` (violation — caught, no damage);
+gate discipline is now exit codes, never output tails. Original scope:
 
 From the approved backlog (a past agent overreached here — scope is STRICT):
 a PURE render primitive ONLY. NOT a Jupyter cell, NOT unrender-to-edit, NOT
@@ -168,14 +174,21 @@ live-preview, NOT editor glue (CodeMirror integration is a separate future
   markers, GFM tables; hostile nodes (unknown/prototype names) degrade the
   same standalone as in-document.
 
-## Phase E — security hardening (non-blocking; deliberately LAST per user)
+## Phase E — security hardening (non-blocking; deliberately LAST) — IN PROGRESS
 
-- Grant-closure hashing: implement the A12 rule as real host infrastructure
-  (needs the permission-UX / run-trigger work that is already a known gap).
-- Permission prompt wording ("can send data to X") — part of the same
-  permission UX.
-- `messageForFailure` rework: distinguish lua-bug vs capability-denied vs
-  tier-blocked declaratively (known follow-up from the run-path slice).
+In-repo scope now (E1/E2); host-app items stay parked:
+
+- E1: `messageForFailure` rework — structured, non-spoofable failure kinds
+  (script-error vs capability-denied vs tier-blocked vs limit) by error
+  identity/status code, never message-string matching; marker text derives
+  from the kind (known follow-up from the run-path slice).
+- E2: grant-closure key helper in @markii/runtime — computeGrantKey(closure)
+  → SHA-256 via globalThis.crypto.subtle (no new deps), stable sorted +
+  length-framed serialization covering note scripts + src files + vault-lib
+  modules + pack module versions (spec §10 A12).
+- PARKED (host-app territory): grant-closure hashing wired into real
+  permission-UX/run-trigger infra; permission prompt wording ("can send
+  data to X").
 - Full adversarial re-audit of @markii/lua sandbox internals (globals, limits,
   marshal, the xpcall fix) — offered to user; run if ordered.
 
