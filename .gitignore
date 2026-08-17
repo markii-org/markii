@@ -3,3 +3,6 @@ dist/
 *.log
 .vite/
 coverage/
+
+# local working queue (2026-08-18): pending-only, untracked; public roadmap = GitHub issues
+TODO.md
