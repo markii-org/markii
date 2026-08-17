@@ -4,6 +4,61 @@ All notable changes to Mark and the `@markii/*` packages are recorded here. The
 format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-08-17
+
+Layout, cross-note data sharing, a block-level render primitive, and a
+hardened scripting failure model. This release adds public API and changes
+some existing behavior, so it is a minor version, not a patch.
+
+### Added
+
+- **Layout presets (`@markii/react`, `@markii/stdlib`)**: `width` and `align`
+  as reserved directive attributes mapped to a closed set of theme classes,
+  and a `:::row{cols=2|3|4}` container for side-by-side dashboards. Invalid
+  values degrade silently; plain viewers stack.
+- **Vault-published values (`@markii/runtime`, `@markii/core`,
+  `@markii/react`)**: the bulletin board — a script fence with the bare
+  `publish` attribute publishes its named value to a vault-level store; any
+  note reads it with an `@`-prefixed name (`data=@gh.stars`). A read-only
+  `VaultStore` plus a capability-style `VaultWriter` (possessing the writer is
+  the publish grant), one writer per name.
+- **Block-level render primitive (`@markii/core`, `@markii/react`)**:
+  `nodeToHast` and `renderMarkNode` render a single parsed node with the same
+  contract as the whole-document path — a pure render function, not an editor.
+- **Failure taxonomy (`@markii/runtime`, `@markii/lua`)**: a closed
+  `FailureKind` (script-error, capability-denied, tier-blocked, limit) derived
+  from non-spoofable error identity, replacing message-string classification.
+- **Grant-closure key (`@markii/runtime`)**: `computeGrantKey` hashes a note's
+  full executable closure (scripts, `src` files, vault-library and pack
+  modules) so a permission grant is re-prompted when any of that code changes.
+- `renderMark` gained an optional fourth `vault` argument (existing three-arg
+  calls are unchanged); `@markii/core` exports `isBareAttribute`.
+
+### Changed
+
+- **Chart** no longer accepts pixel `width`/`height` attributes — components
+  size to their container and layout presets are the sizing story.
+- Boolean fence-meta attributes (`publish`, `open`) are **bare-only** and fail
+  closed: `open=false` no longer opens a script marker.
+- Script names must match `[A-Za-z_][A-Za-z0-9_-]*`; a fence whose name has a
+  dot (or other invalid character) is display-only, not runnable.
+- `messageForFailure` was removed in favor of the structured `FailureKind`.
+
+### Fixed
+
+- **Sandbox (`@markii/lua`)**: the marshal walk's node/depth/key caps are now
+  immune to a script rebinding `error`/`type`/`pairs`/`math.floor`; embedded
+  NUL bytes in a returned string are rejected rather than silently truncated;
+  `runScript` never raw-throws, even on an unexpected internal exception.
+- **Render primitive (`@markii/core`)**: caller-supplied `data.hName`/
+  `hProperties`/`hChildren` are stripped from an input node, closing an
+  injection path unique to the AST-accepting entry point.
+
+### Security
+
+- A full evidence-backed re-audit of the `@markii/lua` sandbox
+  (`docs/lua-sandbox-audit.md`); the two findings above were its result.
+
 ## [0.1.0] - 2026-08-17
 
 First public release.
@@ -45,4 +100,5 @@ implementation split across six packages.
 - **Documentation and demo**: the design spec (`DESIGN.md`), a README, and a
   hosted playground.
 
+[0.2.0]: https://github.com/sadigaxund/markii/releases/tag/v0.2.0
 [0.1.0]: https://github.com/sadigaxund/markii/releases/tag/v0.1.0
