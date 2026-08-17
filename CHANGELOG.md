@@ -26,6 +26,37 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
   props are supplied only for a directive that had a `data=` attribute, and
   `dataFailureKind` only for a genuine `error` resolution.
 
+### Fixed
+
+- **Never-throw against a hostile host store (`@markii/react`)**:
+  `renderMark`/`renderMarkNode` only guarded parse and hast conversion, while
+  a `data=`/`:value[...]` binding is resolved later, during React's render
+  phase — so a host-supplied `ValueStore`/`VaultStore` whose `get()` threw,
+  an entry with a throwing getter, or a stored value that was a revoked or
+  trap-throwing `Proxy` hit during the dotted-path walk escaped the entry
+  point's never-throw guarantee. The resolution layer (`resolveStorePath`/
+  `resolveScopedPath`) now guards every host-store interaction; any such
+  fault degrades to the ordinary `missing` resolution — the `{name}` marker
+  for `:value[...]`, the quiet empty state for a data-bound component — with
+  the thrown message carried in the existing `error`/tooltip channel and no
+  `failureKind` invented. An off-contract `status` on a stored entry now
+  degrades to `missing`, and a non-string `error`/`failureKind` is dropped
+  rather than passed on to a `title=` attribute or a class lookup.
+  `:value[...]` also survives a stored value whose `JSON.stringify` and
+  `String()` both throw, rendering empty instead.
+- **Never-throw in the reference data-bound components (`@markii/react`)**: a
+  BARE (non-dotted) `data=` name performs no path walk, so the hostile value
+  reached `stat`/`progress`/`chart` untouched and threw inside their own
+  field reads (`Array.isArray`, property access, array iteration). All three
+  now read a bound value through a shared `safeRead` guard: an unreadable
+  binding degrades to the component's ordinary quiet empty state (`—`, a
+  `0%` bar, `no data`), with the thrown message reaching only the tooltip and
+  no `failureKind` invented. `chart` still plots a static `values=` series
+  when the bound one is unreadable. A THIRD-PARTY registry component that
+  throws while reading its own `data` prop is unchanged — that remains the
+  embedding app's to guard; the standard set exemplifies the contract rather
+  than relying on the exemption.
+
 ## [0.2.0] - 2026-08-17
 
 Layout, cross-note data sharing, a block-level render primitive, and a

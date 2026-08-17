@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react';
 import type { MarkComponentProps } from '../registry.js';
+import { safeRead } from '../safe-data.js';
 import { dataStateClassName, failureTitle } from './failure-presentation.js';
 
 type ChartKind = 'line' | 'bar';
@@ -67,7 +68,15 @@ function coercePoint(entry: unknown): number | undefined {
  * and plain objects without a usable `.value` are all dropped silently
  * rather than propagating into the geometry math below. The result is
  * capped to `MAX_POINTS` so an oversized series (however it arrived) can
- * never blow up the DOM. Never throws.
+ * never blow up the DOM.
+ *
+ * MAY THROW for a hostile bound value: `Array.isArray(data)`, the `for...of`
+ * (which drives the entire iterator protocol through a `Proxy`'s `get`
+ * trap, so a trap that throws only at element 5 still throws here), and
+ * `coercePoint`'s own reads all touch host-controlled objects. The guard is
+ * at the call site (`safeRead`, `../safe-data`), which wraps the whole
+ * extraction rather than each read; see that module for why. Only finite
+ * numbers ever leave here, so nothing hostile escapes the guard.
  */
 function resolvePoints(
   data: unknown,
@@ -176,8 +185,20 @@ export function Chart({
   const width = DEFAULT_WIDTH;
   const height = DEFAULT_HEIGHT;
 
-  const points = resolvePoints(data, dataStatus, attributes.values);
-  const title = failureTitle(dataError, dataFailureKind);
+  // `safeRead` (`../safe-data`) is what keeps this component inside the
+  // renderer's never-throw guarantee for a HOSTILE bound value (a revoked
+  // `Proxy`, an array whose `get` trap throws mid-iteration). The fallback
+  // re-resolves with the binding treated as absent, so a chart that also
+  // carries a static `values=` series still plots it rather than being
+  // punished for the store's misbehavior; with no static series it lands on
+  // the ordinary `no data` empty state. The thrown message reaches only the
+  // tooltip, never the body.
+  const bound = safeRead<number[]>(
+    () => resolvePoints(data, dataStatus, attributes.values),
+    () => resolvePoints(undefined, 'missing', attributes.values),
+  );
+  const points = bound.fields;
+  const title = failureTitle(dataError ?? bound.fault, dataFailureKind);
 
   if (points.length === 0) {
     return (

@@ -193,3 +193,53 @@ describe('ValueDirective — failure-kind-derived presentation (docs/scripting.m
     ).not.toThrow();
   });
 });
+
+describe('ValueDirective — stringifying a hostile stored value', () => {
+  /**
+   * A stored value is whatever the host wrote into the store. `:value[name]`
+   * renders it, so its coercion to text is a host-controlled operation:
+   * `JSON.stringify` and `String()` can BOTH throw on the same value. The
+   * contract is that display degrades to empty, never to a thrown render.
+   */
+  function renderValue(value: unknown): HTMLElement {
+    const store = createValueStore({ gh: { value, status: 'fresh' } });
+    const { container } = render(
+      renderMark(':value[gh]', defaultRegistry, store),
+    );
+    const el = container.querySelector('.mk-value');
+    expect(el).not.toBeNull();
+    return el as HTMLElement;
+  }
+
+  it('a value whose toJSON, toString and Symbol.toPrimitive all throw renders empty', () => {
+    const explode = (): never => {
+      throw new Error('nope');
+    };
+    const el = renderValue({
+      toJSON: explode,
+      toString: explode,
+      [Symbol.toPrimitive]: explode,
+    });
+    expect(el.textContent).toBe('');
+  });
+
+  it('a cyclic value (JSON.stringify throws) falls back to String() rather than throwing', () => {
+    const cyclic: Record<string, unknown> = {};
+    cyclic.self = cyclic;
+    expect(renderValue(cyclic).textContent).toBe('[object Object]');
+  });
+
+  it('a revoked proxy renders empty instead of throwing', () => {
+    const { proxy, revoke } = Proxy.revocable({ a: 1 }, {});
+    revoke();
+    expect(renderValue(proxy).textContent).toBe('');
+  });
+
+  it('a BigInt (JSON.stringify throws by spec) falls back to String()', () => {
+    expect(renderValue(BigInt(42)).textContent).toBe('42');
+  });
+
+  it('a value JSON.stringify drops entirely (a function) renders empty, as it always has', () => {
+    expect(renderValue(() => 1).textContent).toBe('');
+  });
+});

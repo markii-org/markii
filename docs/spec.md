@@ -72,7 +72,14 @@ A conforming renderer:
 3. renders unregistered names as a visible fallback containing the inner
    content as plain markdown, without failing the document;
 4. never throws on any input, including hostile directive names such as
-   prototype members;
+   prototype members, and including a misbehaving host value or vault
+   store: a `get` that throws, a stored entry whose property access
+   throws, or a stored value whose property access traps throw during a
+   dotted-path walk MUST degrade to the ordinary missing resolution of
+   requirement 6, never propagate out of the renderer. A renderer's own
+   standard components MUST hold to this when reading a bound value; a
+   third-party component's internal failure remains the embedding host's
+   to contain;
 5. is side-effect-free on open: rendering MUST NOT execute scripts, and
    value reads are pure lookups of last-known state;
 6. presents a failed value binding as a quiet placeholder with the reason

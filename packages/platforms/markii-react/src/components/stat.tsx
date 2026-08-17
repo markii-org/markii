@@ -1,5 +1,6 @@
 import type { ReactElement, ReactNode } from 'react';
 import type { MarkComponentProps } from '../registry.js';
+import { safeRead } from '../safe-data.js';
 import { dataStateClassName, failureTitle } from './failure-presentation.js';
 
 const EMPTY_VALUE = '—';
@@ -33,7 +34,13 @@ function coerceField(value: unknown): string | undefined {
  * Reads `value`/`label`/`delta`/`trend` off a bound `data` value. Only a
  * plain object contributes named fields; a bare number/string contributes
  * `value` alone. Anything else (array, `null`, `undefined`) contributes
- * nothing — never throws.
+ * nothing.
+ *
+ * MAY THROW for a hostile bound value — `Array.isArray` and every field read
+ * below go through whatever traps/getters a host put on the object. The
+ * guard is at the call site (`safeRead`, `../safe-data`), which wraps the
+ * whole extraction rather than each read; see that module for why. Only
+ * strings ever leave here, so nothing hostile escapes the guard.
  */
 function readStatFields(data: unknown): StatFields {
   if (typeof data === 'number' || typeof data === 'string') {
@@ -83,10 +90,19 @@ export function Stat({
   dataError,
   dataFailureKind,
 }: MarkComponentProps): ReactElement {
-  const fromData: StatFields =
-    dataStatus === 'missing' || dataStatus === 'error'
-      ? {}
-      : readStatFields(data);
+  // `safeRead` (`../safe-data`) is what keeps this component inside the
+  // renderer's never-throw guarantee for a HOSTILE bound value (a revoked
+  // `Proxy`, throwing getters): an unreadable binding degrades to no fields
+  // at all — the same `—` body a missing binding already renders — with the
+  // thrown message going only to the tooltip, never the body.
+  const bound = safeRead<StatFields>(
+    () =>
+      dataStatus === 'missing' || dataStatus === 'error'
+        ? {}
+        : readStatFields(data),
+    () => ({}),
+  );
+  const fromData = bound.fields;
 
   const value = pick(attributes.value, fromData.value);
   const label = pick(attributes.label, fromData.label);
@@ -108,7 +124,7 @@ export function Stat({
   return (
     <div
       className={dataStateClassName('mk-stat', dataStatus, dataFailureKind)}
-      title={failureTitle(dataError, dataFailureKind)}
+      title={failureTitle(dataError ?? bound.fault, dataFailureKind)}
     >
       <div className="mk-stat__value">{value || EMPTY_VALUE}</div>
       {label ? <div className="mk-stat__label">{label}</div> : null}

@@ -266,15 +266,51 @@ support table (React: available · VS Code: planned · more: planned); 3) short
 4) compact footer (license, contributing). Target well under 150 lines.
 Depends on Phase G for link targets.
 
-## Phase I — VS Code extension (approved 2026-08-17)
+## Phase I — VS Code extension (approved 2026-08-17; v1/v2 split)
 
 `apps/vscode/` — an app/consumer like the playground, NOT a platform renderer
-(it consumes @markii/react): webview preview panel bundling
-core+stdlib+react+react-dom via esbuild, CSP-compliant, scripting off or
-manual-only initially; `*.mk.md` language association + TextMate grammar
-injection for directive/fence-meta highlighting; publish via @vscode/vsce to
-the VS Marketplace (publisher account + Azure DevOps PAT — user's action) and
-to Open VSX.
+(it consumes @markii/react).
+
+v1 (build now): webview preview panel bundling core+stdlib+react+react-dom
+via esbuild, CSP-compliant, RENDERING ONLY (pure; scripts show as collapsed
+markers, no Run); live update on edit (debounced postMessage); `*.mk.md`
+language association + TextMate injection grammar for directive/fence-meta
+highlighting; `.vsix` packaging via @vscode/vsce (package only, NO publish).
+Deps approved for this workspace only: @types/vscode, @vscode/vsce, esbuild.
+
+v2 (later arc, NOT v1): Run support — Lua in a terminatable worker_thread
+(satisfies the isolate requirement), capabilities in the Node extension
+host, grant UX, postMessage bridge.
+
+Publish (after v1): VS Marketplace publisher account + Azure DevOps PAT is
+the USER'S action — ⚠ REMIND USER when v1 is built. Then vsce publish +
+Open VSX.
+
+## Phase J — small closures (approved 2026-08-17)
+
+- [x] J1+J1b DONE 2026-08-17 (this commit; Opus-built, probes kept as
+  hostile-store.test.tsx, 406 react tests): store-path guarded
+  (resolveEntryPath/readEntry/hostFault), safe-data.ts safeRead boundary in
+  stat/progress/chart, spec requirement 4 extended. Original scope:
+  renderer never-throw guard — a host-supplied ValueStore/
+  VaultStore whose get() throws (or a value whose property access traps)
+  currently escapes renderMark's try/catch via DirectiveElement/
+  resolveScopedPath. Guard all store/vault interaction in the resolution
+  layer; degrade to the standard missing/error marker; adversarial tests
+  (throwing get, Proxy value, throwing during dotted-path walk); applies to
+  renderMark and renderMarkNode alike. Spec: renderer requirement extends
+  "never throws" to hostile host stores.
+- J2 (awaiting user): frontmatter tolerance — remark-frontmatter in core so
+  `---` YAML blocks parse as a frontmatter node (dropped in render, exposed
+  in AST + a typed `uses` accessor); conformance fixtures. `uses:` SEMANTICS
+  (pack hints UI) stay in the packs arc.
+- J3 (awaiting user): registry-level aliases — `aliases` in the registry
+  (name → target name + preset attributes), resolved at lookup; spec note
+  that aliases are registry/app-level, never in-note. Note-level macro
+  definitions REJECTED (assessment 2026-08-17): preprocessor-in-a-note
+  violates cleanliness + non-language non-goals.
+- Backlog (undecided): directive form/kind mismatch rule (`:center[x]` →
+  div-in-p) — spec + renderer degrade-to-fallback.
 
 ## Parked / awaiting user
 

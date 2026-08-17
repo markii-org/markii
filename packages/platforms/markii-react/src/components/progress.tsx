@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react';
 import type { MarkComponentProps } from '../registry.js';
+import { safeRead } from '../safe-data.js';
 import { dataStateClassName, failureTitle } from './failure-presentation.js';
 
 const DEFAULT_MAX = 1;
@@ -36,7 +37,12 @@ function coerceNumber(value: unknown): number | undefined {
 /**
  * Reads `value`/`max` off a bound `data` value: a bare finite number
  * supplies `value` alone; a plain object may supply either/both fields.
- * Never throws.
+ *
+ * MAY THROW for a hostile bound value — `Array.isArray` and both field reads
+ * below go through whatever traps/getters a host put on the object. The
+ * guard is at the call site (`safeRead`, `../safe-data`), which wraps the
+ * whole extraction rather than each read; see that module for why. Only
+ * finite numbers ever leave here, so nothing hostile escapes the guard.
  */
 function readProgressFields(data: unknown): ProgressFields {
   if (typeof data === 'number') {
@@ -76,10 +82,19 @@ export function Progress({
   dataError,
   dataFailureKind,
 }: MarkComponentProps): ReactElement {
-  const fromData: ProgressFields =
-    dataStatus === 'missing' || dataStatus === 'error'
-      ? {}
-      : readProgressFields(data);
+  // `safeRead` (`../safe-data`) is what keeps this component inside the
+  // renderer's never-throw guarantee for a HOSTILE bound value (a revoked
+  // `Proxy`, throwing getters): an unreadable binding degrades to no fields
+  // at all — the same quiet `0%` bar a missing binding already renders —
+  // with the thrown message going only to the tooltip, never the body.
+  const bound = safeRead<ProgressFields>(
+    () =>
+      dataStatus === 'missing' || dataStatus === 'error'
+        ? {}
+        : readProgressFields(data),
+    () => ({}),
+  );
+  const fromData = bound.fields;
 
   const rawMax = parseFiniteNumber(attributes.max, fromData.max ?? DEFAULT_MAX);
   const max = rawMax > 0 ? rawMax : DEFAULT_MAX;
@@ -93,7 +108,7 @@ export function Progress({
   return (
     <div
       className={dataStateClassName('mk-progress', dataStatus, dataFailureKind)}
-      title={failureTitle(dataError, dataFailureKind)}
+      title={failureTitle(dataError ?? bound.fault, dataFailureKind)}
       role="progressbar"
       aria-valuenow={value}
       aria-valuemin={0}
