@@ -194,16 +194,13 @@ live-preview, NOT editor glue (CodeMirror integration is a separate future
 - [x] Full adversarial re-audit of @markii/lua sandbox internals — DONE
       (commit f7d54e8, docs/lua-sandbox-audit.md, evidence-backed, run by
       Opus 4.8 after the silent downgrade). Verdict: core holds. Two findings,
-      NEITHER exploitable, fixes NOT yet applied (await go-ahead):
-      - F-1 (LOW, contained): marshal node/depth caps bypassable by rebinding
-        error/type/pairs/math.floor (dynamic global lookups; user code runs
-        first). Contained by memory cap + JS finalize + caught RangeError.
-        Fix: capture those into prelude locals in buildMarshalPrelude; add a
-        runScript catch-all so finalize can't ever raw-throw. Would go through
-        a Sonnet worker + verification per orchestration rules.
-      - F-2 (low correctness): NUL bytes in RETURNED strings silently
-        truncated by wasmoon (broader than the documented bundle scope). Fix:
-        widen the capabilities.ts note or reject NUL at the marshal boundary.
+      NEITHER exploitable, BOTH NOW FIXED (commit 272f1b6, Sonnet-built +
+      Opus-verified by independent probe re-runs):
+      - [x] F-1: marshal caps immunised — error/type/pairs/math.floor captured
+        into prelude-definition-time locals (immune to global rebinding);
+        plus a runScript catch-all making never-throws unconditional.
+      - [x] F-2: NUL bytes in returned strings now rejected Lua-side as
+        marshal reason 'nul-byte' before wasmoon can truncate.
       Not re-run (visible gaps, honest): the 4 xpcall/pcall HANG repros
         (CI-safety — reviewed by reading limits.deadlock.test.ts); host
         external isolate (none ships); require jail (unwired this phase, audit
@@ -219,9 +216,9 @@ live-preview, NOT editor glue (CodeMirror integration is a separate future
   4th param) and changed behavior (chart width/height removed, open=false no
   longer opens, dotted script names now display-only, messageForFailure
   deleted). Needs version bumps + CHANGELOG section before tagging.
-- Full adversarial sandbox re-audit of @markii/lua internals (globals
-  whitelist, limits/interrupt-evasion, marshal, require jail, xpcall fix):
-  explained to user, recommended, awaiting go/no-go.
+- Sandbox re-audit: DONE (f7d54e8) + both findings fixed (272f1b6). See the
+  Phase E section above. (Residual: audit the require jail when packs wire it;
+  the host external terminatable isolate is host territory.)
 - NPM_TOKEN repo secret — required before any future npm version publishes.
 - Second non-React renderer (§13 toolkit-neutrality proof).
 - Phase-3 "registry growth": user's personal component library location still
