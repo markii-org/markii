@@ -2,10 +2,11 @@ import { Fragment, isValidElement } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { jsx, jsxs } from 'react/jsx-runtime';
 import { toJsxRuntime } from 'hast-util-to-jsx-runtime';
-import { toHast, parseMetaAttributes } from '@markii/core';
+import { toHast, parseMetaAttributes, isValidScriptName } from '@markii/core';
 import type { ValueStatus, ValueStore } from '@markii/runtime';
 import type { Element as HastElement } from 'hast';
 import type { DirectiveAttributes, Registry } from './registry.js';
+import { resolveLayoutAttributes } from './layout.js';
 import { ScriptMarker } from './components/script-marker.js';
 import { UnknownDirective } from './components/unknown-directive.js';
 import { ValueDirective } from './components/value-directive.js';
@@ -146,12 +147,82 @@ declare global {
 }
 
 /**
+ * Renders one directive's content (registry component, `:value[...]`
+ * built-in, or the unknown-directive fallback) given its already
+ * layout-stripped `attributes` — the part of `DirectiveElement` that does
+ * NOT know about layout wrapping, split out so `createDirectiveElement` can
+ * wrap its result in a layout `<div>` uniformly, without duplicating this
+ * resolution logic at every return point. This is the only place a
+ * directive name is resolved; it never throws.
+ */
+function renderDirectiveContent(
+  name: string,
+  kind: string | undefined,
+  attributes: DirectiveAttributes,
+  children: ReactNode,
+  registry: Registry,
+  store: ValueStore | undefined,
+): ReactElement {
+  // `:value[name]` (§8) is a renderer built-in, resolved before any
+  // registry lookup — like the unknown-directive fallback, it is not
+  // something a pack can register over; it is part of the render-time
+  // interpolation contract itself.
+  if (name === VALUE_DIRECTIVE_NAME) {
+    return <ValueDirective store={store}>{children}</ValueDirective>;
+  }
+
+  // `Object.hasOwn` (rather than `registry[name]` / `name in registry`)
+  // guards against a directive named `constructor`, `toString`,
+  // `valueOf`, `hasOwnProperty`, etc. resolving through the prototype
+  // chain to an inherited `Object.prototype` member instead of falling
+  // through to the unknown-directive fallback (Architecture rule 3: unknown
+  // directives never throw). The `entry?.component == null` check is a
+  // second belt-and-suspenders guard for the same class of bug — it must
+  // be a nullish check rather than `typeof ... !== 'function'`, since
+  // `React.memo`/`forwardRef`/`lazy` all produce a component whose
+  // `typeof` is `'object'`, not `'function'`, and TypeScript's
+  // `ComponentType` accepts all of them.
+  const entry = Object.hasOwn(registry, name) ? registry[name] : undefined;
+
+  if (entry?.component == null) {
+    return (
+      <UnknownDirective
+        name={name || '(unnamed)'}
+        inline={kind === 'textDirective'}
+      >
+        {children}
+      </UnknownDirective>
+    );
+  }
+
+  const Component = entry.component;
+  const binding = resolveDataAttribute(attributes, store);
+  // `data`/`dataStatus` are only spread in when the directive actually had
+  // a `data=` attribute (`'data' in binding`) — NOT whenever
+  // `binding.data` happens to be defined. Without this check, JSX would
+  // always pass `data`/`dataStatus` as explicit (if `undefined`) props,
+  // so `'data' in props` inside a component would be `true` even for a
+  // directive with no `data=` attribute at all, defeating the very
+  // distinction `registry.ts`'s `MarkComponentProps` doc comment promises
+  // ("absent — not merely falsy — when the directive had no `data=`
+  // attribute").
+  const dataProps =
+    'data' in binding
+      ? { data: binding.data, dataStatus: binding.dataStatus }
+      : {};
+  return (
+    <Component attributes={binding.attributes} {...dataProps}>
+      {children}
+    </Component>
+  );
+}
+
+/**
  * Builds the React component used to replace every `<mk-directive>` hast
- * element (tagged by `@markii/core`'s `toHast`): looks the directive name up in
- * `registry`, and renders the matching component with parsed attributes and
- * pre-rendered children — or the neutral fallback box if the name isn't
- * registered. This is the only place a directive name is resolved; it
- * never throws.
+ * element (tagged by `@markii/core`'s `toHast`): resolves DESIGN.md §4's
+ * layout-preset attributes (`width`/`align`) for block directives, then
+ * delegates the rest of the work — registry lookup, `:value[...]`, the
+ * unknown-directive fallback — to `renderDirectiveContent`. Never throws.
  *
  * Typed as a plain function (not React's `ComponentType`, whose declared
  * return type is the broader `ReactNode`) because hast-util-to-jsx-runtime's
@@ -166,59 +237,36 @@ function createDirectiveElement(
   return function DirectiveElement(props: DirectiveElementProps): ReactElement {
     const name = props['data-mk-name'] ?? '';
     const kind = props['data-mk-kind'];
-    const attributes = parseAttributes(props['data-mk-attrs']);
+    const rawAttributes = parseAttributes(props['data-mk-attrs']);
 
-    // `:value[name]` (§8) is a renderer built-in, resolved before any
-    // registry lookup — like the unknown-directive fallback, it is not
-    // something a pack can register over; it is part of the render-time
-    // interpolation contract itself.
-    if (name === VALUE_DIRECTIVE_NAME) {
-      return <ValueDirective store={store}>{props.children}</ValueDirective>;
-    }
+    // Layout presets (DESIGN.md §4) apply only to block directives
+    // (leaf/container) — a text directive (`kind === 'textDirective'`)
+    // ignores `width`/`align` entirely, so its component still sees
+    // whatever attributes the author wrote, unstripped. Intercepted here,
+    // before the registry lookup inside `renderDirectiveContent`, so it
+    // applies identically to a registered component, the unknown-directive
+    // fallback, and a directive named `constructor`/`toString`/`__proto__`.
+    const isBlockDirective = kind !== 'textDirective';
+    const { attributes, className: layoutClassName } = isBlockDirective
+      ? resolveLayoutAttributes(rawAttributes)
+      : { attributes: rawAttributes, className: undefined };
 
-    // `Object.hasOwn` (rather than `registry[name]` / `name in registry`)
-    // guards against a directive named `constructor`, `toString`,
-    // `valueOf`, `hasOwnProperty`, etc. resolving through the prototype
-    // chain to an inherited `Object.prototype` member instead of falling
-    // through to the unknown-directive fallback (Architecture rule 3: unknown
-    // directives never throw). The `entry?.component == null` check is a
-    // second belt-and-suspenders guard for the same class of bug — it must
-    // be a nullish check rather than `typeof ... !== 'function'`, since
-    // `React.memo`/`forwardRef`/`lazy` all produce a component whose
-    // `typeof` is `'object'`, not `'function'`, and TypeScript's
-    // `ComponentType` accepts all of them.
-    const entry = Object.hasOwn(registry, name) ? registry[name] : undefined;
+    const element = renderDirectiveContent(
+      name,
+      kind,
+      attributes,
+      props.children,
+      registry,
+      store,
+    );
 
-    if (entry?.component == null) {
-      return (
-        <UnknownDirective
-          name={name || '(unnamed)'}
-          inline={kind === 'textDirective'}
-        >
-          {props.children}
-        </UnknownDirective>
-      );
-    }
-
-    const Component = entry.component;
-    const binding = resolveDataAttribute(attributes, store);
-    // `data`/`dataStatus` are only spread in when the directive actually had
-    // a `data=` attribute (`'data' in binding`) — NOT whenever
-    // `binding.data` happens to be defined. Without this check, JSX would
-    // always pass `data`/`dataStatus` as explicit (if `undefined`) props,
-    // so `'data' in props` inside a component would be `true` even for a
-    // directive with no `data=` attribute at all, defeating the very
-    // distinction `registry.ts`'s `MarkComponentProps` doc comment promises
-    // ("absent — not merely falsy — when the directive had no `data=`
-    // attribute").
-    const dataProps =
-      'data' in binding
-        ? { data: binding.data, dataStatus: binding.dataStatus }
-        : {};
-    return (
-      <Component attributes={binding.attributes} {...dataProps}>
-        {props.children}
-      </Component>
+    // Only wrap when at least one layout class actually resulted — this
+    // keeps DOM output unchanged from before layout presets existed for the
+    // overwhelmingly common case of a directive with no width/align.
+    return layoutClassName ? (
+      <div className={layoutClassName}>{element}</div>
+    ) : (
+      element
     );
   };
 }
@@ -289,6 +337,15 @@ interface PreElementProps {
  * `name` attribute at all, falls through to ordinary `<pre>{children}</pre>`
  * rendering — the same graceful-degradation spirit as the unknown-directive
  * fallback (Architecture rule 3).
+ *
+ * The `name` must also pass `@markii/core`'s `isValidScriptName` (DESIGN.md
+ * §8's `[A-Za-z_][A-Za-z0-9_-]*` charset — dots in particular are reserved,
+ * since `data=`/`:value[]` read a dot as path traversal). A block whose name
+ * fails that check is NOT a script: `extractScripts` skips it, so it can
+ * never run, and folding it to a `⚙ name` marker here would advertise a
+ * runnable block that the runtime will never execute. It stays ordinary
+ * highlighted code instead — the same display-only degradation the spec
+ * gives a fence with no `name` at all, and never an error.
  */
 function PreElement({ node, children }: PreElementProps): ReactElement {
   try {
@@ -297,7 +354,7 @@ function PreElement({ node, children }: PreElementProps): ReactElement {
     if (typeof meta === 'string') {
       const attrs = parseMetaAttributes(meta);
       const name = attrs.name;
-      if (name) {
+      if (name && isValidScriptName(name)) {
         return (
           <ScriptMarker
             name={name}

@@ -46,7 +46,7 @@ describe('STANDARD_COMPONENTS', () => {
     }
   });
 
-  it('seeds exactly the twelve components that exist in @markii/react today', () => {
+  it('seeds exactly the thirteen components that exist in @markii/react today', () => {
     expect(Object.keys(STANDARD_COMPONENTS).sort()).toEqual([
       'badge',
       'callout',
@@ -57,6 +57,7 @@ describe('STANDARD_COMPONENTS', () => {
       'kbd',
       'progress',
       'rating',
+      'row',
       'stat',
       'tab',
       'tabs',
@@ -189,6 +190,17 @@ describe('STANDARD_COMPONENTS', () => {
       'line',
       'bar',
     ]);
+  });
+
+  it('marks row as a container directive, matching its :::row{...} ... ::: form', () => {
+    expect(STANDARD_COMPONENTS.row?.kind).toBe('container');
+  });
+
+  it("row's only attribute is cols, optional, a closed enum of 2/3/4", () => {
+    const attrs = STANDARD_COMPONENTS.row?.attributes ?? {};
+    expect(Object.keys(attrs)).toEqual(['cols']);
+    expect(attrs.cols?.required).toBeFalsy();
+    expect(attrs.cols?.enum).toEqual(['2', '3', '4']);
   });
 });
 

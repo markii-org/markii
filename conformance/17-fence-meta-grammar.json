@@ -1,0 +1,112 @@
+{
+  "children": [
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "A quoted value containing a brace — the scanner ignores braces while inside\na quote, so this still finds the real closing "
+        },
+        {
+          "type": "inlineCode",
+          "value": "}"
+        },
+        {
+          "type": "text",
+          "value": ":"
+        }
+      ],
+      "type": "paragraph"
+    },
+    {
+      "lang": "lua",
+      "meta": "{title=\"a }b\" name=x}",
+      "type": "code",
+      "value": "return 1"
+    },
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "Single-quoted vs double-quoted values:"
+        }
+      ],
+      "type": "paragraph"
+    },
+    {
+      "lang": "lua",
+      "meta": "{name='single' src=\"double/quoted.lua\"}",
+      "type": "code",
+      "value": "return 1"
+    },
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "A bare (valueless) attribute alongside a "
+        },
+        {
+          "type": "inlineCode",
+          "value": "key=value"
+        },
+        {
+          "type": "text",
+          "value": " pair:"
+        }
+      ],
+      "type": "paragraph"
+    },
+    {
+      "lang": "lua",
+      "meta": "{name=x publish}",
+      "type": "code",
+      "value": "return 1"
+    },
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "Plain "
+        },
+        {
+          "type": "inlineCode",
+          "value": "key=bare"
+        },
+        {
+          "type": "text",
+          "value": " values with no quotes at all:"
+        }
+      ],
+      "type": "paragraph"
+    },
+    {
+      "lang": "lua",
+      "meta": "{name=x src=scripts/etl.lua}",
+      "type": "code",
+      "value": "return 1"
+    },
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "Text after the first "
+        },
+        {
+          "type": "inlineCode",
+          "value": "{...}"
+        },
+        {
+          "type": "text",
+          "value": " group in the info string is not a second\nattribute group — only the first is parsed:"
+        }
+      ],
+      "type": "paragraph"
+    },
+    {
+      "lang": "lua",
+      "meta": "{name=x} ignored trailing text {also=ignored}",
+      "type": "code",
+      "value": "return 1"
+    }
+  ],
+  "type": "root"
+}

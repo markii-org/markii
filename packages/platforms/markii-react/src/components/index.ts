@@ -9,6 +9,7 @@ import { Figure } from './figure.js';
 import { Kbd } from './kbd.js';
 import { Progress } from './progress.js';
 import { Rating } from './rating.js';
+import { Row } from './row.js';
 import { Stat } from './stat.js';
 import { Tab } from './tab.js';
 import { Tabs } from './tabs.js';
@@ -24,6 +25,7 @@ export { Figure } from './figure.js';
 export { Kbd } from './kbd.js';
 export { Progress } from './progress.js';
 export { Rating } from './rating.js';
+export { Row } from './row.js';
 export { Stat } from './stat.js';
 export { Tab, DEFAULT_TAB_LABEL } from './tab.js';
 export { Tabs } from './tabs.js';
@@ -63,4 +65,5 @@ export const defaultRegistry: Registry = {
   stat: { component: Stat, inline: inlineFromContract('stat') },
   progress: { component: Progress, inline: inlineFromContract('progress') },
   chart: { component: Chart, inline: inlineFromContract('chart') },
+  row: { component: Row, inline: inlineFromContract('row') },
 };

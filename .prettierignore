@@ -8,3 +8,4 @@ package-lock.json
 # CLAUDE.md: subagents must not edit these files).
 DESIGN.md
 CLAUDE.md
+TODO.md

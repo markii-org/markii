@@ -472,6 +472,51 @@ describe('renderMark — collapsed script marker (DESIGN.md §8)', () => {
     expect(code?.textContent).toBe('print("hi")\n');
   });
 
+  // DESIGN.md §8: a script `name` must match `[A-Za-z_][A-Za-z0-9_-]*`. A
+  // name outside that charset means the block is NOT a script — `@markii/core`'s
+  // `extractScripts` skips it, so it can never run. Folding it to a `⚙ name`
+  // marker here would advertise a runnable block the runtime will never
+  // execute, so the fold must be gated by the same predicate.
+  it.each([
+    [
+      'a dotted name (reserved: `data=`/`:value[]` read a dot as a path)',
+      'repo.stars',
+    ],
+    ['a name starting with a digit', '1stars'],
+    ['a name starting with a hyphen', '-stars'],
+    ['a name containing a slash', 'repo/stars'],
+    ['a name containing a colon', 'repo:stars'],
+  ])(
+    'does not fold a script block with %s — it stays plain highlighted code',
+    (_label, name) => {
+      const { container } = render(
+        renderMark(
+          `\`\`\`lua {name=${name}}\nreturn 1\n\`\`\``,
+          defaultRegistry,
+        ),
+      );
+
+      expect(container.querySelector('.mk-script')).toBeNull();
+      const code = container.querySelector('pre code');
+      expect(code).not.toBeNull();
+      expect(code?.textContent).toBe('return 1\n');
+      // The rejected name must not leak into the DOM as a marker label.
+      expect(container.textContent).not.toContain('⚙');
+    },
+  );
+
+  it('still folds a valid name containing the allowed `_` and `-` characters', () => {
+    const { container } = render(
+      renderMark('```lua {name=repo-stars_2}\nreturn 1\n```', defaultRegistry),
+    );
+
+    const marker = container.querySelector('details.mk-script');
+    expect(marker).not.toBeNull();
+    expect(marker?.querySelector('.mk-script__summary')?.textContent).toContain(
+      'repo-stars_2',
+    );
+  });
+
   it('renders a plain code block unchanged when meta has attributes but no `name`', () => {
     const { container } = render(
       renderMark(
@@ -594,6 +639,192 @@ describe('renderMark — GFM (tables, task lists, strikethrough, autolinks)', ()
     const link = container.querySelector('a');
     expect(link).not.toBeNull();
     expect(link).not.toHaveAttribute('href');
+  });
+});
+
+describe('renderMark — layout presets (DESIGN.md §4: width/align)', () => {
+  function echoRegistry(): {
+    registry: Registry;
+    seenAttributes: () => DirectiveAttributes | undefined;
+  } {
+    let seenAttributes: DirectiveAttributes | undefined;
+    const registry: Registry = {
+      probe: {
+        component: ({ attributes }: MarkComponentProps) => {
+          seenAttributes = attributes;
+          return <div className="probe" />;
+        },
+        inline: false,
+      },
+    };
+    return { registry, seenAttributes: () => seenAttributes };
+  }
+
+  it.each([
+    ['narrow', 'mk-width-narrow'],
+    ['wide', 'mk-width-wide'],
+    ['full', 'mk-width-full'],
+  ])('wraps a block directive in a %s width class', (value, expectedClass) => {
+    const { registry } = echoRegistry();
+    const { container } = render(
+      renderMark(`::probe{width=${value}}`, registry),
+    );
+    const wrapper = container.querySelector(`.${expectedClass}`);
+    expect(wrapper).not.toBeNull();
+    expect(wrapper?.querySelector('.probe')).not.toBeNull();
+  });
+
+  it('produces no wrapper for width=normal (the explicit default)', () => {
+    const { registry } = echoRegistry();
+    const { container } = render(renderMark('::probe{width=normal}', registry));
+    // No extra wrapping <div>: the probe element itself is the direct child.
+    expect(container.firstElementChild).toHaveClass('probe');
+    expect(container.querySelector('[class*="mk-width-"]')).toBeNull();
+  });
+
+  it.each([
+    ['left', 'mk-align-left'],
+    ['center', 'mk-align-center'],
+    ['right', 'mk-align-right'],
+  ])('wraps a block directive in a %s align class', (value, expectedClass) => {
+    const { registry } = echoRegistry();
+    const { container } = render(
+      renderMark(`::probe{align=${value}}`, registry),
+    );
+    expect(container.querySelector(`.${expectedClass}`)).not.toBeNull();
+  });
+
+  it('combines width and align into one wrapper carrying both classes', () => {
+    const { registry } = echoRegistry();
+    const { container } = render(
+      renderMark('::probe{width=wide align=center}', registry),
+    );
+    const wrapper = container.querySelector('.mk-width-wide.mk-align-center');
+    expect(wrapper).not.toBeNull();
+  });
+
+  it.each([
+    'javascript:alert(1)',
+    '"; }',
+    '<script>alert(1)</script>',
+    'WIDE',
+    '',
+  ])(
+    'produces no wrapper for a hostile/invalid width value (%s), and never reaches the DOM',
+    (value) => {
+      const { registry } = echoRegistry();
+      // Single-quoted directive attribute syntax (`{width='...'}`), so a value
+      // containing a literal `"` (e.g. `"; }`) doesn't prematurely terminate
+      // the attribute — mdast-util-directive accepts either quote style.
+      const { container } = render(
+        renderMark(`::probe{width='${value}'}`, registry),
+      );
+      expect(container.querySelector('[class*="mk-width-"]')).toBeNull();
+      expect(container.innerHTML).not.toContain('<script>');
+      expect(container.querySelector('script')).toBeNull();
+    },
+  );
+
+  it('strips width/align from the attributes a registered component receives', () => {
+    const { registry, seenAttributes } = echoRegistry();
+    render(
+      renderMark('::probe{width=wide align=center title="kept"}', registry),
+    );
+    expect(seenAttributes()).toEqual({ title: 'kept' });
+  });
+
+  it('strips width/align even when the value is invalid (interception wins regardless of validity)', () => {
+    const { registry, seenAttributes } = echoRegistry();
+    render(
+      renderMark('::probe{width=bogus align=nope title="kept"}', registry),
+    );
+    expect(seenAttributes()).toEqual({ title: 'kept' });
+  });
+
+  it('does NOT wrap or strip layout attributes on an inline (text) directive', () => {
+    const { container } = render(
+      renderMark(':kbd[Ctrl+S]{align=center}', defaultRegistry),
+    );
+    expect(container.querySelector('.mk-align-center')).toBeNull();
+    const kbd = container.querySelector('kbd.mk-kbd');
+    expect(kbd).not.toBeNull();
+    expect(kbd).toHaveTextContent('Ctrl+S');
+  });
+
+  it('never throws for an inline directive carrying layout attributes', () => {
+    expect(() =>
+      render(
+        renderMark(':kbd[Ctrl+S]{width=wide align=center}', defaultRegistry),
+      ),
+    ).not.toThrow();
+  });
+
+  it('still renders the unknown-directive fallback (wrapped) for an unregistered directive with width=wide, never throwing', () => {
+    expect(() => render(renderMark('::mystery{width=wide}', {}))).not.toThrow();
+    const { container } = render(renderMark('::mystery{width=wide}', {}));
+    const wrapper = container.querySelector('.mk-width-wide');
+    expect(wrapper).not.toBeNull();
+    expect(wrapper?.querySelector('.mk-unknown')).not.toBeNull();
+    expect(wrapper).toHaveTextContent('mystery');
+  });
+
+  it('still renders the fallback (wrapped) for a directive named constructor with width=wide, never throwing', () => {
+    expect(() =>
+      render(renderMark(':::constructor{width=wide}\nhi\n:::', {})),
+    ).not.toThrow();
+    const { container } = render(
+      renderMark(':::constructor{width=wide}\nhi\n:::', {}),
+    );
+    const wrapper = container.querySelector('.mk-width-wide');
+    expect(wrapper).not.toBeNull();
+    expect(wrapper?.querySelector('.mk-unknown')).not.toBeNull();
+    expect(wrapper).toHaveTextContent('constructor');
+  });
+
+  it('data= binding still resolves correctly alongside width=wide on the same directive', () => {
+    const store = createValueStore({
+      stars: { value: 42, status: 'fresh', ranAt: 1000 },
+    });
+    let seen: MarkComponentProps | undefined;
+    const registry: Registry = {
+      probe: {
+        component: (props: MarkComponentProps) => {
+          seen = props;
+          return <div className="probe" />;
+        },
+        inline: false,
+      },
+    };
+    const { container } = render(
+      renderMark('::probe{width=wide data=stars}', registry, store),
+    );
+    expect(container.querySelector('.mk-width-wide .probe')).not.toBeNull();
+    expect(seen?.data).toBe(42);
+    expect(seen?.dataStatus).toBe('fresh');
+    expect(seen?.attributes).toEqual({});
+  });
+
+  it('recognizes `:::tab{width=wide}` inside `::::tabs` as a tab (layout attrs on a directive Tabs reads by name do not break recognition)', () => {
+    const { container } = render(
+      renderMark(
+        [
+          '::::tabs',
+          ':::tab{label="A" width=wide}',
+          'panel A',
+          ':::',
+          ':::tab{label="B"}',
+          'panel B',
+          ':::',
+          '::::',
+        ].join('\n'),
+        defaultRegistry,
+      ),
+    );
+    const buttons = container.querySelectorAll('.mk-tabs__button');
+    expect(buttons).toHaveLength(2);
+    expect(buttons[0]).toHaveTextContent('A');
+    expect(buttons[1]).toHaveTextContent('B');
+    expect(container.querySelector('.mk-tab')).toHaveTextContent('panel A');
   });
 });
 

@@ -1,0 +1,137 @@
+{
+  "children": [
+    {
+      "attributes": {
+        "width": "narrow"
+      },
+      "children": [
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": "A narrow chart."
+            }
+          ],
+          "type": "paragraph"
+        }
+      ],
+      "name": "chart",
+      "type": "containerDirective"
+    },
+    {
+      "attributes": {
+        "width": "normal"
+      },
+      "children": [
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": "A normal-width chart."
+            }
+          ],
+          "type": "paragraph"
+        }
+      ],
+      "name": "chart",
+      "type": "containerDirective"
+    },
+    {
+      "attributes": {
+        "width": "wide"
+      },
+      "children": [
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": "A wide chart."
+            }
+          ],
+          "type": "paragraph"
+        }
+      ],
+      "name": "chart",
+      "type": "containerDirective"
+    },
+    {
+      "attributes": {
+        "width": "full"
+      },
+      "children": [
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": "A full-width chart."
+            }
+          ],
+          "type": "paragraph"
+        }
+      ],
+      "name": "chart",
+      "type": "containerDirective"
+    },
+    {
+      "attributes": {
+        "align": "left"
+      },
+      "children": [],
+      "name": "img-pair",
+      "type": "leafDirective"
+    },
+    {
+      "attributes": {
+        "align": "center"
+      },
+      "children": [],
+      "name": "img-pair",
+      "type": "leafDirective"
+    },
+    {
+      "attributes": {
+        "align": "right"
+      },
+      "children": [],
+      "name": "img-pair",
+      "type": "leafDirective"
+    },
+    {
+      "attributes": {
+        "cols": "2"
+      },
+      "children": [
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": "Two cells."
+            }
+          ],
+          "type": "paragraph"
+        }
+      ],
+      "name": "row",
+      "type": "containerDirective"
+    },
+    {
+      "attributes": {
+        "cols": "99"
+      },
+      "children": [
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": "An out-of-range cols value — layout defaults it to auto-fit at render time,\nbut the parser passes it through unchanged."
+            }
+          ],
+          "type": "paragraph"
+        }
+      ],
+      "name": "row",
+      "type": "containerDirective"
+    }
+  ],
+  "type": "root"
+}

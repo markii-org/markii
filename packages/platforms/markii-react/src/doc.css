@@ -495,6 +495,86 @@
   border-radius: 6px;
 }
 
+/* ---------- layout presets (DESIGN.md §4) ---------- */
+
+/*
+ * `render.tsx` only wraps a directive in a `mk-width-*`/`mk-align-*` `<div>`
+ * when at least one of these classes actually applies, so the wrapper below
+ * IS the element sitting directly in `.doc`'s rhythm flow — never
+ * `margin-block` here, that's `.doc > * + *`'s job alone; setting it on the
+ * wrapper too would double up spacing. `max-width: min(<size>, 100%)` keeps
+ * every preset from ever overflowing the document column, even on a narrow
+ * viewport where the size below is wider than the column itself.
+ */
+.mk-width-narrow {
+  max-width: min(30rem, 100%);
+}
+
+.mk-width-wide {
+  max-width: min(64rem, 100%);
+}
+
+/* "full" is the full available column width — not a viewport-bleed hack with negative margins. */
+.mk-width-full {
+  max-width: 100%;
+}
+
+.mk-align-left {
+  margin-inline-end: auto;
+}
+
+.mk-align-center {
+  margin-inline: auto;
+}
+
+.mk-align-right {
+  margin-inline-start: auto;
+}
+
+/* ---------- row ---------- */
+
+.mk-row {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr));
+}
+
+/*
+ * `minmax(0, 1fr)` — a bare `1fr` track can still grow past an equal share
+ * to fit a wide intrinsic-content cell (e.g. a `chart` SVG, a long code
+ * span); pinning the minimum to `0` is what keeps such a cell, and
+ * therefore the whole row, from blowing out past its column.
+ */
+.mk-row--cols-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.mk-row--cols-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.mk-row--cols-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+/*
+ * No separate blockification rule is needed here, unlike `.mk-card__body`'s:
+ * a grid container (which `.mk-row` is) already promotes every direct
+ * child's outer display to block-level as a grid item, same as a flex
+ * container does — an inline-flex/inline-block component (`stat`, `badge`,
+ * ...) used directly as a row cell already stacks/sizes as a proper grid
+ * cell with no extra rule required.
+ */
+
+@media (max-width: 40rem) {
+  .mk-row,
+  .mk-row--cols-2,
+  .mk-row--cols-3,
+  .mk-row--cols-4 {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ---------- unknown directive fallback ---------- */
 
 .mk-unknown {

@@ -1,0 +1,98 @@
+{
+  "children": [
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "Valid script names, charset-wise:"
+        }
+      ],
+      "type": "paragraph"
+    },
+    {
+      "lang": "lua",
+      "meta": "{name=x}",
+      "type": "code",
+      "value": "return 1"
+    },
+    {
+      "lang": "lua",
+      "meta": "{name=repo_stars}",
+      "type": "code",
+      "value": "return 1"
+    },
+    {
+      "lang": "lua",
+      "meta": "{name=__proto__}",
+      "type": "code",
+      "value": "return 1"
+    },
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "A dotted name is reserved for "
+        },
+        {
+          "type": "inlineCode",
+          "value": "data="
+        },
+        {
+          "type": "text",
+          "value": "/"
+        },
+        {
+          "type": "inlineCode",
+          "value": ":value[]"
+        },
+        {
+          "type": "text",
+          "value": " path traversal, so it is\nrejected by "
+        },
+        {
+          "type": "inlineCode",
+          "value": "extractScripts"
+        },
+        {
+          "type": "text",
+          "value": " even though it parses as an ordinary fence:"
+        }
+      ],
+      "type": "paragraph"
+    },
+    {
+      "lang": "lua",
+      "meta": "{name=repo.stars}",
+      "type": "code",
+      "value": "local repo = net.fetch_json(\"https://api.github.com/repos/x/y\")\nreturn repo.stargazers_count"
+    },
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "Other charset-invalid names — still ordinary code fences at the parse layer:"
+        }
+      ],
+      "type": "paragraph"
+    },
+    {
+      "lang": "lua",
+      "meta": "{name=1stars}",
+      "type": "code",
+      "value": "return 1"
+    },
+    {
+      "lang": "lua",
+      "meta": "{name=-stars}",
+      "type": "code",
+      "value": "return 1"
+    },
+    {
+      "lang": "lua",
+      "meta": "{name=repo/stars}",
+      "type": "code",
+      "value": "return 1"
+    }
+  ],
+  "type": "root"
+}

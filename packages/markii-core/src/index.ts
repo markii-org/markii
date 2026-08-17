@@ -8,6 +8,7 @@ export { parse } from './parse.js';
 export { toHast, isSafeUrl } from './to-hast.js';
 export {
   extractScripts,
+  isValidScriptName,
   parseMetaAttributes,
   type ScriptBlock,
 } from './scripts.js';

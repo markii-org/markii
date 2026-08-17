@@ -3,6 +3,7 @@ import { render } from '@testing-library/react';
 import { createValueStore } from '@markii/runtime';
 import { renderMark } from '../render';
 import { defaultRegistry } from './index';
+import { Chart } from './chart';
 
 describe('Chart', () => {
   it('renders a line chart (a polyline) from static `values`', () => {
@@ -217,8 +218,15 @@ describe('Chart', () => {
   });
 
   it('clamps an absurdly large `width`/`height` attribute to a sane maximum instead of a giant viewBox', () => {
+    // Rendered as `<Chart>` directly (not through `renderMark`): `width` is
+    // one of DESIGN.md §4's reserved layout-preset attribute names, so
+    // `render.tsx`'s layout interception strips it off a `::chart{...}`
+    // block directive before `Chart` ever sees it — see the `renderMark —
+    // ::chart{width=wide} is a layout preset` test below for that behavior.
+    // This test exists purely to keep exercising `Chart`'s own `parseSize`
+    // clamping, independent of how the directive attribute gets there.
     const { container } = render(
-      renderMark('::chart{values="1,2,3" width="1e9"}', defaultRegistry),
+      <Chart attributes={{ values: '1,2,3', width: '1e9' }} />,
     );
     const svg = container.querySelector('svg.mk-chart');
     const width = Number(svg?.getAttribute('width'));
@@ -227,12 +235,28 @@ describe('Chart', () => {
     expect(svg?.getAttribute('viewBox')).not.toMatch(/1000000000/);
 
     const { container: heightContainer } = render(
-      renderMark('::chart{values="1,2,3" height="1e9"}', defaultRegistry),
+      <Chart attributes={{ values: '1,2,3', height: '1e9' }} />,
     );
     const heightSvg = heightContainer.querySelector('svg.mk-chart');
     const height = Number(heightSvg?.getAttribute('height'));
     expect(height).toBeLessThan(1e9);
     expect(height).toBeLessThanOrEqual(2000);
+  });
+
+  it('treats `::chart{width=wide}` as a layout preset, not a chart size override — the DESIGN.md §4 collision', () => {
+    const { container } = render(
+      renderMark('::chart{values="1,2,3" width=wide}', defaultRegistry),
+    );
+    // The wrapper `<div>` renderMark adds carries the layout class...
+    const wrapper = container.querySelector('.mk-width-wide');
+    expect(wrapper).not.toBeNull();
+    // ...and the chart itself never saw `width` as its own attribute, so it
+    // rendered at its built-in default size rather than being reinterpreted
+    // as a pixel size (which `parseSize` would reject as non-numeric anyway,
+    // falling back to the default) or clamped.
+    const svg = wrapper?.querySelector('svg.mk-chart');
+    expect(svg).not.toBeNull();
+    expect(Number(svg?.getAttribute('width'))).toBe(240);
   });
 
   it('does not regress the happy-path geometry for a normal series', () => {

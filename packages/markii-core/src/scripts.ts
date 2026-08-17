@@ -61,6 +61,30 @@ function findAttributeGroup(source: string): string | undefined {
 const ATTRIBUTE_TOKEN = /([A-Za-z_][\w-]*)(?:=(?:"([^"]*)"|'([^']*)'|(\S+)))?/g;
 
 /**
+ * The full charset a script `name` may use (DESIGN.md §8). Deliberately NOT
+ * `g`-flagged: a `g`-flagged `RegExp` carries `lastIndex` state across
+ * `.test()` calls (the exec-loop cursor from a previous match survives to
+ * the next call on the same instance), which silently makes alternating
+ * calls report wrong results — a real bug class. `ATTRIBUTE_TOKEN` above
+ * needs `g` because it's driven with `.exec()` in a loop and resets
+ * `lastIndex` itself each time; `isValidScriptName` has no such loop, so it
+ * gets a plain, stateless pattern instead.
+ */
+const SCRIPT_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_-]*$/;
+
+/**
+ * Whether `name` is a legal script `name` (DESIGN.md §8). Dots are
+ * deliberately excluded from the charset — `data=`/`:value[]` read a dot in
+ * a name as path traversal (`repo.stars` means "field `stars` of value
+ * `repo`"), which would make a dotted *script* name unreachable from either
+ * attribute. Fully anchored (`^`…`$`), so a trailing newline or any other
+ * stray character fails the match rather than being silently tolerated.
+ */
+export function isValidScriptName(name: string): boolean {
+  return SCRIPT_NAME_PATTERN.test(name);
+}
+
+/**
  * Parses a fence `meta` string's `{...}` attribute group into a flat
  * key/value map (bare `key` with no `=value` yields `''`). Returns an empty,
  * null-prototype object when `meta` has no attribute group at all — the
@@ -101,9 +125,12 @@ export function parseMetaAttributes(
 /**
  * Walks a parsed mdast `Root` and returns every script block, in document
  * order. A `code` node is a script iff its `meta` carries a `{...}`
- * attribute group with a non-empty `name`; a code block with no meta, or
- * meta with no `name`, is ordinary code and is skipped. Pure AST
- * inspection — no execution, no I/O, no knowledge of any value store.
+ * attribute group with a non-empty `name` that also matches the script-name
+ * charset (DESIGN.md §8, `isValidScriptName`); a code block with no meta,
+ * meta with no `name`, or a `name` outside the charset (e.g. a dotted
+ * `repo.stars`) is ordinary code and is skipped — same display-only
+ * degradation either way, never an error and never a console message. Pure
+ * AST inspection — no execution, no I/O, no knowledge of any value store.
  */
 export function extractScripts(tree: Root): ScriptBlock[] {
   const blocks: ScriptBlock[] = [];
@@ -111,7 +138,7 @@ export function extractScripts(tree: Root): ScriptBlock[] {
   visit(tree, 'code', (node: Code) => {
     const attrs = parseMetaAttributes(node.meta);
     const name = attrs.name;
-    if (!name) return;
+    if (!name || !isValidScriptName(name)) return;
 
     const block: ScriptBlock = {
       name,

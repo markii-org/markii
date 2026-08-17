@@ -293,6 +293,21 @@ export const STANDARD_COMPONENTS: Record<string, ComponentContract> = {
     description:
       'A leaf directive rendering a minimal hand-rolled inline SVG chart, e.g. `::chart{kind=line values="1,3,2,5"}`. Data binding (§8): `data=name` resolves against the value store — expects an array of numbers (typically a Lua script returning a table), or an array of `{value}` objects. Non-finite/non-numeric entries are filtered out and the point count is capped; an empty or all-invalid series renders a small neutral empty state rather than a broken chart. Never throws, and never places unescaped text into the emitted SVG markup.',
   },
+  row: {
+    name: 'row',
+    kind: 'container',
+    attributes: {
+      cols: {
+        type: 'string',
+        required: false,
+        enum: ['2', '3', '4'],
+        description:
+          'Fixed column count for the row. Defaults to auto-fit (a responsive number of equal-width columns) when absent or not one of the allowed values — an invalid `cols` is never an error.',
+      },
+    },
+    description:
+      "DESIGN.md §4's one layout container, e.g. `:::row{cols=3} ... :::`. Its block children become equal-width cells that wrap responsively and stack on narrow viewports — and simply stack in a plain markdown viewer. No spans, no per-cell sizing, no other knobs.",
+  },
 };
 
 /**
