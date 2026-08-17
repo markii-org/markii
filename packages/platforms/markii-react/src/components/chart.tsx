@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react';
 import type { MarkComponentProps } from '../registry.js';
+import { dataStateClassName, failureTitle } from './failure-presentation.js';
 
 type ChartKind = 'line' | 'bar';
 
@@ -144,11 +145,25 @@ function scalePoints(
  * no user-controlled text is ever interpolated into the SVG markup.
  * Missing/error binding with no static fallback renders a small neutral
  * empty state rather than a broken or empty `<svg>`. Never throws.
+ *
+ * Failure presentation mirrors `ValueDirective` exactly (DESIGN.md §8,
+ * AGENTS.md's cleanliness principle): the BODY stays quiet — the same
+ * neutral `no data` state, or the plotted static fallback series — and a
+ * failed/stale binding surfaces only as a tooltip plus a modifier class on
+ * the root element (`mk-chart--stale`, `mk-chart--tier-blocked`, ...), both
+ * produced by `./failure-presentation`. The empty state carries the tooltip
+ * as a `title` attribute; the plotted `<svg>` carries it as an SVG `<title>`
+ * child instead, since `title=` is not a tooltip inside SVG content — the
+ * `role="img"`/`aria-label` pair still describes the graphic to assistive
+ * technology in both branches. Kind-specific wording is NEVER written into
+ * the visible body text.
  */
 export function Chart({
   attributes,
   data,
   dataStatus,
+  dataError,
+  dataFailureKind,
 }: MarkComponentProps): ReactElement {
   const rawKind = attributes.kind ?? DEFAULT_KIND;
   const kind: ChartKind = isChartKind(rawKind) ? rawKind : DEFAULT_KIND;
@@ -162,11 +177,15 @@ export function Chart({
   const height = DEFAULT_HEIGHT;
 
   const points = resolvePoints(data, dataStatus, attributes.values);
+  const title = failureTitle(dataError, dataFailureKind);
 
   if (points.length === 0) {
     return (
       <div
-        className="mk-chart mk-chart--empty"
+        className={dataStateClassName('mk-chart', dataStatus, dataFailureKind, [
+          'mk-chart--empty',
+        ])}
+        title={title}
         role="img"
         aria-label="chart: no data"
         style={{ width, height }}
@@ -181,13 +200,14 @@ export function Chart({
 
   return (
     <svg
-      className="mk-chart"
+      className={dataStateClassName('mk-chart', dataStatus, dataFailureKind)}
       viewBox={`0 0 ${String(width)} ${String(height)}`}
       width={width}
       height={height}
       role="img"
       aria-label={label}
     >
+      {title ? <title>{title}</title> : null}
       {kind === 'line' ? (
         <polyline
           className="mk-chart__line"

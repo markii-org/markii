@@ -46,21 +46,26 @@ describe('STANDARD_COMPONENTS', () => {
     }
   });
 
-  it('seeds exactly the thirteen components that exist in @markii/react today', () => {
+  it('seeds exactly the eighteen components that exist in @markii/react today', () => {
     expect(Object.keys(STANDARD_COMPONENTS).sort()).toEqual([
       'badge',
       'callout',
       'card',
+      'center',
       'chart',
       'details',
       'figure',
+      'full',
       'kbd',
+      'narrow',
       'progress',
       'rating',
+      'right',
       'row',
       'stat',
       'tab',
       'tabs',
+      'wide',
     ]);
   });
 
@@ -196,6 +201,29 @@ describe('STANDARD_COMPONENTS', () => {
     expect(Object.keys(attrs)).toEqual(['cols']);
     expect(attrs.cols?.required).toBeFalsy();
     expect(attrs.cols?.enum).toEqual(['2', '3', '4']);
+  });
+  it.each(['center', 'right', 'wide', 'narrow', 'full'] as const)(
+    'marks the %s layout wrapper as a container directive with no attributes',
+    (name) => {
+      const contract = STANDARD_COMPONENTS[name];
+      expect(contract?.kind).toBe('container');
+      expect(contract?.attributes).toEqual({});
+    },
+  );
+
+  it("each layout wrapper's description notes it takes no attributes and reaches plain markdown the attribute mechanism cannot", () => {
+    for (const name of ['center', 'right', 'wide', 'narrow', 'full']) {
+      const description = STANDARD_COMPONENTS[name]?.description ?? '';
+      expect(description).toContain('Takes no attributes');
+      expect(description).toContain('plain markdown');
+    }
+  });
+
+  it("each layout wrapper's description documents that nesting a width wrapper inside an alignment wrapper composes", () => {
+    for (const name of ['center', 'right', 'wide', 'narrow', 'full']) {
+      const description = STANDARD_COMPONENTS[name]?.description ?? '';
+      expect(description).toContain('composes');
+    }
   });
 });
 

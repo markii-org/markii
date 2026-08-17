@@ -4,6 +4,28 @@ All notable changes to Mark and the `@markii/*` packages are recorded here. The
 format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Layout wrapper containers (`@markii/react`, `@markii/stdlib`)**:
+  `:::center`, `:::right`, `:::wide`, `:::narrow`, `:::full` — five registry
+  aliases of one wrapper component that carry DESIGN.md §4's closed layout
+  presets to plain markdown a directive attribute cannot reach (a GFM table
+  or a bare image has no `{...}`). Attribute-free by design; nesting a width
+  wrapper inside an alignment wrapper composes. `@markii/react/components`
+  exports `createLayoutWrapper`, `LAYOUT_WRAPPER_PRESETS`, and
+  `LayoutWrapperPreset`; `defaultRegistry` gains the five names, and
+  `@markii/stdlib`'s `STANDARD_COMPONENTS` gains their contracts. New
+  conformance fixture `18-layout-wrappers`.
+- **Failure presentation parity (`@markii/react`)**: `MarkComponentProps`
+  gains optional `dataError` and `dataFailureKind`, so `stat`/`progress`/
+  `chart` present a failed `data=` binding exactly the way `:value[...]`
+  already did — a `title` tooltip plus a modifier class hook
+  (`mk-stat--tier-blocked`, `mk-chart--stale`, ...), never body text. Both
+  props are supplied only for a directive that had a `data=` attribute, and
+  `dataFailureKind` only for a genuine `error` resolution.
+
 ## [0.2.0] - 2026-08-17
 
 Layout, cross-note data sharing, a block-level render primitive, and a

@@ -51,6 +51,39 @@ export interface ComponentContract {
 }
 
 /**
+ * Builds one of DESIGN.md §4's five layout-wrapper container contracts —
+ * `center`/`right`/`wide`/`narrow`/`full` — which are otherwise identical in
+ * shape (`kind: 'container'`, no attributes) and differ only in `name` and
+ * the preset-specific half of `description`. A tiny helper rather than five
+ * hand-copied literals, since a typo in one copy's `kind`/`attributes` would
+ * otherwise be easy to miss across five near-duplicate blocks.
+ *
+ * `whatItDoes` is the preset-specific clause (e.g. "Centers narrower-than-
+ * column plain markdown..."); the shared clause about why these exist (the
+ * attribute mechanism cannot reach plain markdown) and about composing with
+ * a nested wrapper is appended identically for all five.
+ */
+function layoutWrapperContract(
+  name: string,
+  whatItDoes: string,
+): ComponentContract {
+  return {
+    name,
+    kind: 'container',
+    attributes: {},
+    description:
+      `${whatItDoes} Takes no attributes — DESIGN.md §4 gives these five ` +
+      'wrapper names a closed, attribute-free form; unlike a `width`/`align` ' +
+      'attribute on a directive, a wrapper also reaches plain markdown a ' +
+      'directive attribute mechanism structurally cannot (a GFM table or a ' +
+      'bare image has no `{...}` to write `width=`/`align=` into). Nesting a ' +
+      'width wrapper (`wide`/`narrow`/`full`) inside an alignment wrapper ' +
+      '(`center`/`right`) composes, e.g. `::::center :::narrow ... ::: ::::` ' +
+      '(the outer fence needs more colons than the inner one).',
+  };
+}
+
+/**
  * The standard component set, seeded from the components that ship with
  * `@markii/react` today (`packages/platforms/markii-react/src/components/
  * {callout,kbd,rating,details,card,badge,figure,tabs,tab}.tsx`). Each
@@ -296,6 +329,26 @@ export const STANDARD_COMPONENTS: Record<string, ComponentContract> = {
     description:
       "DESIGN.md §4's one layout container, e.g. `:::row{cols=3} ... :::`. Its block children become equal-width cells that wrap responsively and stack on narrow viewports — and simply stack in a plain markdown viewer. No spans, no per-cell sizing, no other knobs.",
   },
+  center: layoutWrapperContract(
+    'center',
+    'Centers narrower-than-column plain markdown (a table, an image) within its scope and sets text alignment for everything in scope, e.g. `:::center ... :::`.',
+  ),
+  right: layoutWrapperContract(
+    'right',
+    'Right-aligns narrower-than-column plain markdown (a table, an image) within its scope and sets text alignment for everything in scope, e.g. `:::right ... :::`.',
+  ),
+  wide: layoutWrapperContract(
+    'wide',
+    "Sizes its scope's content to DESIGN.md §4's wide-column width preset, e.g. `:::wide ... :::`.",
+  ),
+  narrow: layoutWrapperContract(
+    'narrow',
+    "Sizes its scope's content to DESIGN.md §4's narrow-column width preset, e.g. `:::narrow ... :::`.",
+  ),
+  full: layoutWrapperContract(
+    'full',
+    "Sizes its scope's content to the full available document-column width, e.g. `:::full ... :::`.",
+  ),
 };
 
 /**

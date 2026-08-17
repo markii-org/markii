@@ -1,5 +1,5 @@
 import type { ComponentType, ReactNode } from 'react';
-import type { ValueStatus } from '@markii/runtime';
+import type { FailureKind, ValueStatus } from '@markii/runtime';
 
 /**
  * Attributes parsed off a directive, e.g. `{type=warning title="Careful"}`.
@@ -27,12 +27,26 @@ export type DirectiveAttributes = Record<string, string | null | undefined>;
  * Both are simply absent — not merely falsy — when the directive had no
  * `data=` attribute at all, so a component can tell "no binding requested"
  * apart from "binding requested but missing".
+ *
+ * `dataError`/`dataFailureKind` describe HOW a binding failed, for the same
+ * quiet presentation `:value[...]` gives an inline value: a tooltip plus a
+ * CSS class hook, never body text (AGENTS.md's cleanliness principle — the
+ * rendered page never shows an error dump). `dataError` is the underlying
+ * message the failing script produced, if any; `dataFailureKind` is
+ * `@markii/runtime`'s closed `FailureKind` classification, supplied ONLY for
+ * a genuine `dataStatus: 'error'` — a plain `'missing'` binding never
+ * invents one, even if the stored root entry happened to carry a stale kind
+ * from an earlier run. Both are optional and a component must degrade
+ * gracefully when they are absent (a hand-built store or a pre-taxonomy
+ * persisted value may carry neither).
  */
 export interface MarkComponentProps {
   attributes: DirectiveAttributes;
   children?: ReactNode;
   data?: unknown;
   dataStatus?: ValueStatus;
+  dataError?: string;
+  dataFailureKind?: FailureKind;
 }
 
 /**

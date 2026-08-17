@@ -10,7 +10,12 @@ import {
   isBareAttribute,
 } from '@markii/core';
 import type { MarkNode } from '@markii/core';
-import type { ValueStatus, ValueStore, VaultStore } from '@markii/runtime';
+import type {
+  FailureKind,
+  ValueStatus,
+  ValueStore,
+  VaultStore,
+} from '@markii/runtime';
 import type { Element as HastElement, Root as HastRoot } from 'hast';
 import type { DirectiveAttributes, Registry } from './registry.js';
 import { resolveLayoutAttributes } from './layout.js';
@@ -107,6 +112,8 @@ interface ResolvedDataBinding {
   attributes: DirectiveAttributes;
   data?: unknown;
   dataStatus?: ValueStatus;
+  dataError?: string;
+  dataFailureKind?: FailureKind;
 }
 
 /**
@@ -121,6 +128,16 @@ interface ResolvedDataBinding {
  * an unresolved path segment all degrade to `dataStatus: 'missing'` with
  * `data: undefined`, the same graceful-degradation spirit as the
  * unknown-directive fallback.
+ *
+ * Failure detail (`dataError`/`dataFailureKind`) is carried alongside the
+ * value so a data-bound component can surface it the way `ValueDirective`
+ * already does — tooltip + class hook, never body text. `dataFailureKind` is
+ * gated to a genuine `'error'` resolution HERE, in the one resolver, rather
+ * than in each component: a `'missing'` resolution must never present a
+ * failure kind even when `resolveScopedPath` carried one through from the
+ * root entry of a partially-resolved dotted path (see `store-path.ts`'s
+ * `walkSegments`) — exactly the rule `ValueDirective` applies to its own
+ * resolution.
  */
 function resolveDataAttribute(
   attributes: DirectiveAttributes,
@@ -141,6 +158,9 @@ function resolveDataAttribute(
     attributes: rest,
     data: resolved.value,
     dataStatus: resolved.status,
+    dataError: resolved.error,
+    dataFailureKind:
+      resolved.status === 'error' ? resolved.failureKind : undefined,
   };
 }
 
@@ -223,7 +243,12 @@ function renderDirectiveContent(
   // attribute").
   const dataProps =
     'data' in binding
-      ? { data: binding.data, dataStatus: binding.dataStatus }
+      ? {
+          data: binding.data,
+          dataStatus: binding.dataStatus,
+          dataError: binding.dataError,
+          dataFailureKind: binding.dataFailureKind,
+        }
       : {};
   return (
     <Component attributes={binding.attributes} {...dataProps}>

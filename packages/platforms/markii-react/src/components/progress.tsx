@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react';
 import type { MarkComponentProps } from '../registry.js';
+import { dataStateClassName, failureTitle } from './failure-presentation.js';
 
 const DEFAULT_MAX = 1;
 
@@ -59,11 +60,21 @@ function readProgressFields(data: unknown): ProgressFields {
  * falls back to `0` (value) or the default `max` of `1`; `value` is then
  * clamped to `[0, max]` and `max` is guarded to be positive. Missing/error
  * binding renders a `0%` bar rather than crashing.
+ *
+ * Failure presentation mirrors `ValueDirective` exactly (DESIGN.md §8,
+ * AGENTS.md's cleanliness principle): the BODY stays quiet — the ordinary
+ * bar, at `0%` when nothing resolved — and a failed/stale binding surfaces
+ * only as a `title` tooltip plus a modifier class on the root element
+ * (`mk-progress--stale`, `mk-progress--tier-blocked`, ...), both produced by
+ * `./failure-presentation`. Kind-specific wording is NEVER written into the
+ * bar's label or any other body text.
  */
 export function Progress({
   attributes,
   data,
   dataStatus,
+  dataError,
+  dataFailureKind,
 }: MarkComponentProps): ReactElement {
   const fromData: ProgressFields =
     dataStatus === 'missing' || dataStatus === 'error'
@@ -81,7 +92,8 @@ export function Progress({
 
   return (
     <div
-      className="mk-progress"
+      className={dataStateClassName('mk-progress', dataStatus, dataFailureKind)}
+      title={failureTitle(dataError, dataFailureKind)}
       role="progressbar"
       aria-valuenow={value}
       aria-valuemin={0}

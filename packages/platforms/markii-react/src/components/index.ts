@@ -7,6 +7,7 @@ import { Chart } from './chart.js';
 import { Details } from './details.js';
 import { Figure } from './figure.js';
 import { Kbd } from './kbd.js';
+import { createLayoutWrapper } from './layout-wrapper.js';
 import { Progress } from './progress.js';
 import { Rating } from './rating.js';
 import { Row } from './row.js';
@@ -23,6 +24,11 @@ export { Chart } from './chart.js';
 export { Details } from './details.js';
 export { Figure } from './figure.js';
 export { Kbd } from './kbd.js';
+export {
+  createLayoutWrapper,
+  LAYOUT_WRAPPER_PRESETS,
+} from './layout-wrapper.js';
+export type { LayoutWrapperPreset } from './layout-wrapper.js';
 export { Progress } from './progress.js';
 export { Rating } from './rating.js';
 export { Row } from './row.js';
@@ -66,4 +72,24 @@ export const defaultRegistry: Registry = {
   progress: { component: Progress, inline: inlineFromContract('progress') },
   chart: { component: Chart, inline: inlineFromContract('chart') },
   row: { component: Row, inline: inlineFromContract('row') },
+  center: {
+    component: createLayoutWrapper('center'),
+    inline: inlineFromContract('center'),
+  },
+  right: {
+    component: createLayoutWrapper('right'),
+    inline: inlineFromContract('right'),
+  },
+  wide: {
+    component: createLayoutWrapper('wide'),
+    inline: inlineFromContract('wide'),
+  },
+  narrow: {
+    component: createLayoutWrapper('narrow'),
+    inline: inlineFromContract('narrow'),
+  },
+  full: {
+    component: createLayoutWrapper('full'),
+    inline: inlineFromContract('full'),
+  },
 };

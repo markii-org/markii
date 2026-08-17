@@ -1,5 +1,6 @@
 import type { ReactElement, ReactNode } from 'react';
 import type { MarkComponentProps } from '../registry.js';
+import { dataStateClassName, failureTitle } from './failure-presentation.js';
 
 const EMPTY_VALUE = '—';
 
@@ -66,11 +67,21 @@ function pick(
  * directive attribute always wins over the bound object's field. Missing
  * value (from either source) renders `—` rather than a blank box; a missing
  * or errored binding degrades the same way. Never throws.
+ *
+ * Failure presentation mirrors `ValueDirective` exactly (DESIGN.md §8,
+ * AGENTS.md's cleanliness principle): the BODY stays quiet — `—`, or
+ * whatever static attributes supplied — and a failed/stale binding surfaces
+ * only as a `title` tooltip plus a modifier class on the root element
+ * (`mk-stat--stale`, `mk-stat--tier-blocked`, ...), both produced by
+ * `./failure-presentation`. Kind-specific wording is NEVER written into the
+ * component's body text.
  */
 export function Stat({
   attributes,
   data,
   dataStatus,
+  dataError,
+  dataFailureKind,
 }: MarkComponentProps): ReactElement {
   const fromData: StatFields =
     dataStatus === 'missing' || dataStatus === 'error'
@@ -95,7 +106,10 @@ export function Stat({
   ) : null;
 
   return (
-    <div className="mk-stat">
+    <div
+      className={dataStateClassName('mk-stat', dataStatus, dataFailureKind)}
+      title={failureTitle(dataError, dataFailureKind)}
+    >
       <div className="mk-stat__value">{value || EMPTY_VALUE}</div>
       {label ? <div className="mk-stat__label">{label}</div> : null}
       {deltaNode}

@@ -1,0 +1,176 @@
+{
+  "children": [
+    {
+      "attributes": {},
+      "children": [
+        {
+          "align": [null, null],
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "type": "text",
+                      "value": "Name"
+                    }
+                  ],
+                  "type": "tableCell"
+                },
+                {
+                  "children": [
+                    {
+                      "type": "text",
+                      "value": "Role"
+                    }
+                  ],
+                  "type": "tableCell"
+                }
+              ],
+              "type": "tableRow"
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "type": "text",
+                      "value": "Ada"
+                    }
+                  ],
+                  "type": "tableCell"
+                },
+                {
+                  "children": [
+                    {
+                      "type": "text",
+                      "value": "Engineer"
+                    }
+                  ],
+                  "type": "tableCell"
+                }
+              ],
+              "type": "tableRow"
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "type": "text",
+                      "value": "Grace"
+                    }
+                  ],
+                  "type": "tableCell"
+                },
+                {
+                  "children": [
+                    {
+                      "type": "text",
+                      "value": "Admiral"
+                    }
+                  ],
+                  "type": "tableCell"
+                }
+              ],
+              "type": "tableRow"
+            }
+          ],
+          "type": "table"
+        }
+      ],
+      "name": "center",
+      "type": "containerDirective"
+    },
+    {
+      "attributes": {},
+      "children": [
+        {
+          "children": [
+            {
+              "alt": "A cat",
+              "title": null,
+              "type": "image",
+              "url": "https://example.com/cat.png"
+            }
+          ],
+          "type": "paragraph"
+        }
+      ],
+      "name": "right",
+      "type": "containerDirective"
+    },
+    {
+      "attributes": {},
+      "children": [
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": "A wide-column paragraph of plain text."
+            }
+          ],
+          "type": "paragraph"
+        }
+      ],
+      "name": "wide",
+      "type": "containerDirective"
+    },
+    {
+      "attributes": {},
+      "children": [
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": "A narrow-column paragraph of plain text."
+            }
+          ],
+          "type": "paragraph"
+        }
+      ],
+      "name": "narrow",
+      "type": "containerDirective"
+    },
+    {
+      "attributes": {},
+      "children": [
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": "A full-width paragraph of plain text."
+            }
+          ],
+          "type": "paragraph"
+        }
+      ],
+      "name": "full",
+      "type": "containerDirective"
+    },
+    {
+      "attributes": {},
+      "children": [
+        {
+          "attributes": {},
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "A narrow scope nested inside a centered scope — composing a width wrapper\nwith an alignment wrapper."
+                }
+              ],
+              "type": "paragraph"
+            }
+          ],
+          "name": "narrow",
+          "type": "containerDirective"
+        }
+      ],
+      "name": "center",
+      "type": "containerDirective"
+    }
+  ],
+  "type": "root"
+}

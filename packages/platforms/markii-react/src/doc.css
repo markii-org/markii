@@ -520,6 +520,50 @@
   border-radius: 6px;
 }
 
+/* ---------- data-binding state (DESIGN.md §8) ---------- */
+
+/*
+ * The block twins of the `.mk-value--*` markers above: a data-bound
+ * component (`stat`, `progress`, `chart`) whose `data=` binding is stale or
+ * failed keeps its ordinary QUIET body — `—`, a `0%` bar, `no data` — and
+ * says so only through these hooks plus its `title` tooltip. No rule here
+ * may add body text (`content:` is deliberately absent) or an outer margin;
+ * the failure taxonomy's wording lives in one place only, `components/
+ * failure-presentation.ts`.
+ *
+ * The hues match `.mk-value--*` exactly, so the same failing name reads the
+ * same whether it surfaced inline via `:value[...]` or as a component.
+ */
+.mk-stat--stale,
+.mk-progress--stale,
+.mk-chart--stale {
+  opacity: 0.8;
+}
+
+.mk-stat--script-error,
+.mk-progress--script-error,
+.mk-chart--script-error {
+  border-bottom: 2px solid #ef4444;
+}
+
+.mk-stat--capability-denied,
+.mk-progress--capability-denied,
+.mk-chart--capability-denied {
+  border-bottom: 2px solid #d97706;
+}
+
+.mk-stat--tier-blocked,
+.mk-progress--tier-blocked,
+.mk-chart--tier-blocked {
+  border-bottom: 2px solid #2563eb;
+}
+
+.mk-stat--limit,
+.mk-progress--limit,
+.mk-chart--limit {
+  border-bottom: 2px solid #7c3aed;
+}
+
 /* ---------- layout presets (DESIGN.md §4) ---------- */
 
 /*
@@ -554,6 +598,67 @@
 
 .mk-align-right {
   margin-inline-start: auto;
+}
+
+/*
+ * The five `:::center`/`:::right`/`:::wide`/`:::narrow`/`:::full` layout
+ * wrappers (DESIGN.md §4, `layout-wrapper.tsx`) reuse the `mk-width-*`/
+ * `mk-align-*` classes above and add `mk-layout` on top for the rules below,
+ * which only make sense on a container that has its OWN plain-markdown
+ * children (a table, an image, a paragraph) rather than on the bare
+ * attribute-interception wrapper `render.tsx` emits for `width=`/`align=`.
+ *
+ * No outer margin on `.mk-layout` itself, same rule as every component
+ * (Architecture rule 4) — `.doc > * + *` spaces the wrapper against its
+ * siblings. This rule instead restores RHYTHM *inside* the wrapper's own
+ * scope, mirroring `.mk-card__body > * + *`: without it, the wrapper's
+ * children would have no spacing between them at all, since `.doc > * + *`
+ * only ever sees the wrapper `<div>` as a whole, never reaches inside it.
+ */
+.mk-layout > * + * {
+  margin-block-start: 1rem;
+}
+
+/* `center`/`right` additionally set text alignment for everything in scope — not just the shrink-to-fit block alignment below. */
+.mk-layout.mk-align-center {
+  text-align: center;
+}
+
+.mk-layout.mk-align-right {
+  text-align: right;
+}
+
+/*
+ * `.mk-align-center`/`.mk-align-right` above (shared with the `align=`
+ * attribute wrapper) only center/right-align the wrapper `<div>` ITSELF
+ * within ITS container — they say nothing about the wrapper's own children.
+ * These two rules do that: they shrink-to-fit and align every direct child
+ * of the wrapper's scope, which is what actually centers/right-aligns a
+ * narrower-than-column table or image sitting inside `:::center`/`:::right`.
+ */
+.mk-layout.mk-align-center > * {
+  margin-inline: auto;
+}
+
+.mk-layout.mk-align-right > * {
+  margin-inline-start: auto;
+  margin-inline-end: 0;
+}
+
+/*
+ * `.doc table` (above) sets `display: block` for horizontal-scroll
+ * overflow, which also makes the table fill its column — defeating
+ * shrink-to-fit alignment before it can even apply. These two rules size a
+ * table down to its content instead, so the `margin-inline` rules above
+ * have a narrower box to actually move. `.doc th`/`.doc td` set
+ * `text-align: left` directly on the cells, so this scope's `text-align`
+ * never flips table cell text — only the table's own position in the
+ * scope, and any non-table text alongside it.
+ */
+.mk-layout.mk-align-center > table,
+.mk-layout.mk-align-right > table {
+  width: fit-content;
+  max-width: 100%;
 }
 
 /* ---------- row ---------- */
