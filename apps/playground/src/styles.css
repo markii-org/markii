@@ -23,10 +23,25 @@ body {
   min-height: 100vh;
 }
 
+/*
+ * Title block on the left, repo link pinned to the right. `align-items:
+ * center` centers the link against the two-line title block rather than
+ * letting it sit on the first baseline; `gap` is the floor between them when
+ * the title wraps on a narrow viewport.
+ */
 .playground__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
   padding: 1rem 1.5rem;
   border-bottom: 1px solid #e2e2e5;
   background: #ffffff;
+}
+
+/* `min-width: 0` so the title text wraps instead of shoving the link out. */
+.playground__header-text {
+  min-width: 0;
 }
 
 .playground__header h1 {
@@ -38,6 +53,65 @@ body {
   margin: 0;
   color: #666;
   font-size: 0.9rem;
+}
+
+/*
+ * Repo link: muted like the header subtitle, darkening to the body ink on
+ * hover/focus. `flex-shrink: 0` keeps it whole while the title block absorbs
+ * the squeeze; `white-space: nowrap` stops "GitHub" breaking mid-word.
+ */
+.playground__repo-link {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 0.4rem;
+  padding: 0.35rem 0.65rem;
+  border: 1px solid #e2e2e5;
+  border-radius: 6px;
+  color: #666;
+  font-size: 0.85rem;
+  font-weight: 500;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.playground__repo-link:hover {
+  color: #1a1a1a;
+  border-color: #c9c9ce;
+  background: #f7f7f8;
+}
+
+.playground__repo-link:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+/* Inherits the link's `color` via `fill="currentColor"`; `display: block`
+   drops the inline-descender gap that would otherwise offset the icon from
+   the label by a pixel. */
+.playground__repo-link-icon {
+  display: block;
+}
+
+/*
+ * Narrow viewports: collapse to the icon alone. The octocat is a
+ * self-explanatory mark, the anchor's `aria-label` carries the accessible
+ * name either way, and the padding is squared up so the remaining icon sits
+ * centered in the button shape instead of off to one side.
+ */
+@media (max-width: 560px) {
+  .playground__repo-link {
+    padding: 0.4rem;
+  }
+
+  .playground__repo-link-label {
+    display: none;
+  }
 }
 
 .playground__panes {

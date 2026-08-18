@@ -2,7 +2,6 @@ import {
   EditorView,
   drawSelection,
   dropCursor,
-  highlightActiveLine,
   highlightActiveLineGutter,
   keymap,
   lineNumbers,
@@ -68,11 +67,15 @@ const smdEditorTheme = EditorView.theme({
     color: '#c1c4ca',
     border: 'none',
   },
-  '.cm-activeLine': {
-    backgroundColor: '#f7f7f8',
-  },
+  /*
+   * No `.cm-activeLine` rule: the active-line highlight is off (see
+   * `createEditorExtensions`). The gutter cue stays, but as a color change
+   * only — a tinted block in the gutter with no matching tint across the line
+   * would read as a stray artifact, whereas a darkened line number is a quiet
+   * "you are here" that never touches the text area.
+   */
   '.cm-activeLineGutter': {
-    backgroundColor: '#f7f7f8',
+    backgroundColor: 'transparent',
     color: '#888888',
   },
   '&.cm-focused': {
@@ -89,9 +92,17 @@ const smdEditorTheme = EditorView.theme({
 /**
  * The playground editor's full extension set: markdown syntax highlighting
  * (`@codemirror/lang-markdown`), line wrapping, and a small hand-picked set
- * of editing conveniences (history/undo, bracket matching, active-line
- * highlight). Deliberately excludes autocomplete and linting — out of scope
+ * of editing conveniences (history/undo, bracket matching, gutter cue for the
+ * caret's line). Deliberately excludes autocomplete and linting — out of scope
  * per docs/integration.md (no directive-aware language server, "maybe never").
+ *
+ * `highlightActiveLine` is deliberately absent: it paints its background on
+ * the `.cm-line` element, which sits ABOVE `drawSelection`'s selection layer,
+ * so the active line's tint covered the selection highlight on whichever line
+ * the caret was on. `highlightActiveLineGutter` is kept — it lives in the
+ * gutter, can never overlap a selection, and (restyled to a color-only cue in
+ * `smdEditorTheme`) preserves the "which line am I on" signal that removing
+ * the line background would otherwise cost.
  */
 export function createEditorExtensions(
   onDocChange: (text: string) => void,
@@ -99,7 +110,6 @@ export function createEditorExtensions(
   return [
     lineNumbers(),
     highlightActiveLineGutter(),
-    highlightActiveLine(),
     history(),
     drawSelection(),
     dropCursor(),
