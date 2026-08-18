@@ -59,17 +59,18 @@ The inner container uses three colons, the outer uses four.
 ```
 
 This can feel inverted if you expect code-style indentation, where depth
-grows inward. But `:::` lines are fences, not scopes, and the rule is the
-same one markdown code fences already follow: a longer fence is a stronger
-one, so it can contain shorter ones. Think "bigger fence, bigger box" — the
-outermost box is the biggest. Indentation was never available for this job,
-because indentation already means something in markdown (four spaces starts
-a code block). A fence line with a name opens a container; a bare colon
-line only ever closes one, which is what keeps closings unambiguous. In
-everyday documents nesting rarely goes past one level, so nearly everything
-is written with plain `:::`. If the growth direction is written the wrong
-way around, nothing errors — the parser pairs the fences it can and leaves
-any stray `:::` visible as text, so the mistake is easy to see and fix.
+grows inward. But `:::` lines are fences, not scopes. The rule is the same
+one markdown code fences already follow: a longer fence is a stronger one,
+so it can contain shorter ones. Think "bigger fence, bigger box".
+Indentation was never available for this job, because indentation already
+means something in markdown — four spaces starts a code block.
+
+Two smaller facts complete the picture. A fence line with a name opens a
+container; a bare colon line only ever closes one. And in everyday
+documents nesting rarely goes past one level, so nearly everything is
+written with plain `:::`. If you do get the growth direction backwards,
+nothing errors: the parser pairs the fences it can and leaves any stray
+`:::` visible as text, so the mistake is easy to see and fix.
 
 The syntax comes from the CommonMark "generic directives" proposal, so it is
 shared with other markdown tools rather than invented here.
@@ -88,14 +89,16 @@ vocabulary. You can restyle them, replace them, or add your own.
 
 A registry may also carry aliases: a second name for a component it already
 holds, optionally with preset attributes, so `warn` can stand for
-`callout{type=warning}`. An alias is resolved when the name is looked up,
-one hop only, so an alias pointing at another alias is not followed. A real
-registered component always beats an alias of the same name, attributes
-written in the document always beat the alias's presets, and an alias
-pointing at a component nobody registered shows the usual fallback box
-under the target's name. Aliases belong to the application or the pack,
-never to a note: a note that could define its own names would be a
-preprocessor in disguise, and the raw file would stop saying what it means.
+`callout{type=warning}`. Three rules make aliases predictable. They resolve
+one hop only, so an alias pointing at another alias is not followed. The
+closest thing wins: a real registered component beats an alias of the same
+name, and attributes written in the document beat the alias's presets. And
+an alias pointing at a component nobody registered shows the usual fallback
+box, named after the target.
+
+Aliases belong to the application or the pack, never to a note. A note that
+could define its own names would be a preprocessor in disguise, and the raw
+file would stop saying what it means.
 
 ### Unknown names never break the page
 
@@ -210,11 +213,13 @@ a chart and its caption — wrap them in `:::cell`:
 ```
 
 The wrapper is invisible: no border, no spacing, nothing but the grouping.
-It also settles a case that is otherwise impossible. Markdown merges two
-adjacent lists into one, so two task lists can only become two cells when a
-`cell` separates them. Mind the colon growth — the outer `::::row` needs
-more colons than the `:::cell` fences inside it. Outside a row, `:::cell`
-does nothing at all.
+Outside a row it does nothing at all. Note the colon growth in the example
+— the outer `::::row` needs more colons than the `:::cell` fences inside
+it.
+
+`cell` also settles a case that is otherwise impossible. Markdown merges
+two adjacent lists into one, so two task lists can only become two separate
+cells when a `cell` stands around each.
 
 ### What layout deliberately cannot do
 
@@ -254,15 +259,17 @@ meaning, so a horizontal rule mid-document is still a horizontal rule, and
 an opening fence that is never closed degrades to ordinary markdown rather
 than swallowing the file.
 
-Its one format-defined key is `uses:`, which names the component packs a
-note expects, written either inline as `uses: [ana, gh]` or as a list of
-`- name` lines beneath it. It is purely informative; it lets a renderer say
-"this note uses pack `ana`, which is not installed" instead of showing bare
-fallback boxes. The rest of the block belongs to whoever wrote it: the
-reference implementation reads `uses:` in those two shapes and hands the
-remaining text back raw, deliberately carrying no YAML library. A `uses:`
-written any other way is simply not read; the note still renders, and
-nothing is reported as an error.
+Frontmatter has one format-defined key: `uses:`, which names the component
+packs a note expects. Write it inline as `uses: [ana, gh]`, or as a list of
+`- name` lines beneath the key. It is purely informative; it lets a
+renderer say "this note uses pack `ana`, which is not installed" instead of
+showing bare fallback boxes.
+
+The rest of the block belongs to whoever wrote it. The reference
+implementation reads `uses:` in those two shapes only and hands the
+remaining text back raw — it deliberately carries no YAML library. A
+`uses:` written any other way is simply not read: the note still renders,
+and nothing is reported as an error.
 
 Links between notes are ordinary relative markdown links, like
 `[roadmap](./roadmap.mk.md)`. They work in every viewer today. Wiki-style
