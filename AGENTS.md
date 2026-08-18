@@ -155,6 +155,47 @@ corpus is plain data — no TypeScript in `conformance/`.
   posture generally. There is no "port an existing external component
   library" path — external component-library dependencies are out of scope.
 
+## Documentation style (user-set, binding)
+
+Two kinds of documents, two different jobs. These rules govern every edit
+to `README.md` and `docs/` — violating them is rework, not taste.
+
+**README = the front door. It links, it does not explain.** Keep it well
+under 150 lines, in exactly this shape:
+
+1. Tagline + hook: what this is and why it exists, with one tiny example —
+   enough to stop a reader from leaving.
+2. Getting started: install, try-it, and platform support shown as a
+   showcase table (available vs planned).
+3. Integrate & extend: a SHORT summary whose job is pointing into the
+   `docs/` pages — never the material itself.
+4. A compact footer: license, contributing.
+
+Anything that can be referenced from `docs/` must not be expanded in the
+README. Overpacking the README is the failure mode to guard against.
+
+**`docs/` = documentation for humans who open it and read.** All heavy
+technical material lives here, and it must read as prose someone follows,
+not notes someone decodes:
+
+- Each page has one audience (note-writer / power user / integrating
+  developer) and a coherent, logical flow; `docs/spec.md` stays the short
+  normative core, with rationale in the topic pages.
+- Plain language. No jargon-dense sentences; never cram several facts into
+  one sentence — split it.
+- No long code inline or inside a paragraph. Code sits in short display
+  blocks; if a sample grows, restructure the section instead.
+- Professional documentation tone throughout. First-person diary phrasing
+  ("What I did NOT test") never ships in docs/ — audit material is
+  rewritten as verification status, keeping the evidence and the honesty,
+  losing the diary voice.
+- Final pass on every authored page: apply the humanizer rules
+  (https://raw.githubusercontent.com/blader/humanizer/refs/heads/main/SKILL.md)
+  — strip inflated claims, filler, forced parallelism, decorative bolding,
+  and chatbot artifacts. Reference it; do not inline it.
+- While re-authoring, collect gaps and misdesigns and REPORT them; never
+  silently change a design decision as part of a rewrite.
+
 ## Maintenance map (what to update when something changes)
 
 Cross-references rot silently. These pairings are mandatory and belong in the
