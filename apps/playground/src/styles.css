@@ -1,5 +1,16 @@
 :root {
   color-scheme: light;
+  /*
+   * Shared height of the chrome controls (`.playground__button`), and the
+   * side of the icon-only repo pill at narrow widths so it stays square.
+   *
+   * 30px, not 32px, is deliberate: the Run button lives inside
+   * `.playground__pane-title`, whose content box is 31px tall — 3rem minus
+   * its 1rem of vertical padding minus the 1px bottom border, under the
+   * global `box-sizing: border-box`. A 2rem control would overflow that box
+   * by half a pixel at each edge and graze the pane title's rule.
+   */
+  --pg-control-height: 1.875rem;
 }
 
 * {
@@ -56,22 +67,41 @@ body {
 }
 
 /*
- * Repo link: muted like the header subtitle, darkening to the body ink on
- * hover/focus. `flex-shrink: 0` keeps it whole while the title block absorbs
- * the squeeze; `white-space: nowrap` stops "GitHub" breaking mid-word.
+ * The two chrome controls — the header's GitHub link and the preview
+ * toolbar's "Run scripts" button — are a matched pair, so every dimension
+ * that makes them read as one lives here once and the modifiers below carry
+ * only what differs (fill vs ghost).
+ *
+ * `min-width` is sized to the longer of the two labels, "Run scripts": at
+ * this type size that string measures ~105px in DejaVu Sans Bold (the widest
+ * realistic `system-ui` face, on Linux) including the 0.65rem side padding
+ * and 1px borders, so 7rem/112px renders BOTH boxes at exactly 112px with
+ * slack to spare rather than letting either grow past it. It also stops the
+ * button resizing when its label swaps to "Running…".
+ *
+ * `font-family: inherit` matters: a `<button>` does not inherit the page font
+ * on its own, so without it the button would render in the UA's button face
+ * while the anchor rendered in `system-ui` — same box, mismatched text.
+ * `text-transform`/`letter-spacing` are reset because the button sits inside
+ * `.playground__pane-title`, which sets uppercase tracking.
  */
-.playground__repo-link {
+.playground__button {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   flex-shrink: 0;
   gap: 0.4rem;
-  padding: 0.35rem 0.65rem;
-  border: 1px solid #e2e2e5;
+  height: var(--pg-control-height);
+  min-width: 7rem;
+  padding: 0 0.65rem;
+  border: 1px solid transparent;
   border-radius: 6px;
-  color: #666;
-  font-size: 0.85rem;
-  font-weight: 500;
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
   line-height: 1;
+  text-transform: none;
+  letter-spacing: normal;
   text-decoration: none;
   white-space: nowrap;
   transition:
@@ -80,15 +110,40 @@ body {
     background-color 0.15s ease;
 }
 
-.playground__repo-link:hover {
+.playground__button:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+/* Filled: the pane's primary action. */
+.playground__button--primary {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.playground__button--primary:hover:not(:disabled) {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+
+.playground__button--primary:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+/* Ghost: muted like the header subtitle, darkening to the body ink on hover. */
+.playground__button--ghost {
+  border-color: #e2e2e5;
+  background: transparent;
+  color: #666;
+}
+
+.playground__button--ghost:hover {
   color: #1a1a1a;
   border-color: #c9c9ce;
   background: #f7f7f8;
-}
-
-.playground__repo-link:focus-visible {
-  outline: 2px solid #2563eb;
-  outline-offset: 2px;
 }
 
 /* Inherits the link's `color` via `fill="currentColor"`; `display: block`
@@ -99,14 +154,19 @@ body {
 }
 
 /*
- * Narrow viewports: collapse to the icon alone. The octocat is a
- * self-explanatory mark, the anchor's `aria-label` carries the accessible
- * name either way, and the padding is squared up so the remaining icon sits
- * centered in the button shape instead of off to one side.
+ * Narrow viewports: the repo link collapses to the icon alone. The octocat is
+ * a self-explanatory mark and the anchor's `aria-label` carries the
+ * accessible name either way. "Matched" relaxes to matched HEIGHT here — the
+ * shared `--pg-control-height` still lines the two up, but width parity is
+ * dropped deliberately: holding 7rem around a lone 16px icon would leave a
+ * wide box of empty space, so the pill becomes a square of that same height
+ * instead. The Run button keeps its full width.
  */
 @media (max-width: 560px) {
   .playground__repo-link {
-    padding: 0.4rem;
+    min-width: 0;
+    width: var(--pg-control-height);
+    padding: 0;
   }
 
   .playground__repo-link-label {
@@ -143,7 +203,17 @@ body {
  */
 .playground__pane-title {
   margin: 0;
-  padding: 0.5rem 1rem;
+  /*
+   * Asymmetric on purpose. Left stays 1rem so the "SOURCE"/"PREVIEW" labels
+   * line up with the editor's own `.cm-content` padding and the status bars
+   * below. Right is 1.5rem to match `.playground__header`'s inset: the panes
+   * grid has no outer padding and its right column ends flush with the
+   * viewport, exactly like the full-width header, so an equal right padding
+   * is what puts the Run button's right edge on the same vertical line as
+   * the header's GitHub link (both now 24px in). It also matches the
+   * 1.5rem right inset of `.playground__preview` directly beneath it.
+   */
+  padding: 0.5rem 1.5rem 0.5rem 1rem;
   height: 3rem;
   box-sizing: border-box;
   display: flex;
@@ -158,29 +228,6 @@ body {
 .playground__pane-title--row {
   justify-content: space-between;
   gap: 0.75rem;
-}
-
-.playground__run-button {
-  text-transform: none;
-  letter-spacing: normal;
-  font-size: 0.78rem;
-  font-weight: 600;
-  padding: 0.3rem 0.7rem;
-  border: 1px solid #2563eb;
-  border-radius: 5px;
-  background: #2563eb;
-  color: #ffffff;
-  cursor: pointer;
-}
-
-.playground__run-button:hover:not(:disabled) {
-  background: #1d4ed8;
-  border-color: #1d4ed8;
-}
-
-.playground__run-button:disabled {
-  cursor: default;
-  opacity: 0.6;
 }
 
 .playground__scripting-status {

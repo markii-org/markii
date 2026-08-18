@@ -169,7 +169,7 @@ export function App(): ReactElement {
           (WCAG 2.5.3 label-in-name).
         */}
         <a
-          className="playground__repo-link"
+          className="playground__button playground__button--ghost playground__repo-link"
           href="https://github.com/sadigaxund/markii"
           target="_blank"
           rel="noopener noreferrer"
@@ -193,7 +193,7 @@ export function App(): ReactElement {
             <span>Preview</span>
             <button
               type="button"
-              className="playground__run-button"
+              className="playground__button playground__button--primary"
               onClick={() => void handleRun()}
               disabled={isRunning}
             >
