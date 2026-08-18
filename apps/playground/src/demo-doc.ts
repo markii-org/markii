@@ -97,9 +97,11 @@ A collapsible block, closed by default. How is the tour so far, by the way?
 
 And a figure pairs an image with a markdown caption:
 
-:::figure{src="/figure-sample.svg" alt="A labeled blue rectangle"}
+::::figure{src="https://raw.githubusercontent.com/sadigaxund/markii/refs/heads/main/apps/playground/public/nature.jpeg"}
+
 **Figure 1.** The caption is markdown, so it can hold *emphasis* or links.
-:::
+::::
+
 
 ## Now break something
 
