@@ -1,13 +1,13 @@
 export const DEMO_DOC = `# Welcome to Mark
 
 This page is a Mark document, and you are standing inside the editor. Change
-anything in the left pane — the right pane re-renders as you type. Nothing
+anything in the left pane and the right pane re-renders as you type. Nothing
 you do here can break the page, so poke at everything.
 
 ## Start with what you know
 
 Everything markdown does still works: **bold**, links, lists, tables. Mark
-adds one rule on top — a *directive* places a component in the document:
+adds one rule on top: a *directive* places a component in the document.
 
 :::callout{type=info title="This box is a directive"}
 Type \`:::callout\` on a line, write any markdown inside, close with \`:::\`.
@@ -19,8 +19,8 @@ and mark things :badge[beta]{variant=info} or :badge[stable]{variant=success}.
 
 ## The live part
 
-This document fetches its own data. Rendering never runs code — the block
-below sits inert until you click **Run scripts** above the preview:
+This document fetches its own data. Rendering never runs code, so the
+block below sits inert until you click **Run scripts** above the preview:
 
 \`\`\`lua {name=repo}
 local repo = net.fetch_json("https://api.github.com/repos/facebook/react")
@@ -69,7 +69,7 @@ Plain markdown can be placed too. Wrap anything in \`:::center\`,
 :::
 
 That table is centered because of the wrapper, not because of anything in
-the table. There is deliberately nothing else to learn here — no style
+the table. There is deliberately nothing else to learn here: no style
 attributes, no pixel values.
 
 ## More to play with
@@ -87,7 +87,7 @@ syntax is designed so it never can be.
 :::
 ::::
 
-Details fold long content away — add the bare \`open\` attribute to start
+Details fold long content away. Add the bare \`open\` attribute to start
 one expanded:
 
 :::details{title="Click to expand"}
@@ -108,15 +108,15 @@ unknown name renders a labeled box with its content intact, which is what
 lets a note travel to machines with different components installed:
 
 :::timeline{src="repo.json"}
-Nothing here registers \`timeline\`, so this shows the fallback — content
-preserved, nothing lost.
+Nothing here registers \`timeline\`, so this shows the fallback with the
+content preserved. Nothing is lost.
 :::
 
 Directive syntax inside a code fence stays literal, so examples are safe:
 
 \`\`\`
 :::callout{type=info}
-Not rendered — it is inside a fence.
+Not rendered, because it is inside a fence.
 :::
 \`\`\`
 

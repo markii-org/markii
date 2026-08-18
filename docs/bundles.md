@@ -13,14 +13,14 @@ one TextBundle, `.epub`, and `.docx` all use, is a folder with a manifest,
 optionally zipped. Mark adopts it directly.
 
 ```
-note.mk.md          plain single file — first-class, never deprecated
+note.mk.md          plain single file: first-class, never deprecated
 
 note.mkbundle/      a bundle: the same note plus everything it needs
   manifest.json     format version, permissions, script declarations
   note.mk.md        the document itself, unchanged syntax
   assets/           images and attachments
   scripts/          script files referenced by src=
-  .cache/           script outputs and fetched data — disposable
+  .cache/           script outputs and fetched data: disposable
 ```
 
 The document itself never grows blobs. Images and long scripts live beside

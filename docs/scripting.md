@@ -201,9 +201,9 @@ install it, and notes never carry it.
 What actually makes scripting approachable is the host API, which is kept
 small, flat, and holdable in one head:
 
-- `net.fetch_json(url)` — fetch and parse JSON from a granted host
-- `cache.get(key, ttl, fn)` — return cached value or compute and store it
-- `bundle.read(path)` / `bundle.write(path, data)` — bundle-scoped files
+- `net.fetch_json(url)`: fetch and parse JSON from a granted host
+- `cache.get(key, ttl, fn)`: return cached value or compute and store it
+- `bundle.read(path)` / `bundle.write(path, data)`: bundle-scoped files
 
 The available Lua standard library is a curated slice: `string`, `table`,
 and `math`. There is no `os`, no `io`, and no raw `require`; everything a

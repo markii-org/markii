@@ -189,6 +189,10 @@ not notes someone decodes:
   ("What I did NOT test") never ships in docs/ — audit material is
   rewritten as verification status, keeping the evidence and the honesty,
   losing the diary voice.
+- No em dashes in authored pages: docs/, both READMEs, and demo content.
+  Rephrase with a colon, a comma, a parenthetical, or a new sentence. The
+  user reads em dashes as generated-text slop; "house style" is not an
+  exemption (that rationalization was tried and rejected 2026-08-18).
 - Final pass on every authored page: apply the humanizer rules
   (https://raw.githubusercontent.com/blader/humanizer/refs/heads/main/SKILL.md)
   — strip inflated claims, filler, forced parallelism, decorative bolding,

@@ -27,7 +27,7 @@ on open, and nothing in a note can break the page.
 
 ## Getting started
 
-Try the playground at https://sadigaxund.github.io/markii/ — source on the
+Try the playground at https://sadigaxund.github.io/markii/: source on the
 left, rendered document on the right, a Run button for the scripts.
 
 To render Mark documents in your own React app:
@@ -48,7 +48,7 @@ const view = renderMark(source, defaultRegistry);
 | Platform                          | Status                                    |
 | --------------------------------- | ----------------------------------------- |
 | React (`@markii/react`)           | available                                 |
-| VS Code extension                 | planned — next milestone                  |
+| VS Code extension                 | planned (next milestone)                  |
 | Other toolkits (Vue, terminal, …) | the format is renderer-neutral; see below |
 
 ## Components
@@ -61,13 +61,13 @@ When you outgrow them, components travel as a pack, and the journey is the
 same whether you write one or install someone else's:
 
 1. A pack is a folder: a small manifest naming the pack and the engine its
-   components are written for — React, for example; any supported renderer
-   engine works the same way — plus the component sources.
+   components are written for (React, for example; any supported renderer
+   engine works the same way), plus the component sources.
 2. Each component is an ordinary component in that engine, nothing special
    to learn: it receives the directive's attributes and its inner markdown,
    already rendered.
 3. Build it once with the pack's one build command. Installing a ready-made
-   pack skips this step entirely — published packs ship prebuilt.
+   pack skips this step entirely, because published packs ship prebuilt.
 4. Install the pack into whichever Mark app you use, by pointing the app at
    the pack folder.
 5. Type the prefixed name in a note: `:::ana-timeline`. On a machine

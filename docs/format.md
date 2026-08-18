@@ -63,7 +63,7 @@ grows inward. But `:::` lines are fences, not scopes. The rule is the same
 one markdown code fences already follow: a longer fence is a stronger one,
 so it can contain shorter ones. Think "bigger fence, bigger box".
 Indentation was never available for this job, because indentation already
-means something in markdown — four spaces starts a code block.
+means something in markdown: four spaces starts a code block.
 
 Two smaller facts complete the picture. A fence line with a name opens a
 container; a bare colon line only ever closes one. And in everyday
@@ -194,8 +194,8 @@ There are no spans, no per-cell sizes, and no other knobs. It exists so a
 dashboard of stats and charts can share a line, and nothing more.
 
 A row counts its direct block children as its cells, so two paragraphs are
-two cells. When one cell needs more than one block — a heading and a list,
-a chart and its caption — wrap them in `:::cell`:
+two cells. When one cell needs more than one block, such as a heading and a list
+or a chart and its caption, wrap them in `:::cell`:
 
 ```
 ::::row{cols=2}
@@ -213,8 +213,8 @@ a chart and its caption — wrap them in `:::cell`:
 ```
 
 The wrapper is invisible: no border, no spacing, nothing but the grouping.
-Outside a row it does nothing at all. Note the colon growth in the example
-— the outer `::::row` needs more colons than the `:::cell` fences inside
+Outside a row it does nothing at all. Note the colon growth in the example:
+the outer `::::row` needs more colons than the `:::cell` fences inside
 it.
 
 `cell` also settles a case that is otherwise impossible. Markdown merges
@@ -267,7 +267,7 @@ showing bare fallback boxes.
 
 The rest of the block belongs to whoever wrote it. The reference
 implementation reads `uses:` in those two shapes only and hands the
-remaining text back raw — it deliberately carries no YAML library. A
+remaining text back raw; it deliberately carries no YAML library. A
 `uses:` written any other way is simply not read: the note still renders,
 and nothing is reported as an error.
 
@@ -287,11 +287,11 @@ holding the document plus its assets. See [bundles.md](bundles.md).
 
 ## The name
 
-The format is called Mark, and the brand it ships under is Mark II — the
+The format is called Mark, and the brand it ships under is Mark II, which is the
 same pun the `@markii` npm scope spells out. The two are used consistently:
 product-facing titles (the repository, the documentation, the VS Code
 extension, the playground) say Mark II, while running prose and the format
-name itself say Mark — "a Mark document", never "a Mark II document". The
+name itself say Mark: "a Mark document", never "a Mark II document". The
 file extension is `.mk.md` and bundles are `.mkbundle`.
 
 The name carries no version: the spec uses ordinary semantic versioning,

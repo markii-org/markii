@@ -50,20 +50,20 @@ viewer, a Vue application, and a static HTML exporter can all conform.
 Only developers embedding Mark take npm dependencies; end users install an
 application. The split is:
 
-- `@markii/core` — text to syntax tree, directive tagging, URL sanitizing,
+- `@markii/core`: text to syntax tree, directive tagging, URL sanitizing,
   and the corpus runner. Zero React.
-- `@markii/stdlib` — the neutral component contracts (names, kinds,
+- `@markii/stdlib`: the neutral component contracts (names, kinds,
   attribute schemas) every renderer implements against. Zero dependencies.
-- `@markii/react` — the reference renderer: registry, `renderMark`, the
-  standard component set. One consumer of core among possible many; it lives
+- `@markii/react`: the reference renderer, holding the registry,
+  `renderMark`, and the standard component set. One consumer of core among possible many; it lives
   under `packages/platforms/` precisely so a sibling renderer for another
   toolkit has a place to sit.
-- `@markii/runtime` — the value store, run orchestration, vault store, and
+- `@markii/runtime`: the value store, run orchestration, vault store, and
   grant-key computation. Framework-free and runtime-agnostic; the script
   executor is injected.
-- `@markii/bundle` — bundle reading and writing in both forms, manifest
+- `@markii/bundle`: bundle reading and writing in both forms, manifest
   validation, and the path jail.
-- `@markii/lua` — the sandboxed Lua executor that plugs into the runtime.
+- `@markii/lua`: the sandboxed Lua executor that plugs into the runtime.
 
 A minimal React embedding is a registry plus one call:
 

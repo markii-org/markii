@@ -1,7 +1,7 @@
 # Mark II for VS Code
 
 Preview for Mark (`.mk.md`) documents: CommonMark plus a small directive
-syntax that renders components — callouts, cards, tabs, dashboard stats,
+syntax that renders components: callouts, cards, tabs, dashboard stats,
 and more. See the
 [format guide](https://github.com/sadigaxund/markii/blob/main/docs/format.md)
 for the full picture.
@@ -10,7 +10,7 @@ for the full picture.
 
 No setup. After installing the extension:
 
-1. Open any file ending in `.mk.md` (create one if you like — it's an
+1. Open any file ending in `.mk.md` (create one if you like; it's an
    ordinary text file).
 2. Press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd>
    (<kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd> on macOS). You can also
@@ -51,8 +51,8 @@ A picture that lives next to this note.
 
 A relative `src` is resolved against the folder the note itself is in, so
 `nice.png` means the `nice.png` sitting beside it and `img/nice.png` means
-one in a subfolder. Images from anywhere else — outside the folder of the
-note and outside your open workspace — are not loaded, which is the
+one in a subfolder. Images from anywhere else, outside the note's folder and
+outside your open workspace, are not loaded, which is the
 editor's own rule for what a preview may read.
 
 ## What v1 does and doesn't
@@ -64,14 +64,14 @@ collapsed marker and data-bound components (`stat`, `progress`, `chart`,
 `:value[...]`) show their quiet empty states. Script execution is a
 planned later version.
 
-The extension contains no rendering logic of its own — it hosts
+The extension contains no rendering logic of its own; it hosts
 `@markii/react`, the format's reference renderer, in a webview. What the
 preview shows is by definition what the reference implementation renders.
 
 ## For contributors
 
 Everything below is for developing the extension inside the
-[markii monorepo](https://github.com/sadigaxund/markii) — none of it is
+[markii monorepo](https://github.com/sadigaxund/markii); none of it is
 needed to use the extension.
 
 Run and debug: open the repo root in VS Code, `npm install` from the repo
@@ -85,7 +85,7 @@ Syntax highlighting is an injection grammar
 (`syntaxes/markii-directives.injection.json`) layered on the built-in
 markdown grammar. One trade-off: on a fence line (` ```lua {name=stars} `)
 the built-in grammar claims the whole line first, so the injected rule for
-that `{...}` group is inert there — accepted, because never disturbing the
+that `{...}` group is inert there. That is accepted, because never disturbing the
 fence's own code highlighting matters more.
 
 Packaging: `npm run package -w markii-vscode` produces a `.vsix`

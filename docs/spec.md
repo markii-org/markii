@@ -1,4 +1,4 @@
-# Mark specification — normative core
+# Mark specification: the normative core
 
 This page collects the rules an implementation must follow. The surrounding
 pages explain the same material for humans, with rationale and examples;
@@ -109,11 +109,11 @@ A conforming renderer:
    contradicts, where doing so would produce invalid nesting: a component
    registered as a block, written as an inline directive, renders
    requirement 3's fallback instead of the component. A fallback's form
-   MUST follow the directive's form rather than the component's kind — an
+   MUST follow the directive's form rather than the component's kind: an
    inline directive falls back to an inline element, a block directive to
    a block one. A registration that carries no kind information renders
-   unchanged, and the reverse direction — an inline component written as
-   a leaf or container — MAY render.
+   unchanged, and the reverse direction (an inline component written as
+   a leaf or container) MAY render.
 
 The contract is framework-neutral; the spec's normative text does not
 mention any UI framework.
