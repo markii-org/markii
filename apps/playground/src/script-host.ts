@@ -46,7 +46,7 @@ export function createFetchNetProvider(): NetProvider {
 
 /** GitHub's REST API sends CORS headers and works unauthenticated for the demo's read-only `net.fetch_json` call. */
 export const DEMO_NET_GRANTS: NetGrants = {
-  get: ['api.github.com'],
+  get: ['api.github.com', 'api.open-meteo.com'],
   post: [],
 };
 
