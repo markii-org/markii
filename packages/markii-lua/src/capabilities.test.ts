@@ -691,6 +691,81 @@ describe('buildCapabilities — bundle delegates to a real @markii/bundle Script
     expect(r.ok && r.value).toBe('img');
   });
 
+  it('bundle.read of a MISSING path resolves to Lua nil, not a throw (GitHub issue #9)', async () => {
+    const { view } = fixtureBundle();
+    const r = await run(
+      `
+      local data = bundle.read("nope.txt")
+      return data == nil, type(data)
+      `,
+      { tier: 'manual', bundle: view },
+    );
+    // MultiReturn truncated to first value by our wrapper in this test
+    // harness (see `run` above); this test only needs the first value.
+    expect(r).toEqual({ ok: true, value: true });
+  });
+
+  it('bundle.read of a PRESENT path still returns its bytes', async () => {
+    const { view } = fixtureBundle();
+    const r = await run('return bundle.read("assets/x.png")', {
+      tier: 'manual',
+      bundle: view,
+    });
+    expect(r).toEqual({ ok: true, value: 'img' });
+  });
+
+  it('bundle.exists: false for a missing path, true for a present one', async () => {
+    const { view } = fixtureBundle();
+    const r = await run(
+      `
+      return bundle.exists("nope.txt"), bundle.exists("assets/x.png")
+      `,
+      { tier: 'manual', bundle: view },
+    );
+    expect(r).toEqual({ ok: true, value: false });
+  });
+
+  it('bundle.read with "read" NOT granted is still a capability denial (unaffected by the nil fix)', async () => {
+    const { storage } = fixtureBundle();
+    const manifest: BundleManifest = {
+      mark: '0.1.0',
+      permissions: { bundle: ['read'] },
+    };
+    // Granted set intersected down to nothing -- `canRead` is false.
+    const view = createScriptView(storage, manifest, { bundle: [] });
+    const r = await run('return bundle.read("assets/x.png")', {
+      tier: 'manual',
+      bundle: view,
+    });
+    expect(r.ok).toBe(false);
+    expect(!r.ok && r.message).toContain('MARK_CAPABILITY');
+  });
+
+  it('read-if-present idiom works end to end: nil on miss, bytes on hit', async () => {
+    const { view } = fixtureBundle();
+    const r = await run(
+      `
+      local cached = bundle.read("cache/data.json")
+      local computed
+      if cached == nil then
+        computed = "computed"
+      else
+        computed = "from-cache"
+      end
+      local miss = bundle.read("cache/does-not-exist.json")
+      local missBranch
+      if miss == nil then
+        missBranch = "computed-on-miss"
+      else
+        missBranch = "should-not-happen"
+      end
+      return computed, missBranch
+      `,
+      { tier: 'manual', bundle: view },
+    );
+    expect(r).toEqual({ ok: true, value: 'from-cache' });
+  });
+
   it("tier 'manual': bundle.write to cache/ works through the real path-jail/write policy", async () => {
     const { view, storage } = fixtureBundle();
     const r = await run(

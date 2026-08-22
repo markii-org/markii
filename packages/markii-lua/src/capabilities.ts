@@ -661,7 +661,17 @@ end
         recordDenial('denied', message);
         throw capabilityError(message);
       }
-      return data === undefined ? null : bytesToLuaString(data);
+      // Resolve with `undefined`, NOT `null`, for a missing path. wasmoon's
+      // `Thread.pushValue` special-cases `typeof target === 'undefined'`
+      // with a direct `lua_pushnil` BEFORE it ever reaches its
+      // type-extension dispatch loop (`dist/index.js`'s `pushValue`
+      // `switch`); `null` is `typeof 'object'`, so it instead falls into
+      // that loop, where `PromiseTypeExtension.pushValue` unconditionally
+      // reads `decoration.target.then` and throws `Cannot read properties
+      // of null (reading 'then')` — verified empirically (wasmoon 1.16.0).
+      // This is exactly the failure this fixes (GitHub issue #9): a
+      // missing bundle path must resolve to Lua `nil`, not throw.
+      return data === undefined ? undefined : bytesToLuaString(data);
     }) as (...args: never[]) => Promise<unknown>;
     rawGlobals.__smd_bundle_exists_raw = (async (path: string) => {
       try {

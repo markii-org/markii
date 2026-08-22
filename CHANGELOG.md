@@ -4,6 +4,17 @@ All notable changes to Mark and the `@markii/*` packages are recorded here. The
 format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **`bundle.read` of a missing path (`@markii/lua`)**: reading a path that
+  does not exist now resolves to Lua `nil` instead of throwing, so the
+  read-if-present idiom works. The crash came from a wasmoon marshalling
+  quirk when a host-side async result resolved with JS `null`; the
+  capability now resolves `undefined` for an absent file. `bundle.exists`,
+  `bundle.write`, and capability-denial behavior are unchanged.
+
 ## [0.4.0] - 2026-08-23
 
 ### Fixed
