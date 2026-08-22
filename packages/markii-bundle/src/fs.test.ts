@@ -58,6 +58,21 @@ describe('openDirBundle — happy path', () => {
     expect(await storage.exists('assets/b.txt')).toBe(false);
   });
 
+  it('size() returns the byte length without reading the file', async () => {
+    const dir = await makeTmpDir('markii-bundle-fs-');
+    const storage = openDirBundle(dir);
+    await storage.write('cache/data.json', u8('{"ok":true}'));
+    expect(await storage.size('cache/data.json')).toBe(
+      u8('{"ok":true}').length,
+    );
+  });
+
+  it('size() returns undefined for a missing path', async () => {
+    const dir = await makeTmpDir('markii-bundle-fs-');
+    const storage = openDirBundle(dir);
+    expect(await storage.size('nope.txt')).toBeUndefined();
+  });
+
   it('lists all files recursively, sorted, bundle-relative', async () => {
     const dir = await makeTmpDir('markii-bundle-fs-');
     const storage = openDirBundle(dir);
@@ -95,6 +110,14 @@ describe('openDirBundle — path-jail enforcement', () => {
       BundlePathError,
     );
   });
+
+  it('throws BundlePathError for a traversal path on size()', async () => {
+    const dir = await makeTmpDir('markii-bundle-fs-');
+    const storage = openDirBundle(dir);
+    await expect(storage.size('../../etc/passwd')).rejects.toThrow(
+      BundlePathError,
+    );
+  });
 });
 
 describe('openDirBundle — symlink escape', () => {
@@ -123,6 +146,10 @@ describe('openDirBundle — symlink escape', () => {
     await expect(
       storage.write('escape-link', u8('overwritten')),
     ).rejects.toThrow(BundlePathError);
+    // size() must refuse a symlinked path exactly like read/write — it
+    // routes through the same jailed resolution, so it can never be used to
+    // learn the size of (or prove the existence of) a path those refuse.
+    await expect(storage.size('escape-link')).rejects.toThrow(BundlePathError);
 
     // The file outside the bundle must be untouched.
     expect(await readFile(secretPath, 'utf8')).toBe('outside-the-bundle');

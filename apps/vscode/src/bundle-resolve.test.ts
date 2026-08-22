@@ -4,11 +4,51 @@ import type { BundleManifest, BundleStorage } from '@markii/bundle';
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_MAX_EMBEDDED_ASSET_BYTES,
+  MAX_BUNDLE_TEXT_FILE_BYTES,
   bundleResolutionFailureMessage,
   extractAssetsAsDataUris,
   resolveBundleDocument,
   resolveBundleDocumentPath,
 } from './bundle-resolve';
+
+/**
+ * A `BundleStorage` whose `size()` for one chosen path lies about being huge
+ * (C-1's guard needs a size check, not real gigabyte-scale test content) —
+ * `read()` on that same path is instrumented so a test can assert it was
+ * NEVER called, proving the guard actually short-circuits before reading.
+ */
+function storageWithOversizedPath(
+  files: Record<string, string>,
+  oversizedPath: string,
+  oversizedSize: number,
+): { storage: BundleStorage; readCalls: string[] } {
+  const map = new Map<string, Uint8Array>(
+    Object.entries(files).map(([path, text]) => [path, strToU8(text)]),
+  );
+  const readCalls: string[] = [];
+  return {
+    storage: {
+      async read(path) {
+        readCalls.push(path);
+        return map.get(path);
+      },
+      async write(path, data) {
+        map.set(path, data);
+      },
+      async list() {
+        return [...map.keys()].sort();
+      },
+      async exists(path) {
+        return map.has(path);
+      },
+      async size(path) {
+        if (path === oversizedPath) return oversizedSize;
+        return map.get(path)?.length;
+      },
+    },
+    readCalls,
+  };
+}
 
 function zipStorage(files: Record<string, string | Uint8Array>): BundleStorage {
   const encoded: Record<string, Uint8Array> = {};
@@ -149,6 +189,43 @@ describe('resolveBundleDocument', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reason).toBe('manifest-invalid');
   });
+
+  it('C-1: refuses an over-budget manifest.json without ever reading it', async () => {
+    const { storage, readCalls } = storageWithOversizedPath(
+      { 'note.mk.md': '# Hello' },
+      'manifest.json',
+      MAX_BUNDLE_TEXT_FILE_BYTES + 1,
+    );
+    const result = await resolveBundleDocument(storage);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toBe('manifest-too-large');
+    expect(readCalls).not.toContain('manifest.json');
+  });
+
+  it('C-1: refuses an over-budget document without ever reading it', async () => {
+    const { storage, readCalls } = storageWithOversizedPath(
+      { 'manifest.json': manifestJson({ mark: '0.1.0' }) },
+      'note.mk.md',
+      MAX_BUNDLE_TEXT_FILE_BYTES + 1,
+    );
+    const result = await resolveBundleDocument(storage);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toBe('document-too-large');
+    expect(readCalls).not.toContain('note.mk.md');
+  });
+
+  it('accepts a manifest/document exactly at the size limit', async () => {
+    const { storage } = storageWithOversizedPath(
+      {
+        'manifest.json': manifestJson({ mark: '0.1.0' }),
+        'note.mk.md': '# Hello',
+      },
+      'manifest.json',
+      manifestJson({ mark: '0.1.0' }).length,
+    );
+    const result = await resolveBundleDocument(storage);
+    expect(result.ok).toBe(true);
+  });
 });
 
 describe('bundleResolutionFailureMessage', () => {
@@ -160,6 +237,12 @@ describe('bundleResolutionFailureMessage', () => {
       /manifest/i,
     );
     expect(bundleResolutionFailureMessage('document-missing')).toMatch(
+      /document/i,
+    );
+    expect(bundleResolutionFailureMessage('manifest-too-large')).toMatch(
+      /manifest/i,
+    );
+    expect(bundleResolutionFailureMessage('document-too-large')).toMatch(
       /document/i,
     );
   });

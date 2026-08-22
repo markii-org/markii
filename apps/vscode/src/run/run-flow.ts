@@ -19,7 +19,11 @@ import type {
   PromptManyHosts,
   PromptUnknownHosts,
 } from './grant-flow.js';
-import { manifestBundleFsGrants, manifestNetHosts } from './bundle-run.js';
+import {
+  bundleModulesFromSnapshot,
+  manifestBundleFsGrants,
+  manifestNetHosts,
+} from './bundle-run.js';
 import type { RunResult, SpawnRunOptions } from './run-host.js';
 import type { ValuesFailure } from '../protocol.js';
 import type { StoredValue } from '@markii/runtime';
@@ -115,12 +119,16 @@ export interface RunOnceOptions {
   timeoutMs: number;
   /**
    * Slice 2 of the `.mkz` Run-path arc (GitHub issue #9): present only for a
-   * bundle-backed document. `buildSnapshot` is called once per run,
-   * immediately before `spawnRun`, to build the in-memory bundle-fs
-   * snapshot (`./bundle-run.ts`'s `buildBundleSnapshot`, already applied to
-   * whatever `BundleStorage` the caller has) — deferred to run time rather
-   * than built eagerly, so a snapshot is only ever read when a run actually
-   * happens. `persistCacheOut` receives the worker's `RunResult.cacheOut`
+   * bundle-backed document. `buildSnapshot` is called exactly once per run
+   * (`./bundle-run.ts`'s `buildBundleSnapshot`, already applied to whatever
+   * `BundleStorage` the caller has) — deferred to run time rather than
+   * built eagerly, so a snapshot is only ever read when a run actually
+   * happens. As of the F-1 fix it is built BEFORE the grant flow rather
+   * than immediately before `spawnRun`, so a `src=` script's resolved
+   * content (`bundleModulesFromSnapshot`) can be folded into the grant
+   * closure `computeGrantKey` hashes, ahead of any prompting — still the
+   * same single call per run, just earlier. `persistCacheOut` receives the
+   * worker's `RunResult.cacheOut`
    * (its bundle `cache/` subtree, post-run) when the run produced one, and
    * is the caller's own persistence: writing back into a directory-form
    * bundle on disk, or into extension storage keyed by bundle identity for
@@ -166,9 +174,27 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
     ? manifestBundleFsGrants(options.bundle.manifest)
     : [];
 
+  // F-1 fix: the bundle snapshot is built BEFORE the grant flow now (it used
+  // to be built only after, purely to feed the run itself) specifically so
+  // any `src=` script file's CONTENT can be folded into the grant closure
+  // below — see `bundleModulesFromSnapshot`'s doc comment. This also means
+  // the snapshot is only ever built once per run, same as before.
+  const bundleSnapshot = options.bundle
+    ? await options.bundle.buildSnapshot()
+    : undefined;
+  const bundleModules =
+    options.bundle && bundleSnapshot
+      ? bundleModulesFromSnapshot(requirements.grantScripts, bundleSnapshot)
+      : undefined;
+
   const grant = await runGrantFlow({
     documentKey: options.documentKey,
-    requirements: { ...requirements, hosts: mergedHosts, bundleFsGrants },
+    requirements: {
+      ...requirements,
+      hosts: mergedHosts,
+      bundleFsGrants,
+      ...(bundleModules ? { bundleModules } : {}),
+    },
     memento: options.memento,
     promptHost: options.promptHost,
     promptUnknownHosts: options.promptUnknownHosts,
@@ -179,10 +205,6 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
   const cacheKey = cacheStorageKeyFor(options.documentKey);
   const rawCache = options.memento.get<unknown>(cacheKey);
   const cacheSnapshot = isCacheSnapshotShape(rawCache) ? rawCache : {};
-
-  const bundleSnapshot = options.bundle
-    ? await options.bundle.buildSnapshot()
-    : undefined;
 
   const result = await options.spawnRun({
     text: options.text,

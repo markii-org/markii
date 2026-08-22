@@ -33,6 +33,16 @@ function createMapStorage(map: Map<string, Uint8Array>): BundleStorage {
       const normalized = normalizeOrThrow(path);
       return Promise.resolve(map.has(normalized));
     },
+    size(path) {
+      // The map already holds each entry's fully-decompressed bytes (this
+      // archive form eagerly inflates every entry up front, under
+      // `openZipBundle`'s own per-entry/total decompression-bomb caps — see
+      // that function's doc comment), so this is just the stored buffer's
+      // length: no re-inflation, no touching the archive bytes again.
+      const normalized = normalizeOrThrow(path);
+      const data = map.get(normalized);
+      return Promise.resolve(data === undefined ? undefined : data.length);
+    },
   };
 }
 

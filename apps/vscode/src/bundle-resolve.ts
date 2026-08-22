@@ -22,7 +22,22 @@ const MANIFEST_PATH = 'manifest.json';
 
 /** Reasons a bundle can fail to resolve into something previewable — each maps to one quiet, specific message; never a raw error dump (AGENTS.md's cleanliness principle). */
 export type BundleResolutionFailureReason =
-  'manifest-missing' | 'manifest-invalid' | 'document-missing';
+  | 'manifest-missing'
+  | 'manifest-invalid'
+  | 'manifest-too-large'
+  | 'document-missing'
+  | 'document-too-large';
+
+/**
+ * C-1 fix: a manifest or document over this many bytes is refused WITHOUT
+ * being read into memory at all — `storage.size()` is consulted before
+ * `storage.read()` (mirroring `apps/vscode/src/run/bundle-run.ts`'s
+ * `buildBundleSnapshot`). A real `manifest.json`/`note.mk.md` is tiny; this
+ * exists only so a delivered bundle whose "document" is actually a
+ * multi-gigabyte file can never force that allocation in the extension
+ * host just by being opened for preview.
+ */
+export const MAX_BUNDLE_TEXT_FILE_BYTES = 5 * 1024 * 1024;
 
 export type BundleResolution =
   | {
@@ -72,6 +87,18 @@ export function resolveBundleDocumentPath(
 export async function resolveBundleDocument(
   storage: BundleStorage,
 ): Promise<BundleResolution> {
+  const manifestSize = await storage.size(MANIFEST_PATH);
+  if (manifestSize === undefined) {
+    return { ok: false, reason: 'manifest-missing' };
+  }
+  if (manifestSize > MAX_BUNDLE_TEXT_FILE_BYTES) {
+    return {
+      ok: false,
+      reason: 'manifest-too-large',
+      detail: `manifest.json is ${manifestSize} bytes, exceeding the ${MAX_BUNDLE_TEXT_FILE_BYTES}-byte limit`,
+    };
+  }
+
   const manifestBytes = await storage.read(MANIFEST_PATH);
   if (manifestBytes === undefined) {
     return { ok: false, reason: 'manifest-missing' };
@@ -93,6 +120,18 @@ export async function resolveBundleDocument(
       ok: false,
       reason: 'manifest-invalid',
       detail: `manifest "document" field (${JSON.stringify(parsed.manifest.document)}) is not a valid bundle-relative path`,
+    };
+  }
+
+  const documentSize = await storage.size(documentPath);
+  if (documentSize === undefined) {
+    return { ok: false, reason: 'document-missing', detail: documentPath };
+  }
+  if (documentSize > MAX_BUNDLE_TEXT_FILE_BYTES) {
+    return {
+      ok: false,
+      reason: 'document-too-large',
+      detail: `${documentPath} is ${documentSize} bytes, exceeding the ${MAX_BUNDLE_TEXT_FILE_BYTES}-byte limit`,
     };
   }
 
@@ -123,8 +162,12 @@ export function bundleResolutionFailureMessage(
       return 'This bundle has no manifest.json and cannot be opened.';
     case 'manifest-invalid':
       return "This bundle's manifest.json is invalid and cannot be opened.";
+    case 'manifest-too-large':
+      return "This bundle's manifest.json is too large to open.";
     case 'document-missing':
       return "This bundle's document could not be found.";
+    case 'document-too-large':
+      return "This bundle's document is too large to open.";
   }
 }
 

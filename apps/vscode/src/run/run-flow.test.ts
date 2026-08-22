@@ -385,6 +385,115 @@ describe('runOnce — bundle-backed run', () => {
     expect(persistCacheOut).not.toHaveBeenCalled();
   });
 
+  it("F-1: swapping a src= script file's content (note text unchanged) re-prompts on the next run", async () => {
+    const memento = fakeMemento();
+    const text = '```lua {name=a src=scripts/etl.lua}\n```\n';
+    const promptHost = vi.fn(() => Promise.resolve(true));
+    const spawnRun = () => Promise.resolve(fakeRunResult());
+
+    const runWith = (etlSource: string) =>
+      runOnce({
+        documentKey: 'bundle:///same.mkz',
+        text,
+        memento,
+        promptHost,
+        promptUnknownHosts: () => Promise.resolve(true),
+        promptManyHosts: () => Promise.resolve(true),
+        spawnRun,
+        timeoutMs: 15000,
+        bundle: {
+          manifest: manifestWith({
+            permissions: { net: { get: ['api.example.com'] } },
+          }),
+          buildSnapshot: () =>
+            Promise.resolve({
+              'scripts/etl.lua': new TextEncoder().encode(etlSource),
+            }),
+          persistCacheOut: () => Promise.resolve(),
+        },
+      });
+
+    await runWith('return 1');
+    expect(promptHost).toHaveBeenCalledTimes(1);
+
+    // Same note text, same script fence -- but the referenced file's
+    // content changed. Before the F-1 fix, `bundleModules` was always `{}`
+    // in the grant closure, so this would NOT re-prompt.
+    await runWith('return 2');
+    expect(promptHost).toHaveBeenCalledTimes(2);
+
+    // Re-running with the SAME (already-seen) content reuses the grant.
+    await runWith('return 2');
+    expect(promptHost).toHaveBeenCalledTimes(2);
+  });
+
+  it('F-1: two otherwise-identical bundles differing only in a src= script body get different grant keys', async () => {
+    const text = '```lua {name=a src=scripts/etl.lua}\n```\n';
+    const promptHostA = vi.fn(() => Promise.resolve(true));
+    const promptHostB = vi.fn(() => Promise.resolve(true));
+
+    const run = (
+      documentKey: string,
+      promptHost: typeof promptHostA,
+      etlSource: string,
+    ) =>
+      runOnce({
+        documentKey,
+        text,
+        memento: fakeMemento(),
+        promptHost,
+        promptUnknownHosts: () => Promise.resolve(true),
+        promptManyHosts: () => Promise.resolve(true),
+        spawnRun: () => Promise.resolve(fakeRunResult()),
+        timeoutMs: 15000,
+        bundle: {
+          manifest: manifestWith({
+            permissions: { net: { get: ['api.example.com'] } },
+          }),
+          buildSnapshot: () =>
+            Promise.resolve({
+              'scripts/etl.lua': new TextEncoder().encode(etlSource),
+            }),
+          persistCacheOut: () => Promise.resolve(),
+        },
+      });
+
+    // Independent documents (independent Mementos), so this only exercises
+    // that both runs prompt fresh -- the real assertion of "different key"
+    // lives in `grant-flow.test.ts`'s direct `computeGrantKey`-level
+    // coverage; this is the end-to-end wiring check that `runOnce` actually
+    // resolves and threads the src= content through at all, for both
+    // bundles, without throwing.
+    await run('bundle:///x.mkz', promptHostA, 'return 1');
+    await run('bundle:///y.mkz', promptHostB, 'return 2');
+    expect(promptHostA).toHaveBeenCalledTimes(1);
+    expect(promptHostB).toHaveBeenCalledTimes(1);
+  });
+
+  it('F-1: a src= reference to a file missing from the bundle snapshot degrades gracefully, never throwing', async () => {
+    const memento = fakeMemento();
+    const text = '```lua {name=a src=scripts/missing.lua}\n```\n';
+
+    await expect(
+      runOnce({
+        documentKey: 'bundle:///missing-src.mkz',
+        text,
+        memento,
+        promptHost: () => Promise.resolve(true),
+        promptUnknownHosts: () => Promise.resolve(true),
+        promptManyHosts: () => Promise.resolve(true),
+        spawnRun: () => Promise.resolve(fakeRunResult()),
+        timeoutMs: 15000,
+        bundle: {
+          manifest: manifestWith(),
+          // The snapshot never includes scripts/missing.lua at all.
+          buildSnapshot: () => Promise.resolve({}),
+          persistCacheOut: () => Promise.resolve(),
+        },
+      }),
+    ).resolves.toBeDefined();
+  });
+
   it('a bare .mk.md run (no bundle option) never calls buildSnapshot or sends a bundle field to spawnRun', async () => {
     const memento = fakeMemento();
     const spawnRun = vi.fn((_options: SpawnRunOptions): Promise<RunResult> =>

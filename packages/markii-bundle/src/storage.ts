@@ -25,6 +25,18 @@ export interface BundleStorage {
   /** All file paths currently in the bundle, bundle-relative, sorted. */
   list(): Promise<string[]>;
   exists(path: string): Promise<boolean>;
+  /**
+   * Returns the file's byte length, or `undefined` if no such path exists —
+   * WITHOUT reading (let alone inflating) its contents. This is what lets a
+   * caller (e.g. `buildBundleSnapshot` in `apps/vscode`) enforce a size
+   * budget by skipping an over-budget file before it is ever materialized in
+   * memory, rather than reading it whole and only then discovering it was too
+   * big. Must route through the exact same path-jail/symlink-refusal a
+   * `read` of the same path would (see the class doc comment above) — a
+   * caller must never be able to learn the size of, or prove the existence
+   * of, a path `read`/`write` would refuse.
+   */
+  size(path: string): Promise<number | undefined>;
 }
 
 /**

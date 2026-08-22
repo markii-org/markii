@@ -246,6 +246,22 @@ export function openDirBundle(rootDir: string): BundleStorage {
         throw err;
       }
     },
+    async size(path) {
+      // Routes through the exact same `normalizeOrThrow` + `resolveInsideRoot`
+      // choke point `read`/`exists` use, so this can never be used to stat
+      // outside the bundle root or through a symlink (see `resolveInsideRoot`'s
+      // doc comment) — the whole point of C-1's fix is a size check a caller
+      // can trust as much as it trusts `read` itself.
+      const relPath = normalizeOrThrow(path);
+      const { target } = await resolveInsideRoot(rootAbs, relPath);
+      try {
+        const info = await stat(target);
+        return info.isFile() ? info.size : undefined;
+      } catch (err) {
+        if (isEnoent(err)) return undefined;
+        throw err;
+      }
+    },
   };
 }
 

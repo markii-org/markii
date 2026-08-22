@@ -6,6 +6,24 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Running `.mkz` bundles in the VS Code extension**: a bundle (directory
+  or zip form) opens and previews, and its scripts run under the same
+  worker/watchdog/grant model as a bare note, now with the bundle
+  filesystem capability. The worker holds no live archive or disk handle:
+  the host passes an in-memory snapshot of the files a run may touch, backs
+  a path-jailed `ScriptView` over it, and persists `.cache/` writes
+  (directory form to disk, zip form to extension storage). The capability a
+  script gets is the manifest-declared intersect the user-granted set;
+  writes stay jailed to `.cache/`. Grants are seeded from the manifest's
+  declared hosts, and `src=` script content is part of the grant-key
+  closure, so editing a bundle script re-prompts. The arc had an
+  adversarial pass; its findings are fixed below.
+- **`BundleStorage.size(path)` (`@markii/bundle`)**: returns a file's byte
+  length without reading its contents, in both storage forms, so a caller
+  can enforce a size budget before materializing a file.
+
 ### Fixed
 
 - **`bundle.read` of a missing path (`@markii/lua`)**: reading a path that
@@ -14,6 +32,14 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
   quirk when a host-side async result resolved with JS `null`; the
   capability now resolves `undefined` for an absent file. `bundle.exists`,
   `bundle.write`, and capability-denial behavior are unchanged.
+- **Bundle files size-checked before reading (VS Code extension)**: a
+  script, document, or manifest file in a delivered `.mkz` bundle is
+  size-checked before it is read, so an oversized file can no longer force
+  a large allocation in the extension host merely by being opened or run
+  (the directory-form snapshot path was previously read-then-cap).
+- **`src=` script edits re-prompt (VS Code extension)**: editing a bundle
+  script referenced by `src=` now invalidates the note's stored grant and
+  re-prompts, instead of silently running the new code under the old grant.
 
 ## [0.4.0] - 2026-08-23
 

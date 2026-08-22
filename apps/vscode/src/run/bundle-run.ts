@@ -34,6 +34,7 @@
  */
 import type { BundleManifest, BundleStorage } from '@markii/bundle';
 import type { BundleFsGrant } from '@markii/bundle';
+import type { GrantClosureScript } from '@markii/runtime';
 
 /** The three bundle-relative prefixes a run's snapshot ever collects — see this module's top doc comment. */
 const SNAPSHOT_PREFIXES = ['scripts/', 'cache/', 'assets/'] as const;
@@ -50,8 +51,20 @@ const SNAPSHOT_PREFIXES = ['scripts/', 'cache/', 'assets/'] as const;
  */
 export const DEFAULT_MAX_BUNDLE_SNAPSHOT_BYTES = 20 * 1024 * 1024;
 
+/**
+ * Per-file cap applied on top of the total budget (C-1, PENTEST-REPORT
+ * follow-up): a single huge file could otherwise consume the ENTIRE total
+ * budget by itself, and — before this fix — would be read into memory in
+ * full before the total-budget check ever saw it. Sized the same as the
+ * total budget by default; a caller wanting a stricter per-file limit can
+ * override it independently via `maxFileBytes`.
+ */
+export const DEFAULT_MAX_BUNDLE_SNAPSHOT_FILE_BYTES =
+  DEFAULT_MAX_BUNDLE_SNAPSHOT_BYTES;
+
 export interface BuildBundleSnapshotOptions {
   readonly maxTotalBytes?: number;
+  readonly maxFileBytes?: number;
 }
 
 export interface BundleSnapshotResult {
@@ -73,6 +86,8 @@ export async function buildBundleSnapshot(
 ): Promise<BundleSnapshotResult> {
   const maxTotalBytes =
     options.maxTotalBytes ?? DEFAULT_MAX_BUNDLE_SNAPSHOT_BYTES;
+  const maxFileBytes =
+    options.maxFileBytes ?? DEFAULT_MAX_BUNDLE_SNAPSHOT_FILE_BYTES;
 
   const allPaths = await storage.list();
   const eligible = allPaths.filter((path) =>
@@ -84,8 +99,28 @@ export async function buildBundleSnapshot(
   let truncated = false;
 
   for (const path of eligible) {
+    // C-1: consult `size()` BEFORE ever calling `read()` — a file whose
+    // declared size alone would blow the per-file or remaining total budget
+    // is skipped without materializing its bytes at all, which is the whole
+    // point: a host-side `readFile` of a multi-gigabyte file (directory
+    // form) would otherwise allocate that much in the extension host before
+    // any cap ever saw it. `size()` returning `undefined` (path vanished
+    // between `list()` and here, or the storage form has no size for it) is
+    // treated exactly like the file being absent: a quiet skip, never a
+    // fallback to reading it blind.
+    const size = await storage.size(path);
+    if (size === undefined) continue;
+    if (size > maxFileBytes || total + size > maxTotalBytes) {
+      truncated = true;
+      continue;
+    }
+
     const bytes = await storage.read(path);
     if (bytes === undefined) continue;
+    // Defense in depth: re-check the actual byte length against the budget.
+    // A well-behaved `BundleStorage` never disagrees between `size()` and
+    // `read()`, but the total-budget accounting below must never trust
+    // `size()` blindly if it ever did.
     if (total + bytes.length > maxTotalBytes) {
       truncated = true;
       continue;
@@ -95,6 +130,45 @@ export async function buildBundleSnapshot(
   }
 
   return { files, truncated };
+}
+
+const utf8Decoder = new TextDecoder('utf-8', { fatal: false });
+
+/**
+ * F-1 fix: the `bundleModules` half of the grant closure `computeGrantKey`
+ * (`@markii/runtime`) hashes — resolved from `snapshot` (the same in-memory
+ * bundle snapshot a run's `ScriptView` is backed by, see this module's top
+ * doc comment) rather than left empty.
+ *
+ * Before this fix, `grant-flow.ts`'s `closureFrom` always passed
+ * `bundleModules: {}`, so a `src=scripts/etl.lua` block's `code` was `""`
+ * (@markii/core's `ScriptBlock` leaves it empty for a `src=` reference — the
+ * actual source lives in the referenced file) and the grant key never
+ * reflected that file's bytes at all: swapping the file's contents while
+ * the note's own text stayed byte-identical re-ran new code under an old,
+ * un-reprompted grant.
+ *
+ * Only `src=` targets are resolved here — `require()` (bundle-local or
+ * pack) stays unwired for the whole `.mkz` Run-path arc (see
+ * `grant-flow.ts`'s top doc comment), so a script's closure has no other
+ * bundle-local code to fold in yet. A `src=` path missing from `snapshot`
+ * (file deleted, or dropped by `buildBundleSnapshot`'s own budget) is
+ * simply omitted from the result — never thrown — so a note whose script
+ * references a missing file still gets a (now-narrower, but well-defined)
+ * grant key instead of failing the whole grant flow.
+ */
+export function bundleModulesFromSnapshot(
+  scripts: readonly GrantClosureScript[],
+  snapshot: Record<string, Uint8Array>,
+): Record<string, string> {
+  const modules: Record<string, string> = {};
+  for (const script of scripts) {
+    if (script.src === undefined) continue;
+    const bytes = snapshot[script.src];
+    if (bytes === undefined) continue;
+    modules[script.src] = utf8Decoder.decode(bytes);
+  }
+  return modules;
 }
 
 /** Every `cache/`-prefixed entry in `files`, unchanged — the shape a worker's `RunResult.cacheOut` carries back and a host persists. */

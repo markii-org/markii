@@ -11,17 +11,20 @@
  * ## Keying
  *
  * `computeGrantKey` (`@markii/runtime`) hashes the note's executable
- * closure — that closure is just its own script blocks
- * (`RunRequirements.grantScripts`), with empty `bundleModules`/
- * `vaultModules`/`packs`: `require` (bundle-local or pack) stays unwired
- * for the whole `.mkz` Run-path arc (GitHub issue #9's design comment), so
- * a bundle-backed run's closure is no richer than a bare `.mk.md` note's.
- * Any edit to any script's code changes the hash, which is what makes "any
- * code change re-prompts" fall out of the keying scheme for free rather
- * than needing its own diffing logic here. The bundle-fs grants a
- * manifest declares (`GrantFlowRequirements.bundleFsGrants`) are NOT part
- * of this key — they ride along the same key/miss cycle as the net hosts
- * do (re-derived and re-prompted together on any script-code change), see
+ * closure — that closure is its own script blocks
+ * (`RunRequirements.grantScripts`) plus, for a bundle-backed run, the
+ * resolved source text of every `src=`-referenced script file
+ * (`GrantFlowRequirements.bundleModules`, F-1 fix), with `vaultModules`/
+ * `packs` left empty: `require` (bundle-local or pack) stays unwired for
+ * the whole `.mkz` Run-path arc (GitHub issue #9's design comment), so a
+ * bundle-backed run's closure has no OTHER bundle-local code to fold in
+ * yet beyond its `src=` targets. Any edit to any script's code — inline or
+ * `src=`-referenced — changes the hash, which is what makes "any code
+ * change re-prompts" fall out of the keying scheme for free rather than
+ * needing its own diffing logic here. The bundle-fs grants a manifest
+ * declares (`GrantFlowRequirements.bundleFsGrants`) are NOT part of this
+ * key — they ride along the same key/miss cycle as the net hosts do
+ * (re-derived and re-prompted together on any script-code change), see
  * `runGrantFlow`'s own comment.
  *
  * ## Storage
@@ -85,6 +88,21 @@ export interface GrantFlowRequirements {
    * is only ever the manifest's ASK, never itself a capability.
    */
   readonly bundleFsGrants?: readonly BundleFsGrant[];
+  /**
+   * Bundle-relative `src=` script path -> source text, for every `src=`
+   * block among `grantScripts` whose file content the host has resolved
+   * (F-1 fix) — `./bundle-run.ts`'s `bundleModulesFromSnapshot`, run over
+   * the same in-memory bundle snapshot the run itself will use. Omitted or
+   * empty for a bare `.mk.md` document (which has no bundle to resolve
+   * `src=` targets from) or a bundle whose scripts have no `src=` blocks.
+   * Folded into `closureFrom`'s `GrantClosure.bundleModules` so
+   * `computeGrantKey` hashes the REFERENCED file's bytes, not just the
+   * (empty) `code` field a `src=` block carries in the note's own text —
+   * without this, swapping a bundle script's contents while the note text
+   * stays byte-identical would silently re-run new code under an old,
+   * un-reprompted grant.
+   */
+  readonly bundleModules?: Readonly<Record<string, string>>;
 }
 
 /**
@@ -382,7 +400,10 @@ function partitionHosts(
 function closureFrom(requirements: GrantFlowRequirements): GrantClosure {
   return {
     scripts: [...requirements.grantScripts],
-    bundleModules: {},
+    // F-1 fix: was unconditionally `{}` — see `GrantFlowRequirements.bundleModules`'s
+    // doc comment for why that let a bundle script's contents change under an
+    // unchanged grant key.
+    bundleModules: { ...(requirements.bundleModules ?? {}) },
     vaultModules: {},
     packs: [],
   };

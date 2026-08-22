@@ -43,13 +43,22 @@ describe('createSnapshotStorage', () => {
     expect(new TextDecoder().decode(files['cache/b.json'])).toBe('b');
   });
 
-  it('rejects a path-jail escape on read/write/exists, same as any other BundleStorage', async () => {
+  it('rejects a path-jail escape on read/write/exists/size, same as any other BundleStorage', async () => {
     const storage = createSnapshotStorage({});
     await expect(storage.read('../escape.json')).rejects.toThrow();
     await expect(
       storage.write('../escape.json', bytesOf('x')),
     ).rejects.toThrow();
     await expect(storage.exists('../escape.json')).rejects.toThrow();
+    await expect(storage.size('../escape.json')).rejects.toThrow();
+  });
+
+  it('size() returns the byte length, or undefined when missing', async () => {
+    const storage = createSnapshotStorage({
+      'cache/a.json': bytesOf('{"x":1}'),
+    });
+    expect(await storage.size('cache/a.json')).toBe(bytesOf('{"x":1}').length);
+    expect(await storage.size('cache/missing.json')).toBeUndefined();
   });
 
   it('list() returns paths sorted', async () => {

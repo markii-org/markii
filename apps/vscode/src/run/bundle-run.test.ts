@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { BundleManifest, BundleStorage } from '@markii/bundle';
 import {
   buildBundleSnapshot,
+  bundleModulesFromSnapshot,
   cacheFilesFrom,
   decodeBundleCacheFromStorage,
   encodeBundleCacheForStorage,
@@ -33,6 +34,32 @@ function fakeStorage(files: Record<string, string>): BundleStorage {
     async exists(path) {
       return map.has(path);
     },
+    async size(path) {
+      return map.get(path)?.length;
+    },
+  };
+}
+
+/**
+ * A `fakeStorage` that also records every path `read()` is actually called
+ * with — used to prove C-1's fix: an over-budget file's `size()` alone must
+ * be enough to skip it, and its `read()` must never be invoked at all.
+ */
+function instrumentedFakeStorage(files: Record<string, string>): {
+  storage: BundleStorage;
+  readCalls: string[];
+} {
+  const base = fakeStorage(files);
+  const readCalls: string[] = [];
+  return {
+    storage: {
+      ...base,
+      async read(path) {
+        readCalls.push(path);
+        return base.read(path);
+      },
+    },
+    readCalls,
   };
 }
 
@@ -72,6 +99,88 @@ describe('buildBundleSnapshot', () => {
     // First file (sorted order) fits; the second does not.
     expect(files['scripts/a.lua']).toBeDefined();
     expect(files['scripts/b.lua']).toBeUndefined();
+  });
+
+  it('C-1: skips a file whose size alone exceeds the total budget WITHOUT ever calling read() on it', async () => {
+    const { storage, readCalls } = instrumentedFakeStorage({
+      'scripts/small.lua': 'ok',
+      'scripts/huge.lua': 'x'.repeat(1000),
+    });
+
+    const { files, truncated } = await buildBundleSnapshot(storage, {
+      maxTotalBytes: 100,
+    });
+
+    expect(truncated).toBe(true);
+    expect(files['scripts/small.lua']).toBeDefined();
+    expect(files['scripts/huge.lua']).toBeUndefined();
+    // The whole point of the fix: the huge file's bytes are never read into
+    // memory, only sized.
+    expect(readCalls).not.toContain('scripts/huge.lua');
+    expect(readCalls).toContain('scripts/small.lua');
+  });
+
+  it('C-1: a single file over maxFileBytes is skipped without a read(), even when the total budget alone would allow it', async () => {
+    const { storage, readCalls } = instrumentedFakeStorage({
+      'scripts/big.lua': 'x'.repeat(1000),
+    });
+
+    const { files, truncated } = await buildBundleSnapshot(storage, {
+      maxTotalBytes: 1_000_000,
+      maxFileBytes: 100,
+    });
+
+    expect(truncated).toBe(true);
+    expect(files['scripts/big.lua']).toBeUndefined();
+    expect(readCalls).toEqual([]);
+  });
+
+  it('a path whose size() comes back undefined is skipped as if absent, never read', async () => {
+    const { storage: base } = instrumentedFakeStorage({
+      'scripts/ghost.lua': 'code',
+    });
+    const storage: BundleStorage = {
+      ...base,
+      async size() {
+        return undefined;
+      },
+    };
+
+    const { files } = await buildBundleSnapshot(storage);
+    expect(files['scripts/ghost.lua']).toBeUndefined();
+  });
+});
+
+describe('bundleModulesFromSnapshot', () => {
+  it('resolves every src= script path present in the snapshot to its decoded text', () => {
+    const snapshot = {
+      'scripts/etl.lua': bytesOf('return 1'),
+      'cache/unrelated.json': bytesOf('{}'),
+    };
+    const modules = bundleModulesFromSnapshot(
+      [
+        { name: 'a', lang: 'lua', src: 'scripts/etl.lua', code: '' },
+        { name: 'b', lang: 'lua', code: 'inline code here' },
+      ],
+      snapshot,
+    );
+    expect(modules).toEqual({ 'scripts/etl.lua': 'return 1' });
+  });
+
+  it('omits a src= path missing from the snapshot rather than throwing', () => {
+    const modules = bundleModulesFromSnapshot(
+      [{ name: 'a', lang: 'lua', src: 'scripts/missing.lua', code: '' }],
+      {},
+    );
+    expect(modules).toEqual({});
+  });
+
+  it('returns {} for a closure with no src= scripts at all', () => {
+    const modules = bundleModulesFromSnapshot(
+      [{ name: 'a', lang: 'lua', code: 'inline' }],
+      {},
+    );
+    expect(modules).toEqual({});
   });
 });
 

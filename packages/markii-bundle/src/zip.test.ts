@@ -49,6 +49,22 @@ describe('openZipBundle — happy path', () => {
     const storage = openZipBundle(bytes);
     expect(await storage.list()).toEqual(['assets/x.png']);
   });
+
+  it('size() returns the decompressed byte length, or undefined when missing', async () => {
+    const bytes = zipSync({ 'note.mk.md': u8('# hello') });
+    const storage = openZipBundle(bytes);
+    expect(await storage.size('note.mk.md')).toBe(u8('# hello').length);
+    expect(await storage.size('nope.txt')).toBeUndefined();
+  });
+
+  it('size() throws BundlePathError for a traversal path, same as read()', () => {
+    const bytes = zipSync({ 'note.mk.md': u8('# hello') });
+    const storage = openZipBundle(bytes);
+    // Matches read()/write()/exists() on this storage form: the path-jail
+    // check runs synchronously inside the (non-`async`) function body, so
+    // it throws immediately rather than rejecting a returned promise.
+    expect(() => storage.size('../evil.txt')).toThrow();
+  });
 });
 
 describe('openZipBundle — zip-slip rejection', () => {
@@ -277,6 +293,7 @@ describe('openZipBundle — DEFECT 7: prototype-pollution-safe names', () => {
       },
       list: () => Promise.resolve(Array.from(map.keys()).sort()),
       exists: (path: string) => Promise.resolve(map.has(path)),
+      size: (path: string) => Promise.resolve(map.get(path)?.length),
     };
     await expect(exportZipBundle(storage)).rejects.toThrow(BundleZipError);
   });

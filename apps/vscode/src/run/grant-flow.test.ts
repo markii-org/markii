@@ -518,6 +518,113 @@ describe('prompt wording', () => {
   });
 });
 
+describe('runGrantFlow — F-1: bundleModules participates in the grant key', () => {
+  function srcScripts(
+    name = 'a',
+    src = 'scripts/etl.lua',
+  ): GrantClosureScript[] {
+    return [{ name, lang: 'lua', src, code: '' }];
+  }
+
+  it('changing the resolved src= file content (note text unchanged) produces a new key and re-prompts', async () => {
+    const memento = fakeMemento();
+
+    const before = await runGrantFlow({
+      documentKey: 'file:///bundle.mkz',
+      requirements: requirementsFor({
+        hosts: ['api.example.com'],
+        grantScripts: srcScripts(),
+        bundleModules: { 'scripts/etl.lua': 'return 1' },
+      }),
+      memento,
+      promptHost: alwaysAllow,
+      promptUnknownHosts: alwaysAllow,
+      promptManyHosts: alwaysAllow,
+    });
+    expect(before.allowedHosts).toEqual(['api.example.com']);
+
+    const promptHost = vi.fn(alwaysAllow);
+    const after = await runGrantFlow({
+      documentKey: 'file:///bundle.mkz',
+      requirements: requirementsFor({
+        hosts: ['api.example.com'],
+        grantScripts: srcScripts(), // the note's own script block is byte-identical...
+        bundleModules: { 'scripts/etl.lua': 'return 2' }, // ...only the referenced file's content changed
+      }),
+      memento,
+      promptHost,
+      promptUnknownHosts: alwaysAllow,
+      promptManyHosts: alwaysAllow,
+    });
+
+    expect(promptHost).toHaveBeenCalledTimes(1);
+    expect(after.allowedHosts).toEqual(['api.example.com']);
+  });
+
+  it('an unchanged src= file content reuses the stored grant with no re-prompting', async () => {
+    const memento = fakeMemento();
+    const requirements = requirementsFor({
+      hosts: ['api.example.com'],
+      grantScripts: srcScripts(),
+      bundleModules: { 'scripts/etl.lua': 'return 1' },
+    });
+
+    const first = await runGrantFlow({
+      documentKey: 'file:///bundle.mkz',
+      requirements,
+      memento,
+      promptHost: alwaysAllow,
+      promptUnknownHosts: alwaysAllow,
+      promptManyHosts: alwaysAllow,
+    });
+    expect(first.allowedHosts).toEqual(['api.example.com']);
+
+    const promptHost = vi.fn(alwaysAllow);
+    const second = await runGrantFlow({
+      documentKey: 'file:///bundle.mkz',
+      requirements,
+      memento,
+      promptHost,
+      promptUnknownHosts: alwaysAllow,
+      promptManyHosts: alwaysAllow,
+    });
+
+    expect(promptHost).not.toHaveBeenCalled();
+    expect(second.allowedHosts).toEqual(['api.example.com']);
+  });
+
+  it('a bare .mk.md (no bundleModules field at all) keys exactly as it did before this fix', async () => {
+    const memento = fakeMemento();
+    const requirements = requirementsFor({
+      hosts: ['api.example.com'],
+      grantScripts: scripts('return 1'),
+    });
+
+    const first = await runGrantFlow({
+      documentKey: 'file:///a.mk.md',
+      requirements,
+      memento,
+      promptHost: alwaysAllow,
+      promptUnknownHosts: alwaysAllow,
+      promptManyHosts: alwaysAllow,
+    });
+    expect(first.allowedHosts).toEqual(['api.example.com']);
+
+    const promptHost = vi.fn(alwaysAllow);
+    const second = await runGrantFlow({
+      documentKey: 'file:///a.mk.md',
+      requirements, // identical object -- no bundleModules field
+      memento,
+      promptHost,
+      promptUnknownHosts: alwaysAllow,
+      promptManyHosts: alwaysAllow,
+    });
+
+    expect(promptHost).not.toHaveBeenCalled();
+    expect(second.allowedHosts).toEqual(['api.example.com']);
+  });
+});
+
 describe('runGrantFlow — bundle-fs access prompting (GitHub issue #9)', () => {
   it('never prompts for bundle access when the manifest declares none', async () => {
     const memento = fakeMemento();

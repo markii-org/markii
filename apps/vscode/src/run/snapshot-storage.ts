@@ -51,6 +51,10 @@ export function createSnapshotStorage(
     async exists(path) {
       return map.has(normalizeOrThrow(path));
     },
+    async size(path) {
+      const data = map.get(normalizeOrThrow(path));
+      return data === undefined ? undefined : data.length;
+    },
     currentFiles: () => Object.fromEntries(map),
   };
 }
