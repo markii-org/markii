@@ -133,6 +133,18 @@ that could edit the manifest could grant itself permissions. A script never
 sees any other note's bundle; sharing data between notes goes through the
 published-value store instead (see [scripting.md](scripting.md)).
 
+A bundle is attacker-deliverable in a way a note opened in an editor is
+not: someone can hand you a whole `.mkz`, and its manifest, document,
+scripts, assets, cached data, and archive structure are all untrusted. Two
+consequences follow for a host. First, opening or running a bundle must
+bound what it reads: a file is size-checked before it is materialized, so a
+single huge entry, a zip bomb, or a directory bundle carrying a giant file
+cannot exhaust the host by being opened. Second, a bundle's cached data is
+not trusted for freshness: a stored entry with an implausible timestamp is
+recomputed rather than served, so a shipped `.cache/` cannot pin stale
+values. The reference host's assessment of these paths is recorded in the
+verification status below.
+
 ## Verification status of the reference sandbox
 
 The `@markii/lua` sandbox was audited adversarially in August 2026 (commit
@@ -224,6 +236,19 @@ storm of them; and the values sent to the page carry only a failure's kind,
 never its text. Two limits of hostname-based grants are documented above
 rather than closed in code: such a grant covers every port and path on the
 host, and it cannot detect a DNS record that changes after the grant.
+
+Bringing `.mkz` bundles into that same run path was assessed adversarially
+in turn, against real hostile bundles: crafted zips, on-disk symlink
+escapes, and real worker runs. The path jail, the write jail confining
+writes to `.cache/`, the zip-bomb guard that refuses on declared size
+before inflating, the symlink and hard-link defenses, the declared-intersect-granted
+capability model, and the fail-safe decoding of a hostile manifest or
+cached data all held. Two weakenings specific to a deliverable bundle were
+found and fixed before release: the directory-form snapshot builder read a
+file before checking its size, which a size check ahead of the read now
+closes; and the grant key omitted the content of `src=` script files, so a
+swapped bundle script could run under an old grant, which folding that
+content into the key now prevents.
 
 Three areas remain intentionally outside the audited surface, and are
 tracked rather than forgotten: the four known hang reproductions are covered

@@ -118,6 +118,15 @@ importance:
 7. **The require mappings.** Map vault-library namespaces to folders, and
    resolve pack modules, keeping the reserved bundle segments
    (`scripts`, `assets`, `.cache`) bundle-local.
+8. **Bundle handling, if you run bundles.** A `.mkz` bundle is
+   attacker-deliverable, so treat its every part as untrusted. Read its
+   files through `@markii/bundle`'s jailed storage (never your own path
+   joins), and size-check a file with `BundleStorage.size` before
+   materializing it, so one oversized entry cannot exhaust the host. Expose
+   the bundle to scripts only through a `ScriptView` scoped to the declared
+   intersect the granted permissions, keep writes confined to `.cache/`,
+   and include the content of `src=` script files in the grant-key closure
+   so editing a bundled script re-prompts.
 
 ## Editor support
 

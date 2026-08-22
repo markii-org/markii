@@ -23,6 +23,10 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 - **`BundleStorage.size(path)` (`@markii/bundle`)**: returns a file's byte
   length without reading its contents, in both storage forms, so a caller
   can enforce a size budget before materializing a file.
+- **Optional `document` manifest field (`@markii/bundle`)**: `manifest.json`
+  may name a bundle-relative path to the document to open in place of the
+  conventional `note.mk.md`. `parseManifest` validates it as a string;
+  path-jailing stays with `normalizeBundlePath` at use time.
 
 ### Fixed
 

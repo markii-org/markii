@@ -12,6 +12,17 @@ export interface BundleManifest {
   mark: string;
   permissions?: BundlePermissions;
   uses?: string[];
+  /**
+   * Optional bundle-relative path to the document to open, overriding the
+   * conventional `note.mk.md`. `parseManifest` only checks that this is a
+   * string; it does not reject `../` or an absolute path here. Path-jailing
+   * is done once, at use time, by the consumer's `normalizeBundlePath` (see
+   * `./paths.ts`) — matching the parity of every other manifest field, none
+   * of which pre-jail path-shaped values either. Keeping the single jail
+   * point at use time avoids duplicating (and risking drift from) that
+   * logic here.
+   */
+  document?: string;
   [key: string]: unknown;
 }
 
@@ -33,7 +44,12 @@ export type ManifestParseResult =
 /** The current spec version this package's default manifests declare. */
 export const CURRENT_SPEC_VERSION = '0.1.0';
 
-const KNOWN_TOP_LEVEL_KEYS = new Set(['mark', 'permissions', 'uses']);
+const KNOWN_TOP_LEVEL_KEYS = new Set([
+  'mark',
+  'permissions',
+  'uses',
+  'document',
+]);
 const KNOWN_FS_GRANTS = new Set<string>(['read', 'write:cache/']);
 
 // Simplified but structurally correct semver: MAJOR.MINOR.PATCH with
@@ -176,6 +192,22 @@ export function parseManifest(json: string): ManifestParseResult {
     }
   }
 
+  // --- document (optional) ---
+  // Only the type is checked here (must be a string). Whether it's a usable
+  // relative path (no `../` escape, not absolute) is left to the consumer's
+  // `normalizeBundlePath` at use time — see the type-level doc comment above
+  // for why: no other manifest field pre-jails a path-shaped value either,
+  // so enforcing it here would be inconsistent and would duplicate the one
+  // real jail point.
+  let document: string | undefined;
+  if (obj.document !== undefined) {
+    if (typeof obj.document !== 'string') {
+      errors.push('"document" must be a string');
+    } else {
+      document = obj.document;
+    }
+  }
+
   // --- unknown top-level keys: forward-compat warning, not an error ---
   for (const key of Object.keys(obj)) {
     if (!KNOWN_TOP_LEVEL_KEYS.has(key)) {
@@ -192,6 +224,7 @@ export function parseManifest(json: string): ManifestParseResult {
   const manifest: BundleManifest = { ...obj, mark: markRaw as string };
   if (permissions !== undefined) manifest.permissions = permissions;
   if (uses !== undefined) manifest.uses = uses;
+  if (document !== undefined) manifest.document = document;
 
   return { ok: true, manifest, warnings };
 }

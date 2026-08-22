@@ -54,6 +54,46 @@ describe('parseManifest — happy paths', () => {
     );
     expect(result.ok).toBe(true);
   });
+
+  it('accepts a valid document field and preserves its value', () => {
+    const result = parseManifest(
+      JSON.stringify({ mark: '0.1.0', document: 'docs/report.mk.md' }),
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.manifest.document).toBe('docs/report.mk.md');
+    expect(result.warnings).toEqual([]);
+  });
+
+  it('stays valid when document is absent (conventional note.mk.md applies)', () => {
+    const result = parseManifest(JSON.stringify({ mark: '0.1.0' }));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.manifest.document).toBeUndefined();
+  });
+
+  it(
+    'accepts a document value containing ../ as a string here — the ' +
+      'consumer, not parseManifest, is the single path-jail point via ' +
+      'normalizeBundlePath',
+    () => {
+      const result = parseManifest(
+        JSON.stringify({ mark: '0.1.0', document: '../../etc/passwd' }),
+      );
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.manifest.document).toBe('../../etc/passwd');
+    },
+  );
+
+  it('accepts an absolute-path document value as a string here for the same reason', () => {
+    const result = parseManifest(
+      JSON.stringify({ mark: '0.1.0', document: '/etc/passwd' }),
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.manifest.document).toBe('/etc/passwd');
+  });
 });
 
 describe('parseManifest — errors', () => {
@@ -162,6 +202,18 @@ describe('parseManifest — errors', () => {
       JSON.stringify({ mark: '0.1.0', uses: [1, 2] }),
     );
     expect(result.ok).toBe(false);
+  });
+
+  it.each([
+    ['a number', 1],
+    ['an object', { path: 'x' }],
+    ['an array', ['x']],
+    ['null', null],
+  ])('rejects a document field that is %s', (_label, document) => {
+    const result = parseManifest(JSON.stringify({ mark: '0.1.0', document }));
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors.join(' ')).toMatch(/"document" must be a string/);
   });
 
   it('collects multiple independent errors at once', () => {

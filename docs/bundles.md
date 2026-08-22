@@ -36,6 +36,27 @@ interchange form, one artifact to send someone. An application treats them
 identically. Bundles from earlier releases used the longer `.mkbundle`
 extension; applications keep recognizing it, but new bundles are `.mkz`.
 
+## Running a bundle
+
+A host that runs scripts treats a bundle the way it treats a plain note,
+with two additions the bundle makes possible. Scripts gain a filesystem
+capability, `bundle.read`, `bundle.write`, and `bundle.exists`, scoped to
+the bundle: reads reach the bundle's own files, and writes reach only
+`.cache/`. A script can never write the document or the manifest, whatever
+its grants say. A missing file read returns nothing rather than failing, so
+the common "read the cache if it is there, otherwise compute it" shape is
+just an `if`.
+
+Where the document lives is the conventional `note.mk.md` at the bundle
+root unless the manifest names another path in its optional `document`
+field. A `src=` script block loads its file from the bundle's `scripts/`
+directory the same way.
+
+A note-writer does not need any of this. Bundles serve the case where a
+note's data collection is worth caching beside the note and carrying with
+it. The reference host for running bundles is the VS Code extension, whose
+responsibilities as a host are covered in [integration.md](integration.md).
+
 ## The cache is disposable
 
 `.cache/` belongs to the host, never to the author. It holds script outputs
@@ -82,6 +103,8 @@ is no transitive resolution and no version ranges, deliberately.
 
 `manifest.json` is the bundle's identity card. It records the spec version
 in its required `mark` field, declares the note's scripts, and lists the
-permissions the note wants (see [security.md](security.md)). Scripts can
-never write it: a script that could edit the manifest could grant itself
+permissions the note wants (see [security.md](security.md)). An optional
+`document` field names the document's path within the bundle; when it is
+absent, the conventional `note.mk.md` at the root applies. Scripts can
+never write the manifest: a script that could edit it could grant itself
 permissions, so the file is load-bearing and host-owned.

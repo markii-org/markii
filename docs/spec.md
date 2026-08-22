@@ -183,7 +183,10 @@ A bundle is a directory, or a zip of that directory, containing
 `.cache/`. The two forms are equivalent, and both carry the `.mkz`
 extension. An implementation SHOULD also recognize the legacy
 `.mkbundle` name. `.cache/` is disposable;
-deleting it MUST NOT lose authored content.
+deleting it MUST NOT lose authored content. The document is `note.mk.md` at
+the bundle root unless the manifest's optional `document` field names
+another bundle-relative path; when present it MUST be a string, and it is
+resolved under the same path rules as any other bundle path.
 
 Scripts see only their own bundle. Paths are resolved inside the bundle
 root; absolute paths, `..`, and symlink escapes are rejected. Writes are
