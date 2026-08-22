@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { BundleManifest } from '@markii/bundle';
 import type { GrantMemento, Thenable } from './grant-flow';
 import type { RunResult, SpawnRunOptions } from './run-host';
 import {
@@ -230,6 +231,179 @@ describe('runOnce', () => {
     });
 
     expect(spawnRun.mock.calls[0]?.[0].cacheSnapshot).toEqual({});
+  });
+});
+
+function manifestWith(overrides: Partial<BundleManifest> = {}): BundleManifest {
+  return { mark: '0.1.0', ...overrides };
+}
+
+describe('runOnce — bundle-backed run', () => {
+  it('merges the manifest-declared net hosts into the grant flow (union with the static scan)', async () => {
+    const memento = fakeMemento();
+    const spawnRun = vi.fn((_options: SpawnRunOptions): Promise<RunResult> =>
+      Promise.resolve(fakeRunResult()),
+    );
+
+    const result = await runOnce({
+      documentKey: 'bundle:///a.mkz',
+      // The static scan alone would only find "scan.example.com".
+      text: fence('a', 'return net.fetch_json("https://scan.example.com/x")'),
+      memento,
+      promptHost: () => Promise.resolve(true),
+      promptUnknownHosts: () => Promise.resolve(true),
+      promptManyHosts: () => Promise.resolve(true),
+      spawnRun,
+      timeoutMs: 15000,
+      bundle: {
+        manifest: manifestWith({
+          permissions: { net: { get: ['manifest.example.com'] } },
+        }),
+        buildSnapshot: () => Promise.resolve({}),
+        persistCacheOut: () => Promise.resolve(),
+      },
+    });
+
+    expect(result.failures).toEqual([]);
+    const spawnArgs = spawnRun.mock.calls[0]?.[0];
+    expect(spawnArgs?.netAllowlist.sort()).toEqual(
+      ['manifest.example.com', 'scan.example.com'].sort(),
+    );
+  });
+
+  it('prompts for the manifest-declared bundle-fs grants and forwards the allowed subset to spawnRun', async () => {
+    const memento = fakeMemento();
+    const spawnRun = vi.fn((_options: SpawnRunOptions): Promise<RunResult> =>
+      Promise.resolve(fakeRunResult()),
+    );
+    const promptBundleAccess = vi.fn(() => Promise.resolve(true));
+
+    await runOnce({
+      documentKey: 'bundle:///a.mkz',
+      text: fence('a', 'return 1'),
+      memento,
+      promptHost: () => Promise.resolve(true),
+      promptUnknownHosts: () => Promise.resolve(true),
+      promptManyHosts: () => Promise.resolve(true),
+      promptBundleAccess,
+      spawnRun,
+      timeoutMs: 15000,
+      bundle: {
+        manifest: manifestWith({
+          permissions: { bundle: ['read', 'write:cache/'] },
+        }),
+        buildSnapshot: () =>
+          Promise.resolve({ 'assets/x.txt': new Uint8Array([1]) }),
+        persistCacheOut: () => Promise.resolve(),
+      },
+    });
+
+    expect(promptBundleAccess).toHaveBeenCalledWith(['read', 'write:cache/']);
+    const spawnArgs = spawnRun.mock.calls[0]?.[0];
+    expect(spawnArgs?.bundle?.grantedBundlePermissions).toEqual([
+      'read',
+      'write:cache/',
+    ]);
+    expect(spawnArgs?.bundle?.snapshot).toEqual({
+      'assets/x.txt': new Uint8Array([1]),
+    });
+  });
+
+  it('declining the bundle-access prompt forwards no bundle-fs grants at all', async () => {
+    const memento = fakeMemento();
+    const spawnRun = vi.fn((_options: SpawnRunOptions): Promise<RunResult> =>
+      Promise.resolve(fakeRunResult()),
+    );
+
+    await runOnce({
+      documentKey: 'bundle:///a.mkz',
+      text: fence('a', 'return 1'),
+      memento,
+      promptHost: () => Promise.resolve(true),
+      promptUnknownHosts: () => Promise.resolve(true),
+      promptManyHosts: () => Promise.resolve(true),
+      promptBundleAccess: () => Promise.resolve(false),
+      spawnRun,
+      timeoutMs: 15000,
+      bundle: {
+        manifest: manifestWith({ permissions: { bundle: ['read'] } }),
+        buildSnapshot: () => Promise.resolve({}),
+        persistCacheOut: () => Promise.resolve(),
+      },
+    });
+
+    const spawnArgs = spawnRun.mock.calls[0]?.[0];
+    expect(spawnArgs?.bundle?.grantedBundlePermissions).toEqual([]);
+  });
+
+  it('persists RunResult.cacheOut via the bundle option when present', async () => {
+    const memento = fakeMemento();
+    const cacheOut = { 'cache/a.json': new Uint8Array([1, 2, 3]) };
+    const spawnRun = () => Promise.resolve(fakeRunResult({ cacheOut }));
+    const persistCacheOut = vi.fn(() => Promise.resolve());
+
+    await runOnce({
+      documentKey: 'bundle:///a.mkz',
+      text: fence('a', 'return 1'),
+      memento,
+      promptHost: () => Promise.resolve(true),
+      promptUnknownHosts: () => Promise.resolve(true),
+      promptManyHosts: () => Promise.resolve(true),
+      spawnRun,
+      timeoutMs: 15000,
+      bundle: {
+        manifest: manifestWith(),
+        buildSnapshot: () => Promise.resolve({}),
+        persistCacheOut,
+      },
+    });
+
+    expect(persistCacheOut).toHaveBeenCalledWith(cacheOut);
+  });
+
+  it('never persists cacheOut when the run produced none', async () => {
+    const memento = fakeMemento();
+    const spawnRun = () => Promise.resolve(fakeRunResult());
+    const persistCacheOut = vi.fn(() => Promise.resolve());
+
+    await runOnce({
+      documentKey: 'bundle:///a.mkz',
+      text: fence('a', 'return 1'),
+      memento,
+      promptHost: () => Promise.resolve(true),
+      promptUnknownHosts: () => Promise.resolve(true),
+      promptManyHosts: () => Promise.resolve(true),
+      spawnRun,
+      timeoutMs: 15000,
+      bundle: {
+        manifest: manifestWith(),
+        buildSnapshot: () => Promise.resolve({}),
+        persistCacheOut,
+      },
+    });
+
+    expect(persistCacheOut).not.toHaveBeenCalled();
+  });
+
+  it('a bare .mk.md run (no bundle option) never calls buildSnapshot or sends a bundle field to spawnRun', async () => {
+    const memento = fakeMemento();
+    const spawnRun = vi.fn((_options: SpawnRunOptions): Promise<RunResult> =>
+      Promise.resolve(fakeRunResult()),
+    );
+
+    await runOnce({
+      documentKey: 'file:///a.mk.md',
+      text: fence('a', 'return 1'),
+      memento,
+      promptHost: () => Promise.resolve(true),
+      promptUnknownHosts: () => Promise.resolve(true),
+      promptManyHosts: () => Promise.resolve(true),
+      spawnRun,
+      timeoutMs: 15000,
+    });
+
+    const spawnArgs = spawnRun.mock.calls[0]?.[0];
+    expect(spawnArgs?.bundle).toBeUndefined();
   });
 });
 

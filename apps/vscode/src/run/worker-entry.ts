@@ -52,6 +52,10 @@ import {
   type NetProvider,
   type NetResponse,
 } from '@markii/lua';
+import type { BundleFsGrant, BundleManifest } from '@markii/bundle';
+import { createScriptView } from '@markii/bundle';
+import { cacheFilesFrom } from './bundle-run.js';
+import { createSnapshotStorage } from './snapshot-storage.js';
 
 /** The one job message this worker ever receives, posted once by `run-host.ts`. */
 export interface RunJob {
@@ -72,6 +76,21 @@ export interface RunJob {
     maxInstructions?: number;
     maxMemoryBytes?: number;
   };
+  /**
+   * Slice 2 of the `.mkz` Run-path arc (GitHub issue #9): the bundle
+   * filesystem capability for a bundle-backed run, entirely as an
+   * in-memory snapshot — see `./bundle-run.ts`'s doc comment for what this
+   * host-built snapshot contains and why. Absent for a bare `.mk.md` run,
+   * exactly as before this field existed.
+   */
+  bundle?: {
+    /** Bundle-relative path -> bytes, built host-side by `./bundle-run.ts`'s `buildBundleSnapshot`. */
+    snapshot: Record<string, Uint8Array>;
+    /** The bundle's manifest — `@markii/bundle`'s `createScriptView` reads its `permissions.bundle` declaration to intersect against `grantedBundlePermissions`. */
+    manifest: BundleManifest;
+    /** The user-granted bundle-fs permissions for this run (already the OUTCOME of the host's own grant flow, not the manifest's raw declaration) — `createScriptView` intersects this with what the manifest declares. */
+    grantedBundlePermissions: BundleFsGrant[];
+  };
 }
 
 /** One failed script, in the shape the host needs to drive the grant/UI flow — never a raw thrown error. */
@@ -89,6 +108,14 @@ export interface RunResult {
   failures: RunFailure[];
   /** The mutated cache state, to be persisted by the host for the next run. */
   cacheSnapshot: Record<string, CacheEntry>;
+  /**
+   * Present only when `RunJob.bundle` was set: the FULL, post-run contents
+   * of the bundle snapshot's `cache/` subtree (not a diff) — the host
+   * persists this verbatim (directory form: written back into the bundle
+   * dir; zip form: extension storage keyed by bundle identity) and seeds
+   * the next run's snapshot from it. Absent for a bare `.mk.md` run.
+   */
+  cacheOut?: Record<string, Uint8Array>;
 }
 
 /** Bare, lowercased hostname from a URL string, or `undefined` if the URL doesn't parse. */
@@ -385,6 +412,22 @@ async function runJob(job: RunJob): Promise<RunResult> {
   const tree = parse(job.text);
   const scripts = extractScripts(tree);
 
+  // Slice 2 of the .mkz Run-path arc (GitHub issue #9): a bundle-backed run
+  // gets a snapshot-backed ScriptView (never a live zip/disk handle — see
+  // `./snapshot-storage.ts`), scoped to exactly the intersection
+  // `createScriptView` (@markii/bundle) computes between the manifest's
+  // declared `permissions.bundle` and what the host's grant flow actually
+  // granted.
+  const bundleStorage = job.bundle
+    ? createSnapshotStorage(job.bundle.snapshot)
+    : undefined;
+  const bundleView =
+    bundleStorage && job.bundle
+      ? createScriptView(bundleStorage, job.bundle.manifest, {
+          bundle: job.bundle.grantedBundlePermissions,
+        })
+      : undefined;
+
   const executor = createLuaExecutor({
     net,
     // One allowlist governs GET/POST/PATCH alike (B-6, docs/security.md:
@@ -394,6 +437,7 @@ async function runJob(job: RunJob): Promise<RunResult> {
     // disabled.
     netGrants: { get: netAllowlist, post: netAllowlist },
     cache: cache.provider,
+    bundle: bundleView,
     maxFetchBytes,
     limits: {
       ...(job.limits?.wallClockMs !== undefined
@@ -415,6 +459,25 @@ async function runJob(job: RunJob): Promise<RunResult> {
     executor,
     trigger: 'manual',
     store,
+    // `src=scripts/foo.lua` resolution (design point 4): the referenced
+    // file's source lives in the snapshot under its own bundle-relative
+    // path (`ScriptBlock.src` already carries the full "scripts/..." path
+    // — see @markii/core's `scripts.ts`), read through the SAME jailed
+    // snapshot storage a script's own `bundle.read` would use. A bare
+    // `.mk.md` run (no `job.bundle`) never sets `loadSource` at all, so a
+    // `src=` block there is reported as the pre-existing "no loadSource
+    // provided" error, unchanged.
+    ...(bundleStorage
+      ? {
+          loadSource: async (src: string) => {
+            const bytes = await bundleStorage.read(src);
+            if (bytes === undefined) {
+              throw new Error(`bundle script "${src}" was not found`);
+            }
+            return Buffer.from(bytes).toString('utf8');
+          },
+        }
+      : {}),
   });
 
   const failures: RunFailure[] = summary.results
@@ -457,6 +520,9 @@ async function runJob(job: RunJob): Promise<RunResult> {
     values,
     failures,
     cacheSnapshot: cache.snapshot(),
+    ...(bundleStorage
+      ? { cacheOut: cacheFilesFrom(bundleStorage.currentFiles()) }
+      : {}),
   };
 }
 

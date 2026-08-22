@@ -31,6 +31,8 @@ export interface SpawnRunOptions {
   timeoutMs: number;
   /** Forwarded verbatim to the worker's `RunJob.limits` (the sandbox's own, INNER resource caps) — see `./worker-entry.ts`. */
   limits?: RunJob['limits'];
+  /** Forwarded verbatim to the worker's `RunJob.bundle` (the bundle-fs capability snapshot) — see `./worker-entry.ts`. Absent for a bare `.mk.md` run. */
+  bundle?: RunJob['bundle'];
   /**
    * Overrides the worker entry file this run spawns. Left unset,
    * `defaultWorkerPath` resolves it: the bundled `dist/run/worker.js` the
@@ -122,6 +124,7 @@ export async function spawnRun(options: SpawnRunOptions): Promise<RunResult> {
     netAllowlist: options.netAllowlist,
     cacheSnapshot: options.cacheSnapshot,
     ...(options.limits !== undefined ? { limits: options.limits } : {}),
+    ...(options.bundle !== undefined ? { bundle: options.bundle } : {}),
   };
 
   return new Promise<RunResult>((resolve) => {

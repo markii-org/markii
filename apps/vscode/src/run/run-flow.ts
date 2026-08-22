@@ -14,13 +14,16 @@ import { extractRunRequirements } from './script-requirements.js';
 import { runGrantFlow } from './grant-flow.js';
 import type {
   GrantMemento,
+  PromptBundleAccess,
   PromptHost,
   PromptManyHosts,
   PromptUnknownHosts,
 } from './grant-flow.js';
+import { manifestBundleFsGrants, manifestNetHosts } from './bundle-run.js';
 import type { RunResult, SpawnRunOptions } from './run-host.js';
 import type { ValuesFailure } from '../protocol.js';
 import type { StoredValue } from '@markii/runtime';
+import type { BundleManifest } from '@markii/bundle';
 
 /**
  * Strips a `StoredValue`'s `error` field before it ever reaches the wire
@@ -105,9 +108,29 @@ export interface RunOnceOptions {
   promptUnknownHosts: PromptUnknownHosts;
   /** PROMPT-STORM guard's consolidated gate — see `./grant-flow.ts`'s `MAX_HOST_PROMPTS`. */
   promptManyHosts: PromptManyHosts;
+  /** Prompts for a bundle's declared bundle-fs grants — see `./grant-flow.ts`'s `PromptBundleAccess`. Only ever consulted when `bundle` (below) is set AND its manifest declares `permissions.bundle`. */
+  promptBundleAccess?: PromptBundleAccess;
   /** Injected so this function is testable with a fake worker runner — the real adapter passes `./run-host.ts`'s `spawnRun`. */
   spawnRun: (options: SpawnRunOptions) => Promise<RunResult>;
   timeoutMs: number;
+  /**
+   * Slice 2 of the `.mkz` Run-path arc (GitHub issue #9): present only for a
+   * bundle-backed document. `buildSnapshot` is called once per run,
+   * immediately before `spawnRun`, to build the in-memory bundle-fs
+   * snapshot (`./bundle-run.ts`'s `buildBundleSnapshot`, already applied to
+   * whatever `BundleStorage` the caller has) — deferred to run time rather
+   * than built eagerly, so a snapshot is only ever read when a run actually
+   * happens. `persistCacheOut` receives the worker's `RunResult.cacheOut`
+   * (its bundle `cache/` subtree, post-run) when the run produced one, and
+   * is the caller's own persistence: writing back into a directory-form
+   * bundle on disk, or into extension storage keyed by bundle identity for
+   * a read-only zip form (see `preview-panel.ts`'s adapters).
+   */
+  bundle?: {
+    manifest: BundleManifest;
+    buildSnapshot: () => Promise<Record<string, Uint8Array>>;
+    persistCacheOut: (cacheOut: Record<string, Uint8Array>) => Promise<void>;
+  };
 }
 
 export interface RunOnceResult {
@@ -129,24 +152,52 @@ export interface RunOnceResult {
 export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
   const requirements = extractRunRequirements(options.text);
 
+  // Design point 5 (GitHub issue #9): a bundle's manifest-declared net hosts
+  // seed the grant flow too, unioned with whatever the static script scan
+  // already found — so a bundle prompts for what it DECLARES, not only for
+  // hosts a literal `net.fetch_json("https://...")` call site happens to
+  // reveal. Declaring is not granting: this only changes what gets PROMPTED
+  // for, never what ends up allowed without a prompt.
+  const manifestHosts = options.bundle
+    ? manifestNetHosts(options.bundle.manifest)
+    : [];
+  const mergedHosts = [...new Set([...requirements.hosts, ...manifestHosts])];
+  const bundleFsGrants = options.bundle
+    ? manifestBundleFsGrants(options.bundle.manifest)
+    : [];
+
   const grant = await runGrantFlow({
     documentKey: options.documentKey,
-    requirements,
+    requirements: { ...requirements, hosts: mergedHosts, bundleFsGrants },
     memento: options.memento,
     promptHost: options.promptHost,
     promptUnknownHosts: options.promptUnknownHosts,
     promptManyHosts: options.promptManyHosts,
+    promptBundleAccess: options.promptBundleAccess,
   });
 
   const cacheKey = cacheStorageKeyFor(options.documentKey);
   const rawCache = options.memento.get<unknown>(cacheKey);
   const cacheSnapshot = isCacheSnapshotShape(rawCache) ? rawCache : {};
 
+  const bundleSnapshot = options.bundle
+    ? await options.bundle.buildSnapshot()
+    : undefined;
+
   const result = await options.spawnRun({
     text: options.text,
     netAllowlist: grant.allowedHosts,
     cacheSnapshot: cacheSnapshot as SpawnRunOptions['cacheSnapshot'],
     timeoutMs: options.timeoutMs,
+    ...(options.bundle && bundleSnapshot
+      ? {
+          bundle: {
+            snapshot: bundleSnapshot,
+            manifest: options.bundle.manifest,
+            grantedBundlePermissions: grant.allowedBundleGrants,
+          },
+        }
+      : {}),
   });
 
   const nextSnapshotText = serializeCacheSnapshotIfSmallEnough(
@@ -156,6 +207,10 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
     cacheKey,
     nextSnapshotText === undefined ? undefined : result.cacheSnapshot,
   );
+
+  if (options.bundle && result.cacheOut) {
+    await options.bundle.persistCacheOut(result.cacheOut);
+  }
 
   return {
     values: scrubValuesForWire(result.values),

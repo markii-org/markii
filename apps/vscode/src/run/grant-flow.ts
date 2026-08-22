@@ -11,12 +11,18 @@
  * ## Keying
  *
  * `computeGrantKey` (`@markii/runtime`) hashes the note's executable
- * closure — for a bare `.mk.md` note (this arc's whole scope; bundles are
- * out of scope), that closure is just its own script blocks
+ * closure — that closure is just its own script blocks
  * (`RunRequirements.grantScripts`), with empty `bundleModules`/
- * `vaultModules`/`packs`. Any edit to any script's code changes the hash,
- * which is what makes "any code change re-prompts" fall out of the keying
- * scheme for free rather than needing its own diffing logic here.
+ * `vaultModules`/`packs`: `require` (bundle-local or pack) stays unwired
+ * for the whole `.mkz` Run-path arc (GitHub issue #9's design comment), so
+ * a bundle-backed run's closure is no richer than a bare `.mk.md` note's.
+ * Any edit to any script's code changes the hash, which is what makes "any
+ * code change re-prompts" fall out of the keying scheme for free rather
+ * than needing its own diffing logic here. The bundle-fs grants a
+ * manifest declares (`GrantFlowRequirements.bundleFsGrants`) are NOT part
+ * of this key — they ride along the same key/miss cycle as the net hosts
+ * do (re-derived and re-prompted together on any script-code change), see
+ * `runGrantFlow`'s own comment.
  *
  * ## Storage
  *
@@ -62,12 +68,23 @@ import {
   type GrantClosure,
   type GrantClosureScript,
 } from '@markii/runtime';
+import type { BundleFsGrant } from '@markii/bundle';
 
 /** The subset of `RunRequirements` (`./script-requirements.ts`) this flow needs — kept structural rather than importing the whole interface, so a fake in tests doesn't need to fabricate `scripts`. */
 export interface GrantFlowRequirements {
   readonly hosts: readonly string[];
   readonly hasUnknownHosts: boolean;
   readonly grantScripts: readonly GrantClosureScript[];
+  /**
+   * Bundle-fs grants (`'read'` / `'write:cache/'`) the note's manifest
+   * DECLARES wanting (GitHub issue #9's design comment: "a bundle prompts
+   * for what it declares"). Omitted or empty for a bare `.mk.md` document,
+   * or a bundle whose manifest declares no bundle-fs permissions at all —
+   * either way, `runGrantFlow` never prompts for bundle access and
+   * `allowedBundleGrants` comes back empty. Declaring is not granting: this
+   * is only ever the manifest's ASK, never itself a capability.
+   */
+  readonly bundleFsGrants?: readonly BundleFsGrant[];
 }
 
 /**
@@ -103,6 +120,11 @@ export type PromptUnknownHosts = () => Promise<boolean>;
 /** Prompts once for the consolidated "many hosts" gate (PROMPT-STORM fix) — resolves `true` for Allow all, `false` for Deny all. */
 export type PromptManyHosts = (hostCount: number) => Promise<boolean>;
 
+/** Prompts once, all-or-nothing, for the bundle-fs grants (`'read'` / `'write:cache/'`) a manifest declares — resolves `true` for Allow, `false` for Don't allow. */
+export type PromptBundleAccess = (
+  grants: readonly BundleFsGrant[],
+) => Promise<boolean>;
+
 export interface GrantFlowOptions {
   /** Stable identity for the note this run belongs to — `vscode.Uri.toString()` of the document, in the real adapter. */
   documentKey: string;
@@ -112,11 +134,21 @@ export interface GrantFlowOptions {
   promptUnknownHosts: PromptUnknownHosts;
   /** Consolidated gate used instead of the per-host loop once the distinct static host count exceeds `MAX_HOST_PROMPTS` — see that constant's doc comment. */
   promptManyHosts: PromptManyHosts;
+  /**
+   * Prompts for `requirements.bundleFsGrants`, when non-empty. Optional:
+   * a bare `.mk.md` caller (or any test that never populates
+   * `bundleFsGrants`) simply never needs it — if `bundleFsGrants` is
+   * non-empty and this is omitted, the omission is treated as a silent
+   * decline (fail-safe), never as an implicit grant.
+   */
+  promptBundleAccess?: PromptBundleAccess;
 }
 
 export interface GrantFlowResult {
   /** The hostnames this run's `net.*` calls may reach — exactly what `spawnRun`'s `netAllowlist` (`./run-host.ts`) expects. */
   allowedHosts: string[];
+  /** The bundle-fs grants the user actually allowed this run — exactly what `spawnRun`'s `bundle.grantedBundlePermissions` (`./run-host.ts`) expects. `@markii/bundle`'s `createScriptView` still intersects this with the manifest's own declaration; this is the USER half of that intersection, never the manifest's alone. */
+  allowedBundleGrants: BundleFsGrant[];
 }
 
 /** Exact prompt wording — normative per the locked design comment. Exported so a test (and the adapter that renders it) both anchor on the same string. */
@@ -164,11 +196,30 @@ export function manyHostsPromptMessage(hostCount: number): string {
   return `This note requests network access to many hosts (${hostCount}). Allow all or deny all?`;
 }
 
+/** Exact wording of the bundle-fs access gate — normative, same test-anchored pattern as `hostPromptMessage`. */
+export function bundleAccessPromptMessage(
+  grants: readonly BundleFsGrant[],
+): string {
+  return `This note's scripts request bundle file access (${grants.join(', ')}). Allow?`;
+}
+
 const GRANTS_STORAGE_KEY = 'markii.netGrants';
+
+const KNOWN_BUNDLE_FS_GRANTS = new Set<string>(['read', 'write:cache/']);
+
+function isBundleFsGrant(value: unknown): value is BundleFsGrant {
+  return typeof value === 'string' && KNOWN_BUNDLE_FS_GRANTS.has(value);
+}
 
 interface StoredGrant {
   readonly key: string;
   readonly allowedHosts: readonly string[];
+  /**
+   * Absent on any grant stored before this field existed (or one for a
+   * bare `.mk.md` document, which never has bundle grants to ask about) —
+   * treated identically to an empty array everywhere this is read.
+   */
+  readonly allowedBundleGrants?: readonly string[];
 }
 
 function hasOwn(value: object, key: string): boolean {
@@ -190,6 +241,14 @@ function isStoredGrant(value: unknown): value is StoredGrant {
   ) {
     return false;
   }
+  if (
+    hasOwn(value, 'allowedBundleGrants') &&
+    value.allowedBundleGrants !== undefined &&
+    (!Array.isArray(value.allowedBundleGrants) ||
+      !value.allowedBundleGrants.every((grant) => typeof grant === 'string'))
+  ) {
+    return false;
+  }
   return true;
 }
 
@@ -202,10 +261,24 @@ function readAllGrants(memento: GrantMemento): Record<string, unknown> {
  * A `readGrant` result annotated with whether re-validation dropped
  * anything (N-6, PENTEST-REPORT-2026-08-23.md).
  */
+/** A `StoredGrant` after every field has been re-validated against today's rules (`isSafeHostForPrompt`/`isBundleFsGrant`) — stricter than the raw `StoredGrant` shape a `Memento` can hand back. */
+interface ValidatedGrant {
+  readonly key: string;
+  readonly allowedHosts: readonly string[];
+  readonly allowedBundleGrants: readonly BundleFsGrant[];
+}
+
 interface ReadGrantResult {
-  readonly grant: StoredGrant;
+  readonly grant: ValidatedGrant;
   /** `true` when at least one stored host failed today's `isSafeHostForPrompt` re-check and was dropped. */
   readonly droppedUnsafeHost: boolean;
+}
+
+/** Every stored bundle grant that survives re-validation against today's known grant vocabulary (`'read'` / `'write:cache/'`) — a foreign/stale/hand-edited entry is dropped, mirroring `isSafeHostForPrompt`'s re-check for hosts. */
+function safeBundleGrants(
+  candidate: readonly string[] | undefined,
+): BundleFsGrant[] {
+  return (candidate ?? []).filter(isBundleFsGrant);
 }
 
 /**
@@ -230,9 +303,16 @@ function readGrant(
   if (!isStoredGrant(candidate)) return undefined;
 
   const safeHosts = candidate.allowedHosts.filter(isSafeHostForPrompt);
+  const bundleGrants = safeBundleGrants(candidate.allowedBundleGrants);
   return {
-    grant: { key: candidate.key, allowedHosts: safeHosts },
-    droppedUnsafeHost: safeHosts.length !== candidate.allowedHosts.length,
+    grant: {
+      key: candidate.key,
+      allowedHosts: safeHosts,
+      allowedBundleGrants: bundleGrants,
+    },
+    droppedUnsafeHost:
+      safeHosts.length !== candidate.allowedHosts.length ||
+      bundleGrants.length !== (candidate.allowedBundleGrants ?? []).length,
   };
 }
 
@@ -325,7 +405,10 @@ export async function runGrantFlow(
     promptHost,
     promptUnknownHosts,
     promptManyHosts,
+    promptBundleAccess,
   } = options;
+
+  const declaredBundleGrants = requirements.bundleFsGrants ?? [];
 
   const key = await computeGrantKey(closureFrom(requirements));
   const stored = readGrant(memento, documentKey);
@@ -337,7 +420,10 @@ export async function runGrantFlow(
   // requirements and, once answered, overwrites the untrusted record via
   // the normal `writeGrant` call at the end of this function.
   if (stored && stored.grant.key === key && !stored.droppedUnsafeHost) {
-    return { allowedHosts: [...stored.grant.allowedHosts] };
+    return {
+      allowedHosts: [...stored.grant.allowedHosts],
+      allowedBundleGrants: [...(stored.grant.allowedBundleGrants ?? [])],
+    };
   }
 
   const { safeHosts, needsUnknownPrompt } = partitionHosts(
@@ -375,6 +461,18 @@ export async function runGrantFlow(
     }
   }
 
+  // Bundle-fs access (GitHub issue #9's design comment): exactly one
+  // all-or-nothing gate, asked only when the manifest actually declares
+  // wanting bundle-fs access at all. Declining, or `promptBundleAccess`
+  // being unavailable while something was declared, is a plain denial —
+  // never an implicit grant (fail-safe, same posture as every other prompt
+  // in this flow).
+  let allowedBundleGrants: BundleFsGrant[] = [];
+  if (declaredBundleGrants.length > 0 && promptBundleAccess) {
+    const allowed = await promptBundleAccess(declaredBundleGrants);
+    if (allowed) allowedBundleGrants = [...declaredBundleGrants];
+  }
+
   // C-3: a FULL decline (no host ended up allowed) is deliberately NOT
   // persisted. Persisting `{key, allowedHosts: []}` would otherwise disable
   // network for this note's exact current code FOREVER — a single
@@ -388,14 +486,15 @@ export async function runGrantFlow(
   // allowed) is still persisted normally, and `clearGrantForDocument` below
   // gives an explicit way to revoke a persisted grant when the user wants a
   // fresh prompt without changing the note's code.
-  if (finalAllowedHosts.length > 0) {
+  if (finalAllowedHosts.length > 0 || allowedBundleGrants.length > 0) {
     await writeGrant(memento, documentKey, {
       key,
       allowedHosts: finalAllowedHosts,
+      allowedBundleGrants,
     });
   }
 
-  return { allowedHosts: finalAllowedHosts };
+  return { allowedHosts: finalAllowedHosts, allowedBundleGrants };
 }
 
 /**

@@ -1,5 +1,9 @@
 import * as vscode from 'vscode';
-import type { BundleStorage } from '@markii/bundle';
+import type {
+  BundleFsGrant,
+  BundleManifest,
+  BundleStorage,
+} from '@markii/bundle';
 import { openZipBundle } from '@markii/bundle';
 import { openDirBundle } from '@markii/bundle/fs';
 import {
@@ -22,12 +26,19 @@ import {
   ALLOW_LABEL,
   DONT_ALLOW_LABEL,
   UNKNOWN_HOSTS_PROMPT_MESSAGE,
+  bundleAccessPromptMessage,
   clearGrantForDocument,
   hostPromptMessage,
   manyHostsPromptMessage,
 } from './run/grant-flow.js';
 import { spawnRun } from './run/run-host.js';
 import { runOnce } from './run/run-flow.js';
+import {
+  buildBundleSnapshot,
+  decodeBundleCacheFromStorage,
+  encodeBundleCacheForStorage,
+  withPersistedCache,
+} from './run/bundle-run.js';
 
 /**
  * Imports `vscode` — deliberately NOT unit-tested (vitest cannot resolve
@@ -61,13 +72,42 @@ const DEBOUNCE_MS = 200; // matches apps/playground/src/App.tsx's DEBOUNCE_MS
  * resolved into something previewable at all (AGENTS.md's cleanliness
  * principle: a message in the preview, never a crash or a dump).
  */
+/**
+ * Slice 2 of the `.mkz` Run-path arc (GitHub issue #9): what a bundle-backed
+ * `document`/`bundle-archive` source needs for `markii.runScripts` to run
+ * its scripts with the bundle-fs capability — see that command's own doc
+ * comment. `rootDir` (directory form) lets a run persist `.cache/` writes
+ * straight back into the bundle directory on disk; `storage`/`identity`
+ * (zip form) let a run reuse the already-open in-memory archive and
+ * persist `.cache/` writes to extension storage keyed by the archive's own
+ * identity, without ever rewriting the user's zip file.
+ */
+type BundleRunContext =
+  | {
+      readonly form: 'directory';
+      readonly manifest: BundleManifest;
+      readonly rootDir: string;
+    }
+  | {
+      readonly form: 'zip';
+      readonly manifest: BundleManifest;
+      readonly storage: BundleStorage;
+      readonly identity: string;
+    };
+
 type PreviewSource =
-  | { readonly kind: 'document'; document: vscode.TextDocument }
+  | {
+      readonly kind: 'document';
+      document: vscode.TextDocument;
+      /** Set only for a directory-form bundle's contained document — absent for a plain, bundle-free `.mk.md` file. */
+      readonly bundle?: Extract<BundleRunContext, { form: 'directory' }>;
+    }
   | {
       readonly kind: 'bundle-archive';
       readonly text: string;
       readonly assets: Readonly<Record<string, string>>;
       readonly title: string;
+      readonly bundle: Extract<BundleRunContext, { form: 'zip' }>;
     }
   | {
       readonly kind: 'bundle-error';
@@ -264,11 +304,27 @@ function setHtml(
  * and could stomp the new document's content with stale text — then posts
  * the new document's text right away.
  */
+/** The current source's bundle context, when `document` is the exact same document that source is already showing — used so a plain document-navigation helper (reveal-again, follow-the-editor) never silently drops a directory-form bundle's run context just by re-deriving a fresh `{kind: 'document', document}` source. */
+function preservedBundleContext(
+  source: PreviewSource,
+  document: vscode.TextDocument,
+): Extract<PreviewSource, { kind: 'document' }>['bundle'] | undefined {
+  return source.kind === 'document' &&
+    source.document.uri.toString() === document.uri.toString()
+    ? source.bundle
+    : undefined;
+}
+
 function switchDocument(
   preview: ActivePreview,
   document: vscode.TextDocument,
 ): void {
-  preview.source = { kind: 'document', document };
+  const bundle = preservedBundleContext(preview.source, document);
+  preview.source = {
+    kind: 'document',
+    document,
+    ...(bundle ? { bundle } : {}),
+  };
   preview.debouncer.cancel();
   postUpdate(preview);
 }
@@ -298,6 +354,7 @@ function retargetToDocument(
     return;
   }
 
+  const bundle = preservedBundleContext(preview.source, document);
   const viewColumn = preview.panel.viewColumn;
   // Disposing runs the panel's own `onDidDispose` synchronously, which
   // clears `active` and unhooks every listener — including, possibly, the
@@ -305,7 +362,11 @@ function retargetToDocument(
   // subscription during its own callback is supported), and `createPreview`
   // below immediately installs a fresh `active`.
   preview.panel.dispose();
-  createPreview(context, { kind: 'document', document }, viewColumn);
+  createPreview(
+    context,
+    { kind: 'document', document, ...(bundle ? { bundle } : {}) },
+    viewColumn,
+  );
 }
 
 function activePreviewableDocument(): vscode.TextDocument | undefined {
@@ -517,7 +578,15 @@ async function openDirectoryBundle(
   }
 
   await vscode.window.showTextDocument(document, { preview: false });
-  presentSource(context, { kind: 'document', document });
+  presentSource(context, {
+    kind: 'document',
+    document,
+    bundle: {
+      form: 'directory',
+      manifest: resolution.manifest,
+      rootDir: bundleUri.fsPath,
+    },
+  });
 }
 
 /**
@@ -586,6 +655,12 @@ async function openZipBundleArchive(
     text: resolution.text,
     assets,
     title: bundlePreviewTitleFor(bundleName, true),
+    bundle: {
+      form: 'zip',
+      manifest: resolution.manifest,
+      storage,
+      identity: bundleUri.toString(),
+    },
   });
 }
 
@@ -680,17 +755,37 @@ async function promptManyHostsAdapter(hostCount: number): Promise<boolean> {
   return choice === ALLOW_LABEL;
 }
 
+/** Prompts once, all-or-nothing, for a bundle's declared bundle-fs grants (`run/grant-flow.ts`'s `bundleAccessPromptMessage`). */
+async function promptBundleAccessAdapter(
+  grants: readonly BundleFsGrant[],
+): Promise<boolean> {
+  const choice = await vscode.window.showInformationMessage(
+    bundleAccessPromptMessage(grants),
+    { modal: true },
+    ALLOW_LABEL,
+    DONT_ALLOW_LABEL,
+  );
+  return choice === ALLOW_LABEL;
+}
+
 /**
  * The `markii.runScripts` command handler: runs the currently previewed
  * document's scripts once (grant flow, then `spawnRun`) and posts the
  * outcome to the panel as a `values` message.
  *
  * A press that arrives while no preview is open, while a previous press is
- * still running, or while the preview is showing a bundle-derived source
- * (`bundle-archive`/`bundle-error` — this slice does not run bundle
- * scripts at all, see AGENTS.md's session-scoped task description) is a
- * no-op. See `ActivePreview.running`'s doc comment for why a running press
- * is "ignore", not "cancel and restart".
+ * still running, or while the preview is showing a `bundle-error` source
+ * (nothing resolved well enough to run) is a no-op. See
+ * `ActivePreview.running`'s doc comment for why a running press is
+ * "ignore", not "cancel and restart".
+ *
+ * Slice 2 of the `.mkz` Run-path arc (GitHub issue #9): a bundle-backed
+ * `document` source (a directory-form bundle's contained `note.mk.md`) and
+ * a `bundle-archive` source (a read-only zip form, run entirely in memory)
+ * both run their scripts with the bundle-fs capability wired in —
+ * `bundleOptionsFor` below builds each form's `buildSnapshot`/
+ * `persistCacheOut` pair; a plain, bundle-free `document` source runs
+ * exactly as slice 1 left it, with no `bundle` option at all.
  *
  * The result is tagged with the revision captured BEFORE `runOnce`'s own
  * awaits (the grant prompts and the run itself can each take a while, and
@@ -709,18 +804,82 @@ async function promptManyHostsAdapter(hostCount: number): Promise<boolean> {
  * and `preview.running` is always cleared in `finally` regardless of which
  * path was taken.
  */
+/** The `vscode.Memento` key a zip-form bundle's persisted `.cache/` state lives under, keyed by the archive's own identity (its URI string) — never the user's zip file itself, see this file's design comment on `BundleRunContext`. */
+function bundleCacheStorageKeyFor(identity: string): string {
+  return `markii.bundleCache:${identity}`;
+}
+
+/**
+ * Builds `runOnce`'s optional `bundle` option for a bundle-backed source —
+ * `undefined` for a plain, bundle-free `document`. Directory form reads and
+ * persists straight through `@markii/bundle`'s `openDirBundle` (itself
+ * symlink/hard-link-safe, see `packages/markii-bundle/src/fs.ts`), so
+ * `.cache/` writes land back in the bundle directory on disk exactly like
+ * any other bundle write. Zip form never touches the user's archive: its
+ * snapshot is built from the ALREADY-OPEN in-memory `storage` this preview
+ * was created from, overlaid with whatever `.cache/` state a PRIOR run
+ * persisted to extension storage (`decodeBundleCacheFromStorage`), and a
+ * run's own `.cache/` output is written back to that same extension
+ * storage, keyed by the archive's identity.
+ */
+function bundleOptionsFor(
+  context: vscode.ExtensionContext,
+  bundle: BundleRunContext,
+): Parameters<typeof runOnce>[0]['bundle'] {
+  if (bundle.form === 'directory') {
+    const rootDir = bundle.rootDir;
+    return {
+      manifest: bundle.manifest,
+      buildSnapshot: async () => {
+        const { files } = await buildBundleSnapshot(openDirBundle(rootDir));
+        return files;
+      },
+      persistCacheOut: async (cacheOut) => {
+        const storage = openDirBundle(rootDir);
+        for (const [path, bytes] of Object.entries(cacheOut)) {
+          await storage.write(path, bytes);
+        }
+      },
+    };
+  }
+
+  const { storage, identity } = bundle;
+  const cacheKey = bundleCacheStorageKeyFor(identity);
+  return {
+    manifest: bundle.manifest,
+    buildSnapshot: async () => {
+      const { files } = await buildBundleSnapshot(storage);
+      const persisted = decodeBundleCacheFromStorage(
+        context.workspaceState.get(cacheKey),
+      );
+      return withPersistedCache(files, persisted);
+    },
+    persistCacheOut: async (cacheOut) => {
+      const encoded = encodeBundleCacheForStorage(cacheOut);
+      await context.workspaceState.update(cacheKey, encoded);
+    },
+  };
+}
+
 export async function runScripts(
   context: vscode.ExtensionContext,
 ): Promise<void> {
   const preview = active;
   if (!preview || preview.running) return;
-  if (preview.source.kind !== 'document') return;
+  const source = preview.source;
+  if (source.kind === 'bundle-error') return;
 
   preview.running = true;
   const revision = preview.revision;
-  const document = preview.source.document;
-  const documentKey = document.uri.toString();
-  const text = document.getText();
+  const text =
+    source.kind === 'document' ? source.document.getText() : source.text;
+  const documentKey =
+    source.kind === 'document'
+      ? source.document.uri.toString()
+      : source.bundle.identity;
+  const bundleOptions = source.bundle
+    ? bundleOptionsFor(context, source.bundle)
+    : undefined;
 
   try {
     const result = await runOnce({
@@ -730,8 +889,10 @@ export async function runScripts(
       promptHost: promptHostAdapter,
       promptUnknownHosts: promptUnknownHostsAdapter,
       promptManyHosts: promptManyHostsAdapter,
+      promptBundleAccess: promptBundleAccessAdapter,
       spawnRun,
       timeoutMs: RUN_TIMEOUT_MS,
+      ...(bundleOptions ? { bundle: bundleOptions } : {}),
     });
 
     // The panel may have been disposed (or replaced by a fresh one — see
