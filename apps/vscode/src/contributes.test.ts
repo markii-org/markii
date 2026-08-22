@@ -102,6 +102,30 @@ describe('contributes.menus — editor title button', () => {
   });
 });
 
+describe('contributes.menus — explorer context (bundle preview)', () => {
+  it('offers the preview command for .mkz and .mkbundle resources, but not plain .mk.md', () => {
+    const menus = asRecord(contributes.menus, 'contributes.menus');
+    const entries = asArray(
+      menus['explorer/context'],
+      'menus["explorer/context"]',
+    )
+      .map((entry) => asRecord(entry, 'menus["explorer/context"][]'))
+      .filter((entry) => entry.command === COMMAND);
+    expect(entries).toHaveLength(1);
+
+    const when = asString(entries[0]?.when, 'explorer/context entry when');
+    const match = /resourceFilename\s*=~\s*\/(.+?)\/i(?=\s|$|\))/.exec(when);
+    expect(match).not.toBeNull();
+    const pattern = new RegExp(match?.[1] ?? '', 'i');
+
+    expect(pattern.test('note.mkz')).toBe(true);
+    expect(pattern.test('note.MKZ')).toBe(true);
+    expect(pattern.test('note.mkbundle')).toBe(true);
+    expect(pattern.test('note.mk.md')).toBe(false);
+    expect(pattern.test('note.zip')).toBe(false);
+  });
+});
+
 describe('contributes.keybindings — Ctrl+Shift+V', () => {
   it('binds ctrl+shift+v, with cmd+shift+v on macOS', () => {
     const entry = keybindingEntry();

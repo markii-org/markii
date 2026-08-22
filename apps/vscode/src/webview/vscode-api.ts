@@ -14,6 +14,10 @@ export interface PersistedState {
   readonly revision: number;
   /** The last `baseUri` this webview was given (`protocol.ts`), so a rehydrated preview resolves relative images correctly in the instant before the host's re-post arrives. Absent for a document with no folder. */
   readonly baseUri?: string;
+  /** The last embedded bundle-asset map this webview was given (`protocol.ts`'s `UpdateMessage.assets`), for the same rehydration reason as `baseUri`. Absent outside a read-only zip-form bundle preview. */
+  readonly assets?: Readonly<Record<string, string>>;
+  /** Whether the currently displayed document is a read-only zip-form bundle preview (`protocol.ts`'s `UpdateMessage.readOnly`). */
+  readonly readOnly?: boolean;
 }
 
 /** The subset of the real `acquireVsCodeApi()` return value this extension uses. */
@@ -62,6 +66,26 @@ function isPersistedState(value: unknown): value is PersistedState {
     hasOwn(value, 'baseUri') &&
     value.baseUri !== undefined &&
     !isSafeBaseUri(value.baseUri)
+  ) {
+    return false;
+  }
+  // Same "never trust persisted state as-is" posture as `baseUri` above,
+  // but not re-running `protocol.ts`'s full `data:` URI check (private to
+  // that module): a merely SHAPE-invalid `assets`/`readOnly` degrades to no
+  // persisted state at all, same as any other malformed field here — it is
+  // not this function's job to re-validate the URIs themselves.
+  if (
+    hasOwn(value, 'assets') &&
+    value.assets !== undefined &&
+    (!isPlainObject(value.assets) ||
+      !Object.values(value.assets).every((v) => typeof v === 'string'))
+  ) {
+    return false;
+  }
+  if (
+    hasOwn(value, 'readOnly') &&
+    value.readOnly !== undefined &&
+    typeof value.readOnly !== 'boolean'
   ) {
     return false;
   }

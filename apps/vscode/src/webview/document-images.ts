@@ -51,25 +51,54 @@ function hasScheme(value: string): boolean {
 }
 
 /**
- * The absolute form of a document-relative `value`, or `undefined` when
- * `value` must be left untouched — which covers every case that is already
- * resolvable on its own: an absolute URL (`https://…`, `data:…`), a
- * protocol-relative `//host/…`, a bare fragment `#…`, an empty/whitespace
- * source, and any value at all when no `baseUri` is known (an unsaved
- * document has no folder). A `baseUri` that fails to parse yields
- * `undefined` too, so a bad base degrades to today's behavior rather than
- * throwing mid-render.
+ * Normalizes a relative image `src` into the key form
+ * `extractAssetsAsDataUris` (`bundle-resolve.ts`) uses for its map: strips
+ * any leading `./` segments and a leading `/`, so `assets/a.png`,
+ * `./assets/a.png`, and `/assets/a.png` all look up the same entry. Never
+ * resolves `..` — a lookup key containing one simply won't be in the map
+ * (the map is built only from paths a jailed `BundleStorage.list()` ever
+ * returned), so a traversal attempt fails closed by construction rather
+ * than by an extra check here.
+ */
+function assetLookupKey(value: string): string {
+  let result = value;
+  while (result.startsWith('./')) result = result.slice(2);
+  while (result.startsWith('/')) result = result.slice(1);
+  return result;
+}
+
+/**
+ * The absolute (or embedded) form of a document-relative `value`, or
+ * `undefined` when `value` must be left untouched — which covers every case
+ * that is already resolvable on its own: an absolute URL (`https://…`,
+ * `data:…`), a protocol-relative `//host/…`, a bare fragment `#…`, an
+ * empty/whitespace source, and any value at all when neither `baseUri` nor
+ * `assets` is known (an unsaved document, or a read-only zip-form bundle
+ * preview with no matching embedded asset).
+ *
+ * `assets` (a read-only zip-form bundle's embedded images, see
+ * `protocol.ts`'s `UpdateMessage.assets`) is tried FIRST when present: a zip
+ * bundle preview has no real folder for `baseUri` to point at, so a
+ * document-relative image can only ever come from the embedded map. A
+ * `baseUri` that fails to parse yields `undefined` too, so a bad base
+ * degrades to today's behavior rather than throwing mid-render.
  */
 export function resolveDocumentUrl(
   value: string,
   baseUri: string | undefined,
+  assets?: Readonly<Record<string, string>>,
 ): string | undefined {
-  if (baseUri === undefined) return undefined;
   if (value.trim() === '') return undefined;
   if (value.startsWith('#')) return undefined;
   if (value.startsWith('//')) return undefined;
   if (hasScheme(value)) return undefined;
 
+  if (assets !== undefined) {
+    const hit = assets[assetLookupKey(value)];
+    if (hit !== undefined) return hit;
+  }
+
+  if (baseUri === undefined) return undefined;
   try {
     return new URL(value, baseUri).toString();
   } catch {
@@ -78,9 +107,9 @@ export function resolveDocumentUrl(
 }
 
 /**
- * Rewrites every relative `<img src>` inside `container` to its absolute
- * form under `baseUri`. Idempotent: a second pass sees absolute sources and
- * leaves them alone.
+ * Rewrites every relative `<img src>` inside `container` to its absolute (or
+ * embedded-asset) form under `baseUri`/`assets`. Idempotent: a second pass
+ * sees absolute sources and leaves them alone.
  *
  * Called from an effect after each render (`preview.tsx`). React writes the
  * relative `src` first and this runs immediately after, so the browser may
@@ -92,11 +121,12 @@ export function resolveDocumentUrl(
 export function applyDocumentBase(
   container: ParentNode,
   baseUri: string | undefined,
+  assets?: Readonly<Record<string, string>>,
 ): void {
   for (const image of container.querySelectorAll('img')) {
     const source = image.getAttribute('src');
     if (source === null) continue;
-    const resolved = resolveDocumentUrl(source, baseUri);
+    const resolved = resolveDocumentUrl(source, baseUri, assets);
     if (resolved !== undefined && resolved !== source) {
       image.setAttribute('src', resolved);
     }

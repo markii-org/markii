@@ -1,4 +1,17 @@
 import * as vscode from 'vscode';
+import type { BundleStorage } from '@markii/bundle';
+import { openZipBundle } from '@markii/bundle';
+import { openDirBundle } from '@markii/bundle/fs';
+import {
+  bundlePreviewTitleFor,
+  classifyBundleTarget,
+} from './bundle-target.js';
+import {
+  bundleResolutionFailureMessage,
+  extractAssetsAsDataUris,
+  resolveBundleDocument,
+} from './bundle-resolve.js';
+import type { BundleResolution } from './bundle-resolve.js';
 import { createDebouncer } from './debounce.js';
 import { isPreviewableDocument, previewTitleFor } from './mark-document.js';
 import { isWebviewToHostMessage } from './protocol.js';
@@ -20,8 +33,8 @@ import { runOnce } from './run/run-flow.js';
  * Imports `vscode` — deliberately NOT unit-tested (vitest cannot resolve
  * `vscode`), per the extension's file-scope split. Every piece of logic
  * worth testing in isolation (message validation, debouncing, document
- * classification, HTML/CSP construction) already lives in the plain
- * modules imported above; this file is wiring only.
+ * classification, bundle resolution, HTML/CSP construction) already lives
+ * in the plain modules imported above; this file is wiring and I/O only.
  */
 
 const VIEW_TYPE = 'markii.preview';
@@ -37,11 +50,36 @@ const PREVIEW_ACTIVE_CONTEXT_KEY = 'markii.previewActive';
 const DOCUMENT_TITLE = 'Markii Preview';
 const DEBOUNCE_MS = 200; // matches apps/playground/src/App.tsx's DEBOUNCE_MS
 
+/**
+ * What the preview panel is currently showing. `document` is the ordinary
+ * v1 case (a plain `.mk.md` file OR a directory-form bundle's contained
+ * `note.mk.md`, which is a normal editable file either way — see
+ * `openDirectoryBundle`). `bundle-archive` is a read-only zip-form bundle:
+ * there is no editable buffer behind it, so it carries its own static text
+ * and embedded asset map instead of a `vscode.TextDocument`.
+ * `bundle-error` is the quiet degraded state for a bundle that could not be
+ * resolved into something previewable at all (AGENTS.md's cleanliness
+ * principle: a message in the preview, never a crash or a dump).
+ */
+type PreviewSource =
+  | { readonly kind: 'document'; document: vscode.TextDocument }
+  | {
+      readonly kind: 'bundle-archive';
+      readonly text: string;
+      readonly assets: Readonly<Record<string, string>>;
+      readonly title: string;
+    }
+  | {
+      readonly kind: 'bundle-error';
+      readonly title: string;
+      readonly message: string;
+    };
+
 interface ActivePreview {
   readonly panel: vscode.WebviewPanel;
-  document: vscode.TextDocument;
+  source: PreviewSource;
   revision: number;
-  /** `scheme://authority/path` keys of the `localResourceRoots` this panel was created with — see `retargetPreview`. Fixed for the panel's whole life, because `localResourceRoots` itself is. */
+  /** `scheme://authority/path` keys of the `localResourceRoots` this panel was created with — see `retargetToDocument`. Fixed for the panel's whole life, because `localResourceRoots` itself is. */
   readonly rootKeys: readonly string[];
   readonly debouncer: ReturnType<typeof createDebouncer<void>>;
   /**
@@ -71,25 +109,39 @@ function documentFolder(document: vscode.TextDocument): vscode.Uri | undefined {
   return vscode.Uri.joinPath(document.uri, '..');
 }
 
+/** The last path segment of a URI's path, or `''` for one with none. */
+function baseName(uri: vscode.Uri): string {
+  return uri.path.split('/').pop() ?? '';
+}
+
+/** The tab title for `source`, before any per-update refresh (`postUpdate` re-sets the same value on every message, since a document's own base name can change under a save-as). */
+function titleForSource(source: PreviewSource): string {
+  return source.kind === 'document'
+    ? previewTitleFor(source.document.uri.path)
+    : source.title;
+}
+
 /**
  * The panel's `localResourceRoots`: the bundled webview assets, every
- * workspace folder, and the previewed document's own folder.
+ * workspace folder, and (for a `document` source) the previewed document's
+ * own folder — which, for a directory-form bundle, IS the bundle root, so
+ * `assets/nice.png` resolves exactly like any other relative image with no
+ * extra code (see `openDirectoryBundle`). A `bundle-archive`/`bundle-error`
+ * source needs no extra root: its images (if any) arrive pre-embedded as
+ * `data:` URIs (`protocol.ts`'s `UpdateMessage.assets`), not served as
+ * local files.
  *
  * DECISION — roots are set BROADLY at creation, and the panel is recreated
- * (`retargetPreview`) only when the preview follows the editor somewhere no
- * root covers. `localResourceRoots` cannot be widened after creation, so the
- * alternatives were: (a) recreate the panel on every document switch —
+ * (`retargetToDocument`) only when the preview follows the editor somewhere
+ * no root covers. `localResourceRoots` cannot be widened after creation, so
+ * the alternatives were: (a) recreate the panel on every document switch —
  * correct but visibly destroys and rebuilds the preview constantly; (b)
  * grant a very wide root such as the file-system root — one line, and an
  * open door from any previewed note to any file on the machine; (c) this.
- * Including all workspace folders means the common cases (a note in the open
- * project, a multi-root workspace) never recreate anything, while a note
- * opened from outside the workspace costs exactly one recreation and gets
- * its own folder — and nothing beyond it — added.
  */
 function localResourceRootsFor(
   context: vscode.ExtensionContext,
-  document: vscode.TextDocument,
+  source: PreviewSource,
 ): vscode.Uri[] {
   const roots: vscode.Uri[] = [
     vscode.Uri.joinPath(context.extensionUri, 'dist', 'webview'),
@@ -97,8 +149,10 @@ function localResourceRootsFor(
   for (const folder of vscode.workspace.workspaceFolders ?? []) {
     roots.push(folder.uri);
   }
-  const folder = documentFolder(document);
-  if (folder) roots.push(folder);
+  if (source.kind === 'document') {
+    const folder = documentFolder(source.document);
+    if (folder) roots.push(folder);
+  }
   return roots;
 }
 
@@ -112,24 +166,43 @@ function localResourceRootsFor(
 let active: ActivePreview | undefined;
 
 /**
- * Sends the tracked document's current text as a fresh `update`, bumping
- * `revision` first so every message this extension ever sends is
- * monotonically numbered — `isNewerRevision` (`protocol.ts`) on the webview
- * side relies on that to ignore anything older than what it already
- * rendered.
+ * Sends the panel's current source as a fresh message, bumping `revision`
+ * first so every message this extension ever sends is monotonically
+ * numbered — `isNewerRevision` (`protocol.ts`) on the webview side relies on
+ * that to ignore anything older than what it already rendered.
  */
 function postUpdate(preview: ActivePreview): void {
-  // The tab is renamed with every post rather than only on switch: the
-  // panel follows the active editor, so its title is the only place a
-  // reader can see WHICH document is on screen (an unsaved buffer can also
-  // be renamed under us by a save).
-  preview.panel.title = previewTitleFor(preview.document.uri.path);
   preview.revision += 1;
-  const baseUri = baseUriFor(preview);
+  preview.panel.title = titleForSource(preview.source);
+  const source = preview.source;
+
+  if (source.kind === 'bundle-error') {
+    const message: HostToWebviewMessage = {
+      type: 'bundle-error',
+      revision: preview.revision,
+      message: source.message,
+    };
+    void preview.panel.webview.postMessage(message);
+    return;
+  }
+
+  if (source.kind === 'bundle-archive') {
+    const message: HostToWebviewMessage = {
+      type: 'update',
+      revision: preview.revision,
+      text: source.text,
+      assets: source.assets,
+      readOnly: true,
+    };
+    void preview.panel.webview.postMessage(message);
+    return;
+  }
+
+  const baseUri = baseUriForDocument(source.document, preview);
   const message: HostToWebviewMessage = {
     type: 'update',
     revision: preview.revision,
-    text: preview.document.getText(),
+    text: source.document.getText(),
     // Spread rather than `baseUri: undefined`: `postMessage`'s structured
     // clone preserves an own property whose value is `undefined`, and the
     // wire format says a document with no folder OMITS the field.
@@ -139,14 +212,17 @@ function postUpdate(preview: ActivePreview): void {
 }
 
 /**
- * The webview-visible URI of the tracked document's folder, with a trailing
- * `/` so relative sources resolve INSIDE it (see `withTrailingSlash`), or
+ * The webview-visible URI of `document`'s folder, with a trailing `/` so
+ * relative sources resolve INSIDE it (see `withTrailingSlash`), or
  * `undefined` for a document with no folder. `asWebviewUri` only ever
  * produces a loadable URL for a path inside the panel's
- * `localResourceRoots`; `retargetPreview` is what keeps that true.
+ * `localResourceRoots`; `retargetToDocument` is what keeps that true.
  */
-function baseUriFor(preview: ActivePreview): string | undefined {
-  const folder = documentFolder(preview.document);
+function baseUriForDocument(
+  document: vscode.TextDocument,
+  preview: ActivePreview,
+): string | undefined {
+  const folder = documentFolder(document);
   if (!folder) return undefined;
   return withTrailingSlash(
     preview.panel.webview.asWebviewUri(folder).toString(),
@@ -184,23 +260,25 @@ function setHtml(
  * Switches the tracked document (used both when the command re-targets an
  * already-open panel, and when the active editor changes to a different
  * previewable document): drops any in-flight debounced update for the OLD
- * document — it would otherwise arrive after this synchronous, immediate
- * post and could stomp the new document's content with stale text — then
- * posts the new document's text right away.
+ * source — it would otherwise arrive after this synchronous, immediate post
+ * and could stomp the new document's content with stale text — then posts
+ * the new document's text right away.
  */
 function switchDocument(
   preview: ActivePreview,
   document: vscode.TextDocument,
 ): void {
-  preview.document = document;
+  preview.source = { kind: 'document', document };
   preview.debouncer.cancel();
   postUpdate(preview);
 }
 
 /**
  * Points the existing preview at `document` — the one entry point for
- * changing what the panel shows, used both by the command (re-targeting an
- * open panel) and by the follow-the-active-editor listener.
+ * changing which plain document the panel shows, used by the command
+ * (re-targeting an open panel), by the follow-the-active-editor listener,
+ * and by `openDirectoryBundle` once it has resolved a bundle's contained
+ * `note.mk.md`.
  *
  * Almost always this is a plain `switchDocument`. The exception is a
  * document whose folder no `localResourceRoots` entry covers: that set is
@@ -209,7 +287,7 @@ function switchDocument(
  * same view column so the recreation reads as a refresh rather than the
  * preview jumping somewhere else.
  */
-function retargetPreview(
+function retargetToDocument(
   context: vscode.ExtensionContext,
   preview: ActivePreview,
   document: vscode.TextDocument,
@@ -227,7 +305,7 @@ function retargetPreview(
   // subscription during its own callback is supported), and `createPreview`
   // below immediately installs a fresh `active`.
   preview.panel.dispose();
-  createPreview(context, document, viewColumn);
+  createPreview(context, { kind: 'document', document }, viewColumn);
 }
 
 function activePreviewableDocument(): vscode.TextDocument | undefined {
@@ -238,17 +316,48 @@ function activePreviewableDocument(): vscode.TextDocument | undefined {
 }
 
 /**
+ * Shows `source` in the singleton preview panel: for a plain document this
+ * re-targets (or creates) the panel exactly as `markii.openPreview` always
+ * has; for a bundle-derived source (`bundle-archive`/`bundle-error`) it
+ * always creates a fresh panel — those sources have no existing
+ * `TextDocument`/folder to compare `rootKeys` against, so there is nothing
+ * to gain from trying to reuse the current panel's roots.
+ */
+function presentSource(
+  context: vscode.ExtensionContext,
+  source: PreviewSource,
+): void {
+  if (source.kind === 'document') {
+    if (active) {
+      retargetToDocument(context, active, source.document);
+      const current = active;
+      if (current) current.panel.reveal(current.panel.viewColumn, true);
+      return;
+    }
+    createPreview(context, source);
+    return;
+  }
+
+  const viewColumn = active?.panel.viewColumn;
+  active?.panel.dispose();
+  createPreview(context, source, viewColumn);
+  const current = active;
+  if (current) current.panel.reveal(current.panel.viewColumn, true);
+}
+
+/**
  * Wires up the singleton panel's full lifecycle: the ready/update
- * handshake, following text edits (debounced) and the active editor
- * (immediately), and rehydration when the panel becomes visible again.
+ * handshake, following text edits (debounced, `document` sources only) and
+ * the active editor (immediately), and rehydration when the panel becomes
+ * visible again.
  *
  * DECISION — `retainContextWhenHidden: false` plus state rehydration,
  * NOT context retention: retaining context would pin a full React + Markii
  * renderer webview in memory for the entire life of the window, but this
  * extension's ENTIRE state is one string and one revision number. Instead,
- * the webview persists `{text, revision}` via `setState` on every applied
- * update and restores it from `getState()` immediately on (re)load
- * (`webview/preview.tsx`), and this function re-posts the current text
+ * the webview persists `{text, revision, ...}` via `setState` on every
+ * applied update and restores it from `getState()` immediately on (re)load
+ * (`webview/preview.tsx`), and this function re-posts the current source
  * below whenever the panel becomes visible again (`onDidChangeViewState`)
  * — so from the user's perspective a tab switch is indistinguishable from
  * true context retention, at no standing memory cost while the panel is
@@ -256,13 +365,13 @@ function activePreviewableDocument(): vscode.TextDocument | undefined {
  */
 function createPreview(
   context: vscode.ExtensionContext,
-  document: vscode.TextDocument,
+  source: PreviewSource,
   viewColumn?: vscode.ViewColumn,
 ): void {
-  const roots = localResourceRootsFor(context, document);
+  const roots = localResourceRootsFor(context, source);
   const panel = vscode.window.createWebviewPanel(
     VIEW_TYPE,
-    previewTitleFor(document.uri.path),
+    titleForSource(source),
     {
       viewColumn: viewColumn ?? vscode.ViewColumn.Beside,
       preserveFocus: true,
@@ -278,7 +387,7 @@ function createPreview(
 
   const preview: ActivePreview = {
     panel,
-    document,
+    source,
     revision: 0,
     rootKeys: roots.map(rootKey),
     debouncer: createDebouncer<void>(DEBOUNCE_MS, () => {
@@ -305,11 +414,14 @@ function createPreview(
       }
     }),
 
-    // Text edits to the tracked document are debounced (matching the
-    // playground's own DEBOUNCE_MS) so a fast typist doesn't flood the
-    // webview with one `update` per keystroke.
+    // Text edits are debounced (matching the playground's own
+    // DEBOUNCE_MS) so a fast typist doesn't flood the webview with one
+    // `update` per keystroke. Only ever relevant for a `document` source —
+    // a `bundle-archive`/`bundle-error` source has no editor buffer to
+    // watch.
     vscode.workspace.onDidChangeTextDocument((event) => {
-      if (event.document !== preview.document) return;
+      if (preview.source.kind !== 'document') return;
+      if (event.document !== preview.source.document) return;
       preview.debouncer.schedule();
     }),
 
@@ -317,10 +429,12 @@ function createPreview(
     // files should feel instant. A non-previewable editor gaining focus
     // (an Output pane, this very preview panel, a settings UI, ...) is
     // explicitly NOT switched to — the preview keeps showing whatever it
-    // was already showing rather than ever going blank.
+    // was already showing rather than ever going blank. This also covers
+    // switching AWAY from a bundle-derived source: focusing any ordinary
+    // previewable document resumes the familiar follow-the-editor behavior.
     vscode.window.onDidChangeActiveTextEditor((editor) => {
       if (!editor || !isPreviewableDocument(editor.document)) return;
-      retargetPreview(context, preview, editor.document);
+      retargetToDocument(context, preview, editor.document);
     }),
 
     // Rehydration: `retainContextWhenHidden: false` means the webview is
@@ -347,6 +461,185 @@ function createPreview(
       false,
     );
   });
+}
+
+/** Logs a bundle-resolution failure's detail (never shown on screen — see `bundleResolutionFailureMessage`) for anyone using "Open Webview Developer Tools" or the extension host's own console. */
+function logBundleResolutionFailure(
+  bundleName: string,
+  resolution: Extract<BundleResolution, { ok: false }>,
+): void {
+  console.error(
+    `Markii: bundle "${bundleName}" failed to resolve (${resolution.reason})${
+      resolution.detail ? `: ${resolution.detail}` : ''
+    }`,
+  );
+}
+
+/**
+ * Opens the directory form of a `.mkz`/`.mkbundle` bundle: reads and
+ * validates its manifest via `@markii/bundle`'s Node `fs` storage
+ * (`openDirBundle`), resolves the document it names (or the conventional
+ * `note.mk.md`), and — because that document is a REAL file on disk —
+ * shows it through the exact same `document` preview path a plain `.mk.md`
+ * file takes. Nothing about live-edit tracking, debouncing, or relative
+ * image resolution needs bundle-specific code: `note.mk.md`'s own folder
+ * (the bundle root) already becomes this preview's `localResourceRoots`
+ * entry, so `assets/nice.png` just resolves.
+ */
+async function openDirectoryBundle(
+  bundleUri: vscode.Uri,
+  bundleName: string,
+  context: vscode.ExtensionContext,
+): Promise<void> {
+  const storage: BundleStorage = openDirBundle(bundleUri.fsPath);
+  const resolution = await resolveBundleDocument(storage);
+  if (!resolution.ok) {
+    logBundleResolutionFailure(bundleName, resolution);
+    presentSource(context, {
+      kind: 'bundle-error',
+      title: bundlePreviewTitleFor(bundleName, false),
+      message: bundleResolutionFailureMessage(resolution.reason),
+    });
+    return;
+  }
+
+  const documentUri = vscode.Uri.joinPath(bundleUri, resolution.documentPath);
+  let document: vscode.TextDocument;
+  try {
+    document = await vscode.workspace.openTextDocument(documentUri);
+  } catch {
+    presentSource(context, {
+      kind: 'bundle-error',
+      title: bundlePreviewTitleFor(bundleName, false),
+      message: "This bundle's document could not be found.",
+    });
+    return;
+  }
+
+  await vscode.window.showTextDocument(document, { preview: false });
+  presentSource(context, { kind: 'document', document });
+}
+
+/**
+ * Opens the zip form of a `.mkz`/`.mkbundle` bundle: reads the archive's
+ * bytes and hands them to `@markii/bundle`'s `openZipBundle` (which itself
+ * rejects zip-slip/collision/decompression-bomb/CRC-corrupt archives —
+ * `openZipBundle` throws, never silently drops entries), validates the
+ * manifest, resolves the document, and shows it READ-ONLY: there is no
+ * editable buffer behind an archived file, so the preview is a one-shot
+ * static render rather than a `document` source, and the panel's title
+ * carries the "(read-only)" marker (`bundlePreviewTitleFor`).
+ *
+ * A webview cannot reach into a zip archive to load an image the way it
+ * loads a real file under `localResourceRoots`, so recognized image types
+ * under `assets/` are extracted ahead of time as `data:` URIs
+ * (`extractAssetsAsDataUris`) and sent inline with the document text.
+ */
+async function openZipBundleArchive(
+  bundleUri: vscode.Uri,
+  bundleName: string,
+  context: vscode.ExtensionContext,
+): Promise<void> {
+  let bytes: Uint8Array;
+  try {
+    bytes = await vscode.workspace.fs.readFile(bundleUri);
+  } catch {
+    presentSource(context, {
+      kind: 'bundle-error',
+      title: bundlePreviewTitleFor(bundleName, true),
+      message: 'This bundle could not be read.',
+    });
+    return;
+  }
+
+  let storage: BundleStorage;
+  try {
+    storage = openZipBundle(bytes);
+  } catch (err) {
+    console.error(
+      `Markii: zip bundle "${bundleName}" rejected:`,
+      err instanceof Error ? err.message : String(err),
+    );
+    presentSource(context, {
+      kind: 'bundle-error',
+      title: bundlePreviewTitleFor(bundleName, true),
+      message:
+        'This bundle could not be opened (invalid or unsafe zip archive).',
+    });
+    return;
+  }
+
+  const resolution = await resolveBundleDocument(storage);
+  if (!resolution.ok) {
+    logBundleResolutionFailure(bundleName, resolution);
+    presentSource(context, {
+      kind: 'bundle-error',
+      title: bundlePreviewTitleFor(bundleName, true),
+      message: bundleResolutionFailureMessage(resolution.reason),
+    });
+    return;
+  }
+
+  const assets = await extractAssetsAsDataUris(storage);
+  presentSource(context, {
+    kind: 'bundle-archive',
+    text: resolution.text,
+    assets,
+    title: bundlePreviewTitleFor(bundleName, true),
+  });
+}
+
+/**
+ * Entry point for opening a preview from an explicit `uri` — the explorer
+ * context menu path (`package.json`'s `explorer/context` entry) for a
+ * `.mkz`/`.mkbundle` directory or zip file. Classifies the target
+ * (`classifyBundleTarget`) and dispatches to the matching flow; a
+ * bundle-shaped NAME that isn't actually a directory or zip (unlikely, but
+ * `stat` is the ground truth) falls back to trying it as a plain document,
+ * same as any other `uri`.
+ */
+async function openPreviewForUri(
+  context: vscode.ExtensionContext,
+  uri: vscode.Uri,
+): Promise<void> {
+  let stat: vscode.FileStat;
+  try {
+    stat = await vscode.workspace.fs.stat(uri);
+  } catch {
+    void vscode.window.showErrorMessage(
+      'Markii: could not open this item for preview.',
+    );
+    return;
+  }
+
+  const name = baseName(uri);
+  const isDirectory = (stat.type & vscode.FileType.Directory) !== 0;
+  const kind = classifyBundleTarget(name, isDirectory);
+
+  if (kind === 'directory') {
+    await openDirectoryBundle(uri, name, context);
+    return;
+  }
+  if (kind === 'zip') {
+    await openZipBundleArchive(uri, name, context);
+    return;
+  }
+  if (isDirectory) {
+    void vscode.window.showInformationMessage(
+      'Markii: this folder is not a .mkz bundle.',
+    );
+    return;
+  }
+
+  try {
+    const document = await vscode.workspace.openTextDocument(uri);
+    await vscode.window.showTextDocument(document, { preview: false });
+    presentSource(context, { kind: 'document', document });
+  } catch {
+    void vscode.window.showErrorMessage(
+      'Markii: could not open this item for preview.',
+    );
+  }
 }
 
 /** Prompts once for a specific host, with the normative modal wording (`run/grant-flow.ts`'s `hostPromptMessage`) and the Allow / Don't allow button pair. */
@@ -392,9 +685,12 @@ async function promptManyHostsAdapter(hostCount: number): Promise<boolean> {
  * document's scripts once (grant flow, then `spawnRun`) and posts the
  * outcome to the panel as a `values` message.
  *
- * A press that arrives while no preview is open, or while a previous press
- * is still running, is a no-op — see `ActivePreview.running`'s doc comment
- * for why this is "ignore", not "cancel and restart".
+ * A press that arrives while no preview is open, while a previous press is
+ * still running, or while the preview is showing a bundle-derived source
+ * (`bundle-archive`/`bundle-error` — this slice does not run bundle
+ * scripts at all, see AGENTS.md's session-scoped task description) is a
+ * no-op. See `ActivePreview.running`'s doc comment for why a running press
+ * is "ignore", not "cancel and restart".
  *
  * The result is tagged with the revision captured BEFORE `runOnce`'s own
  * awaits (the grant prompts and the run itself can each take a while, and
@@ -418,11 +714,13 @@ export async function runScripts(
 ): Promise<void> {
   const preview = active;
   if (!preview || preview.running) return;
+  if (preview.source.kind !== 'document') return;
 
   preview.running = true;
   const revision = preview.revision;
-  const documentKey = preview.document.uri.toString();
-  const text = preview.document.getText();
+  const document = preview.source.document;
+  const documentKey = document.uri.toString();
+  const text = document.getText();
 
   try {
     const result = await runOnce({
@@ -437,7 +735,7 @@ export async function runScripts(
     });
 
     // The panel may have been disposed (or replaced by a fresh one — see
-    // `retargetPreview`) while the run above was in flight; `active` no
+    // `retargetToDocument`) while the run above was in flight; `active` no
     // longer being this exact `preview` means there is nothing left to post
     // to, and touching `preview.panel` past disposal would itself throw.
     if (active !== preview) return;
@@ -457,7 +755,7 @@ export async function runScripts(
     console.error('markii.runScripts failed:', detail);
     // Quiet, stack-free message — AGENTS.md's cleanliness principle: the
     // rendered page (and its surrounding UI) shows quiet markers, never
-    // error dumps.
+    // error dumps or machinery.
     void vscode.window.showErrorMessage(
       "Markii: running this note's scripts failed.",
     );
@@ -478,7 +776,9 @@ export async function runScripts(
 export async function resetScriptGrants(
   context: vscode.ExtensionContext,
 ): Promise<void> {
-  const document = activePreviewableDocument() ?? active?.document;
+  const document =
+    activePreviewableDocument() ??
+    (active?.source.kind === 'document' ? active.source.document : undefined);
   if (!document) {
     void vscode.window.showInformationMessage(
       'Open a .mk.md document to reset its script permissions.',
@@ -493,20 +793,32 @@ export async function resetScriptGrants(
 }
 
 /**
- * The `markii.openPreview` command handler. Opens a new panel for the
- * active previewable document, or — if a panel is already open — re-targets
- * and reveals it. If nothing previewable is active and no panel exists yet,
- * informs the user instead of opening an empty/blank preview.
+ * The `markii.openPreview` command handler. With an explicit `uri` (the
+ * explorer context menu path — a `.mkz`/`.mkbundle` directory or zip file,
+ * or any other resource), delegates entirely to `openPreviewForUri`.
+ * Without one (the command palette / title-bar-button / keybinding paths),
+ * opens a new panel for the active previewable document, or — if a panel
+ * is already open — re-targets and reveals it. If nothing previewable is
+ * active and no panel exists yet, informs the user instead of opening an
+ * empty/blank preview.
  */
-export function openPreview(context: vscode.ExtensionContext): void {
+export function openPreview(
+  context: vscode.ExtensionContext,
+  uri?: vscode.Uri,
+): void {
+  if (uri) {
+    void openPreviewForUri(context, uri);
+    return;
+  }
+
   const document = activePreviewableDocument();
 
   if (active) {
     if (document) {
-      retargetPreview(context, active, document);
+      retargetToDocument(context, active, document);
     }
-    // Re-read `active`: `retargetPreview` may have replaced the panel (and
-    // therefore this variable) with a freshly created one.
+    // Re-read `active`: `retargetToDocument` may have replaced the panel
+    // (and therefore this variable) with a freshly created one.
     const current = active;
     if (current) current.panel.reveal(current.panel.viewColumn, true);
     return;
@@ -519,5 +831,5 @@ export function openPreview(context: vscode.ExtensionContext): void {
     return;
   }
 
-  createPreview(context, document);
+  createPreview(context, { kind: 'document', document });
 }

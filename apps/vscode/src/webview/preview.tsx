@@ -97,6 +97,13 @@ interface RunValues {
  */
 interface LocalState extends PersistedState {
   readonly runValues?: RunValues;
+  /**
+   * Set when the host could not resolve a bundle into something previewable
+   * (`protocol.ts`'s `BundleErrorMessage`) — a short, quiet sentence shown
+   * in place of the document, exactly like `PreviewErrorBoundary`'s own
+   * message for a render-time failure. Cleared by the next `update`.
+   */
+  readonly bundleError?: string;
 }
 
 function initialState(): LocalState {
@@ -145,10 +152,27 @@ export function Preview(): ReactElement {
             text: data.text,
             revision: data.revision,
             baseUri: data.baseUri,
+            assets: data.assets,
+            readOnly: data.readOnly,
             // A run's output is tied to the revision it ran against; a
             // fresh `update` can never match that revision again (revision
             // numbers only increase), so there's nothing to carry forward.
             runValues: undefined,
+            bundleError: undefined,
+          };
+        }
+        if (data.type === 'bundle-error') {
+          if (!isNewerRevision(previous.revision, data.revision)) {
+            return previous;
+          }
+          return {
+            text: '',
+            revision: data.revision,
+            baseUri: undefined,
+            assets: undefined,
+            readOnly: undefined,
+            runValues: undefined,
+            bundleError: data.message,
           };
         }
         // A `values` result for anything other than the CURRENT text
@@ -178,8 +202,10 @@ export function Preview(): ReactElement {
       text: state.text,
       revision: state.revision,
       baseUri: state.baseUri,
+      assets: state.assets,
+      readOnly: state.readOnly,
     });
-  }, [state.text, state.revision, state.baseUri]);
+  }, [state.text, state.revision, state.baseUri, state.assets, state.readOnly]);
 
   // Only a run whose revision still matches the CURRENTLY DISPLAYED text
   // counts — this is the other half of the stale-revision drop above (that
@@ -205,9 +231,17 @@ export function Preview(): ReactElement {
   useEffect(() => {
     const container = documentRef.current;
     if (container) {
-      applyDocumentBase(container, state.baseUri);
+      applyDocumentBase(container, state.baseUri, state.assets);
     }
-  }, [rendered, state.baseUri]);
+  }, [rendered, state.baseUri, state.assets]);
+
+  if (state.bundleError !== undefined) {
+    return (
+      <p className="mk-preview__error" role="alert">
+        {state.bundleError}
+      </p>
+    );
+  }
 
   return (
     <PreviewErrorBoundary resetKey={state.revision}>
@@ -220,6 +254,11 @@ export function Preview(): ReactElement {
         relative source, and the effect re-resolves it against the new base.
       */}
       <div className="doc" ref={documentRef} key={state.baseUri ?? ''}>
+        {state.readOnly === true && (
+          <p className="mk-preview__readonly-marker">
+            Read-only bundle preview
+          </p>
+        )}
         {rendered}
       </div>
     </PreviewErrorBoundary>

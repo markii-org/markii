@@ -185,6 +185,141 @@ describe('isHostToWebviewMessage', () => {
   });
 });
 
+describe('isHostToWebviewMessage — assets/readOnly', () => {
+  it('accepts a well-formed assets record', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'update',
+        revision: 1,
+        text: 'hi',
+        assets: { 'assets/a.png': 'data:image/png;base64,AAAA' },
+      }),
+    ).toBe(true);
+  });
+
+  it('accepts an empty assets record', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'update',
+        revision: 1,
+        text: 'hi',
+        assets: {},
+      }),
+    ).toBe(true);
+  });
+
+  it('rejects a non-data: asset value', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'update',
+        revision: 1,
+        text: 'hi',
+        assets: { 'assets/a.png': 'https://evil.test/a.png' },
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects a non-string asset value', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'update',
+        revision: 1,
+        text: 'hi',
+        assets: { 'assets/a.png': 42 },
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects an assets field that is not an object', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'update',
+        revision: 1,
+        text: 'hi',
+        assets: ['data:image/png;base64,AAAA'],
+      }),
+    ).toBe(false);
+  });
+
+  it('accepts an explicit readOnly boolean', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'update',
+        revision: 1,
+        text: 'hi',
+        readOnly: true,
+      }),
+    ).toBe(true);
+    expect(
+      isHostToWebviewMessage({
+        type: 'update',
+        revision: 1,
+        text: 'hi',
+        readOnly: false,
+      }),
+    ).toBe(true);
+  });
+
+  it('rejects a non-boolean readOnly', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'update',
+        revision: 1,
+        text: 'hi',
+        readOnly: 'yes',
+      }),
+    ).toBe(false);
+  });
+});
+
+describe('isHostToWebviewMessage — bundle-error', () => {
+  it('accepts a well-formed bundle-error message', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'bundle-error',
+        revision: 1,
+        message: 'This bundle has no manifest.json and cannot be opened.',
+      }),
+    ).toBe(true);
+  });
+
+  it('rejects a missing message', () => {
+    expect(isHostToWebviewMessage({ type: 'bundle-error', revision: 1 })).toBe(
+      false,
+    );
+  });
+
+  it('rejects an empty message', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'bundle-error',
+        revision: 1,
+        message: '',
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects a giant message', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'bundle-error',
+        revision: 1,
+        message: 'a'.repeat(100_000),
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects a negative revision, same as any other message', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'bundle-error',
+        revision: -1,
+        message: 'x',
+      }),
+    ).toBe(false);
+  });
+});
+
 const FRESH_VALUE: WireStoredValue = { value: 42, status: 'fresh' };
 
 function valuesMessage(overrides: Partial<ValuesMessage> = {}): ValuesMessage {

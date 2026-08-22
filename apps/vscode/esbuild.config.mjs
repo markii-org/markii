@@ -40,6 +40,7 @@ const repoRoot = path.resolve(here, '..', '..');
 /** Package name -> that package's `src` directory (see the note above). */
 const markiiSrcRoots = {
   '@markii/core': path.join(repoRoot, 'packages', 'markii-core', 'src'),
+  '@markii/bundle': path.join(repoRoot, 'packages', 'markii-bundle', 'src'),
   '@markii/stdlib': path.join(repoRoot, 'packages', 'markii-stdlib', 'src'),
   '@markii/runtime': path.join(repoRoot, 'packages', 'markii-runtime', 'src'),
   '@markii/lua': path.join(repoRoot, 'packages', 'markii-lua', 'src'),

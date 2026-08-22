@@ -11,8 +11,8 @@ import { openPreview, resetScriptGrants, runScripts } from './preview-panel.js';
 export function activate(context: vscode.ExtensionContext): void {
   const openPreviewCommand = vscode.commands.registerCommand(
     'markii.openPreview',
-    () => {
-      openPreview(context);
+    (uri?: vscode.Uri) => {
+      openPreview(context, uri);
     },
   );
   const runScriptsCommand = vscode.commands.registerCommand(

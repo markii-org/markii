@@ -76,6 +76,79 @@ describe('resolveDocumentUrl', () => {
   });
 });
 
+const ASSETS = {
+  'assets/nice.png': 'data:image/png;base64,AAAA',
+};
+
+describe('resolveDocumentUrl — embedded bundle assets (zip form)', () => {
+  it('resolves a direct match against the assets map with no baseUri at all', () => {
+    expect(resolveDocumentUrl('assets/nice.png', undefined, ASSETS)).toBe(
+      ASSETS['assets/nice.png'],
+    );
+  });
+
+  it('normalizes a leading ./ before looking up the assets map', () => {
+    expect(resolveDocumentUrl('./assets/nice.png', undefined, ASSETS)).toBe(
+      ASSETS['assets/nice.png'],
+    );
+  });
+
+  it('normalizes a leading / before looking up the assets map', () => {
+    expect(resolveDocumentUrl('/assets/nice.png', undefined, ASSETS)).toBe(
+      ASSETS['assets/nice.png'],
+    );
+  });
+
+  it('prefers the assets map over baseUri when both are given', () => {
+    expect(resolveDocumentUrl('assets/nice.png', BASE, ASSETS)).toBe(
+      ASSETS['assets/nice.png'],
+    );
+  });
+
+  it('fails closed on a traversal attempt: no baseUri, no matching key, no image', () => {
+    // The assets map is built only from paths a jailed BundleStorage.list()
+    // actually returned (bundle-resolve.ts), so a "../" src can never have a
+    // matching entry — this asserts the failure mode is "blank image",
+    // never an escape.
+    expect(
+      resolveDocumentUrl('../outside.png', undefined, ASSETS),
+    ).toBeUndefined();
+    expect(
+      resolveDocumentUrl('../../etc/passwd.png', undefined, ASSETS),
+    ).toBeUndefined();
+  });
+
+  it('falls back to undefined for an unmatched relative source with no baseUri', () => {
+    expect(
+      resolveDocumentUrl('assets/missing.png', undefined, ASSETS),
+    ).toBeUndefined();
+  });
+
+  it('falls back to baseUri resolution when the assets map has no match', () => {
+    expect(resolveDocumentUrl('other.png', BASE, ASSETS)).toBe(
+      `${BASE}other.png`,
+    );
+  });
+});
+
+describe('applyDocumentBase — embedded bundle assets (zip form)', () => {
+  it('rewrites a matching relative image to its embedded data URI', () => {
+    const element = container('<img src="assets/nice.png" alt="">');
+    applyDocumentBase(element, undefined, ASSETS);
+    expect(element.querySelector('img')?.getAttribute('src')).toBe(
+      ASSETS['assets/nice.png'],
+    );
+  });
+
+  it('leaves an unmatched image source alone (blank, not a crash)', () => {
+    const element = container('<img src="assets/missing.png" alt="">');
+    expect(() => applyDocumentBase(element, undefined, ASSETS)).not.toThrow();
+    expect(element.querySelector('img')?.getAttribute('src')).toBe(
+      'assets/missing.png',
+    );
+  });
+});
+
 /** Builds a detached container holding `html`, the way the rendered document subtree looks to the effect. */
 function container(html: string): HTMLElement {
   const element = document.createElement('div');

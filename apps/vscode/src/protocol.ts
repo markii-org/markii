@@ -37,6 +37,40 @@ export interface UpdateMessage {
    * sources alone; absolute `https://` images never depend on it.
    */
   readonly baseUri?: string;
+  /**
+   * Bundle asset images, embedded as `data:` URIs and keyed by their
+   * bundle-relative path (e.g. `assets/nice.png`) — the read-only zip-form
+   * bundle preview's substitute for `baseUri`: a webview cannot reach into a
+   * zip archive to load an image the way it loads a real file under
+   * `localResourceRoots`, so the host extracts recognized image types ahead
+   * of time (`bundle-resolve.ts`'s `extractAssetsAsDataUris`) and sends them
+   * inline instead. Absent for a plain document or a directory-form bundle,
+   * both of which resolve images via `baseUri` as usual.
+   */
+  readonly assets?: Readonly<Record<string, string>>;
+  /**
+   * True for a zip-form bundle preview: the archived document has no
+   * editable buffer behind it, so edits are never tracked and this flag is
+   * the ONLY thing that tells the webview to say so (a quiet marker, not a
+   * dump — AGENTS.md's cleanliness principle). Absent (falsy) for a plain
+   * document or a directory-form bundle, both of which track a real file.
+   */
+  readonly readOnly?: boolean;
+}
+
+/**
+ * Host -> webview: a bundle could not be resolved into something
+ * previewable (missing/invalid manifest.json, or a missing document) —
+ * `bundle-resolve.ts` computed the reason and reduced it to `message`, a
+ * short, specific, non-stack-trace sentence. The webview shows it in place
+ * of a document, exactly as `PreviewErrorBoundary` shows its own quiet
+ * message for a render-time failure — never a raw error, per the
+ * cleanliness principle.
+ */
+export interface BundleErrorMessage {
+  readonly type: 'bundle-error';
+  readonly revision: number;
+  readonly message: string;
 }
 
 /**
@@ -83,7 +117,8 @@ export interface ReadyMessage {
   readonly type: 'ready';
 }
 
-export type HostToWebviewMessage = UpdateMessage | ValuesMessage;
+export type HostToWebviewMessage =
+  UpdateMessage | ValuesMessage | BundleErrorMessage;
 export type WebviewToHostMessage = ReadyMessage;
 
 function hasOwn(value: object, key: string): boolean {
@@ -149,6 +184,35 @@ export function isSafeBaseUri(value: unknown): value is string {
   return BASE_URI_SCHEMES.has(parsed.protocol);
 }
 
+/**
+ * A sane upper bound on one embedded asset's `data:` URI — base64 inflates
+ * bytes by roughly a third, so this comfortably covers
+ * `bundle-resolve.ts`'s `DEFAULT_MAX_EMBEDDED_ASSET_BYTES` total budget for
+ * a single entry while still rejecting an implausibly, hostilely large one.
+ */
+const MAX_ASSET_DATA_URI_LENGTH = 32 * 1024 * 1024;
+
+/** A sane upper bound on how many distinct asset entries one `update` message may carry. */
+const MAX_ASSET_ENTRIES = 1000;
+
+/** True for a value this extension is willing to treat as one embedded asset: a bounded `data:` URI string. */
+function isSafeAssetDataUri(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    value.length <= MAX_ASSET_DATA_URI_LENGTH &&
+    value.startsWith('data:')
+  );
+}
+
+/** Every OWN entry of `value` is a bounded `data:` URI, same `Object.keys`-only-visits-own-properties discipline as `isWireStoredValueRecord`. */
+function isAssetsRecord(value: unknown): value is Record<string, string> {
+  if (!isPlainObject(value)) return false;
+  const keys = Object.keys(value);
+  if (keys.length > MAX_ASSET_ENTRIES) return false;
+  return keys.every((key) => isSafeAssetDataUri(value[key]));
+}
+
 function isUpdateMessage(value: unknown): value is UpdateMessage {
   if (!isPlainObject(value)) return false;
   if (!hasOwn(value, 'type') || value.type !== 'update') return false;
@@ -167,6 +231,40 @@ function isUpdateMessage(value: unknown): value is UpdateMessage {
     hasOwn(value, 'baseUri') &&
     value.baseUri !== undefined &&
     !isSafeBaseUri(value.baseUri)
+  ) {
+    return false;
+  }
+  if (
+    hasOwn(value, 'assets') &&
+    value.assets !== undefined &&
+    !isAssetsRecord(value.assets)
+  ) {
+    return false;
+  }
+  if (
+    hasOwn(value, 'readOnly') &&
+    value.readOnly !== undefined &&
+    typeof value.readOnly !== 'boolean'
+  ) {
+    return false;
+  }
+  return true;
+}
+
+/** A sane upper bound on a bundle-error message — real ones are one short sentence (`bundle-resolve.ts`'s `bundleResolutionFailureMessage`). */
+const MAX_BUNDLE_ERROR_MESSAGE_LENGTH = 4096;
+
+function isBundleErrorMessage(value: unknown): value is BundleErrorMessage {
+  if (!isPlainObject(value)) return false;
+  if (!hasOwn(value, 'type') || value.type !== 'bundle-error') return false;
+  if (!hasOwn(value, 'revision') || !isValidRevision(value.revision)) {
+    return false;
+  }
+  if (
+    !hasOwn(value, 'message') ||
+    typeof value.message !== 'string' ||
+    value.message.length === 0 ||
+    value.message.length > MAX_BUNDLE_ERROR_MESSAGE_LENGTH
   ) {
     return false;
   }
@@ -264,7 +362,11 @@ function isValuesMessage(value: unknown): value is ValuesMessage {
 export function isHostToWebviewMessage(
   value: unknown,
 ): value is HostToWebviewMessage {
-  return isUpdateMessage(value) || isValuesMessage(value);
+  return (
+    isUpdateMessage(value) ||
+    isValuesMessage(value) ||
+    isBundleErrorMessage(value)
+  );
 }
 
 export function isWebviewToHostMessage(
