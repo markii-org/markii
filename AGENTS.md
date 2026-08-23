@@ -56,6 +56,17 @@ packages/platforms/markii-react   the reference L1 renderer, a platform adapter
                      center/right/wide/narrow/full via createLayoutWrapper;
                      failure-presentation.ts — the ONE home of failure wording)
   src/doc.css        document rhythm + component internals
+packages/platforms/markii-html   the static HTML renderer (issue #2), a second
+                        platform adapter proving renderer-neutrality — zero React,
+                        emits an HTML string for stopped-changing docs (publish/CI/
+                        email/archive):
+  src/render.ts      hast → HTML string walk (hast-util-to-html for plain nodes;
+                     directives/script-fences swapped for raw nodes); same
+                     unknown/form-mismatch fallback markup+classes as @markii/react
+  src/registry.ts    HtmlRegistry: components are (attrs, childrenHtml, ctx)→string;
+                     same alias/hostile-config rules as the React registry
+  src/layout.ts      resolveLayoutAttributes (width/align), mirrors @markii/react
+  src/escape.ts      the one HTML-escaping primitive (ctx.esc)
 packages/markii-runtime host-side scripting glue (docs/scripting.md) — neutral, no React,
                         no wasmoon; stays runtime-agnostic (executor injected):
   src/store.ts       ValueStore + createValueStore (null-proto, hasOwn-guarded)

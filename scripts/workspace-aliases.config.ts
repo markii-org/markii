@@ -52,4 +52,8 @@ export const workspaceAliases = [
     find: '@markii/react',
     replacement: pkgSrc('packages', 'platforms', 'markii-react'),
   },
+  {
+    find: '@markii/html',
+    replacement: pkgSrc('packages', 'platforms', 'markii-html'),
+  },
 ];

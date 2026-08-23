@@ -4,6 +4,25 @@ All notable changes to Mark and the `@markii/*` packages are recorded here. The
 format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`@markii/html`: a second, framework-free renderer (issue #2)** — the
+  toolkit-neutrality proof. A new platform package under
+  `packages/platforms/` that consumes `@markii/core`'s sanitized hast and
+  emits an HTML string, with zero React, for stopped-changing documents
+  (publishing, CI, email, archive). `renderMarkToHtml(text, registry)` and
+  `renderMarkNodeToHtml(node, registry)` mirror the React renderer's L1
+  contract: registry resolution with aliases, string attributes,
+  children-as-markdown, the unknown-directive and form/kind-mismatch
+  fallbacks (same markup and classes as `@markii/react`, so one stylesheet
+  covers both), layout interception (`width`/`align`), script-fence folding,
+  hostile-registry safety, and the never-throw guarantee. Components are
+  `(attributes, childrenHtml, ctx) => string` with `ctx.esc`. This first
+  slice ships the engine; the standard component set and value binding
+  follow.
+
 ## [0.5.0] - 2026-08-23
 
 ### Added

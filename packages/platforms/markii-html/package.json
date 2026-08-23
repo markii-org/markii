@@ -1,0 +1,53 @@
+{
+  "name": "@markii/html",
+  "version": "0.5.0",
+  "description": "A framework-free static HTML renderer for Markii (.mk.md): a registry-driven hast-to-HTML string engine. Zero React; for stopped-changing documents (publish, CI, email, archive).",
+  "keywords": [
+    "markdown",
+    "markii",
+    "mk.md",
+    "html",
+    "renderer",
+    "static",
+    "directive"
+  ],
+  "license": "MIT",
+  "author": "sadigaxund",
+  "homepage": "https://github.com/sadigaxund/markii#readme",
+  "bugs": "https://github.com/sadigaxund/markii/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sadigaxund/markii.git",
+    "directory": "packages/platforms/markii-html"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "build": "tsc --noEmit -p tsconfig.json",
+    "build:dist": "rm -rf dist && tsc -p tsconfig.build.json",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "hast-util-to-html": "^9.0.0",
+    "@markii/core": "0.5.0"
+  },
+  "devDependencies": {
+    "@types/hast": "^3.0.4"
+  }
+}

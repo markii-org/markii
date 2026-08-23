@@ -1,6 +1,6 @@
 # Fires on a pushed `v*.*.*` tag and does two things:
 #
-#   1. publish-npm    Publishes the six @markii/* library packages to npm.
+#   1. publish-npm    Publishes the seven @markii/* library packages to npm.
 #                     Idempotent: any package whose version is already on the
 #                     registry is skipped, so re-running a tag (or tagging a
 #                     version that was published by hand) is safe and does not
@@ -28,7 +28,7 @@
 # The stable tarball names mean the newest assets are always reachable at:
 #   https://github.com/sadigaxund/markii/releases/latest/download/markii-core.tgz
 #   (and markii-stdlib.tgz, markii-bundle.tgz, markii-runtime.tgz,
-#    markii-lua.tgz, markii-react.tgz)
+#    markii-lua.tgz, markii-react.tgz, markii-html.tgz)
 
 name: Release
 
@@ -46,6 +46,7 @@ env:
     packages/markii-runtime
     packages/markii-lua
     packages/platforms/markii-react
+    packages/platforms/markii-html
 
 jobs:
   publish-npm:
@@ -145,10 +146,10 @@ jobs:
             echo "npm install @markii/react@${VERSION}"
             echo '```'
             echo
-            echo 'All six packages, if you want them explicitly:'
+            echo 'All seven packages, if you want them explicitly:'
             echo
             echo '```'
-            for pkg in core stdlib bundle runtime lua react; do
+            for pkg in core stdlib bundle runtime lua react html; do
               echo "npm install @markii/${pkg}@${VERSION}"
             done
             echo '```'
@@ -159,7 +160,7 @@ jobs:
             echo 'stable across releases, so the latest of each is always at a fixed URL:'
             echo
             echo '```'
-            for pkg in core stdlib bundle runtime lua react; do
+            for pkg in core stdlib bundle runtime lua react html; do
               echo "https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/markii-${pkg}.tgz"
             done
             echo '```'
