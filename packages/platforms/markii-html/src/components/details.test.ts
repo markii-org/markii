@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { escapeHtml } from '../escape.js';
+import { createTestContext } from '../test/html-context.js';
 import { Details } from './details.js';
 
-const ctx = { esc: escapeHtml };
+const ctx = createTestContext();
 
 describe('Details', () => {
   it('defaults the summary to "Details" and starts folded', () => {

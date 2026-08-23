@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parse } from '@markii/core';
+import { createValueStore, createVaultStore } from '@markii/runtime';
 import { renderMarkToHtml, renderMarkNodeToHtml } from './render';
 import {
   createHtmlRegistry,
@@ -225,11 +226,119 @@ describe('a throwing component is contained, never fails the document', () => {
 });
 
 describe(':value[...] built-in', () => {
-  it('renders the missing marker with the name in braces (no store yet)', () => {
+  it('renders the missing marker with the name in braces (no store)', () => {
     const html = renderMarkToHtml('stars: :value[repo.stars]\n', empty);
     expect(html).toContain(
       '<span class="mk-value mk-value--missing">{repo.stars}</span>',
     );
+  });
+
+  it('renders the resolved value from a store, plain span', () => {
+    const store = createValueStore({ stars: { value: 42, status: 'fresh' } });
+    const html = renderMarkToHtml('stars: :value[stars]\n', empty, store);
+    expect(html).toContain('<span class="mk-value">42</span>');
+  });
+
+  it('walks a dotted path into a stored object', () => {
+    const store = createValueStore({
+      repo: { value: { stars: 7 }, status: 'fresh' },
+    });
+    const html = renderMarkToHtml('stars: :value[repo.stars]\n', empty, store);
+    expect(html).toContain('<span class="mk-value">7</span>');
+  });
+
+  it('a stale value gets the stale modifier class', () => {
+    const store = createValueStore({ stars: { value: 1, status: 'stale' } });
+    const html = renderMarkToHtml(':value[stars]\n', empty, store);
+    expect(html).toContain('<span class="mk-value mk-value--stale">1</span>');
+  });
+
+  it('an error resolution with a failure kind carries the modifier class and title', () => {
+    const store = createValueStore({
+      stars: {
+        value: undefined,
+        status: 'error',
+        error: 'network down',
+        failureKind: 'capability-denied',
+      },
+    });
+    const html = renderMarkToHtml(':value[stars]\n', empty, store);
+    expect(html).toContain(
+      'mk-value mk-value--missing mk-value--capability-denied',
+    );
+    expect(html).toContain('title="needs permission: network down"');
+    expect(html).toContain('{stars}');
+  });
+
+  it('an @-prefixed name resolves against the vault, not the store', () => {
+    const { store: vault, writer } = createVaultStore();
+    void writer.publish('gh', { value: 200, status: 'fresh' });
+    const store = createValueStore({ gh: { value: 1, status: 'fresh' } });
+    const html = renderMarkToHtml(':value[@gh]\n', empty, store, vault);
+    expect(html).toContain('<span class="mk-value">200</span>');
+  });
+
+  it('an @-prefixed name with no vault degrades to missing, never reading the store', () => {
+    const store = createValueStore({ gh: { value: 1, status: 'fresh' } });
+    const html = renderMarkToHtml(':value[@gh]\n', empty, store);
+    expect(html).toContain('mk-value mk-value--missing');
+    expect(html).toContain('{@gh}');
+  });
+
+  it('nested markup inside the label contributes nothing to the resolved name', () => {
+    const store = createValueStore({ stars: { value: 1, status: 'fresh' } });
+    // The label text itself is the store key; emphasis markup around it
+    // still resolves against the plain text, matching @markii/react.
+    const html = renderMarkToHtml(':value[stars]\n', empty, store);
+    expect(html).toContain('<span class="mk-value">1</span>');
+  });
+});
+
+describe('data= attribute binding', () => {
+  const echo: HtmlComponent = (_attrs, _children, ctx) =>
+    JSON.stringify({
+      data: ctx.data,
+      dataStatus: ctx.dataStatus,
+      dataError: ctx.dataError,
+    });
+
+  it('a component with no data= attribute gets no data fields at all', () => {
+    const reg = createHtmlRegistry({ echo: { component: echo } });
+    const html = renderMarkToHtml('::echo\n', reg);
+    expect(html).toContain(
+      JSON.stringify({
+        data: undefined,
+        dataStatus: undefined,
+        dataError: undefined,
+      }),
+    );
+  });
+
+  it('resolves a bound name and strips data= from the attributes the component sees', () => {
+    const seen: string[] = [];
+    const probe: HtmlComponent = (attrs) => {
+      seen.push(JSON.stringify(attrs));
+      return '';
+    };
+    const reg = createHtmlRegistry({
+      probe: { component: probe },
+      echo: { component: echo },
+    });
+    const store = createValueStore({ n: { value: 5, status: 'fresh' } });
+    renderMarkToHtml('::probe{data=n other=x}\n', reg, store);
+    expect(seen[0]).toBe(JSON.stringify({ other: 'x' }));
+
+    const html = renderMarkToHtml('::echo{data=n}\n', reg, store);
+    expect(html).toContain('"data":5');
+    expect(html).toContain('"dataStatus":"fresh"');
+  });
+
+  it('an unresolved data= name degrades to dataStatus missing, never throwing', () => {
+    const html = renderMarkToHtml(
+      '::echo{data=nope}\n',
+      createHtmlRegistry({ echo: { component: echo } }),
+    );
+    expect(html).toContain('"dataStatus":"missing"');
   });
 });
 

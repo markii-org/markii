@@ -7,6 +7,8 @@
  * the React renderer's, so a note resolves the same way in both.
  */
 
+import type { FailureKind, ValueStatus } from '@markii/runtime';
+
 /**
  * Attributes parsed off a directive, e.g. `{type=warning title="Careful"}`. A
  * bare attribute (present but valueless, e.g. `{collapsed}`) arrives as
@@ -15,14 +17,55 @@
 export type DirectiveAttributes = Record<string, string | null | undefined>;
 
 /**
+ * A `data=`/`:value[...]` name resolved against the render's value store
+ * (and, for an `@`-prefixed name, its vault) — the string engine's read-only
+ * view of `./resolve.js`'s `StorePathResolution`. Never carries a `Proxy` or
+ * any other live handle: `value` is whatever the store returned, but
+ * `status`/`error`/`failureKind` are already validated primitives.
+ */
+export interface ValueResolution {
+  value: unknown;
+  status: ValueStatus;
+  error?: string;
+  failureKind?: FailureKind;
+}
+
+/**
  * The render context handed to every component. `esc` is the engine's single
  * HTML-escaping primitive (see `./escape`), so a component never hand-rolls
- * escaping. Data-binding and empty-state helpers join this in a later slice;
- * the shape is an interface precisely so adding them is source-compatible.
+ * escaping.
+ *
+ * `resolve` looks up a `data=`-style name (dotted paths, `@`-prefixed vault
+ * names) against the store/vault the current render was called with; it
+ * degrades to `{ value: undefined, status: 'missing' }` when there is no
+ * store/vault, or the name doesn't resolve — it never throws. `valueMarker`
+ * is the empty/stale-state presentation for a resolved name, matching
+ * `@markii/react`'s `ValueDirective` exactly (the missing-value `{name}`
+ * span, the stale underline, the failure-kind tooltip); it is what powers
+ * the `:value[...]` built-in and is exposed here so a data-bound component
+ * can render the identical marker for a name it resolves itself.
+ *
+ * `data`/`dataStatus`/`dataError`/`dataFailureKind` mirror `@markii/react`'s
+ * `MarkComponentProps` fields, just carried on `ctx` instead of a fourth
+ * function parameter (the `HtmlComponent` signature is `(attributes,
+ * childrenHtml, ctx)`, with no room for a fifth argument). They are present
+ * ONLY when the directive actually had a `data=` attribute — `dataStatus`
+ * is always one of the four `ValueStatus` values in that case, even when the
+ * name didn't resolve (`'missing'`); all four are `undefined` together when
+ * there was no `data=` attribute at all, exactly like the `'data' in
+ * binding` distinction `@markii/react`'s `renderDirectiveContent` makes.
  */
 export interface HtmlRenderContext {
   /** HTML-escapes a string for safe insertion into text or a quoted attribute value. */
   esc(value: string): string;
+  /** Resolves a `data=`/`:value[...]` name against the current render's store/vault. Never throws. */
+  resolve(name: string): ValueResolution;
+  /** The quiet missing/stale/failure-tinted marker for `name`, matching `@markii/react`'s `ValueDirective` markup exactly. Never throws. */
+  valueMarker(name: string): string;
+  data?: unknown;
+  dataStatus?: ValueStatus;
+  dataError?: string;
+  dataFailureKind?: FailureKind;
 }
 
 /**

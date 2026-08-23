@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { escapeHtml } from '../escape.js';
+import { createTestContext } from '../test/html-context.js';
 import { Rating } from './rating.js';
 
-const ctx = { esc: escapeHtml };
+const ctx = createTestContext();
 
 describe('Rating', () => {
   it('defaults to 0 out of 5 when no attributes are given', () => {

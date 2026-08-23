@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { escapeHtml } from '../escape.js';
+import { createTestContext } from '../test/html-context.js';
 import { Figure } from './figure.js';
 
-const ctx = { esc: escapeHtml };
+const ctx = createTestContext();
 
 describe('Figure', () => {
   it('renders an image when src is given', () => {

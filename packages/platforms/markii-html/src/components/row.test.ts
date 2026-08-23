@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { escapeHtml } from '../escape.js';
+import { createTestContext } from '../test/html-context.js';
 import { Row } from './row.js';
 
-const ctx = { esc: escapeHtml };
+const ctx = createTestContext();
 
 describe('Row', () => {
   it.each(['2', '3', '4'])(

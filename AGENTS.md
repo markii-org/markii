@@ -62,16 +62,30 @@ packages/platforms/markii-html   the static HTML renderer (issue #2), a second
                         email/archive):
   src/render.ts      hast → HTML string walk (hast-util-to-html for plain nodes;
                      directives/script-fences swapped for raw nodes); same
-                     unknown/form-mismatch fallback markup+classes as @markii/react
+                     unknown/form-mismatch fallback markup+classes as @markii/react.
+                     renderMarkToHtml/renderMarkNodeToHtml take optional store/vault;
+                     threads :value[…] + data= binding through the render context
   src/registry.ts    HtmlRegistry: components are (attrs, childrenHtml, ctx)→string;
-                     same alias/hostile-config rules as the React registry
+                     same alias/hostile-config rules as the React registry.
+                     HtmlRenderContext carries esc + resolve/valueMarker (shared)
+                     + per-directive data/dataStatus/dataError/dataFailureKind
+  src/resolve.ts     value resolver ported from @markii/react's store-path/safe-data
+                     (dotted walk, @vault scoping, never-throw, hasOwn-guarded)
+  src/value-format.ts stringifyStoredValue (bound value → display text)
+  src/failure-presentation.ts failurePhrase/failureTitle/failureKindClass/
+                     dataStateClassName — the ONE home of failure wording, per engine
+  src/document.ts    exportHtmlDocument(body, options?): full-page shell with
+                     doc.css embedded (from src/doc-css.generated.ts, gitignored,
+                     regenerated from @markii/react's doc.css by scripts/generate-doc-css.ts
+                     at pretest/prebuild/prebuild:dist)
   src/layout.ts      resolveLayoutAttributes (width/align), mirrors @markii/react
   src/escape.ts      the one HTML-escaping primitive (ctx.esc)
+  src/conformance.test.ts  runs the L1 corpus through this engine (issue #2 gate)
   src/components/    the standard set as string emitters (callout, card, badge,
                      details, figure, tabs/tab, kbd, rating, row, cell, layout
-                     wrappers) + defaultHtmlRegistry; markup/classes match
-                     @markii/react so doc.css is shared. stat/progress/chart and
-                     value binding deferred (need a value-resolution context)
+                     wrappers, and the data-bound stat/progress/chart — chart is
+                     dependency-free SVG) + defaultHtmlRegistry; markup/classes
+                     match @markii/react so doc.css is shared
 packages/markii-runtime host-side scripting glue (docs/scripting.md) — neutral, no React,
                         no wasmoon; stays runtime-agnostic (executor injected):
   src/store.ts       ValueStore + createValueStore (null-proto, hasOwn-guarded)

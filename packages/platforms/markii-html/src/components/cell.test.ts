@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { escapeHtml } from '../escape.js';
+import { createTestContext } from '../test/html-context.js';
 import { Cell } from './cell.js';
 
-const ctx = { esc: escapeHtml };
+const ctx = createTestContext();
 
 describe('Cell', () => {
   it('renders a plain unstyled div wrapping its children', () => {

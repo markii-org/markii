@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { escapeHtml } from '../escape.js';
+import { createTestContext } from '../test/html-context.js';
 import {
   createLayoutWrapper,
   LAYOUT_WRAPPER_PRESETS,
 } from './layout-wrapper.js';
 
-const ctx = { esc: escapeHtml };
+const ctx = createTestContext();
 
 describe('createLayoutWrapper', () => {
   it.each(LAYOUT_WRAPPER_PRESETS)(

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { escapeHtml } from '../escape.js';
+import { createTestContext } from '../test/html-context.js';
 import { Tab, tabPanel } from './tab.js';
 
-const ctx = { esc: escapeHtml };
+const ctx = createTestContext();
 
 describe('Tab', () => {
   it('renders a role="tabpanel" wrapping its children, matching tabPanel', () => {

@@ -29,9 +29,38 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
   sanitizer gate the React figure uses). `tabs` renders every panel in document
   order with no JS switcher: this package is zero-JS by design, and a string
   component cannot recover each tab's `label` from already-rendered children (a
-  documented limitation). The data-bound `stat`/`progress`/`chart` and
-  `:value`/`data=` binding are deferred to a later slice, since they need a
-  value-resolution context.
+  documented limitation).
+- **`@markii/html`: value binding and the data-bound `stat`/`progress`/`chart`
+  trio (issue #2, slice 3)** — `renderMarkToHtml`/`renderMarkNodeToHtml` now
+  take optional `store`/`vault` arguments (`@markii/runtime`'s `ValueStore`/
+  `VaultStore`), and `HtmlRenderContext` grew `resolve(name)`, `valueMarker
+(name)`, and the per-directive `data`/`dataStatus`/`dataError`/
+  `dataFailureKind` fields — the string engine's equivalent of
+  `@markii/react`'s `MarkComponentProps`, since a plain `(attributes,
+childrenHtml, ctx) => string` component has no room for a fourth argument.
+  `:value[name]` and every `data=name` attribute resolve dotted paths and
+  `@`-prefixed vault names, matching `@markii/react`'s `ValueDirective`/
+  `resolveDataAttribute` presentation exactly (missing/stale/failure-kind
+  classes, tooltip wording). `stat`, `progress`, and `chart` are now
+  registered in `defaultHtmlRegistry`, with markup and classes identical to
+  `@markii/react`'s versions — `chart` is a dependency-free inline-SVG string,
+  matching the React chart's geometry byte-for-byte. Resolution logic
+  (`resolveScopedPath`, `safeRead`), failure presentation
+  (`dataStateClassName`, `failureTitle`), and value formatting
+  (`stringifyStoredValue`) are ported from `@markii/react`'s internal modules
+  into this package's own `src/resolve.ts` / `src/failure-presentation.ts` /
+  `src/value-format.ts`, since the two renderers are independent
+  implementations of the same contract rather than a shared dependency.
+- **`@markii/html`: the L1 conformance corpus now runs against this engine**
+  (issue #2's success criterion) — every fixture in `conformance/` renders
+  through `renderMarkToHtml` with `defaultHtmlRegistry` without throwing.
+- **`@markii/html`: `exportHtmlDocument(body, options?)`** — wraps an
+  already-rendered document body in a complete, self-contained HTML document
+  (doctype, `<head>`, a `<style>` block, a `<div class="doc">` wrapper), for
+  publishing a rendered note as a standalone file. The embedded stylesheet is
+  `@markii/react`'s `doc.css`, generated into this package at build/test time
+  (`scripts/generate-doc-css.ts`) rather than duplicated by hand, so the two
+  renderers can never drift on document rhythm or component internals.
 
 ## [0.5.0] - 2026-08-23
 

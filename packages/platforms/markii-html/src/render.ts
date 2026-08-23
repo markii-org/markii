@@ -7,16 +7,21 @@ import {
 } from '@markii/core';
 import type { MarkNode } from '@markii/core';
 import { toHtml } from 'hast-util-to-html';
-import type { Root, RootContent, ElementContent, Element } from 'hast';
+import type { Root, RootContent, ElementContent, Element, Text } from 'hast';
+import type { ValueStore, VaultStore } from '@markii/runtime';
 import type {
   DirectiveAttributes,
   HtmlRegistry,
   HtmlRegistryEntry,
   HtmlRenderContext,
+  ValueResolution,
 } from './registry.js';
 import { readRegistryComponent, resolveDirectiveAlias } from './registry.js';
 import { resolveLayoutAttributes } from './layout.js';
 import { escapeHtml } from './escape.js';
+import { resolveScopedPath, type ValueScope } from './resolve.js';
+import { failureKindClass, failureTitle } from './failure-presentation.js';
+import { stringifyStoredValue } from './value-format.js';
 
 /** The hast tag name `@markii/core`'s `toHast` marks every directive with (`to-hast.ts`'s `DIRECTIVE_TAG`). */
 const DIRECTIVE_TAG = 'mk-directive';
@@ -49,7 +54,112 @@ function serialize(children: RootContent[]): string {
   return toHtml(root, { allowDangerousHtml: true });
 }
 
-const ctx: HtmlRenderContext = { esc: escapeHtml };
+/**
+ * Builds the missing/stale/resolved `<span>` for a resolved value name,
+ * matching `@markii/react`'s `ValueDirective` markup and class names
+ * byte-for-byte: `mk-value mk-value--missing` (+ a failure-kind modifier
+ * class, only for a genuine `'error'` resolution) with `{name}` as the
+ * label when nothing resolved; `mk-value` (+ `mk-value--stale`) with the
+ * stringified value otherwise. Never throws.
+ */
+function buildValueMarker(name: string, resolved: ValueResolution): string {
+  if (resolved.status === 'missing' || resolved.status === 'error') {
+    const failureKind =
+      resolved.status === 'error' ? resolved.failureKind : undefined;
+    const kindClass = failureKindClass('mk-value', failureKind);
+    const className = kindClass
+      ? `mk-value mk-value--missing ${kindClass}`
+      : 'mk-value mk-value--missing';
+    const title = failureTitle(resolved.error, failureKind);
+    const titleAttr = title ? ` title="${escapeHtml(title)}"` : '';
+    const label = name ? `{${escapeHtml(name)}}` : '{value}';
+    return `<span class="${className}"${titleAttr}>${label}</span>`;
+  }
+
+  const className =
+    resolved.status === 'stale' ? 'mk-value mk-value--stale' : 'mk-value';
+  return `<span class="${className}">${escapeHtml(stringifyStoredValue(resolved.value))}</span>`;
+}
+
+/**
+ * Builds the base `HtmlRenderContext` for one top-level render call, bound
+ * to `scope` (the store/vault this render was invoked with). `resolve` and
+ * `valueMarker` never throw, matching `resolveScopedPath`'s own contract.
+ * The `data*` fields are attached per-directive later (see
+ * `withDataBinding`) — this base object never carries them.
+ */
+function createBaseContext(scope: ValueScope): HtmlRenderContext {
+  return {
+    esc: escapeHtml,
+    resolve(name: string): ValueResolution {
+      const trimmed = name.trim();
+      if (!trimmed) return { value: undefined, status: 'missing' };
+      return resolveScopedPath(scope, trimmed);
+    },
+    valueMarker(name: string): string {
+      const trimmed = name.trim();
+      const resolved = trimmed
+        ? resolveScopedPath(scope, trimmed)
+        : ({ value: undefined, status: 'missing' } as ValueResolution);
+      return buildValueMarker(trimmed, resolved);
+    },
+  };
+}
+
+/** `ctx` with one directive's resolved `data=` binding attached, for the single component invocation that binding belongs to. */
+function withDataBinding(
+  ctx: HtmlRenderContext,
+  binding: ResolvedDataBinding,
+): HtmlRenderContext {
+  if (!('data' in binding)) return ctx;
+  return {
+    ...ctx,
+    data: binding.data,
+    dataStatus: binding.dataStatus,
+    dataError: binding.dataError,
+    dataFailureKind: binding.dataFailureKind,
+  };
+}
+
+interface ResolvedDataBinding {
+  attributes: DirectiveAttributes;
+  data?: unknown;
+  dataStatus?: ValueResolution['status'];
+  dataError?: string;
+  dataFailureKind?: ValueResolution['failureKind'];
+}
+
+/**
+ * Splits a `data=<name>` attribute (if present) off `attributes`, resolves
+ * `<name>` against `scope` — dotted paths and `@`-prefixed vault names both
+ * work, via `resolveScopedPath` — and returns the resolved binding plus the
+ * remaining attributes. Never throws: no store/vault, an empty `data`
+ * attribute, or an unresolved path all degrade to `dataStatus: 'missing'`
+ * with `data: undefined`. Mirrors `@markii/react`'s `resolveDataAttribute`.
+ */
+function resolveDataAttribute(
+  attributes: DirectiveAttributes,
+  scope: ValueScope,
+): ResolvedDataBinding {
+  if (!Object.hasOwn(attributes, DATA_ATTRIBUTE_KEY)) {
+    return { attributes };
+  }
+
+  const { [DATA_ATTRIBUTE_KEY]: rawName, ...rest } = attributes;
+  if (!rawName) {
+    return { attributes: rest, data: undefined, dataStatus: 'missing' };
+  }
+
+  const resolved = resolveScopedPath(scope, rawName);
+  return {
+    attributes: rest,
+    data: resolved.value,
+    dataStatus: resolved.status,
+    dataError: resolved.error,
+    dataFailureKind:
+      resolved.status === 'error' ? resolved.failureKind : undefined,
+  };
+}
 
 /** Parses the `data-mk-attrs` JSON back into an attribute map, keeping only string/null values. Never throws. */
 function parseAttributes(json: string | undefined): DirectiveAttributes {
@@ -99,15 +209,6 @@ function isFormMismatch(
   } catch {
     return false;
   }
-}
-
-/** The `data=` key is intercepted (like `width`/`align`) so a component never receives it as a raw attribute. */
-function stripDataAttribute(
-  attributes: DirectiveAttributes,
-): DirectiveAttributes {
-  if (!Object.hasOwn(attributes, DATA_ATTRIBUTE_KEY)) return attributes;
-  const { [DATA_ATTRIBUTE_KEY]: _dropped, ...rest } = attributes;
-  return rest;
 }
 
 /** The fallback label line, worded for the reason and the form the directive was written in. Returns HTML. */
@@ -186,15 +287,20 @@ function componentError(
 }
 
 /**
- * The `:value[name]` built-in. Slice 1 has no value store, so every binding is
- * the missing marker (`@markii/react`'s `ValueDirective` renders exactly this
- * for a missing resolution): `{name}` inside a `mk-value mk-value--missing`
- * span. `childrenHtml` is the directive's label, already escaped. Data
- * resolution against a real store arrives with the scripting slice.
+ * Flattens a directive's inner hast children back to plain text, for
+ * `:value[name]`'s label (§8: a bare value name). Only top-level TEXT nodes
+ * contribute; a nested element (markup the format never asks authors to
+ * write inside the label) contributes nothing rather than being partially
+ * serialized — mirrors `@markii/react`'s `ValueDirective`'s
+ * `extractPlainText`, adapted from a React-children walk to a hast-children
+ * walk since this engine never builds a React tree.
  */
-function valueMarker(childrenHtml: string): string {
-  const label = childrenHtml.trim() ? childrenHtml : 'value';
-  return `<span class="mk-value mk-value--missing">{${label}}</span>`;
+function extractPlainText(children: ElementContent[]): string {
+  let text = '';
+  for (const child of children) {
+    if (child.type === 'text') text += (child as Text).value;
+  }
+  return text;
 }
 
 /** The first element child of `node` named `tagName`, or `undefined`. */
@@ -272,9 +378,12 @@ function renderDirectiveContent(
   kind: string | undefined,
   attributes: DirectiveAttributes,
   childrenHtml: string,
+  plainLabel: string,
   registry: HtmlRegistry,
+  ctx: HtmlRenderContext,
+  scope: ValueScope,
 ): string {
-  if (name === VALUE_DIRECTIVE_NAME) return valueMarker(childrenHtml);
+  if (name === VALUE_DIRECTIVE_NAME) return ctx.valueMarker(plainLabel);
 
   const inline = kind === TEXT_DIRECTIVE_KIND;
   const entry = Object.hasOwn(registry, name) ? registry[name] : undefined;
@@ -297,21 +406,33 @@ function renderDirectiveContent(
     );
   }
 
+  const binding = resolveDataAttribute(attributes, scope);
   try {
-    return component(stripDataAttribute(attributes), childrenHtml, ctx);
+    return component(
+      binding.attributes,
+      childrenHtml,
+      withDataBinding(ctx, binding),
+    );
   } catch {
     return componentError(name || '(unnamed)', inline, childrenHtml);
   }
 }
 
 /** Turns one `<mk-directive>` element (children already transformed) into its HTML string, including the layout wrapper for block directives. */
-function renderDirective(element: Element, registry: HtmlRegistry): string {
+function renderDirective(
+  element: Element,
+  registry: HtmlRegistry,
+  ctx: HtmlRenderContext,
+  scope: ValueScope,
+): string {
   const written = stringProperty(element, 'data-mk-name') ?? '';
   const kind = stringProperty(element, 'data-mk-kind');
   const rawAttributes = parseAttributes(
     stringProperty(element, 'data-mk-attrs'),
   );
   const childrenHtml = serialize(element.children as unknown as RootContent[]);
+  const plainLabel =
+    written === VALUE_DIRECTIVE_NAME ? extractPlainText(element.children) : '';
 
   const { name, attributes: aliased } =
     written === VALUE_DIRECTIVE_NAME
@@ -325,7 +446,10 @@ function renderDirective(element: Element, registry: HtmlRegistry): string {
     kind,
     attributes,
     childrenHtml,
+    plainLabel,
     registry,
+    ctx,
+    scope,
   );
 
   return isBlock && className
@@ -343,6 +467,8 @@ function renderDirective(element: Element, registry: HtmlRegistry): string {
  */
 function makeTransform(
   registry: HtmlRegistry,
+  ctx: HtmlRenderContext,
+  scope: ValueScope,
 ): (node: RootContent) => RootContent {
   function transform(node: RootContent): RootContent {
     if (node.type !== 'element') return node;
@@ -352,7 +478,7 @@ function makeTransform(
     );
 
     if (node.tagName === DIRECTIVE_TAG)
-      return raw(renderDirective(node, registry));
+      return raw(renderDirective(node, registry, ctx, scope));
     if (node.tagName === 'pre') {
       const marker = renderScriptMarker(node);
       if (marker !== undefined) return raw(marker);
@@ -372,8 +498,13 @@ function renderFailureFallback(error: unknown): string {
   );
 }
 
-function renderRoot(root: Root, registry: HtmlRegistry): string {
-  const transform = makeTransform(registry);
+function renderRoot(
+  root: Root,
+  registry: HtmlRegistry,
+  scope: ValueScope,
+): string {
+  const ctx = createBaseContext(scope);
+  const transform = makeTransform(registry, ctx, scope);
   root.children = root.children.map(transform);
   return serialize(root.children);
 }
@@ -386,10 +517,28 @@ function renderRoot(root: Root, registry: HtmlRegistry): string {
  * fallback) and folds script fences into markers. Pure and never-throwing:
  * parsing is tolerant, unknown names always render a fallback, and any
  * unexpected internal error degrades to the "failed to render document" box.
+ *
+ * `store` is the note's value store (`@markii/runtime`, §8's pure read path)
+ * — optional, matching how a missing/absent value degrades gracefully: with
+ * no store, `:value[name]` renders its missing-value marker and every
+ * `data=name` attribute resolves to `dataStatus: 'missing'`, but the
+ * document still renders completely.
+ *
+ * `vault` is the optional app-scoped read seam (`@markii/runtime`'s
+ * `VaultStore`) that an `@`-prefixed name (`data=@gh.stars`,
+ * `:value[@gh.stars]`) resolves against instead of `store` — "bare name =
+ * mine, `@name` = the vault's". With no `vault` supplied, every `@name`
+ * degrades to `'missing'` the same way an absent `store` degrades a bare
+ * name.
  */
-export function renderMarkToHtml(text: string, registry: HtmlRegistry): string {
+export function renderMarkToHtml(
+  text: string,
+  registry: HtmlRegistry,
+  store?: ValueStore,
+  vault?: VaultStore,
+): string {
   try {
-    return renderRoot(toHast(text), registry);
+    return renderRoot(toHast(text), registry, { store, vault });
   } catch (error) {
     return renderFailureFallback(error);
   }
@@ -399,14 +548,17 @@ export function renderMarkToHtml(text: string, registry: HtmlRegistry): string {
  * The block-level twin of `renderMarkToHtml`: renders one already-parsed mdast
  * node (`@markii/core`'s `MarkNode`) to HTML instead of a whole document's
  * text, via `nodeToHast`. Same registry resolution, same fallbacks, same
- * purity and never-throw guarantees.
+ * purity and never-throw guarantees, and the same optional `store`/`vault`
+ * value-binding arguments.
  */
 export function renderMarkNodeToHtml(
   node: MarkNode,
   registry: HtmlRegistry,
+  store?: ValueStore,
+  vault?: VaultStore,
 ): string {
   try {
-    return renderRoot(nodeToHast(node), registry);
+    return renderRoot(nodeToHast(node), registry, { store, vault });
   } catch (error) {
     return renderFailureFallback(error);
   }

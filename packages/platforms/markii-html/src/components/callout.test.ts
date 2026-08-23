@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { renderMarkToHtml } from '../render.js';
-import { escapeHtml } from '../escape.js';
+import { createTestContext } from '../test/html-context.js';
 import { Callout } from './callout.js';
 import { defaultHtmlRegistry } from './index.js';
 
-const ctx = { esc: escapeHtml };
+const ctx = createTestContext();
 
 describe('Callout', () => {
   it('defaults to info when no type is given, with no title element', () => {

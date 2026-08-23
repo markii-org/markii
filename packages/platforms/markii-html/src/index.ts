@@ -6,6 +6,24 @@
 export { renderMarkToHtml, renderMarkNodeToHtml } from './render.js';
 export { escapeHtml } from './escape.js';
 export {
+  exportHtmlDocument,
+  type ExportHtmlDocumentOptions,
+} from './document.js';
+export {
+  resolveStorePath,
+  resolveScopedPath,
+  VAULT_NAME_PREFIX,
+  type StorePathResolution,
+  type ValueScope,
+} from './resolve.js';
+export {
+  failurePhrase,
+  failureTitle,
+  failureKindClass,
+  dataStateClassName,
+} from './failure-presentation.js';
+export { stringifyStoredValue } from './value-format.js';
+export {
   createHtmlRegistry,
   mergeHtmlRegistries,
   registryAliases,
@@ -20,6 +38,7 @@ export {
   type RegistryAlias,
   type RegistryAliases,
   type ResolvedDirective,
+  type ValueResolution,
 } from './registry.js';
 export {
   resolveLayoutAttributes,

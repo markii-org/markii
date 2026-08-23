@@ -43,14 +43,19 @@
     "access": "public"
   },
   "scripts": {
+    "generate:doc-css": "node scripts/generate-doc-css.ts",
+    "pretest": "npm run generate:doc-css",
     "test": "vitest run",
+    "prebuild": "npm run generate:doc-css",
     "build": "tsc --noEmit -p tsconfig.json",
+    "prebuild:dist": "npm run generate:doc-css",
     "build:dist": "rm -rf dist && tsc -p tsconfig.build.json",
     "lint": "eslint ."
   },
   "dependencies": {
     "hast-util-to-html": "^9.0.0",
     "@markii/core": "0.5.0",
+    "@markii/runtime": "0.5.0",
     "@markii/stdlib": "0.5.0"
   },
   "devDependencies": {

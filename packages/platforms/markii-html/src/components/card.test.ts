@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { renderMarkToHtml } from '../render.js';
-import { escapeHtml } from '../escape.js';
+import { createTestContext } from '../test/html-context.js';
 import { Card } from './card.js';
 import { defaultHtmlRegistry } from './index.js';
 
-const ctx = { esc: escapeHtml };
+const ctx = createTestContext();
 
 describe('Card', () => {
   it('renders title and body when a title is given', () => {
