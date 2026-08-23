@@ -145,6 +145,9 @@ corpus is plain data — no TypeScript in `conformance/`.
 - Small focused modules; named exports; no default exports except React lazy needs.
 - Tests: Vitest, colocated `*.test.ts(x)`; every parser behavior gets a
   conformance fixture, not just inline strings.
+- Security-relevant behavior gets an executed probe against the real
+  worker/interpreter/server, not only unit assertions on mocks; any
+  conditional or deferred probe is resolved before merge.
 - Formatting: Prettier defaults. Lint: ESLint flat config, typescript-eslint
   recommended. Both must pass.
 - Dependencies: only what's listed under Stack. Adding anything else requires
@@ -227,6 +230,25 @@ same commit as the change that triggers them:
 - **New stdlib component** → contract in `@markii/stdlib`, component + tests
   in `@markii/react`, `doc.css` for its internals (never outer margins), and
   the component list in this file's repo layout.
+- **New `ScriptExecutor` implementation** (any engine adapted behind
+  `@markii/runtime`'s seam) → it MUST pass `conformance/executor/` plus an
+  independent adversarial pass before merge, and that pass's findings update
+  `docs/security.md` in the same commit.
+- **New platform renderer** → it MUST consume `@markii/core`'s sanitized hast
+  unchanged (no raw-markup escape hatch) and implement the
+  failure-presentation contract; the renderer checklist in
+  `skills/markii-security-audit.md` is the review gate.
+- **New host embedding the Run path** → the isolate requirement and the host
+  checklist in `docs/integration.md` are the merge gate; grant persistence
+  re-validates on read; bundle handling goes through `@markii/bundle`'s
+  jailed storage, never a reimplemented jail.
+- **Security probe suites are product code** → colocated `*probe*` suites are
+  committed and kept green in CI (the documented hang/deadlock repros are the
+  one exception: they are covered by dedicated tests rather than re-executed,
+  since re-triggering a genuine hang would wedge the runner). A probe is
+  never removed or weakened to make a suite pass. Pass 1's probe suite was
+  lost as an untracked file; committing these suites makes that class of
+  evidence loss impossible.
 - **Rename/move of any top-level doc** → fix every cross-reference in the
   same commit: `README.md`, this file, `TODO.md`, `docs/`, and source
   comments (grep for the old name).
