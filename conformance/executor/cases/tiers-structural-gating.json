@@ -1,0 +1,12 @@
+{
+  "id": "tiers/read-only-is-structural",
+  "area": "tiers",
+  "invariant": "Read-only triggers (auto/scheduled) expose NO effectful surface: effectful operations are absent stubs whose invocation fails as a classified tier block, not checks performed at call time.",
+  "scenario": {
+    "probe": "under a read-only trigger, enumerate effectful API surface and attempt each"
+  },
+  "mustHold": [
+    "effectful surface either does not exist or fails as tier-blocked before side effects",
+    "no sequence of calls escalates a read-only trigger to effectful behavior"
+  ]
+}

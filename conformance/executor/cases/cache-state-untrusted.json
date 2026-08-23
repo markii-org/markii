@@ -1,0 +1,13 @@
+{
+  "id": "contract/hostile-stored-state-self-heals",
+  "area": "contract",
+  "invariant": "Host-persisted or artifact-shipped state read by the guest is untrusted: implausible shape, timestamps, or size self-heal as misses with plausible rewrite, never crash, never serve as valid.",
+  "scenario": {
+    "entries": ["missing fields", "string timestamp", "NaN/Infinity", "huge future timestamp", "fractional timestamp", "negative timestamp", "cyclic or oversized payload"]
+  },
+  "mustHold": [
+    "every poisoned entry behaves exactly like an empty miss",
+    "healed rewrites carry plausible, clamped metadata",
+    "a boundary-plausible entry still hits"
+  ]
+}

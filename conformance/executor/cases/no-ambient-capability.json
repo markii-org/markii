@@ -1,0 +1,10 @@
+{
+  "id": "isolation/no-ambient-capability",
+  "area": "isolation",
+  "invariant": "The guest has no clock, filesystem, network, process, or reflection capability beyond what the host explicitly injects.",
+  "scenario": { "guestCode": "enumerate every reachable global; attempt time reads, I/O, net, raw memory/reflection" },
+  "mustHold": [
+    "no ambient capability resolves to a live function",
+    "feature-detection probing cannot infer granted capabilities"
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "id": "isolation/fresh-env-per-run",
+  "area": "isolation",
+  "invariant": "Each run starts from a pristine guest environment; nothing a previous run defined, stored, or monkey-patched is observable.",
+  "scenario": {
+    "run1": { "guestCode": "define globals, override builtins the host relies on, store large state" },
+    "run2": { "guestCode": "attempt to observe run1's leftovers" }
+  },
+  "mustHold": [
+    "run2 observes none of run1's globals, overrides, or stored state",
+    "host-relied-on primitives behave as originally captured"
+  ]
+}

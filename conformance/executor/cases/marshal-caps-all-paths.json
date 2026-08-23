@@ -1,0 +1,13 @@
+{
+  "id": "marshal/caps-on-every-crossing",
+  "area": "marshal",
+  "invariant": "Values crossing the boundary in EITHER direction pass depth, node-count, size, cycle, key-type, and encoding caps on both the guest-side walk and a host-side finalizer.",
+  "scenario": {
+    "cases": ["deep recursion", "wide table/object", "self-referential value", "oversized string", "hostile key types", "strings containing NUL", "non-finite numbers"]
+  },
+  "mustHold": [
+    "each case fails cleanly with a classified reason or is rejected pre-transfer",
+    "no case reaches host memory unbounded",
+    "caps cannot be bypassed by rebinding guest globals between calls"
+  ]
+}

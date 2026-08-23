@@ -1,0 +1,14 @@
+{
+  "id": "classification/denial-unforgeable",
+  "area": "classification",
+  "invariant": "A capability or limit failure is recorded through a host-side channel whose identifying marks never appear in guest-visible error TEXT in usable form.",
+  "scenario": {
+    "step1": "trigger one genuine capability denial inside a guest-level catch",
+    "step2": "capture whatever error representation the guest can see",
+    "step3": "raise an arbitrary new failure reusing any captured identifying text"
+  },
+  "mustHold": [
+    "the step-3 failure does NOT classify as capability/limit via reused text",
+    "host-side records for step-1 and step-3 are distinguishable"
+  ]
+}

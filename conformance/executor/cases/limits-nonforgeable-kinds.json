@@ -1,0 +1,14 @@
+{
+  "id": "limits/kinds-recorded-hostside",
+  "area": "limits",
+  "invariant": "Instruction, wall-clock, and memory ceilings produce host-recorded breach kinds that guest code cannot suppress, forge, or relabel.",
+  "scenario": {
+    "cases": ["tight instruction loop", "allocation flood", "spin under wall clock"],
+    "adversarial": "guest attempts to fake each kind's identifying text"
+  },
+  "mustHold": [
+    "each ceiling terminates the run via the external kill switch path",
+    "recorded kinds come only from the host channel",
+    "forged text classifies as an ordinary script failure"
+  ]
+}

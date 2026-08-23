@@ -1,0 +1,12 @@
+{
+  "id": "contract/run-never-throws",
+  "area": "contract",
+  "invariant": "The executor's run entry returns an outcome for EVERY input, including malformed programs and hostile values; it never rejects, throws across the seam, or leaves its caller's promise unsettled.",
+  "scenario": {
+    "inputs": ["syntax-error program", "program erroring at top level", "program returning hostile values", "program wedging until external termination"]
+  },
+  "mustHold": [
+    "every input yields exactly one settled outcome",
+    "external termination after settlement is a no-op (exactly-once)"
+  ]
+}

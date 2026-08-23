@@ -15,6 +15,9 @@ docs/
 TODO.md
 # Audit artifacts: verbatim reports, kept as written; verdict folds into docs/security.md
 PENTEST-REPORT-*.md
+# Security-audit skills and process proposals: agent-facing prose, same posture
+skills/
+SECURITY-PROCESS-PROPOSAL.md
 # conformance fixtures are byte-exact test data — formatters must not rewrite them
 conformance/
 # Mark documents: Prettier's markdown formatter breaks directive fences
