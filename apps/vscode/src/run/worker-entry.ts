@@ -34,7 +34,6 @@
  */
 import { parentPort } from 'node:worker_threads';
 import { existsSync } from 'node:fs';
-import { randomBytes } from 'node:crypto';
 import * as path from 'node:path';
 
 import { extractScripts, parse } from '@markii/core';
@@ -47,6 +46,7 @@ import {
 import {
   createLuaExecutor,
   DEFAULT_MAX_FETCH_BYTES,
+  netProviderDenial,
   type CacheEntry,
   type CacheProvider,
   type NetProvider,
@@ -128,54 +128,29 @@ function hostnameOf(url: string): string | undefined {
 }
 
 /**
- * Tag on every `Error` this module's `NetProvider` throws for a policy
- * denial (an ungranted host, a redirect off the allowlist, too many
- * redirects, an over-size response, a credential-bearing redirect target).
- * This is NOT the same kind of denial as `@markii/lua`'s own `netGrants`
- * check inside `buildCapabilities` (which records on its own out-of-band
- * `CapabilityDenials` handle and is caught there) — a denial detected HERE
- * happens inside this provider's own `get`/`post`/`patch`, one level below
- * that check, so it surfaces from `thread.run()` as an ordinary thrown error
- * and would otherwise be misclassified as a `'script-error'` (adversarial
- * finding B-3). `runJob` below scans for this tag on every failed
- * script/value and reclassifies it as `'capability-denied'` — a net-provider
- * policy refusal is a permission problem, never a bug in the script.
+ * A policy denial this module's `NetProvider` raises (an ungranted host, a
+ * redirect off the allowlist, too many redirects, an over-size response, a
+ * credential-bearing redirect target). This is NOT the same kind of denial
+ * as `@markii/lua`'s own `netGrants` check inside `buildCapabilities` (which
+ * records on its own out-of-band `CapabilityDenials` handle): a denial
+ * detected HERE happens inside this provider's own `get`/`post`/`patch`, one
+ * level below that check. `netProviderDenial` (`@markii/lua`) brands the
+ * thrown `Error` with a JS `Symbol`; `@markii/lua` checks that brand on the
+ * JS side of the provider call, BEFORE the error crosses into Lua, records
+ * the denial on the same non-spoofable handle its own grant check uses, and
+ * re-throws a sanitized capability error. So a provider policy refusal comes
+ * back as `'capability-denied'` with no help from `runJob`, and no
+ * classification signal ever rides in a Lua-visible string.
  *
- * N-3 fix (PENTEST-REPORT-2026-08-23.md): a script can call
- * `error("MARKII_NET_DENIED: fake")` itself, and a fixed public tag string
- * has no way to tell that apart from a genuine denial once both have
- * crossed back out through wasmoon's Lua `pcall`/`error()` as plain text —
- * Lua only ever carries a string error value, so there is no channel here to
- * attach a non-spoofable Error subclass or symbol-keyed marker that would
- * survive the round trip intact (that IS available inside `@markii/lua`
- * itself, via its own out-of-band `CapabilityDenials` handle, but this
- * provider is one layer below that: a plain callback `@markii/lua` invokes
- * and awaits, with no visibility into its internals). The fix applied here
- * is the strongest one available at this seam without changing
- * `@markii/lua`: each job generates a fresh 128-bit random tag via
- * `node:crypto`, used ONLY for this one run and never exposed to the Lua
- * environment (not a global, not returned in any value, never logged) — a
- * script cannot know it, so it cannot forge a match. `createNetDenialTag`
- * is called once per `runJob` invocation, and the resulting `netDenied`/
- * `isNetDenialMessage` pair is threaded through instead of using a
- * module-level constant.
+ * P2-c fix (PENTEST-REPORT-2026-08-23.md §9.3): the previous approach put a
+ * per-run random tag INSIDE the thrown message so `runJob` could reclassify
+ * the failure by scanning that message. But the message crosses back into
+ * Lua, where a script's own `pcall`/`tostring` reads the tag and then forges
+ * it into `error(tag .. ": ...")` to relabel an unrelated failure as
+ * capability-denied. The brand lives on the JS `Error` object and is consumed
+ * before the Lua boundary, so there is nothing for a script to observe or
+ * forge, and `runJob` no longer post-processes failure kinds at all.
  */
-function createNetDenialTag(): string {
-  return `MARKII_NET_DENIED:${randomBytes(16).toString('hex')}`;
-}
-
-/** A tagged denial, scoped to one job's unpredictable `tag` — see `createNetDenialTag`'s doc comment. */
-function makeNetDenied(tag: string): (message: string) => Error {
-  return (message: string) => new Error(`${tag}: ${message}`);
-}
-
-/** A tagged failure carries this job's exact `tag` in its message — see `createNetDenialTag`'s doc comment. Never throws. */
-function makeIsNetDenialMessage(
-  tag: string,
-): (message: string | undefined) => boolean {
-  return (message: string | undefined) =>
-    message !== undefined && message.includes(tag);
-}
 
 /**
  * A same-hop, same-host redirect chain is capped at this many hops (B-1):
@@ -193,21 +168,21 @@ const MAX_REDIRECTS = 5;
  * given) the moment the running byte total exceeds the cap — the whole
  * response is never buffered first. This mirrors the denial
  * `@markii/lua`'s own `maxFetchBytes` cap already produces for an
- * over-size response (see `createNetDenialTag`'s doc comment on why this
+ * over-size response (see the `NetProvider` doc comment above on why this
  * provider's OWN cap must exist at all: the sandbox's cap runs on the text
- * this function already returned, too late to bound the read itself).
+ * this function already returned, too late to bound the read itself). An
+ * over-size body is a policy refusal, so it throws `netProviderDenial`.
  */
 async function readBoundedBody(
   response: Response,
   maxFetchBytes: number,
   controller: AbortController,
-  netDenied: (message: string) => Error,
 ): Promise<string> {
   const declaredLength = response.headers.get('content-length');
   if (declaredLength !== null) {
     const declared = Number(declaredLength);
     if (Number.isFinite(declared) && declared > maxFetchBytes) {
-      throw netDenied(
+      throw netProviderDenial(
         `response declares ${declared} bytes, exceeding the ${maxFetchBytes}-byte cap`,
       );
     }
@@ -229,7 +204,7 @@ async function readBoundedBody(
     total += value.byteLength;
     if (total > maxFetchBytes) {
       controller.abort();
-      throw netDenied(`response exceeds the ${maxFetchBytes}-byte cap`);
+      throw netProviderDenial(`response exceeds the ${maxFetchBytes}-byte cap`);
     }
     text += decoder.decode(value, { stream: true });
   }
@@ -267,7 +242,6 @@ async function readBoundedBody(
 function createNetProvider(
   allowlist: readonly string[],
   maxFetchBytes: number,
-  netDenied: (message: string) => Error,
 ): NetProvider {
   const allowed = new Set(allowlist.map((host) => host.toLowerCase()));
 
@@ -280,7 +254,9 @@ function createNetProvider(
     for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
       const host = hostnameOf(url);
       if (!host || !allowed.has(host)) {
-        throw netDenied(`host "${host ?? url}" is not on the run's allowlist`);
+        throw netProviderDenial(
+          `host "${host ?? url}" is not on the run's allowlist`,
+        );
       }
 
       const controller = new AbortController();
@@ -301,25 +277,29 @@ function createNetProvider(
         // real script bug. Convert it into an ordinary provider denial (same
         // treatment every other policy refusal in this loop gets) instead of
         // letting it surface as an unclassified `'script-error'`.
-        throw netDenied(`redirect target rejected: ${describeThrown(err)}`);
+        throw netProviderDenial(
+          `redirect target rejected: ${describeThrown(err)}`,
+        );
       }
 
       if (response.status >= 300 && response.status < 400) {
         const location = response.headers.get('location');
         if (!location) {
-          throw netDenied('redirect response carried no Location header');
+          throw netProviderDenial(
+            'redirect response carried no Location header',
+          );
         }
         let nextUrl: string;
         try {
           nextUrl = new URL(location, url).toString();
         } catch {
-          throw netDenied(
+          throw netProviderDenial(
             'redirect response carried an unparseable Location header',
           );
         }
         const nextHost = hostnameOf(nextUrl);
         if (!nextHost || !allowed.has(nextHost)) {
-          throw netDenied(
+          throw netProviderDenial(
             `redirected to disallowed host "${nextHost ?? nextUrl}"`,
           );
         }
@@ -331,11 +311,10 @@ function createNetProvider(
         response,
         maxFetchBytes,
         controller,
-        netDenied,
       );
       return { status: response.status, body: responseBody };
     }
-    throw netDenied(`exceeded ${MAX_REDIRECTS} redirects`);
+    throw netProviderDenial(`exceeded ${MAX_REDIRECTS} redirects`);
   }
 
   return {
@@ -402,12 +381,7 @@ async function runJob(job: RunJob): Promise<RunResult> {
   // computed once, here, rather than letting each side default
   // independently, so the two can never quietly disagree.
   const maxFetchBytes = job.limits?.maxFetchBytes ?? DEFAULT_MAX_FETCH_BYTES;
-  // N-3 fix: a fresh, unpredictable denial tag per job — see
-  // `createNetDenialTag`'s doc comment.
-  const netDenialTag = createNetDenialTag();
-  const netDenied = makeNetDenied(netDenialTag);
-  const isNetDenialMessage = makeIsNetDenialMessage(netDenialTag);
-  const net = createNetProvider(netAllowlist, maxFetchBytes, netDenied);
+  const net = createNetProvider(netAllowlist, maxFetchBytes);
 
   const tree = parse(job.text);
   const scripts = extractScripts(tree);
@@ -480,40 +454,33 @@ async function runJob(job: RunJob): Promise<RunResult> {
       : {}),
   });
 
+  // A net-provider policy denial already arrives here classified as
+  // 'capability-denied': `@markii/lua` records it on its non-spoofable
+  // `CapabilityDenials` handle when the branded `netProviderDenial` crosses
+  // its provider-call boundary (see the `NetProvider` doc comment above,
+  // P2-c). So `runJob` no longer post-processes any failure kind — it reads
+  // `entry.failureKind` verbatim, and the value store already carries the
+  // same kind for the corresponding `StoredValue`.
   const failures: RunFailure[] = summary.results
     .filter(
       (entry: RunSummaryEntry): entry is RunSummaryEntry & { error: string } =>
         entry.status === 'error',
     )
-    .map((entry) => {
-      const message = entry.error ?? 'script failed';
-      const kind = entry.failureKind ?? 'script-error';
-      return {
-        name: entry.name,
-        message,
-        // B-3: a net-provider policy denial (a blocked redirect, an
-        // over-size body, too many hops) throws a plain `Error` one level
-        // below `@markii/lua`'s own capability-denial recording (see
-        // `createNetDenialTag`'s doc comment above), so it would otherwise
-        // land here as an ordinary `'script-error'`. Reclassify it as a
-        // capability denial — the note asked for something the allowlist
-        // refused, not a bug in the script.
-        kind: isNetDenialMessage(message) ? 'capability-denied' : kind,
-      };
-    });
+    .map((entry) => ({
+      name: entry.name,
+      message: entry.error ?? 'script failed',
+      kind: entry.failureKind ?? 'script-error',
+    }));
 
-  // Same reclassification for the value store's own `failureKind` — every
-  // `StoredValue` with `status: 'error'` was populated from the exact same
-  // `runOne` outcome the `failures` entry above came from, so a net denial
-  // must be reclassified there too (a renderer branches on
-  // `StoredValue.failureKind` directly — see `@markii/react`'s
-  // `failure-presentation.ts`).
+  // Copied entry-by-entry onto a fresh plain object rather than returned as
+  // `store.snapshot()` directly: this preserves the exact N-11 pinned shape
+  // (a script literally named `__proto__` assigns through and leaves no own
+  // key), which a direct structured-clone of the store's own object would
+  // not. The values are otherwise passed through verbatim — failure kinds
+  // arrive already correct (see the failures comment above).
   const values: Record<string, import('@markii/runtime').StoredValue> = {};
   for (const [name, entry] of Object.entries(store.snapshot())) {
-    values[name] =
-      entry.status === 'error' && isNetDenialMessage(entry.error)
-        ? { ...entry, failureKind: 'capability-denied' }
-        : entry;
+    values[name] = entry;
   }
 
   return {

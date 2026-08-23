@@ -5,7 +5,7 @@ import {
   type BundleManifest,
 } from '@markii/bundle';
 import { describe, expect, it } from 'vitest';
-import type { NetProvider } from './capabilities';
+import { netProviderDenial, type NetProvider } from './capabilities';
 import type { ScriptLimits } from './limits';
 import { runScript, type RunScriptOptions } from './sandbox';
 
@@ -139,6 +139,57 @@ describe('forgery battery: genuine capability denials classify correctly', () =>
     expect(r.ok).toBe(false);
     expect(!r.ok && r.error.kind).toBe('capability');
     expect(!r.ok && r.error.capability).toBe('denied');
+  });
+});
+
+describe('provider-thrown policy denials classify out of band (P2-c)', () => {
+  it('a NetProvider that throws netProviderDenial classifies as capability/denied, using its plain message', async () => {
+    const net: NetProvider = {
+      get: async () => {
+        throw netProviderDenial('redirected to disallowed host "evil.example"');
+      },
+    };
+    const r = await run('return net.fetch_json("https://api.example.com/x")', {
+      net,
+      netGrants: { get: ['api.example.com'], post: [] },
+    });
+    expect(r.ok).toBe(false);
+    expect(!r.ok && r.error.kind).toBe('capability');
+    expect(!r.ok && r.error.capability).toBe('denied');
+    // The recorded message is the provider's own human text — no secret tag.
+    expect(!r.ok && r.error.message).toContain('disallowed host');
+  });
+
+  it('a NetProvider that throws a plain Error (a transport failure) stays a script-error, never capability', async () => {
+    const net: NetProvider = {
+      get: async () => {
+        throw new Error('ECONNREFUSED');
+      },
+    };
+    const r = await run('return net.fetch_json("https://api.example.com/x")', {
+      net,
+      netGrants: { get: ['api.example.com'], post: [] },
+    });
+    expect(r.ok).toBe(false);
+    expect(!r.ok && r.error.kind).toBe('runtime');
+    expect(!r.ok && r.error.capability).toBeUndefined();
+  });
+
+  it('a script cannot read a per-run secret out of a provider denial: the message is the provider text only', async () => {
+    const net: NetProvider = {
+      get: async () => {
+        throw netProviderDenial('host not on the allowlist');
+      },
+    };
+    const r = await run(
+      'local ok, err = pcall(net.fetch_json, "https://api.example.com/x")\n' +
+        'return tostring(err)',
+      { net, netGrants: { get: ['api.example.com'], post: [] } },
+    );
+    expect(r.ok).toBe(true);
+    const msg = r.ok ? String(r.value) : '';
+    expect(msg).toContain('host not on the allowlist');
+    expect(msg).not.toMatch(/[0-9a-f]{32}/);
   });
 });
 

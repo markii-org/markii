@@ -109,6 +109,42 @@ function capabilityError(message: string): Error {
   return new Error(`${CAPABILITY_ERROR_TAG}: ${message}`);
 }
 
+/**
+ * Brand marking an `Error` a {@link NetProvider} throws for a POLICY denial
+ * (an ungranted redirect hop, an over-size body, too many hops, a
+ * credential-bearing redirect) as opposed to a genuine transport failure
+ * (DNS, connection refused). A provider is one layer below `buildCapabilities`'
+ * own grant check, so its throws would otherwise surface as an ordinary
+ * runtime error and be classified `'script-error'`. Marking the throw lets
+ * this module record it on the non-spoofable {@link CapabilityDenials} handle
+ * (see `callNetProvider` below) instead of relying on a message string a
+ * script could read and forge.
+ *
+ * This closes P2-c (PENTEST-REPORT-2026-08-23.md §9.3): the earlier host-side
+ * fix embedded a per-run random tag in the thrown message so the host could
+ * reclassify the failure, but that message crosses back into Lua, where a
+ * script's own `pcall`/`tostring` reads the tag and then forges it. The brand
+ * is a JS `Symbol` checked on the JS side, BEFORE the error ever crosses the
+ * Lua boundary, so nothing a script can observe distinguishes a denial, and
+ * classification no longer depends on any Lua-visible string.
+ */
+const NET_PROVIDER_DENIAL: unique symbol = Symbol('markii.net.provider-denial');
+
+/** Construct an `Error` a `NetProvider` throws for a policy denial — see {@link NET_PROVIDER_DENIAL}. */
+export function netProviderDenial(message: string): Error {
+  return Object.assign(new Error(message), {
+    [NET_PROVIDER_DENIAL]: true as const,
+  });
+}
+
+/** True when `err` was built by {@link netProviderDenial} — a provider's policy refusal, not a transport failure. */
+export function isNetProviderDenial(err: unknown): err is Error {
+  return (
+    err instanceof Error &&
+    (err as { [NET_PROVIDER_DENIAL]?: unknown })[NET_PROVIDER_DENIAL] === true
+  );
+}
+
 function describeThrown(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
@@ -254,6 +290,28 @@ export function buildCapabilities(config: CapabilityConfig): {
   }
   const denials: CapabilityDenials = { last: () => lastDenial };
 
+  /**
+   * Invokes a `NetProvider` method, turning a POLICY denial the provider
+   * throws (marked via `netProviderDenial`) into the same non-spoofable
+   * outcome an in-house grant check produces: recorded on `recordDenial` and
+   * re-thrown as a `capabilityError` carrying the provider's own plain
+   * message. A transport failure (unmarked) is left to propagate untouched,
+   * so it stays a `'script-error'`. This is what lets the host provider stop
+   * smuggling a secret classification tag through the Lua-visible error text
+   * (P2-c — see `netProviderDenial`).
+   */
+  async function callNetProvider<T>(op: () => Promise<T>): Promise<T> {
+    try {
+      return await op();
+    } catch (err) {
+      if (isNetProviderDenial(err)) {
+        recordDenial('denied', err.message);
+        throw capabilityError(err.message);
+      }
+      throw err;
+    }
+  }
+
   // --- net --------------------------------------------------------------
   // `fetch_json` and `post`/`patch` are gated INDEPENDENTLY of each other
   // (a manifest can grant POST to a host without granting it GET, or vice
@@ -282,7 +340,7 @@ export function buildCapabilities(config: CapabilityConfig): {
         recordDenial('denied', message);
         throw capabilityError(message);
       }
-      const res = await config.net!.get(url);
+      const res = await callNetProvider(() => config.net!.get(url));
       if (res.body.length > maxFetchBytes) {
         const message = `fetch response for "${url}" exceeds the ${maxFetchBytes}-byte cap`;
         recordDenial('denied', message);
@@ -357,7 +415,7 @@ net.fetch_json = function(url) return __smd_net_get_json_decode(__smd_net_get(ur
         recordDenial('denied', message);
         throw capabilityError(message);
       }
-      const res = await config.net!.post!(url, body);
+      const res = await callNetProvider(() => config.net!.post!(url, body));
       // As with `net.fetch_json` above (GitHub issue #6): a plain JS object
       // (even one this shallow) crosses into Lua as a `js_proxy` userdata,
       // not a genuine table. `status`/`body` are both scalars, so instead
@@ -415,7 +473,7 @@ net.post = function(url, body) return __smd_net_post_blocked(url, body):await() 
         recordDenial('denied', message);
         throw capabilityError(message);
       }
-      const res = await config.net!.patch!(url, body);
+      const res = await callNetProvider(() => config.net!.patch!(url, body));
       // Same fix as `net.post` above (GitHub issue #6) — see that block's
       // comment for the full mechanism.
       return LuaMultiReturn.of<string | number>(res.status, res.body);

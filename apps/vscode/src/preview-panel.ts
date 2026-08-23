@@ -14,6 +14,7 @@ import {
   bundleResolutionFailureMessage,
   extractAssetsAsDataUris,
   resolveBundleDocument,
+  zipArchiveTooLarge,
 } from './bundle-resolve.js';
 import type { BundleResolution } from './bundle-resolve.js';
 import { createDebouncer } from './debounce.js';
@@ -609,6 +610,34 @@ async function openZipBundleArchive(
   bundleName: string,
   context: vscode.ExtensionContext,
 ): Promise<void> {
+  // P2-b: bound the archive read by its on-disk size BEFORE materializing it
+  // (see `zipArchiveTooLarge`). A single huge `.mkz` must not be read whole
+  // into the host just to be opened — every per-entry cap downstream operates
+  // on a `BundleStorage` that only exists once the archive is already in
+  // memory, so the guard has to sit here, ahead of `readFile`.
+  let stat: vscode.FileStat;
+  try {
+    stat = await vscode.workspace.fs.stat(bundleUri);
+  } catch {
+    presentSource(context, {
+      kind: 'bundle-error',
+      title: bundlePreviewTitleFor(bundleName, true),
+      message: 'This bundle could not be read.',
+    });
+    return;
+  }
+  if (zipArchiveTooLarge(stat.size)) {
+    console.error(
+      `Markii: zip bundle "${bundleName}" is ${stat.size} bytes, exceeding the archive open cap`,
+    );
+    presentSource(context, {
+      kind: 'bundle-error',
+      title: bundlePreviewTitleFor(bundleName, true),
+      message: 'This bundle is too large to open.',
+    });
+    return;
+  }
+
   let bytes: Uint8Array;
   try {
     bytes = await vscode.workspace.fs.readFile(bundleUri);

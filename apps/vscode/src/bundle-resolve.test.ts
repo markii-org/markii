@@ -5,10 +5,12 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_MAX_EMBEDDED_ASSET_BYTES,
   MAX_BUNDLE_TEXT_FILE_BYTES,
+  MAX_ZIP_ARCHIVE_BYTES,
   bundleResolutionFailureMessage,
   extractAssetsAsDataUris,
   resolveBundleDocument,
   resolveBundleDocumentPath,
+  zipArchiveTooLarge,
 } from './bundle-resolve';
 
 /**
@@ -286,5 +288,18 @@ describe('extractAssetsAsDataUris', () => {
 
   it('has a sane default budget', () => {
     expect(DEFAULT_MAX_EMBEDDED_ASSET_BYTES).toBeGreaterThan(0);
+  });
+});
+
+describe('zipArchiveTooLarge (P2-b: bound the archive open by on-disk size)', () => {
+  it('accepts an archive at or under the cap', () => {
+    expect(zipArchiveTooLarge(0)).toBe(false);
+    expect(zipArchiveTooLarge(1024)).toBe(false);
+    expect(zipArchiveTooLarge(MAX_ZIP_ARCHIVE_BYTES)).toBe(false);
+  });
+
+  it('refuses an archive over the cap, so a giant .mkz is never read whole', () => {
+    expect(zipArchiveTooLarge(MAX_ZIP_ARCHIVE_BYTES + 1)).toBe(true);
+    expect(zipArchiveTooLarge(4 * 1024 * 1024 * 1024)).toBe(true);
   });
 });

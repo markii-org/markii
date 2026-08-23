@@ -39,6 +39,28 @@ export type BundleResolutionFailureReason =
  */
 export const MAX_BUNDLE_TEXT_FILE_BYTES = 5 * 1024 * 1024;
 
+/**
+ * P2-b fix (PENTEST-REPORT-2026-08-23.md §9.3): the zip form is one physical
+ * file, and opening it means reading the whole archive into the extension
+ * host before any per-entry cap in `resolveBundleDocument`/`buildBundleSnapshot`
+ * can apply — those all operate on an already-materialized `BundleStorage`.
+ * A delivered `.mkz` whose archive is multi-gigabyte would therefore exhaust
+ * the host purely by being opened, contradicting security.md's "cannot
+ * exhaust the host by being opened". The archive's on-disk size is checked
+ * (via `fs.stat`) BEFORE the `readFile`, and an over-cap archive is refused
+ * without ever being read. The ceiling is generous for a real note plus its
+ * assets (which the snapshot/asset budgets bound to ~20MB each once open) yet
+ * small enough to bound the open itself; the decompression-bomb guard inside
+ * `openZipBundle` still governs inflation of whatever compressed bytes fit
+ * under this cap.
+ */
+export const MAX_ZIP_ARCHIVE_BYTES = 64 * 1024 * 1024;
+
+/** True when a zip archive's on-disk size exceeds {@link MAX_ZIP_ARCHIVE_BYTES} and must be refused before it is read into memory. */
+export function zipArchiveTooLarge(sizeBytes: number): boolean {
+  return sizeBytes > MAX_ZIP_ARCHIVE_BYTES;
+}
+
 export type BundleResolution =
   | {
       readonly ok: true;

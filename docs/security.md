@@ -137,9 +137,10 @@ A bundle is attacker-deliverable in a way a note opened in an editor is
 not: someone can hand you a whole `.mkz`, and its manifest, document,
 scripts, assets, cached data, and archive structure are all untrusted. Two
 consequences follow for a host. First, opening or running a bundle must
-bound what it reads: a file is size-checked before it is materialized, so a
-single huge entry, a zip bomb, or a directory bundle carrying a giant file
-cannot exhaust the host by being opened. Second, a bundle's cached data is
+bound what it reads: a file is size-checked before it is materialized, and
+the zip archive itself is size-checked before it is read from disk, so a
+single huge entry, a zip bomb, a directory bundle carrying a giant file, or
+a multi-gigabyte archive cannot exhaust the host by being opened. Second, a bundle's cached data is
 not trusted for freshness: a stored entry with an implausible timestamp is
 recomputed rather than served, so a shipped `.cache/` cannot pin stale
 values. The reference host's assessment of these paths is recorded in the
@@ -228,9 +229,11 @@ cannot reach a host the user did not grant; a response body is bounded to
 the fetch-size cap as it streams rather than buffered whole, and the worker
 runs under a capped heap, so neither a flood nor a decompression bomb can
 exhaust the host; a cache entry with an implausible timestamp is treated as
-a miss rather than served as permanently fresh; network denials are marked
-by identity rather than by a string a script could print, so a script
-cannot relabel its own failure; stored grants are re-validated when read; a
+a miss rather than served as permanently fresh; a network denial the host's
+provider raises is recorded out of band and classified from that record, not
+from any string that crosses into the script, so a script cannot read a
+classification signal and cannot relabel its own failure; stored grants are
+re-validated when read; a
 note that names many hosts folds into one consolidated prompt rather than a
 storm of them; and the values sent to the page carry only a failure's kind,
 never its text. Two limits of hostname-based grants are documented above
@@ -248,7 +251,25 @@ found and fixed before release: the directory-form snapshot builder read a
 file before checking its size, which a size check ahead of the read now
 closes; and the grant key omitted the content of `src=` script files, so a
 swapped bundle script could run under an old grant, which folding that
-content into the key now prevents.
+content into the key now prevents. An independent re-attack afterward
+confirmed both fixes held and found one further host-exhaustion path: the
+zip form was read from disk whole before any per-entry cap applied, since
+those caps operate on an already-opened archive. The archive's on-disk size
+is now checked before it is read, so an oversized `.mkz` is refused at open.
+The same re-attack found that the earlier network-denial fix still let a
+script read its classification signal: the per-run tag that marked a denial
+travelled inside the error text, where a script's own `pcall` could read it
+and then forge it onto an unrelated failure to relabel that failure as a
+permission denial. The presentation was cosmetic, since no boundary was
+crossed, but the fix removes the seam: a provider's policy denial is now
+recorded on the sandbox's out-of-band handle and the tag is gone, so no
+classification signal reaches the script at all. Two smaller observations
+were accepted rather than changed, and are noted here so they stay visible:
+a persisted bundle cache keyed by archive path means a bundle replaced at the
+same path inherits the old cache values, which is bounded because grants fail
+closed and a cache entry is never trusted for freshness; and a bundle's
+shipped `.cache/` is not read back into `cache.get` in the current host, so
+there is no poisoned-cache path through it today.
 
 Three areas remain intentionally outside the audited surface, and are
 tracked rather than forgotten: the four known hang reproductions are covered

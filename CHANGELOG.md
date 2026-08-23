@@ -27,6 +27,13 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
   may name a bundle-relative path to the document to open in place of the
   conventional `note.mk.md`. `parseManifest` validates it as a string;
   path-jailing stays with `normalizeBundlePath` at use time.
+- **`netProviderDenial` / `isNetProviderDenial` (`@markii/lua`)**: a
+  `NetProvider` marks a policy denial (a blocked redirect, an over-size
+  body, too many hops) by throwing `netProviderDenial(message)`. The sandbox
+  recognizes the brand on the JS side of the provider call, records the
+  denial on its non-spoofable out-of-band handle, and re-throws a sanitized
+  capability error, so a provider-level denial classifies as
+  `capability-denied` without a host reclassifying it from the error text.
 
 ### Fixed
 
@@ -44,6 +51,20 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 - **`src=` script edits re-prompt (VS Code extension)**: editing a bundle
   script referenced by `src=` now invalidates the note's stored grant and
   re-prompts, instead of silently running the new code under the old grant.
+- **Zip archive size-checked before opening (VS Code extension)**: the zip
+  form of a `.mkz` is read from disk whole to open it, so its on-disk size
+  is now checked first and an oversized archive is refused before the read.
+  The per-entry caps only apply to an already-opened archive, so without
+  this a multi-gigabyte `.mkz` could exhaust the extension host purely by
+  being opened (PENTEST-REPORT-2026-08-23.md §9.3, P2-b).
+- **Net-denial classification no longer rides a Lua-visible tag (VS Code
+  extension + `@markii/lua`)**: a provider policy denial was marked by a
+  per-run tag carried inside the thrown error message, which a script's own
+  `pcall`/`tostring` could read and then forge onto an unrelated failure to
+  relabel it as `capability-denied`. Classification now happens entirely out
+  of band via `netProviderDenial`, the tag is gone, and the worker no longer
+  post-processes failure kinds. Cosmetic only (no boundary was crossed), but
+  it removes the leak (PENTEST-REPORT-2026-08-23.md §9.3, P2-c).
 
 ## [0.4.0] - 2026-08-23
 

@@ -41,7 +41,9 @@ export {
   DEFAULT_MAX_FETCH_BYTES,
   bytesToLuaString,
   buildCapabilities,
+  isNetProviderDenial,
   luaStringToBytes,
+  netProviderDenial,
 } from './capabilities.js';
 
 export type { MarshalLimits } from './marshal.js';
