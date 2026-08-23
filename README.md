@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="res/logo_512x512.png" alt="Markii" width="128" height="128" />
+</p>
+
 # Markii
 
 [![CI](https://github.com/sadigaxund/markii/actions/workflows/ci.yml/badge.svg)](https://github.com/sadigaxund/markii/actions/workflows/ci.yml)
@@ -32,11 +36,31 @@ on open, and nothing in a note can break the page.
 
 Ways to use Markii with no coding:
 
-| App               | What it is                                                      | Get it                                                                                                 |
-| ----------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Playground        | Try Markii live in the browser: source, rendered view, Run      | [Open the playground](https://sadigaxund.github.io/markii/)                                            |
-| VS Code extension | Preview and run `.mk.md` files and `.mkz` bundles in the editor | [Download the .vsix](https://github.com/sadigaxund/markii/releases/latest/download/markii-vscode.vsix) |
-| Obsidian plugin   | Markii components inside an Obsidian vault                      | planned                                                                                                |
+<table>
+  <tr>
+    <td width="33%" valign="top" align="center">
+      <img src="res/icons/playground.svg" width="40" height="40" alt="" /><br />
+      <h4>Playground</h4>
+      Try Markii live in the browser: source, rendered view, Run.
+      <br /><br />
+      <a href="https://sadigaxund.github.io/markii/">Open the playground &rarr;</a>
+    </td>
+    <td width="33%" valign="top" align="center">
+      <img src="res/icons/vscode.png" width="40" height="40" alt="" /><br />
+      <h4>VS Code extension</h4>
+      Preview and run <code>.mk.md</code> files and <code>.mkz</code> bundles in the editor.
+      <br /><br />
+      <a href="https://github.com/sadigaxund/markii/releases/latest/download/markii-vscode.vsix">Download the .vsix &rarr;</a>
+    </td>
+    <td width="33%" valign="top" align="center">
+      <img src="res/icons/obsidian.svg" width="40" height="40" alt="" /><br />
+      <h4>Obsidian plugin</h4>
+      Markii components inside an Obsidian vault.
+      <br /><br />
+      <em>Planned</em>
+    </td>
+  </tr>
+</table>
 
 To render Markii documents in your own React app:
 
@@ -53,11 +77,31 @@ const view = renderMark(source, defaultRegistry);
 
 ### Engines
 
-| Engine                                 | Output                                              | Status    |
-| -------------------------------------- | --------------------------------------------------- | --------- |
-| React (`@markii/react`)                | an interactive DOM view                             | available |
-| Static HTML (`@markii/html`)           | a self-contained HTML string (publish, CI, archive) | available |
-| Other toolkits (Vue, terminal, native) | the format is engine-neutral; see below             | planned   |
+<table>
+  <tr>
+    <td width="33%" valign="top" align="center">
+      <img src="res/icons/react.svg" width="40" height="40" alt="" /><br />
+      <h4>React</h4>
+      <code>@markii/react</code> renders an interactive DOM view.
+      <br /><br />
+      <strong>Available</strong>
+    </td>
+    <td width="33%" valign="top" align="center">
+      <img src="res/icons/html5.svg" width="40" height="40" alt="" /><br />
+      <h4>Static HTML</h4>
+      <code>@markii/html</code> emits a self-contained string for publish, CI, archive.
+      <br /><br />
+      <strong>Available</strong>
+    </td>
+    <td width="33%" valign="top" align="center">
+      <img src="res/icons/toolkit.svg" width="40" height="40" alt="" /><br />
+      <h4>Other toolkits</h4>
+      Vue, terminal, native: the format is engine-neutral.
+      <br /><br />
+      <em>Planned</em>
+    </td>
+  </tr>
+</table>
 
 ## Components
 
@@ -65,24 +109,10 @@ Every Markii app ships the standard set: callout, card, badge, details,
 figure, tabs, kbd, rating, and the data-bound stat, progress, and chart.
 They cover everyday notes, and they are defaults, not the ceiling.
 
-When you outgrow them, components travel as a pack, and the journey is the
-same whether you write one or install someone else's:
-
-1. A pack is a folder: a small manifest naming the pack and the engine its
-   components are written for (React, for example; any supported renderer
-   engine works the same way), plus the component sources.
-2. Each component is an ordinary component in that engine, nothing special
-   to learn: it receives the directive's attributes and its inner markdown,
-   already rendered.
-3. Build it once with the pack's one build command. Installing a ready-made
-   pack skips this step entirely, because published packs ship prebuilt.
-4. Install the pack into whichever Markii app you use, by pointing the app at
-   the pack folder.
-5. Type the prefixed name in a note: `:::ana-timeline`. On a machine
-   without the pack, the same note shows a labeled fallback and stays
-   readable.
-
-Packs are designed but not shipped yet; the contract lives in
+When you outgrow them, components travel as a pack: a folder with a manifest
+and ordinary components for your engine, built once and pointed at your app.
+On a machine without the pack, the same note shows a labeled fallback and
+stays readable. Packs are designed but not shipped yet; the contract lives in
 [docs/packs.md](docs/packs.md).
 
 ## Integrating and extending

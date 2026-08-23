@@ -6,6 +6,7 @@
   "private": true,
   "license": "MIT",
   "publisher": "markii",
+  "icon": "icon.png",
   "author": "sadigaxund",
   "repository": {
     "type": "git",
