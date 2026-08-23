@@ -46,11 +46,11 @@ const view = renderMark(source, defaultRegistry);
 
 ### Platforms
 
-| Platform                          | Status                                    |
-| --------------------------------- | ----------------------------------------- |
-| React (`@markii/react`)           | available                                 |
-| VS Code extension                 | planned (next milestone)                  |
-| Other toolkits (Vue, terminal, …) | the format is renderer-neutral; see below |
+| Platform                          | Status                                                                              |
+| --------------------------------- | ----------------------------------------------------------------------------------- |
+| React (`@markii/react`)           | available                                                                           |
+| VS Code extension                 | in the repo: preview plus script and `.mkz` bundle Run; Marketplace publish pending |
+| Other toolkits (Vue, terminal, …) | the format is renderer-neutral; see below                                           |
 
 ## Components
 
