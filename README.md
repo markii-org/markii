@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="res/logo_512x512.png" alt="Markii" width="128" height="128" />
+  <img src="res/logo_512x512.png" alt="Markii" width="256" height="256" />
 </p>
 
 # Markii
