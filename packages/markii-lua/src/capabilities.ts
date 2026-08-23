@@ -120,7 +120,7 @@ function capabilityError(message: string): Error {
  * (see `callNetProvider` below) instead of relying on a message string a
  * script could read and forge.
  *
- * This closes P2-c (PENTEST-REPORT-2026-08-23.md §9.3): the earlier host-side
+ * This closes P2-c (docs/archive/PENTEST-REPORT-2026-08-23.md §9.3): the earlier host-side
  * fix embedded a per-run random tag in the thrown message so the host could
  * reclassify the failure, but that message crosses back into Lua, where a
  * script's own `pcall`/`tostring` reads the tag and then forges it. The brand

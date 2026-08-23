@@ -576,7 +576,7 @@ describe('spawnRun — N-2: postMessage guard for uncloneable payloads', () => {
     // A function anywhere in the structured-clone payload makes
     // `postMessage` throw `DataCloneError` synchronously, before the
     // executor's `resolve` is ever reachable through the ordinary
-    // message/error/exit paths -- see PENTEST-REPORT-2026-08-23.md's N-2.
+    // message/error/exit paths -- see docs/archive/PENTEST-REPORT-2026-08-23.md's N-2.
     const uncloneableCacheSnapshot = {
       k: { toString: () => 'x' },
     } as unknown as Record<string, import('@markii/lua').CacheEntry>;
@@ -707,7 +707,7 @@ describe('spawnRun — N-3/N-4: net-denial classification is identity-based, not
   });
 });
 
-// N-11 (PENTEST-REPORT-2026-08-23.md): silent data quirks, pinned as
+// N-11 (docs/archive/PENTEST-REPORT-2026-08-23.md): silent data quirks, pinned as
 // executable evidence so behavior can't drift unnoticed. None of these are
 // exploitable (see the report); this is documentation, not a fix.
 describe('spawnRun — N-11: silent data quirks (pinned, not changed)', () => {

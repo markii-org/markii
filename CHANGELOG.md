@@ -56,7 +56,7 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
   is now checked first and an oversized archive is refused before the read.
   The per-entry caps only apply to an already-opened archive, so without
   this a multi-gigabyte `.mkz` could exhaust the extension host purely by
-  being opened (PENTEST-REPORT-2026-08-23.md §9.3, P2-b).
+  being opened (docs/archive/PENTEST-REPORT-2026-08-23.md §9.3, P2-b).
 - **Net-denial classification no longer rides a Lua-visible tag (VS Code
   extension + `@markii/lua`)**: a provider policy denial was marked by a
   per-run tag carried inside the thrown error message, which a script's own
@@ -64,7 +64,7 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
   relabel it as `capability-denied`. Classification now happens entirely out
   of band via `netProviderDenial`, the tag is gone, and the worker no longer
   post-processes failure kinds. Cosmetic only (no boundary was crossed), but
-  it removes the leak (PENTEST-REPORT-2026-08-23.md §9.3, P2-c).
+  it removes the leak (docs/archive/PENTEST-REPORT-2026-08-23.md §9.3, P2-c).
 
 ## [0.4.0] - 2026-08-23
 

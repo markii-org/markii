@@ -183,7 +183,7 @@ export const ALLOW_LABEL = 'Allow';
 export const DONT_ALLOW_LABEL = "Don't allow";
 
 /**
- * PROMPT-STORM fix (report section 8, item 6, PENTEST-REPORT-2026-08-23.md):
+ * PROMPT-STORM fix (report section 8, item 6, docs/archive/PENTEST-REPORT-2026-08-23.md):
  * `runGrantFlow`'s per-host loop below is sequential and modal, one dialog
  * per statically-extracted host. A hostile note with hundreds of literal
  * `net.fetch_json("https://hostN/")` calls would otherwise re-open hundreds
@@ -277,7 +277,7 @@ function readAllGrants(memento: GrantMemento): Record<string, unknown> {
 
 /**
  * A `readGrant` result annotated with whether re-validation dropped
- * anything (N-6, PENTEST-REPORT-2026-08-23.md).
+ * anything (N-6, docs/archive/PENTEST-REPORT-2026-08-23.md).
  */
 /** A `StoredGrant` after every field has been re-validated against today's rules (`isSafeHostForPrompt`/`isBundleFsGrant`) — stricter than the raw `StoredGrant` shape a `Memento` can hand back. */
 interface ValidatedGrant {

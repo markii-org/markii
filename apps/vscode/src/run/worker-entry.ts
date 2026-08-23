@@ -142,7 +142,7 @@ function hostnameOf(url: string): string | undefined {
  * back as `'capability-denied'` with no help from `runJob`, and no
  * classification signal ever rides in a Lua-visible string.
  *
- * P2-c fix (PENTEST-REPORT-2026-08-23.md §9.3): the previous approach put a
+ * P2-c fix (docs/archive/PENTEST-REPORT-2026-08-23.md §9.3): the previous approach put a
  * per-run random tag INSIDE the thrown message so `runJob` could reclassify
  * the failure by scanning that message. But the message crosses back into
  * Lua, where a script's own `pcall`/`tostring` reads the tag and then forges
@@ -269,7 +269,7 @@ function createNetProvider(
           signal: controller.signal,
         });
       } catch (err) {
-        // N-4 fix (PENTEST-REPORT-2026-08-23.md): a redirect Location that
+        // N-4 fix (docs/archive/PENTEST-REPORT-2026-08-23.md): a redirect Location that
         // embeds credentials (`https://user:pass@host/...`) makes Node's
         // `fetch` throw `TypeError: Request cannot be constructed from a URL
         // that includes credentials` at construction time — the request is

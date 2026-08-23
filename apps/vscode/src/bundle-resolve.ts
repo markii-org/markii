@@ -40,7 +40,7 @@ export type BundleResolutionFailureReason =
 export const MAX_BUNDLE_TEXT_FILE_BYTES = 5 * 1024 * 1024;
 
 /**
- * P2-b fix (PENTEST-REPORT-2026-08-23.md §9.3): the zip form is one physical
+ * P2-b fix (docs/archive/PENTEST-REPORT-2026-08-23.md §9.3): the zip form is one physical
  * file, and opening it means reading the whole archive into the extension
  * host before any per-entry cap in `resolveBundleDocument`/`buildBundleSnapshot`
  * can apply — those all operate on an already-materialized `BundleStorage`.

@@ -114,7 +114,7 @@ function pickNonceChar(sample: number): string {
 
 /**
  * A `[0, 1)` sample drawn from `node:crypto`'s CSPRNG (N-9 fix,
- * PENTEST-REPORT-2026-08-23.md) rather than `Math.random`, which is not
+ * docs/archive/PENTEST-REPORT-2026-08-23.md) rather than `Math.random`, which is not
  * cryptographically strong in V8 and is unsuitable as the sole source of
  * entropy for something whose whole job is being unguessable. Reads 4 random
  * bytes as an unsigned 32-bit integer and scales it into `[0, 1)`, matching

@@ -754,7 +754,7 @@ describe('runGrantFlow — bundle-fs access prompting (GitHub issue #9)', () => 
   });
 });
 
-// N-6 (PENTEST-REPORT-2026-08-23.md): stored grants are re-validated, not
+// N-6 (docs/archive/PENTEST-REPORT-2026-08-23.md): stored grants are re-validated, not
 // trusted verbatim, once shape validation passes.
 describe('runGrantFlow — N-6: stored grant hosts are re-validated at read time', () => {
   it('a stored record with a mix of safe and unsafe hosts yields only the safe ones and re-prompts for the rest', async () => {
@@ -848,7 +848,7 @@ describe('runGrantFlow — N-6: stored grant hosts are re-validated at read time
   });
 });
 
-// PROMPT-STORM guard (report section 8, item 6, PENTEST-REPORT-2026-08-23.md).
+// PROMPT-STORM guard (report section 8, item 6, docs/archive/PENTEST-REPORT-2026-08-23.md).
 describe('runGrantFlow — PROMPT-STORM guard: many distinct hosts fold into one consolidated gate', () => {
   function manyHosts(count: number): string[] {
     return Array.from({ length: count }, (_, i) => `host${i}.example.com`);

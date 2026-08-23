@@ -5,7 +5,7 @@ playbook, severity rubric, report contract). This file adds the repo trust
 map, the known-findings ledger, concrete per-surface checklists with code
 anchors, and the harness recipes proven in the August 2026 passes.
 
-Prior art to read first: `PENTEST-REPORT-2026-08-23.md` (passes 1 and 2),
+Prior art to read first: `docs/archive/PENTEST-REPORT-2026-08-23.md` (passes 1 and 2),
 `docs/security.md` (normative model plus its written promises), `docs/bundles.md`,
 and `AGENTS.md`.
 

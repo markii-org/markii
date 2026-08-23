@@ -221,7 +221,7 @@ export async function spawnRun(options: SpawnRunOptions): Promise<RunResult> {
       });
     });
 
-    // N-2 fix (PENTEST-REPORT-2026-08-23.md): `postMessage` structured-clones
+    // N-2 fix (docs/archive/PENTEST-REPORT-2026-08-23.md): `postMessage` structured-clones
     // `job` synchronously, so an uncloneable payload (e.g. a value containing
     // a function, or an object with a throwing `toString`) throws a
     // `DataCloneError` right here, before any of the worker's own event
