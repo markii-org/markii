@@ -15,17 +15,20 @@ and sandboxed scripts feeding them live data, in anything that speaks Markii.
 # Example Markii note
 
 ## you can use custom made `callout` type component
+
 :::callout{type=warning title="Heads up"}
 This ships **Tuesday**.
 :::
 
 ## you can also run `Lua` code to dynamically render your notes
+
 ```lua {name=repo}
 local r = net.fetch_json("https://api.github.com/repos/facebook/react")
 return { stars = r.stargazers_count }
 ```
 
 ## this is an example of inline substitution. see `docs/format.md`
+
 facebook/react has :value[repo.stars] stars.
 ````
 
@@ -79,8 +82,8 @@ Ways to use Markii with no coding:
 To render Markii documents in your own React app:
 
 ```tsx
-import { defaultRegistry }  from '@markii/react/components';
-import { renderMark }       from '@markii/react';
+import { defaultRegistry } from '@markii/react/components';
+import { renderMark } from '@markii/react';
 
 const view = renderMark(source, defaultRegistry);
 ```
