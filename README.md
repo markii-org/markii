@@ -46,7 +46,7 @@ Ways to use Markii with no coding:
       <a href="https://sadigaxund.github.io/markii/">Open the playground &rarr;</a>
     </td>
     <td width="33%" valign="top" align="center">
-      <img src="res/icons/vscode-logo.png" width="40" height="40" alt="" /><br />
+      <img src="res/icons/vscode-mark.png" width="40" height="40" alt="" /><br />
       <h4>VS Code extension</h4>
       Preview and run <code>.mk.md</code> files and <code>.mkz</code> bundles in the editor.
       <br /><br />
