@@ -176,7 +176,7 @@ export function hostPromptMessage(host: string): string {
 
 /** Exact wording of the one extra "hosts can't be listed in advance" prompt. */
 export const UNKNOWN_HOSTS_PROMPT_MESSAGE =
-  "This note builds a network address dynamically, so its hosts can't be listed in advance. Allow network access?";
+  "This note builds network addresses at run time, which can't be listed in advance and will be denied; only the hosts written directly in the note can be granted. Allow those?";
 
 /** Button labels every prompt in this flow uses — both a plain "Allow" and a "Don't allow" refusal are always offered, never a bare dismiss-only message. */
 export const ALLOW_LABEL = 'Allow';

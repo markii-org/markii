@@ -499,7 +499,7 @@ describe('prompt wording', () => {
       "This note's scripts can send data to api.example.com. Allow?",
     );
     expect(UNKNOWN_HOSTS_PROMPT_MESSAGE).toBe(
-      "This note builds a network address dynamically, so its hosts can't be listed in advance. Allow network access?",
+      "This note builds network addresses at run time, which can't be listed in advance and will be denied; only the hosts written directly in the note can be granted. Allow those?",
     );
     expect(ALLOW_LABEL).toBe('Allow');
     expect(DONT_ALLOW_LABEL).toBe("Don't allow");

@@ -304,6 +304,8 @@ genuine hang would wedge the test runner); the external terminatable isolate
 is now exercised by the extension's own tests but its behavior inside a live
 editor host is the application's to verify; and the `require` jail cannot be
 audited until the packs feature wires it up, at which point it needs its own
-adversarial pass. One consent-wording refinement is deferred: a prompt
-offered when a note builds network addresses dynamically is honest that such
-requests are denied, and is tracked for rewording to state that outright.
+adversarial pass. The consent prompt shown when a note builds network
+addresses at run time now states the denial outright: it says those requests
+cannot be listed in advance and will be denied, and that only the hosts
+written directly in the note can be granted, so accepting is never mistaken
+for enabling the dynamic requests.
