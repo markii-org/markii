@@ -37,7 +37,10 @@
       "@markii/react/components": [
         "packages/platforms/markii-react/src/components/index.ts"
       ],
-      "@markii/html": ["packages/platforms/markii-html/src/index.ts"]
+      "@markii/html": ["packages/platforms/markii-html/src/index.ts"],
+      "@markii/html/components": [
+        "packages/platforms/markii-html/src/components/index.ts"
+      ]
     }
   }
 }

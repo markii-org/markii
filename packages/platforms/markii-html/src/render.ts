@@ -31,17 +31,13 @@ const CODE_META_ATTR = 'data-mk-meta';
 /** The bare-only meta attribute that opens a script marker expanded (§8; bare-only, fail-closed). */
 const OPEN_ATTRIBUTE_KEY = 'open';
 
-/** A hast `raw` node: not in the standard `hast` content unions, but `hast-util-to-html` emits its value verbatim under `allowDangerousHtml`. */
-interface RawNode {
-  type: 'raw';
-  value: string;
-}
-
 /**
- * Wraps a finished HTML string as a hast `raw` node. Every directive, script
- * marker, and fallback the engine produces re-enters the tree this way, so a
- * single `toHtml` pass serializes the plain hast around them while their
- * already-built HTML passes through untouched.
+ * Wraps a finished HTML string as a hast `raw` node. A `raw` node is not in
+ * the standard `hast` content unions, but `hast-util-to-html` emits its value
+ * verbatim under `allowDangerousHtml` — so every directive, script marker, and
+ * fallback the engine produces re-enters the tree this way, and a single
+ * `toHtml` pass serializes the plain hast around them while their already-built
+ * HTML passes through untouched.
  */
 function raw(value: string): RootContent {
   return { type: 'raw', value } as unknown as RootContent;

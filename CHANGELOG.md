@@ -19,9 +19,19 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
   fallbacks (same markup and classes as `@markii/react`, so one stylesheet
   covers both), layout interception (`width`/`align`), script-fence folding,
   hostile-registry safety, and the never-throw guarantee. Components are
-  `(attributes, childrenHtml, ctx) => string` with `ctx.esc`. This first
-  slice ships the engine; the standard component set and value binding
-  follow.
+  `(attributes, childrenHtml, ctx) => string` with `ctx.esc`.
+- **`@markii/html/components`: the standard component set** — HTML-string
+  emitters for callout, card, badge, details, figure, tabs/tab, kbd, rating,
+  row, cell, and the layout wrappers (center/left/right/wide/narrow/full via
+  `createLayoutWrapper`), plus `defaultHtmlRegistry`. Markup and classes match
+  `@markii/react` byte-for-byte, so `@markii/react/doc.css` styles both
+  renderers; `figure` runs `src` through `@markii/core`'s `isSafeUrl` (the same
+  sanitizer gate the React figure uses). `tabs` renders every panel in document
+  order with no JS switcher: this package is zero-JS by design, and a string
+  component cannot recover each tab's `label` from already-rendered children (a
+  documented limitation). The data-bound `stat`/`progress`/`chart` and
+  `:value`/`data=` binding are deferred to a later slice, since they need a
+  value-resolution context.
 
 ## [0.5.0] - 2026-08-23
 

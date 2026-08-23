@@ -67,6 +67,11 @@ packages/platforms/markii-html   the static HTML renderer (issue #2), a second
                      same alias/hostile-config rules as the React registry
   src/layout.ts      resolveLayoutAttributes (width/align), mirrors @markii/react
   src/escape.ts      the one HTML-escaping primitive (ctx.esc)
+  src/components/    the standard set as string emitters (callout, card, badge,
+                     details, figure, tabs/tab, kbd, rating, row, cell, layout
+                     wrappers) + defaultHtmlRegistry; markup/classes match
+                     @markii/react so doc.css is shared. stat/progress/chart and
+                     value binding deferred (need a value-resolution context)
 packages/markii-runtime host-side scripting glue (docs/scripting.md) — neutral, no React,
                         no wasmoon; stays runtime-agnostic (executor injected):
   src/store.ts       ValueStore + createValueStore (null-proto, hasOwn-guarded)
