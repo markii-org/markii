@@ -6,6 +6,8 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-08-24
+
 ### Added
 
 - **`@markii/html`: a second, framework-free renderer (issue #2)** — the

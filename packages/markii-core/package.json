@@ -1,6 +1,6 @@
 {
   "name": "@markii/core",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Framework-agnostic reference parser for Mark (.mk.md): CommonMark + directives to mdast, and mdast to a sanitized hast tree. Zero React dependency.",
   "keywords": [
     "markdown",
