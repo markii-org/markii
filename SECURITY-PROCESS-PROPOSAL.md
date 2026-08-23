@@ -1,9 +1,10 @@
 # Proposal: security-process rules for AGENTS.md
 
-Status: PROPOSAL for orchestrator review. Nothing here is applied; per repo
-rules the orchestrator owns AGENTS.md and docs/ edits. Companion artifacts
-shipped alongside: `skills/security-audit.md` (general method),
-`skills/markii-security-audit.md` (repo-specific), and a seed executor
+Status: ADOPTED (2026-08-23). Change 1 (maintenance-map additions) and Change
+2 (the executed-probe coding standard) are in AGENTS.md; Change 3 (the promise
+ledger) is in `docs/security.md`. This file is kept as the rationale record.
+Companion artifacts shipped alongside: `skills/security-audit.md` (general
+method), `skills/markii-security-audit.md` (repo-specific), and a seed executor
 conformance corpus at `conformance/executor/`.
 
 ## Motivation

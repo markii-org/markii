@@ -146,6 +146,32 @@ recomputed rather than served, so a shipped `.cache/` cannot pin stale
 values. The reference host's assessment of these paths is recorded in the
 verification status below.
 
+## Promise ledger
+
+The rules above are written as prose. This table collects the security
+promises in one place, each with a stable identifier, so an audit or a review
+can grade code against one specific claim rather than against a paragraph. An
+identifier is stable across rewordings; a row is removed only when the
+guarantee it names is. The verification status below reports how these were
+tested, and the skills in `skills/` grade against this table.
+
+| ID | Promise | Where it holds |
+| --- | --- | --- |
+| `open-is-pure` | Rendering a document runs no script; every value read is a pure lookup of last-known state. | [The sandbox](#the-sandbox); `@markii/react` render |
+| `open-fetches-images` | A pure open performs no network beyond fetching a remote image the document references, the same posture any markdown preview takes. | [No "trust this note?" dialog](#no-trust-this-note-dialog) |
+| `no-ambient` | A script has no network, no filesystem, and no clock beyond what the host injects as a granted capability. | [Capabilities](#capabilities); `@markii/lua` empty environment |
+| `net-per-host` | A network grant is scoped to a hostname, and the prompt states the note can send data to that host. | [Capabilities](#capabilities) |
+| `grant-keyed-to-code` | A grant is keyed to a hash of the note's full executable closure and is re-prompted when any of that code changes. | [Capabilities](#capabilities); `computeGrantKey` in `@markii/runtime` |
+| `redirect-rechecked` | Every redirect hop's host is re-checked against the allowlist before it is contacted, so a redirect cannot reach an ungranted host. | [Capabilities](#capabilities); the host `net` provider |
+| `tier-caps` | An auto-run or scheduled run is read-only, and the read-only tier exposes no effectful method to escalate. | [Triggers cap capabilities](#triggers-cap-capabilities) |
+| `non-forgeable-class` | A limit breach or a capability denial is recorded outside the sandbox, so a script cannot forge or suppress how its own failure is classified. | [The sandbox](#the-sandbox); `CapabilityDenials` and the limit flags |
+| `isolate-required` | A host must run scripts in a dedicated terminatable isolate with an external wall-clock watchdog; auto-run and scheduled execution are unsound without it. | [The isolate requirement](#the-isolate-requirement); host code |
+| `bundle-jail` | `bundle.read` and `bundle.write` reject absolute paths, `..`, and symlink escapes, so a script never reaches outside its own bundle. | [The bundle jail](#the-bundle-jail); the `@markii/bundle` path jail |
+| `writes-to-cache` | A script's writes are confined to `.cache/`; it can never write the document or the manifest. | [The bundle jail](#the-bundle-jail); the write jail |
+| `bounded-open` | A file is size-checked before it is materialized and a zip archive before it is read, so opening or running a bundle cannot exhaust the host. | [The bundle jail](#the-bundle-jail) |
+| `cache-not-trusted` | A cached entry with an implausible timestamp is recomputed rather than served, so a shipped `.cache/` cannot pin stale values. | [The bundle jail](#the-bundle-jail) |
+| `values-are-data` | A script value reaches the page as data only; its text never becomes markup, and a failure carries only its kind, never its text. | [Capabilities](#capabilities); the failure-presentation seam in `@markii/react` |
+
 ## Verification status of the reference sandbox
 
 The `@markii/lua` sandbox was audited adversarially in August 2026 (commit
