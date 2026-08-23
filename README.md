@@ -39,20 +39,27 @@ Ways to use Markii with no coding:
 <table>
   <tr>
     <td width="33%" valign="top" align="center">
+      <br>
       <img src="res/icons/playground.svg" width="40" height="40" alt="" /><br />
       <h4>Playground</h4>
       Try Markii live in the browser: source, rendered view, Run.
       <br /><br />
       <a href="https://sadigaxund.github.io/markii/">Open the playground &rarr;</a>
+      <br>
+      <br>
     </td>
     <td width="33%" valign="top" align="center">
+      <br>
       <img src="res/icons/vscode-mark.png" width="40" height="40" alt="" /><br />
       <h4>VS Code extension</h4>
       Preview and run <code>.mk.md</code> files and <code>.mkz</code> bundles in the editor.
       <br /><br />
       <a href="https://github.com/sadigaxund/markii/releases/latest/download/markii-vscode.vsix">Download the .vsix &rarr;</a>
+      <br>
+      <br>
     </td>
     <td width="33%" valign="top" align="center">
+      <br>
       <img src="res/icons/obsidian.svg" width="40" height="40" alt="" /><br />
       <h4>Obsidian plugin</h4>
       Markii components inside an Obsidian vault.
@@ -80,25 +87,34 @@ const view = renderMark(source, defaultRegistry);
 <table>
   <tr>
     <td width="33%" valign="top" align="center">
+      <br>
       <img src="res/icons/react.svg" width="40" height="40" alt="" /><br />
       <h4>React</h4>
       <code>@markii/react</code> renders an interactive DOM view.
       <br /><br />
       <strong>Available</strong>
+      <br>
+      <br>
     </td>
     <td width="33%" valign="top" align="center">
+      <br>
       <img src="res/icons/html5.svg" width="40" height="40" alt="" /><br />
       <h4>Static HTML</h4>
       <code>@markii/html</code> emits a self-contained string for publish, CI, archive.
       <br /><br />
       <strong>Available</strong>
+      <br>
+      <br>
     </td>
     <td width="33%" valign="top" align="center">
+      <br>
       <img src="res/icons/toolkit.svg" width="40" height="40" alt="" /><br />
       <h4>Other toolkits</h4>
       Vue, terminal, native: the format is engine-neutral.
       <br /><br />
       <em>Planned</em>
+      <br>
+      <br>
     </td>
   </tr>
 </table>
