@@ -31,6 +31,15 @@ on open, and nothing in a note can break the page.
 Try the playground at https://sadigaxund.github.io/markii/: source on the
 left, rendered document on the right, a Run button for the scripts.
 
+### Apps
+
+Ways to use Markii with no coding:
+
+| App               | What it is                                                      | Get it                                                                                                                                                                                                                    |
+| ----------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| VS Code extension | Preview and run `.mk.md` files and `.mkz` bundles in the editor | [![Download the .vsix](https://img.shields.io/badge/download-.vsix-1f6feb?logo=visualstudiocode&logoColor=white)](https://github.com/sadigaxund/markii/releases/latest/download/markii-vscode.vsix) · Marketplace planned |
+| Obsidian plugin   | Markii components inside an Obsidian vault                      | planned                                                                                                                                                                                                                   |
+
 To render Markii documents in your own React app:
 
 ```
@@ -44,13 +53,12 @@ import { defaultRegistry } from '@markii/react/components';
 const view = renderMark(source, defaultRegistry);
 ```
 
-### Platforms
+### Renderers
 
-| Platform                          | Status                                                                              |
-| --------------------------------- | ----------------------------------------------------------------------------------- |
-| React (`@markii/react`)           | available                                                                           |
-| VS Code extension                 | in the repo: preview plus script and `.mkz` bundle Run; Marketplace publish pending |
-| Other toolkits (Vue, terminal, …) | the format is renderer-neutral; see below                                           |
+| Renderer                          | Status                                    |
+| --------------------------------- | ----------------------------------------- |
+| React (`@markii/react`)           | available                                 |
+| Other toolkits (Vue, terminal, …) | the format is renderer-neutral; see below |
 
 ## Components
 

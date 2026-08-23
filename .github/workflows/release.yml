@@ -8,6 +8,12 @@
 #   2. github-release Packs each package into a stable-named tarball, extracts
 #                     the matching section from CHANGELOG.md, and creates (or
 #                     updates) the GitHub Release with those tarballs attached.
+#   3. vscode-extension  Builds the VS Code extension into a .vsix, attaches it
+#                     to the GitHub Release (a versioned name and a stable
+#                     markii-vscode.vsix), and, only when a VSCE_PAT secret is
+#                     present, publishes it to the VS Code Marketplace. Without
+#                     the secret the publish step is skipped and the .vsix is
+#                     still attached, so the two paths are independent.
 #
 # Prerequisites for publishing a NEW version to npm:
 #   - The `@markii` scope is owned by the publishing account or org.
@@ -174,3 +180,50 @@ jobs:
           else
             gh release create "$TAG" --title "$TAG" --notes-file RELEASE_NOTES.md dist-artifacts/*.tgz
           fi
+
+  vscode-extension:
+    needs: github-release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    # Job-level so the Marketplace step's `if` can read it. An empty string
+    # when the secret is unset, which the step guards on.
+    env:
+      VSCE_PAT: ${{ secrets.VSCE_PAT }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # The extension bundles @markii/* from source (esbuild aliases), so it
+      # does not depend on the npm publish above; it only needs the workspace.
+      - name: Build and package the extension
+        run: |
+          set -euo pipefail
+          cd apps/vscode
+          npm run package
+          ls -1 *.vsix
+
+      - name: Attach the .vsix to the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          VSIX=$(ls apps/vscode/markii-vscode-*.vsix)
+          # A stable-named copy so the latest is always at a fixed URL, the
+          # same convention the tarballs use.
+          cp "$VSIX" markii-vscode.vsix
+          gh release upload "$TAG" "$VSIX" markii-vscode.vsix --clobber
+
+      - name: Publish to the VS Code Marketplace (only when VSCE_PAT is set)
+        if: env.VSCE_PAT != ''
+        run: |
+          set -euo pipefail
+          cd apps/vscode
+          npx @vscode/vsce publish --no-dependencies -p "$VSCE_PAT"
