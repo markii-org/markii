@@ -100,7 +100,7 @@ const view = renderMark(source, defaultRegistry);
       <br>
       <img src="res/icons/html5.svg" width="40" height="40" alt="" /><br />
       <h4>Static HTML</h4>
-      <code>@markii/html</code> emits a self-contained string for publish, CI, archive.
+      <code>@markii/html</code> emits a static HTML for publish, CI, archive.
       <br /><br />
       <strong>Available</strong>
       <br>
