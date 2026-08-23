@@ -6,6 +6,18 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **`@markii/pack`: the component pack contract (issue #3, slice 0)** — a new
+  neutral package defining `pack.json`'s manifest shape
+  (`name`/`engine`/`components`), hand-rolled validation (`parsePackManifest`),
+  and the namespace rules from `docs/packs.md`: pack-name and
+  local-component-name validation (lowercase-kebab), rejection of the reserved
+  bundle segments `scripts`/`assets`/`.cache` as a namespace, directive-name
+  composition (`ana` + `timeline` → `ana-timeline`), and a namespace-collision
+  predicate. No React, no parsing, no registry loading, no filesystem reads:
+  those are later slices.
+
 ## [0.6.0] - 2026-08-24
 
 ### Added

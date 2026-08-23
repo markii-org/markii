@@ -1,0 +1,44 @@
+{
+  "name": "@markii/pack",
+  "version": "0.6.0",
+  "description": "Component pack contract for Markii (docs/packs.md): the pack.json manifest shape, namespace and engine rules, and hand-rolled validation. No React, no parsing, no bundle loading.",
+  "keywords": [
+    "markdown",
+    "mark",
+    "mk.md",
+    "pack",
+    "namespace"
+  ],
+  "license": "MIT",
+  "author": "sadigaxund",
+  "homepage": "https://github.com/sadigaxund/markii#readme",
+  "bugs": "https://github.com/sadigaxund/markii/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sadigaxund/markii.git",
+    "directory": "packages/markii-pack"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "build": "tsc --noEmit -p tsconfig.json",
+    "build:dist": "rm -rf dist && tsc -p tsconfig.build.json",
+    "lint": "eslint ."
+  }
+}

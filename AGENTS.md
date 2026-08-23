@@ -100,6 +100,15 @@ packages/markii-bundle  .mkz bundle handling (docs/bundles.md, L2) — no React,
   src/zip.ts         zip form via fflate (browser-safe main entry)
   src/fs.ts          directory form via node:fs (Node-only "./fs" subpath export)
   src/script-view.ts capability-restricted view for future script runtime (§11)
+packages/markii-pack    component pack contract (docs/packs.md, issue #3) — no React,
+                        no parsing, no bundle loading; the seam later slices
+                        (registry loading, uses: surfacing, require) build against:
+  src/manifest.ts    pack.json contract: PackManifest (name/engine/components)
+                     + parsePackManifest() hand-rolled validation (no schema deps)
+  src/namespace.ts   namespace/engine rules: pack-name + local-component-name
+                     validation (lowercase-kebab), reserved bundle-segment
+                     rejection, directive-name composition (packName + localName
+                     → "ana-timeline"), collision-detection predicate
 packages/markii-lua     Lua sandbox runtime (docs/security.md, L3) — no React, no parsing:
   src/globals.ts     empty-env whitelist: curated string/table/math only
   src/capabilities.ts net/cache/bundle tables; two-tier (manual vs auto) gating

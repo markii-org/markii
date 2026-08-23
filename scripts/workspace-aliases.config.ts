@@ -47,6 +47,10 @@ export const workspaceAliases = [
     find: '@markii/bundle',
     replacement: pkgSrc('packages', 'markii-bundle'),
   },
+  {
+    find: '@markii/pack',
+    replacement: pkgSrc('packages', 'markii-pack'),
+  },
   { find: '@markii/lua', replacement: pkgSrc('packages', 'markii-lua') },
   {
     find: '@markii/react',
