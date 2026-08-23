@@ -10,20 +10,27 @@ Markii is markdown that renders your own components. A `.mk.md` file is plain
 CommonMark plus one small directive syntax, so it opens as readable markdown
 in any editor, and opens as a living document, with callouts, tabs, charts,
 and sandboxed scripts feeding them live data, in anything that speaks Markii.
-(Markii rhymes with marquee.)
 
 ````markdown
+# Example Markii note
+
+## you can use custom made `callout` type component
 :::callout{type=warning title="Heads up"}
 This ships **Tuesday**.
 :::
 
+## you can also run `Lua` code to dynamically render your notes
 ```lua {name=repo}
 local r = net.fetch_json("https://api.github.com/repos/facebook/react")
 return { stars = r.stargazers_count }
 ```
 
+## this is an example of inline substitution. see `docs/format.md`
 facebook/react has :value[repo.stars] stars.
 ````
+
+> [!TIP]
+> For more details on how Markii works, see [README.mk.md](https://sadigaxund.github.io/markii/)
 
 Delete every directive and script and a coherent note remains. That is the
 line Markii holds: components and scripts feed the document; they never become
@@ -71,13 +78,9 @@ Ways to use Markii with no coding:
 
 To render Markii documents in your own React app:
 
-```
-npm install @markii/core @markii/react
-```
-
 ```tsx
-import { renderMark } from '@markii/react';
-import { defaultRegistry } from '@markii/react/components';
+import { defaultRegistry }  from '@markii/react/components';
+import { renderMark }       from '@markii/react';
 
 const view = renderMark(source, defaultRegistry);
 ```
