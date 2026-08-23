@@ -28,17 +28,15 @@ on open, and nothing in a note can break the page.
 
 ## Getting started
 
-Try the playground at https://sadigaxund.github.io/markii/: source on the
-left, rendered document on the right, a Run button for the scripts.
-
 ### Apps
 
 Ways to use Markii with no coding:
 
-| App               | What it is                                                      | Get it                                                                                                                                                                                                                                                                                                                  |
-| ----------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| VS Code extension | Preview and run `.mk.md` files and `.mkz` bundles in the editor | [![Marketplace](https://img.shields.io/visual-studio-marketplace/v/markii.markii-vscode?label=Marketplace&logo=visualstudiocode&logoColor=white)](https://marketplace.visualstudio.com/items?itemName=markii.markii-vscode) · [.vsix](https://github.com/sadigaxund/markii/releases/latest/download/markii-vscode.vsix) |
-| Obsidian plugin   | Markii components inside an Obsidian vault                      | planned                                                                                                                                                                                                                                                                                                                 |
+| App               | What it is                                                      | Get it                                                                                                 |
+| ----------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Playground        | Try Markii live in the browser: source, rendered view, Run      | [Open the playground](https://sadigaxund.github.io/markii/)                                            |
+| VS Code extension | Preview and run `.mk.md` files and `.mkz` bundles in the editor | [Download the .vsix](https://github.com/sadigaxund/markii/releases/latest/download/markii-vscode.vsix) |
+| Obsidian plugin   | Markii components inside an Obsidian vault                      | planned                                                                                                |
 
 To render Markii documents in your own React app:
 
@@ -53,12 +51,13 @@ import { defaultRegistry } from '@markii/react/components';
 const view = renderMark(source, defaultRegistry);
 ```
 
-### Renderers
+### Engines
 
-| Renderer                          | Status                                    |
-| --------------------------------- | ----------------------------------------- |
-| React (`@markii/react`)           | available                                 |
-| Other toolkits (Vue, terminal, …) | the format is renderer-neutral; see below |
+| Engine                                 | Output                                              | Status    |
+| -------------------------------------- | --------------------------------------------------- | --------- |
+| React (`@markii/react`)                | an interactive DOM view                             | available |
+| Static HTML (`@markii/html`)           | a self-contained HTML string (publish, CI, archive) | available |
+| Other toolkits (Vue, terminal, native) | the format is engine-neutral; see below             | planned   |
 
 ## Components
 
@@ -108,7 +107,7 @@ npm test       # every workspace
 npm run dev    # playground
 ```
 
-The repo is an npm-workspaces monorepo: six `@markii/*` packages split along
+The repo is an npm-workspaces monorepo: seven `@markii/*` packages split along
 the format's seams, a conformance corpus, and a thin playground. Read
 [AGENTS.md](AGENTS.md) and the docs before changing parser or renderer
 behavior.
