@@ -55,6 +55,11 @@ packages/platforms/markii-react   the reference L1 renderer, a platform adapter
                      dashboard: stat, progress, chart; row + cell; layout wrappers
                      center/right/wide/narrow/full via createLayoutWrapper;
                      failure-presentation.ts — the ONE home of failure wording)
+  src/pack-loader.ts pack install/namespacing (docs/packs.md, issue #3 slice 1):
+                     loadPack (manifest + host-resolved component modules →
+                     namespaced Registry, engine-gated) and installPacks
+                     (merges packs onto a base Registry, rejects a shared
+                     namespace at install time)
   src/doc.css        document rhythm + component internals
 packages/platforms/markii-html   the static HTML renderer (issue #2), a second
                         platform adapter proving renderer-neutrality — zero React,
@@ -109,11 +114,19 @@ packages/markii-pack    component pack contract (docs/packs.md, issue #3) — no
                      validation (lowercase-kebab), reserved bundle-segment
                      rejection, directive-name composition (packName + localName
                      → "ana-timeline"), collision-detection predicate
+  src/uses.ts        resolveUses(): resolves a note's declared `uses:` list
+                     against installed pack namespaces (missing/satisfied),
+                     host-facing metadata only — no loading, no registry
 packages/markii-lua     Lua sandbox runtime (docs/security.md, L3) — no React, no parsing:
   src/globals.ts     empty-env whitelist: curated string/table/math only
   src/capabilities.ts net/cache/bundle tables; two-tier (manual vs auto) gating
   src/limits.ts      instruction-count hook, wall-clock/memory/fetch-size caps
-  src/require.ts     sandboxed require: bundle scripts/ + pack modules, pure Lua
+  src/require.ts     sandboxed require() (issue #3, slice 3): bundle-local
+                     modules (reuses @markii/bundle's path-jail via the same
+                     ScriptView) + injected PackModuleResolver seam (denies
+                     cleanly with none configured); per-run cache, cycle
+                     detection, bytecode rejection, protected-chunk execution
+                     sharing the run's globals/limits
   src/marshal.ts     Lua↔JS value conversion (serializable-only, depth/size caps)
   src/sandbox.ts     runScript(): assemble env + limits + caps, run, marshal result
   src/executor.ts    createLuaExecutor(): adapts runScript to @markii/runtime's ScriptExecutor

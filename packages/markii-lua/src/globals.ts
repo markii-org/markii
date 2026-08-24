@@ -90,6 +90,21 @@ const LIBRARIES: readonly LuaLibraries[] = [
  *   validation — bytecode is not sandboxed the way source is (it can
  *   encode out-of-range opcodes that crash or exploit the VM), which is
  *   also why `string.dump` (bytecode *production*) is removed below.
+ *   The real `load` function object is captured into a private global,
+ *   `__smd_load_raw`, ONE LINE ABOVE where the public `load` name is
+ *   nil'd out (see `SCRUB_PRELUDE` below) — mirroring the "capture the
+ *   genuine primitive into a local/global at definition time, before a
+ *   later script can rebind or lose it" discipline already used
+ *   throughout this sandbox (e.g. `./marshal`'s `error`/`type`/`pairs`
+ *   capture, `./capabilities`' `__smd_json_decode` capture). `./require`
+ *   consumes `__smd_load_raw` from its own prelude (run later, still
+ *   before any untrusted script code) to compile a fetched module's
+ *   SOURCE TEXT ONLY — always called with Lua's `mode = "t"`, which
+ *   makes `load` itself refuse a binary/bytecode chunk — and then nils
+ *   `__smd_load_raw` back out once captured into its own local, so the
+ *   raw primitive is never reachable as a global either before or after
+ *   `require` claims it. No other code in this sandbox may read
+ *   `__smd_load_raw`; it is not part of the documented host API.
  * - `collectgarbage` — its `"count"` argument is a harmless memory query
  *   but other arguments (`"stop"`, `"generational"`, `"incremental"`) let
  *   a script retune the collector as a denial-of-service knob against the
@@ -209,6 +224,7 @@ end
 `;
 
 const SCRUB_PRELUDE = `
+__smd_load_raw = load
 load = nil
 loadstring = nil
 loadfile = nil

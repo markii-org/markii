@@ -241,6 +241,20 @@ export function buildCapabilities(config: CapabilityConfig): {
   rawGlobals: Record<string, (...args: never[]) => Promise<unknown>>;
   preludeLua: string;
   denials: CapabilityDenials;
+  /**
+   * The same recording function `denials` reads from, exposed so a SIBLING
+   * capability builder assembled in the same `runScript` call (currently
+   * only `./require`'s `buildRequire`) can record onto this identical,
+   * per-run `CapabilityDenials` handle instead of maintaining its own —
+   * `sandbox.ts`'s classification logic only ever consults ONE such handle
+   * per run, so a require-triggered denial (an ungranted/absent bundle
+   * capability, a path-jail rejection surfaced through the same `ScriptView`
+   * `bundle.read` uses, a rejected pack-module request) must land on this
+   * one, not a second, unconsulted one. Not part of the public API surface
+   * consumers reason about (`denials.last()` remains read-only) — this is
+   * wiring between this package's own modules.
+   */
+  recordDenial: (reason: CapabilityDenial['reason'], message: string) => void;
 } {
   const maxFetchBytes = config.maxFetchBytes ?? DEFAULT_MAX_FETCH_BYTES;
   const marshalLimits: MarshalLimits =
@@ -792,5 +806,10 @@ bundle.write = function(path, data) return __smd_bundle_write_blocked(path, data
     }
   }
 
-  return { rawGlobals, preludeLua: preludeParts.join('\n'), denials };
+  return {
+    rawGlobals,
+    preludeLua: preludeParts.join('\n'),
+    denials,
+    recordDenial,
+  };
 }

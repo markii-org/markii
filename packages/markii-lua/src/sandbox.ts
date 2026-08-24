@@ -18,6 +18,7 @@ import {
   type MarshalLimits,
   wrapUserCode,
 } from './marshal.js';
+import { buildRequire, type PackModuleResolver } from './require.js';
 
 export interface RunScriptOptions {
   code: string;
@@ -26,8 +27,10 @@ export interface RunScriptOptions {
   net?: NetProvider;
   netGrants?: NetGrants;
   cache?: CacheProvider;
-  /** Bundle-scoped filesystem (spec §11), already capability-restricted — see `@markii/bundle`'s `createScriptView`. */
+  /** Bundle-scoped filesystem (spec §11), already capability-restricted — see `@markii/bundle`'s `createScriptView`. Also backs bundle-local `require "scripts/..."` (`./require`) — the SAME `ScriptView`, so a module require goes through the identical path-jail and read-permission check as `bundle.read`. */
   bundle?: ScriptView;
+  /** Optional pack-module `require` seam (`./require`'s `PackModuleResolver`) — resolves `require "packName/modulePath"`. Omitted (the default: no host wires packs yet), every pack-namespaced `require` fails as a clean capability denial, never a crash. */
+  packModuleResolver?: PackModuleResolver;
   maxFetchBytes?: number;
   limits?: Partial<ScriptLimits>;
   marshalLimits?: Partial<MarshalLimits>;
@@ -223,7 +226,9 @@ function classifyRuntimeError(err: unknown): ScriptFailure {
  * 2. Memory cap (`engine.global.setMemoryMax`, backed by the
  *    `traceAllocations: true` custom allocator `./globals` requests).
  * 3. `./capabilities` — build the `net`/`cache`/`bundle` Lua tables from
- *    whatever providers/grants/tier this call was given.
+ *    whatever providers/grants/tier this call was given, then `./require` —
+ *    the real `require` global, sharing the same `bundle`/denial-recording
+ *    wiring (§8's bundle-local and pack-namespaced module sources).
  * 4. `./marshal` — inject the trusted node/depth-capped marshal walk that
  *    the wrapped user code's return value is piped through.
  * 5. A dedicated child thread (NOT `engine.doString`, which creates its
@@ -264,21 +269,44 @@ export async function runScript(
   let guardTimer: ReturnType<typeof setTimeout> | undefined;
 
   try {
-    const { rawGlobals, preludeLua, denials } = buildCapabilities({
-      tier: options.tier,
-      net: options.net,
-      netGrants: options.netGrants,
-      cache: options.cache,
-      bundle: options.bundle,
-      maxFetchBytes: options.maxFetchBytes,
-      marshalLimits,
-    });
+    const { rawGlobals, preludeLua, denials, recordDenial } = buildCapabilities(
+      {
+        tier: options.tier,
+        net: options.net,
+        netGrants: options.netGrants,
+        cache: options.cache,
+        bundle: options.bundle,
+        maxFetchBytes: options.maxFetchBytes,
+        marshalLimits,
+      },
+    );
     for (const [name, fn] of Object.entries(rawGlobals)) {
       engine.global.set(name, fn);
     }
     if (preludeLua.trim().length > 0) {
       await engine.doString(preludeLua);
     }
+
+    // ./require: always wired, regardless of whether `options.bundle`/
+    // `options.packModuleResolver` are set — see `buildRequire`'s doc
+    // comment for why `require` must always be a real, defined function
+    // (never left absent for the sandbox to leave as a bare "attempt to
+    // call a nil value"), and shares `denials`/`recordDenial` with
+    // `buildCapabilities` above so a require-triggered denial classifies
+    // as `kind: 'capability'` the same way any other one does (see
+    // `classifyRuntimeError`'s doc comment below).
+    const requireBuild = buildRequire({
+      bundle: options.bundle,
+      packModuleResolver: options.packModuleResolver,
+      recordDenial,
+    });
+    for (const [name, fn] of Object.entries(requireBuild.rawGlobals)) {
+      engine.global.set(name, fn);
+    }
+    if (requireBuild.preludeLua.trim().length > 0) {
+      await engine.doString(requireBuild.preludeLua);
+    }
+
     await engine.doString(buildMarshalPrelude(marshalLimits));
 
     thread = engine.global.newThread();

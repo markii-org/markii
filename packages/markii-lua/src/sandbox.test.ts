@@ -70,10 +70,22 @@ describe('runScript — happy path', () => {
 });
 
 describe('runScript — sandbox escape attempts all come back as typed failures, never a host compromise', () => {
-  it.each(DENIED_GLOBALS)('"%s" is nil inside the script', async (name) => {
-    const r = await run(`return type(${name})`);
-    expect(r).toEqual({ ok: true, value: 'nil' });
-  });
+  // 'require' is intentionally EXCLUDED from this fresh-engine-scrub list
+  // here (unlike `./globals.test.ts`, which still asserts it correctly:
+  // a genuinely FRESH engine, with no prelude run at all, never defines
+  // `require`). `runScript` itself now always wires up the real `require`
+  // from `./require` as part of its prelude assembly (issue #3, slice 3)
+  // — see the dedicated describe block below for why that's still safe
+  // with zero capabilities configured: every call denies cleanly, it
+  // never grants filesystem/network/bytecode access nothing else already
+  // granted this run.
+  it.each(DENIED_GLOBALS.filter((name) => name !== 'require'))(
+    '"%s" is nil inside the script',
+    async (name) => {
+      const r = await run(`return type(${name})`);
+      expect(r).toEqual({ ok: true, value: 'nil' });
+    },
+  );
 
   it('load(...) of a string is impossible', async () => {
     const r = await run('return type(load)');
@@ -95,6 +107,28 @@ describe('runScript — sandbox escape attempts all come back as typed failures,
       return tostring(ok) .. ":" .. tostring(string.dump)
     `);
     expect(r).toEqual({ ok: true, value: 'false:nil' });
+  });
+});
+
+describe('runScript — `require` is always real (issue #3, slice 3), but grants nothing beyond what this run already has', () => {
+  it('is a function even with zero bundle/pack configuration on this run', async () => {
+    const r = await run('return type(require)');
+    expect(r).toEqual({ ok: true, value: 'function' });
+  });
+
+  it('a bundle-local require, with no bundle configured, denies cleanly rather than reaching any filesystem', async () => {
+    const r = await run('return require("scripts/anything")');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error.kind).toBe('capability');
+  });
+
+  it('a pack-namespaced require, with no resolver configured, denies cleanly — see ./require.probe.test.ts for the full adversarial suite', async () => {
+    const r = await run('return require("ana/http")');
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error.kind).toBe('capability');
+      expect(r.error.capability).toBe('denied');
+    }
   });
 });
 

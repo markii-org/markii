@@ -55,7 +55,8 @@ export {
   wrapUserCode,
 } from './marshal.js';
 
-export { NOT_YET_SUPPORTED_MESSAGE, buildRequireStub } from './require.js';
+export type { PackModuleResolver, RequireConfig } from './require.js';
+export { buildRequire } from './require.js';
 
 export type { RunScriptOptions, RunScriptResult } from './sandbox.js';
 export { runScript } from './sandbox.js';

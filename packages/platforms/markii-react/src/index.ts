@@ -20,3 +20,11 @@ export {
   type ResolvedDirective,
   type MarkComponentProps,
 } from './registry.js';
+export {
+  REACT_ENGINE_ID,
+  loadPack,
+  installPacks,
+  type PackComponentModules,
+  type PackToInstall,
+  type InstallPacksResult,
+} from './pack-loader.js';

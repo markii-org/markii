@@ -146,6 +146,37 @@ recomputed rather than served, so a shipped `.cache/` cannot pin stale
 values. The reference host's assessment of these paths is recorded in the
 verification status below.
 
+## Sandboxed require
+
+`require` resolves exactly two sources today: bundle-local modules
+(`require "scripts/..."`, `"assets/..."`, `".cache/..."`), whose source text
+is read through the identical `ScriptView` and path-jail that `bundle.read`
+uses, and pack-namespaced modules (`require "packName/..."`), gated behind an
+optional host-injected resolver. That resolver is absent by default, so every
+pack-namespaced `require` denies cleanly rather than reaching any real pack
+loader. The vault library, the third source named in the scripting model, is
+not implemented yet.
+
+A resolved module runs as a protected chunk on the same Lua thread as the rest
+of the run, sharing its globals, capabilities, and instruction, wall-clock, and
+memory budget. A module cannot grant itself more than the script that required
+it already had, and a runaway module is still killed by the shared limit. Only
+pure Lua source text is ever compiled: the genuine `load` primitive is captured
+privately before the public name is scrubbed, is reachable from nowhere except
+`require`'s own prelude, and is always invoked in text-only mode, which refuses
+anything carrying Lua's bytecode signature; `require` also rejects that
+signature on the host side before the text reaches Lua. Resolution is cached
+once per run, and a cycle (module `A` requiring `B` requiring `A`) is detected
+and rejected immediately rather than left to hang.
+
+Reading is the only operation `require` performs, so it is read-only under
+every trigger tier with no extra gate. One coupling is worth a maintainer's
+attention: the scrub leaves the captured `load` primitive in a private global
+until `require`'s prelude nils it, so a host that assembles a run without that
+prelude would leave the primitive reachable. The sanctioned entry point
+(`runScript`) always runs the prelude; the require-jail audit slice should
+confirm no other path can skip it.
+
 ## Promise ledger
 
 The rules above are written as prose. This table collects the security

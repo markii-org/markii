@@ -17,6 +17,31 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
   composition (`ana` + `timeline` → `ana-timeline`), and a namespace-collision
   predicate. No React, no parsing, no registry loading, no filesystem reads:
   those are later slices.
+- **`@markii/pack`: `resolveUses()` and `isValidPackNameShape()` (issue #3,
+  slice 2)** — resolves a note's frontmatter `uses:` declaration against a
+  host's installed pack namespaces, distinguishing "not declared" from
+  "declared but not installed" (`docs/packs.md`). Host-facing metadata only:
+  no loading, no registry.
+- **`@markii/react`: pack loading and registry namespacing (issue #3,
+  slice 1)** — `loadPack(manifest, componentModules)` builds a `Registry`
+  from a `@markii/pack` manifest, namespacing each component under
+  `composeDirectiveName(pack, local)`; a manifest whose `engine` is not
+  `"react"` yields an empty registry so its directives fall back cleanly.
+  `installPacks(packs, base?)` merges several packs onto a base registry and
+  rejects the install (no partial merge) when two packs share a namespace.
+
+### Changed
+
+- **`@markii/lua`: the sandboxed `require` is now wired (issue #3, slice 3,
+  spec §8)** — `require` resolves bundle-local modules (`require "scripts/…"`,
+  reusing `@markii/bundle`'s path-jail via the same `ScriptView`) and a
+  pack-module seam (an injected `PackModuleResolver`), with a per-run module
+  cache, cycle detection, and bytecode rejection. A resolved module runs as a
+  protected chunk sharing the run's globals, capabilities, and limits.
+  `require` is now always a real function in the sandbox (previously absent);
+  with no bundle or resolver configured every call denies cleanly. The
+  superseded `buildRequireStub`/`NOT_YET_SUPPORTED_MESSAGE` exports are
+  removed.
 
 ## [0.6.0] - 2026-08-24
 

@@ -18,3 +18,6 @@ export {
   validateLocalComponentName,
   validatePackName,
 } from './namespace.js';
+
+export type { UsesResolution } from './uses.js';
+export { isValidPackNameShape, resolveUses } from './uses.js';
