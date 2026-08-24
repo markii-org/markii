@@ -54,7 +54,7 @@ Ways to use Markii with no coding:
       <h4>Playground</h4>
       Try Markii live in the browser: source, rendered view, Run.
       <br /><br />
-      <a href="https://sadigaxund.github.io/markii/">Open the playground &rarr;</a>
+      <a href="https://github.com/sadigaxund/markii-vault">Open the playground &rarr;</a>
       <br>
       <br>
     </td>
