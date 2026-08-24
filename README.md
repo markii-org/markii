@@ -153,8 +153,7 @@ claim support by passing the same fixtures this repo tests against.
   [docs/format.md](docs/format.md) and the [docs index](docs/README.md).
 - Embedding the libraries or writing a new renderer:
   [docs/integration.md](docs/integration.md).
-- Sharing components as packs (designed, upcoming):
-  [docs/packs.md](docs/packs.md).
+- Sharing components as packs: [docs/packs.md](docs/packs.md).
 - The normative rules: [docs/spec.md](docs/spec.md).
 
 ## Development
@@ -165,7 +164,7 @@ npm test       # every workspace
 npm run dev    # playground
 ```
 
-The repo is an npm-workspaces monorepo: seven `@markii/*` packages split along
+The repo is an npm-workspaces monorepo: eight `@markii/*` packages split along
 the format's seams, a conformance corpus, and a thin playground. Read
 [AGENTS.md](AGENTS.md) and the docs before changing parser or renderer
 behavior.
