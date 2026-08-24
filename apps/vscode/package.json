@@ -51,6 +51,11 @@
         "command": "markii.resetScriptGrants",
         "title": "Reset Script Grants",
         "category": "Markii"
+      },
+      {
+        "command": "markii.addPackFolder",
+        "title": "Add Pack Folder…",
+        "category": "Markii"
       }
     ],
     "menus": {
@@ -69,7 +74,7 @@
         },
         {
           "command": "markii.runScripts",
-          "when": "(resourceFilename =~ /\\.mk\\.md$/ && markii.previewActive) || activeWebviewPanelId == 'markii.preview'",
+          "when": "activeWebviewPanelId == 'markii.preview'",
           "group": "navigation@2"
         }
       ],
@@ -85,6 +90,9 @@
         {
           "command": "markii.resetScriptGrants",
           "when": "editorLangId == markdown || markii.previewActive"
+        },
+        {
+          "command": "markii.addPackFolder"
         }
       ]
     },

@@ -41,6 +41,11 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **VS Code extension: preview UX** — the **Run Scripts** button now appears
+  only on the preview panel's title bar (once, over the rendered view) instead
+  of also on the source editor. Added a **Markii: Add Pack Folder…** command
+  (a folder picker that appends to the user-scoped `markii.packs` setting) so
+  packs can be installed without hand-editing settings JSON.
 - **`@markii/lua`: the sandboxed `require` is now wired (issue #3, slice 3,
   spec §8)** — `require` resolves bundle-local modules (`require "scripts/…"`,
   reusing `@markii/bundle`'s path-jail via the same `ScriptView`) and a
