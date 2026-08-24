@@ -306,6 +306,76 @@ describe('require probe — pack-namespaced require with no resolver injected', 
   });
 });
 
+describe('require probe — slice 4: no require/load internals leak to user code', () => {
+  it("the captured `load` primitive and require's own private globals are all nil from user code", async () => {
+    // The slice-4 fail-closed assertion in ./sandbox guarantees the
+    // load-capture window is closed before user code runs; this checks the
+    // whole set of private names a script might probe for, from the user
+    // chunk itself (not from inside a module).
+    const result = await run(`
+      return table.concat({
+        type(__smd_load_raw),
+        type(__smd_require_resolve_raw),
+        type(__smd_require_cache),
+        type(__smd_require_stack),
+        type(load),
+        type(_G),
+      }, ",")
+    `);
+    expect(result).toEqual({ ok: true, value: 'nil,nil,nil,nil,nil,nil' });
+  });
+
+  it('reassigning `require` in user code cannot reach the private cache/stack it closes over', async () => {
+    // Even after shadowing `require`, the prelude locals stay unreachable —
+    // they are upvalues of the original closure, never globals.
+    const result = await run(`
+      require = nil
+      return type(__smd_require_cache) .. "," .. type(__smd_require_stack)
+    `);
+    expect(result).toEqual({ ok: true, value: 'nil,nil' });
+  });
+});
+
+describe('require probe — hostile / malformed inputs fail cleanly', () => {
+  it('a deeper cycle A -> B -> C -> A is still rejected, not run unboundedly', async () => {
+    const view = bundleWithScripts({
+      'a.lua': 'require("scripts/b"); return 1',
+      'b.lua': 'require("scripts/c"); return 1',
+      'c.lua': 'require("scripts/a"); return 1',
+    });
+    const started = Date.now();
+    const result = await run('return require("scripts/a")', { bundle: view });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.message).toMatch(/circular require/);
+    expect(Date.now() - started).toBeLessThan(FAST_LIMITS.wallClockMs!);
+  });
+
+  it.each(['return require(42)', 'return require(nil)', 'return require({})'])(
+    'require with a non-string argument errors cleanly (%s)',
+    async (code) => {
+      const result = await run(code);
+      expect(result.ok).toBe(false);
+      // A Lua-level `error(...)` from require's own type guard — a normal
+      // script error, never a host crash or an unhandled rejection.
+      if (!result.ok) expect(result.error.kind).toBe('runtime');
+    },
+  );
+
+  it('a pack module resolver that THROWS fails the run cleanly, never crashes the host', async () => {
+    const result = await run('return require("ana/boom")', {
+      packModuleResolver: () => {
+        throw new Error('resolver blew up');
+      },
+    });
+    expect(result.ok).toBe(false);
+    // The rejection propagates through the Lua `:await()` as an ordinary
+    // error and is classified by runScript — the process does not crash and
+    // there is no unhandled promise rejection.
+    if (!result.ok)
+      expect(['runtime', 'capability']).toContain(result.error.kind);
+  });
+});
+
 describe("require probe — a required module shares the run's resource budget (cannot escape the caps)", () => {
   it('an instruction-hungry module still gets killed by the shared limit, not run unboundedly', async () => {
     const view = bundleWithScripts({

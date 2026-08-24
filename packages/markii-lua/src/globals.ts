@@ -313,6 +313,16 @@ export interface CreateEmptyLuaEngineOptions {
  * described above. `traceAllocations: true` is required for the memory cap
  * (`./limits` / `./sandbox` call `engine.global.setMemoryMax`) — without it
  * wasmoon uses the plain, uncapped allocator.
+ *
+ * NOT A COMPLETE SANDBOX ON ITS OWN (issue #3, slice 4). `SCRUB_PRELUDE`
+ * removes every dangerous global, but it also captures the genuine `load`
+ * primitive into the private global `__smd_load_raw` so `./require`'s prelude
+ * can consume it — and leaves that global set. `runScript` closes the window:
+ * it runs `./require`'s prelude (which nils `__smd_load_raw` back out) and
+ * then asserts, fail-closed, that no code-loading primitive remains before
+ * any user code runs. Do NOT run untrusted code on an engine straight from
+ * this function without first running that prelude; use `runScript`, which is
+ * the only supported way to execute a note's script.
  */
 export async function createEmptyLuaEngine(
   options?: CreateEmptyLuaEngineOptions,

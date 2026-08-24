@@ -328,14 +328,25 @@ closed and a cache entry is never trusted for freshness; and a bundle's
 shipped `.cache/` is not read back into `cache.get` in the current host, so
 there is no poisoned-cache path through it today.
 
-Three areas remain intentionally outside the audited surface, and are
-tracked rather than forgotten: the four known hang reproductions are covered
-by dedicated deadlock tests rather than re-executed in CI (re-triggering a
-genuine hang would wedge the test runner); the external terminatable isolate
-is now exercised by the extension's own tests but its behavior inside a live
-editor host is the application's to verify; and the `require` jail cannot be
-audited until the packs feature wires it up, at which point it needs its own
-adversarial pass. The consent prompt shown when a note builds network
+The sandboxed `require` was wired in for the packs feature (issue #3) and
+ships with an executed adversarial probe suite run through the real
+interpreter: path traversal in module names (caught by the reused bundle
+path-jail), bytecode rejection on both the host and Lua sides, the
+pack-namespace denial-with-no-resolver seam, per-run cache isolation, cycle
+detection that terminates on its own rather than by the wall-clock kill, tier
+gating, a required module sharing the run's resource caps, and probes that no
+require or `load` internals leak to user code. One hardening landed with it: a
+fail-closed assertion in `runScript` refuses to run any user code if the
+load-capture window described under "Sandboxed require" is ever left open. The
+full independent adversarial pass over the require jail is the remaining step
+before the feature is considered audited.
+
+Two areas remain intentionally outside the audited surface, and are tracked
+rather than forgotten: the four known hang reproductions are covered by
+dedicated deadlock tests rather than re-executed in CI (re-triggering a
+genuine hang would wedge the test runner); and the external terminatable
+isolate is now exercised by the extension's own tests but its behavior inside a
+live editor host is the application's to verify. The consent prompt shown when a note builds network
 addresses at run time now states the denial outright: it says those requests
 cannot be listed in advance and will be denied, and that only the hosts
 written directly in the note can be granted, so accepting is never mistaken

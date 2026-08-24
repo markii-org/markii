@@ -42,6 +42,13 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
   with no bundle or resolver configured every call denies cleanly. The
   superseded `buildRequireStub`/`NOT_YET_SUPPORTED_MESSAGE` exports are
   removed.
+- **`@markii/lua`: require-jail hardening (issue #3, slice 4)** — `runScript`
+  now asserts, fail-closed, that no code-loading primitive (`load` or the
+  private captured `__smd_load_raw`) is reachable before any user code runs, so
+  the sandbox-assembly path can never silently regress into leaving the
+  compiler exposed. The adversarial probe suite gained cases for the internals
+  never leaking to user code, deeper require cycles, non-string `require`
+  arguments, and a throwing pack resolver.
 
 ## [0.6.0] - 2026-08-24
 

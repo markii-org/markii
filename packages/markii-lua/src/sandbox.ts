@@ -307,6 +307,24 @@ export async function runScript(
       await engine.doString(requireBuild.preludeLua);
     }
 
+    // Fail-closed defense in depth (issue #3, slice 4). `./globals`'
+    // SCRUB_PRELUDE captures the genuine `load` primitive into the private
+    // global `__smd_load_raw` so `./require`'s prelude (run just above) can
+    // consume it; that prelude nils the global back out immediately. This
+    // asserts the window is actually closed BEFORE any user code runs: if a
+    // future refactor of either prelude ever left `__smd_load_raw` (or the
+    // public `load`) reachable, this aborts the run rather than executing a
+    // script against an exposed compiler. On the sanctioned path this is
+    // always a no-op; it exists so the path can never silently regress.
+    const loadResidue = await engine.doString(
+      'return type(__smd_load_raw) .. "," .. type(load)',
+    );
+    if (loadResidue !== 'nil,nil') {
+      throw new Error(
+        `sandbox assembly left a code-loading primitive reachable (${String(loadResidue)}); refusing to run`,
+      );
+    }
+
     await engine.doString(buildMarshalPrelude(marshalLimits));
 
     thread = engine.global.newThread();
