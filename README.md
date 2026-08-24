@@ -134,8 +134,7 @@ They cover everyday notes, and they are defaults, not the ceiling.
 When you outgrow them, components travel as a pack: a folder with a manifest
 and ordinary components for your engine, built once and pointed at your app.
 On a machine without the pack, the same note shows a labeled fallback and
-stays readable. Packs are designed but not shipped yet; the contract lives in
-[docs/packs.md](docs/packs.md).
+stays readable. The contract lives in [docs/packs.md](docs/packs.md).
 
 ## Integrating and extending
 

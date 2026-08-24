@@ -1,9 +1,10 @@
 # Component packs
 
-A pack is how components and shared Lua modules travel between people. This
-page describes the design. Packs are specified but not yet implemented; the
-registry, contracts, and `require` seams they plug into exist today, and
-this page is the target they will be built against.
+A pack is how components and shared Lua modules travel between people. The
+contract, the namespace rules, the registry merging, and the sandboxed
+`require` are implemented, and the reference host (the VS Code extension)
+loads packs. This page describes that shipped contract. There is no pack
+registry or marketplace, and none is planned here; the last section says why.
 
 ## What a pack is
 
@@ -68,6 +69,37 @@ Flat and boring on purpose. Installing two packs with the same namespace is
 rejected at install time. A vault library that shadows an installed pack's
 namespace wins, with a visible warning. There is no transitive dependency
 resolution and there are no version ranges.
+
+## Loading a pack in a host
+
+Installing a pack means handing its folder to whichever app renders your
+notes. Two hosts show the shape.
+
+In your own React application, a pack is a build-time dependency. You import
+its built components and merge them into your registry with `installPacks`,
+which namespaces each component and rejects two packs that claim the same
+namespace. You pass the merged registry to `renderMark`. Nothing loads at
+runtime: the pack is part of your bundle like any other import.
+
+In the VS Code extension, packs are installed through the `markii.packs`
+setting, a list of folders you trust as installed packs. The setting lives
+in your user settings only, so a project you open can never add a pack on
+your behalf. Each folder holds a `pack.json`, the pack's built component
+script, and an optional `scripts/` folder of shared Lua. The extension
+validates each manifest and rejects namespace collisions, then does two
+things: it makes the pack's Lua modules reachable from `require "name/..."`
+in the Run path, and it loads the pack's component script into the preview so
+its components render. A note that names a pack you have not installed still
+reads: its components show the labeled fallback, and a quiet marker notes the
+missing pack.
+
+The component script follows a small registration convention. When it loads,
+it calls a function the host provides and hands over its manifest and its
+components; the host collects those and merges them the same way a React
+application would. Pack components use the host's own renderer instance
+rather than bundling their own copy. A host that loads packs this way limits
+what it will load to exactly the configured folders, and never lets a note's
+content decide what runs.
 
 ## What the reference project provides, and what it doesn't
 
