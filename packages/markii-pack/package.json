@@ -1,6 +1,6 @@
 {
   "name": "@markii/pack",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Component pack contract for Markii (docs/packs.md): the pack.json manifest shape, namespace and engine rules, and hand-rolled validation. No React, no parsing, no bundle loading.",
   "keywords": [
     "markdown",

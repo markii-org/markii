@@ -6,6 +6,44 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-08-24
+
+### Added
+
+- **VS Code extension: scheduled/auto refresh and value-store persistence for
+  monitoring notes (issue #11)** — three additions, all within the read-only
+  tier the runtime already defined:
+  - _Value persistence (gap 1)._ A note's last run values are persisted and
+    re-shown, marked stale, when its preview reopens — so a monitoring note
+    renders its last figures instantly and offline, before or without a
+    re-run. A failed re-run keeps the last-known-good value rather than wiping
+    it (`mergePersistedValues`).
+  - _Scheduled refresh (gap 2)._ A new `markii.refreshIntervalSeconds` setting
+    (0 = off, minimum 5s) drives periodic re-runs at the `scheduled`
+    (read-only) trigger.
+  - _Run-on-open (gap 3)._ A new `markii.runOnOpen` setting (off by default)
+    runs a note once when its preview opens, at the `auto` (read-only)
+    trigger.
+
+  Auto and scheduled runs resolve grants NON-INTERACTIVELY: they reuse only
+  the hosts the user already granted by hand for that exact executable
+  closure, never prompt on a timer or on open, and never widen network
+  access. The trigger flows through `runOnce` → `spawnRun` → the worker, where
+  `@markii/runtime`'s `tierForTrigger` enforces the read-only tier
+  (no POST/PATCH/bundle-write) regardless of grants — verified end-to-end
+  through a real worker in `worker-trigger.test.ts`.
+
+### Security
+
+- **Pack arc hardening (pass-3 pentest report, `docs/security.md`)** — two LOW
+  findings closed: **H-1** pins the `markii.packs` `"scope": "application"`
+  declaration with a `contributes.test.ts` assertion, so the user-only scope
+  that keeps a workspace's `.vscode/settings.json` from injecting packs cannot
+  be silently removed; **H-2** adds a 1 MB per-file cap when pre-reading a
+  pack's `scripts/*.lua`, matching the bundle snapshot's posture. The pass-3
+  probe suite (`packages/markii-lua/src/require-pass3.probe.test.ts`, 22
+  cases) is committed as permanent product code.
+
 ## [0.7.0] - 2026-08-24
 
 ### Added

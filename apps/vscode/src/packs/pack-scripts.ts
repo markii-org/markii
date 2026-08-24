@@ -59,6 +59,20 @@ const MAX_SCRIPT_FILES_PER_PACK = 500;
 const MAX_SCRIPT_DIR_DEPTH = 16;
 
 /**
+ * A per-file size cap on a pack's `scripts/*.lua` (H-2, pass-3 pentest report
+ * section 10.2). Packs are user-installed, trusted folders, so this is
+ * defense in depth rather than a trust boundary — but it matches the posture
+ * `buildBundleSnapshot` already takes for bundle files: a single file's whole
+ * text is read into the extension host and then structured-cloned into the
+ * Run worker's job, so an absurdly large `.lua` (accidental or hostile) would
+ * otherwise pull an unbounded amount into host memory. A file over this cap
+ * is skipped exactly like an unreadable one — `require`-ing it then resolves
+ * as an ordinary "no such module", never a crash. 1 MB is far above any real
+ * shared Lua module while still bounding a pathological one.
+ */
+const MAX_SCRIPT_FILE_BYTES = 1_000_000;
+
+/**
  * Walks `pack.scriptsDir` (relative to it) collecting every `.lua` file's
  * bundle-jail-normalized relative path -> source text. A relative path the
  * jail rejects (should not arise from a real directory listing, but this is
@@ -99,6 +113,10 @@ async function collectPackModules(
       const absolutePath = path.join(pack.scriptsDir, relativePath);
       const source = await reader.readFile(absolutePath);
       if (source === undefined) continue;
+      // H-2: skip a file whose UTF-8 size exceeds the per-file cap, same as an
+      // unreadable one. `Buffer.byteLength` measures the encoded bytes (what
+      // actually crosses into the worker), not the JS string's UTF-16 length.
+      if (Buffer.byteLength(source, 'utf8') > MAX_SCRIPT_FILE_BYTES) continue;
 
       result[normalized.path] = source;
       fileCount += 1;

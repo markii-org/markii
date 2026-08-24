@@ -33,7 +33,9 @@ import {
   manyHostsPromptMessage,
 } from './run/grant-flow.js';
 import { spawnRun } from './run/run-host.js';
-import { runOnce } from './run/run-flow.js';
+import { readPersistedValues, runOnce } from './run/run-flow.js';
+import { staleValuesForRehydration } from './run/stale-values.js';
+import type { RunTrigger, StoredValue } from '@markii/runtime';
 import {
   buildBundleSnapshot,
   decodeBundleCacheFromStorage,
@@ -135,6 +137,8 @@ interface ActivePreview {
    * `retargetToDocument`'s doc comment).
    */
   readonly packContext: PackContext;
+  /** `context.workspaceState`, kept so `postUpdate` can re-seed a note's persisted last-known values (GitHub issue #11, gap 1) without threading `context` through every navigation path. */
+  readonly memento: vscode.Memento;
   readonly debouncer: ReturnType<typeof createDebouncer<void>>;
   /**
    * Set for the duration of one `markii.runScripts` press. `runScripts`
@@ -145,6 +149,30 @@ interface ActivePreview {
    * to write back.
    */
   running: boolean;
+  /**
+   * GitHub issue #11 (scheduled refresh): the interval timer driving
+   * `'scheduled'`-trigger re-runs, when `markii.refreshIntervalSeconds` is
+   * set above zero at this panel's creation. `undefined` when refresh is
+   * off. Cleared in `onDidDispose` so a torn-down panel never keeps firing.
+   * Like `packContext`/`localResourceRoots`, the interval is read once at
+   * (re)creation; changing the setting takes effect on the next panel.
+   */
+  refreshTimer?: ReturnType<typeof setInterval>;
+  /**
+   * GitHub issue #11 (run-on-open): set true once this panel has performed
+   * its at-most-once `'auto'`-trigger run-on-open, so the run happens a
+   * single time per panel life and NOT again on every hide/show rehydration
+   * (the webview re-sends `ready` each time it is rebuilt under
+   * `retainContextWhenHidden: false`).
+   */
+  ranOnOpen: boolean;
+}
+
+/** The stable storage identity for a preview source — a plain document's URI, or a zip-form bundle's archive identity. A `bundle-error` source has nothing runnable and thus no key. */
+function documentKeyForSource(source: PreviewSource): string | undefined {
+  if (source.kind === 'document') return source.document.uri.toString();
+  if (source.kind === 'bundle-archive') return source.bundle.identity;
+  return undefined;
 }
 
 /** The comparable key form of a URI for `resource-roots.ts` — scheme and authority included, so a `file:` root can never be mistaken for a same-path root on another scheme or remote authority. */
@@ -236,6 +264,41 @@ function workspaceRootPath(): string | undefined {
   return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 }
 
+/** Whether `markii.runOnOpen` (GitHub issue #11) is enabled — an opt-in, read-only run when a note's preview first opens. Off by default. */
+function runOnOpenEnabled(): boolean {
+  return vscode.workspace
+    .getConfiguration('markii')
+    .get<boolean>('runOnOpen', false);
+}
+
+/**
+ * The lower bound on `markii.refreshIntervalSeconds` (GitHub issue #11):
+ * refresh runs spawn a fresh worker each time, so a too-small interval would
+ * be pure churn. A value between 1 and this clamps UP to this; 0 (the
+ * default) means off and is left as 0.
+ */
+const MIN_REFRESH_INTERVAL_SECONDS = 5;
+
+/**
+ * The scheduled-refresh interval in milliseconds, or `undefined` when
+ * refresh is off (`markii.refreshIntervalSeconds` at 0, its default, or any
+ * non-positive/invalid value). A positive value below
+ * `MIN_REFRESH_INTERVAL_SECONDS` is clamped up to it.
+ */
+function refreshIntervalMs(): number | undefined {
+  const seconds = vscode.workspace
+    .getConfiguration('markii')
+    .get<number>('refreshIntervalSeconds', 0);
+  if (
+    typeof seconds !== 'number' ||
+    !Number.isFinite(seconds) ||
+    seconds <= 0
+  ) {
+    return undefined;
+  }
+  return Math.max(seconds, MIN_REFRESH_INTERVAL_SECONDS) * 1000;
+}
+
 /**
  * Loads the current `markii.packs` install state (GitHub issue #3 slice 5):
  * resolves the setting's entries against the open workspace root, discovers
@@ -289,6 +352,7 @@ function postUpdate(preview: ActivePreview): void {
       packNamespaces: preview.packContext.namespaces,
     };
     void preview.panel.webview.postMessage(message);
+    postStalePersistedValues(preview, source);
     return;
   }
 
@@ -302,6 +366,39 @@ function postUpdate(preview: ActivePreview): void {
     // wire format says a document with no folder OMITS the field.
     ...(baseUri === undefined ? {} : { baseUri }),
     packNamespaces: preview.packContext.namespaces,
+  };
+  void preview.panel.webview.postMessage(message);
+  postStalePersistedValues(preview, source);
+}
+
+/**
+ * Immediately after an `update`, re-posts this note's persisted last-known
+ * values as a `values` message at the SAME revision, marked stale (GitHub
+ * issue #11, gap 1). Posting the two back-to-back inside the synchronous
+ * `postUpdate` guarantees they carry the same revision, so the webview
+ * (which drops a `values` message whose revision no longer matches the text
+ * it is showing — see `webview/preview.tsx`) always accepts these: a
+ * reopened note shows its last figures instantly, visibly stale, before (or
+ * without) any re-run. A note with nothing persisted posts nothing, so the
+ * empty-state behavior is unchanged. A fresh run's own `values` message
+ * (posted later, at run time) supersedes these, since it carries fresh
+ * statuses at the current revision.
+ */
+function postStalePersistedValues(
+  preview: ActivePreview,
+  source: Extract<PreviewSource, { kind: 'document' | 'bundle-archive' }>,
+): void {
+  const documentKey = documentKeyForSource(source);
+  if (documentKey === undefined) return;
+  const persisted = readPersistedValues(preview.memento, documentKey);
+  if (Object.keys(persisted).length === 0) return;
+  const stale: Record<string, StoredValue> =
+    staleValuesForRehydration(persisted);
+  const message: ValuesMessage = {
+    type: 'values',
+    revision: preview.revision,
+    values: stale,
+    failures: [],
   };
   void preview.panel.webview.postMessage(message);
 }
@@ -532,10 +629,12 @@ async function createPreview(
     revision: 0,
     rootKeys: roots.map(rootKey),
     packContext,
+    memento: context.workspaceState,
     debouncer: createDebouncer<void>(DEBOUNCE_MS, () => {
       postUpdate(preview);
     }),
     running: false,
+    ranOnOpen: false,
   };
   active = preview;
   void vscode.commands.executeCommand(
@@ -553,6 +652,7 @@ async function createPreview(
       if (!isWebviewToHostMessage(raw)) return;
       if (raw.type === 'ready') {
         postUpdate(preview);
+        maybeRunOnOpen(context, preview);
       }
     }),
 
@@ -591,8 +691,28 @@ async function createPreview(
     }),
   ];
 
+  // GitHub issue #11 (scheduled refresh): if the setting asks for it, drive
+  // periodic `'scheduled'`-trigger re-runs. Read once here, like every other
+  // per-panel setting; the timer is cleared on dispose below so a torn-down
+  // panel never keeps firing, and each tick is a no-op while a run is already
+  // in flight (`runWithTrigger`'s own `running` guard).
+  const intervalMs = refreshIntervalMs();
+  if (intervalMs !== undefined) {
+    preview.refreshTimer = setInterval(() => {
+      if (active !== preview) return;
+      void runWithTrigger(context, 'scheduled');
+    }, intervalMs);
+    // Never let the refresh timer keep the extension host's event loop alive
+    // on its own.
+    preview.refreshTimer.unref?.();
+  }
+
   panel.onDidDispose(() => {
     preview.debouncer.cancel();
+    if (preview.refreshTimer !== undefined) {
+      clearInterval(preview.refreshTimer);
+      preview.refreshTimer = undefined;
+    }
     for (const disposable of disposables) {
       disposable.dispose();
     }
@@ -603,6 +723,26 @@ async function createPreview(
       false,
     );
   });
+}
+
+/**
+ * Performs the at-most-once run-on-open (GitHub issue #11) for `preview`,
+ * if `markii.runOnOpen` is enabled. Guarded by `preview.ranOnOpen` so it
+ * fires a single time per panel life, not on every hide/show rehydration
+ * (the webview re-sends `ready` each time it is rebuilt). The run goes
+ * through the `'auto'` trigger: read-only tier, grants resolved
+ * non-interactively (never a prompt on open), last-known values already
+ * shown stale by `postStalePersistedValues` until it completes.
+ */
+function maybeRunOnOpen(
+  context: vscode.ExtensionContext,
+  preview: ActivePreview,
+): void {
+  if (preview.ranOnOpen) return;
+  if (preview.source.kind === 'bundle-error') return;
+  if (!runOnOpenEnabled()) return;
+  preview.ranOnOpen = true;
+  void runWithTrigger(context, 'auto');
 }
 
 /** Logs a bundle-resolution failure's detail (never shown on screen — see `bundleResolutionFailureMessage`) for anyone using "Open Webview Developer Tools" or the extension host's own console. */
@@ -973,6 +1113,24 @@ function bundleOptionsFor(
 export async function runScripts(
   context: vscode.ExtensionContext,
 ): Promise<void> {
+  await runWithTrigger(context, 'manual');
+}
+
+/**
+ * The shared body behind the manual `markii.runScripts` press and the
+ * `'auto'`/`'scheduled'` runs GitHub issue #11 adds. `trigger` flows through
+ * `runOnce` to the worker, where `@markii/runtime`'s `tierForTrigger` caps
+ * what the run may do; for a non-manual trigger `runOnce` also resolves
+ * grants non-interactively, so the prompt adapters passed here are simply
+ * never invoked (no modal ever opens on a timer or on open). Every other
+ * concern — the `running` guard, the revision tag captured before the run's
+ * awaits, the disposed-panel check, and the C-5 never-reject wrapping — is
+ * identical across triggers, which is why they share one body.
+ */
+async function runWithTrigger(
+  context: vscode.ExtensionContext,
+  trigger: RunTrigger,
+): Promise<void> {
   const preview = active;
   if (!preview || preview.running) return;
   const source = preview.source;
@@ -994,6 +1152,7 @@ export async function runScripts(
     const result = await runOnce({
       documentKey,
       text,
+      trigger,
       memento: context.workspaceState,
       promptHost: promptHostAdapter,
       promptUnknownHosts: promptUnknownHostsAdapter,

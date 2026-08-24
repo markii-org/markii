@@ -519,6 +519,50 @@ export async function runGrantFlow(
 }
 
 /**
+ * The NON-INTERACTIVE half of `runGrantFlow`, for auto/scheduled runs
+ * (GitHub issue #11): resolves this note's effective net + bundle-fs
+ * allowlist from ONLY what is already persisted, and NEVER prompts, NEVER
+ * writes. It is exactly `runGrantFlow`'s stored-grant fast path in
+ * isolation.
+ *
+ * This is the code half of the security promise auto/scheduled execution
+ * makes (docs/security.md, docs/scripting.md): a run that was not triggered
+ * by a click must never open a modal on a timer, and must never widen what
+ * the note can reach beyond a grant the user already made by hand under the
+ * exact same executable closure. On ANY miss — no stored grant, a grant for
+ * different code (the key no longer matches), or a stored host that fails
+ * today's `isSafeHostForPrompt` re-check (N-6) — this returns an EMPTY
+ * allowlist rather than falling back to prompting. An ungranted host then
+ * fails at execution with the ordinary `'capability-denied'` kind, exactly
+ * as it would on a manual run the user declined, and the consuming
+ * component shows its quiet stale/empty state.
+ *
+ * The read-only tier (`tierForTrigger('auto'|'scheduled')` in
+ * `@markii/runtime`) is a SEPARATE, independent gate applied in the worker;
+ * this function governs only which hosts are reachable, that one governs
+ * which capabilities (no POST/PATCH/bundle-write) may run at all.
+ */
+export async function resolveStoredGrant(options: {
+  documentKey: string;
+  requirements: GrantFlowRequirements;
+  memento: GrantMemento;
+}): Promise<GrantFlowResult> {
+  const empty: GrantFlowResult = { allowedHosts: [], allowedBundleGrants: [] };
+  const stored = readGrant(options.memento, options.documentKey);
+  // N-6: a stored host that no longer passes today's safety re-check makes
+  // the whole record untrusted here, exactly as it does in `runGrantFlow` —
+  // but with no prompt to fall through to, an untrusted record simply yields
+  // the empty allowlist.
+  if (!stored || stored.droppedUnsafeHost) return empty;
+  const key = await computeGrantKey(closureFrom(options.requirements));
+  if (stored.grant.key !== key) return empty;
+  return {
+    allowedHosts: [...stored.grant.allowedHosts],
+    allowedBundleGrants: [...stored.grant.allowedBundleGrants],
+  };
+}
+
+/**
  * Clears the persisted grant (if any) for `documentKey` — the
  * `markii.resetScriptGrants` command's whole implementation (C-3): with no
  * stored record, `runGrantFlow`'s next call for this document is

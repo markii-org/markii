@@ -101,3 +101,40 @@ describe('loadPackModules', () => {
     expect(Object.keys(map).sort()).toEqual(['a', 'b']);
   });
 });
+
+describe('loadPackModules — per-file size cap (H-2)', () => {
+  it('skips a scripts/*.lua file over the 1 MB cap, keeping smaller siblings', async () => {
+    const scriptsDir = '/packs/demo/scripts';
+    const huge = 'x'.repeat(1_000_001);
+    const reader = fakeReader(
+      {
+        [scriptsDir]: [
+          { name: 'small.lua', isDirectory: false },
+          { name: 'huge.lua', isDirectory: false },
+        ],
+      },
+      {
+        [path.join(scriptsDir, 'small.lua')]: 'return 1',
+        [path.join(scriptsDir, 'huge.lua')]: huge,
+      },
+    );
+
+    const map = await loadPackModules([pack('demo', scriptsDir)], reader);
+
+    expect(map.demo).toEqual({ 'small.lua': 'return 1' });
+    expect(map.demo?.['huge.lua']).toBeUndefined();
+  });
+
+  it('keeps a file exactly at the cap', async () => {
+    const scriptsDir = '/packs/demo/scripts';
+    const atCap = 'x'.repeat(1_000_000);
+    const reader = fakeReader(
+      { [scriptsDir]: [{ name: 'edge.lua', isDirectory: false }] },
+      { [path.join(scriptsDir, 'edge.lua')]: atCap },
+    );
+
+    const map = await loadPackModules([pack('demo', scriptsDir)], reader);
+
+    expect(map.demo?.['edge.lua']).toBe(atCap);
+  });
+});

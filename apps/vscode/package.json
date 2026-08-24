@@ -2,7 +2,7 @@
   "name": "markii-vscode",
   "displayName": "Markii",
   "description": "Preview for Markii (.mk.md) documents: CommonMark plus directives that render components.",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "private": true,
   "license": "MIT",
   "publisher": "markii",
@@ -134,6 +134,17 @@
           "default": [],
           "scope": "application",
           "markdownDescription": "Folders the user explicitly trusts as installed Markii component packs (docs/packs.md). Each entry is either an absolute path, or a path relative to the open workspace folder. Pack code runs with the SAME trust as the extension's own bundle once loaded — only add a folder you trust. Loading is driven ONLY by this setting; a note's own content can never add, remove, or influence which packs load. This setting is USER-scope only (it cannot be set from a workspace's `.vscode/settings.json`), so opening someone else's project can never silently add a pack on your behalf."
+        },
+        "markii.runOnOpen": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Run a note's scripts automatically when its preview first opens, at the READ-ONLY tier (GET requests, cache and bundle reads; never POST/PATCH or bundle writes). Off by default: scripts otherwise run only on an explicit **Markii: Run Scripts**. An auto-run never prompts and never adds network access — it reuses only the hosts you already granted by hand for that exact note; anything else fails cleanly and the note keeps showing its last-known values, marked stale."
+        },
+        "markii.refreshIntervalSeconds": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "markdownDescription": "Re-run the previewed note's scripts on this interval, in seconds, at the READ-ONLY tier — for dashboard/monitoring notes. `0` (the default) turns scheduled refresh off. A positive value under 5 is treated as 5. Like auto-run, a scheduled run never prompts and never adds network access; it reuses only the hosts you already granted by hand. The interval is read when the preview opens; change it and reopen the preview to apply."
         }
       }
     }

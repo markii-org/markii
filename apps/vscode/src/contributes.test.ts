@@ -126,6 +126,63 @@ describe('contributes.menus — explorer context (bundle preview)', () => {
   });
 });
 
+describe('contributes.configuration — markii.packs application scope (H-1)', () => {
+  // H-1 (pass-3 pentest report, section 10.2): `markii.packs` being
+  // USER-scope only is the entire reason a malicious repo's
+  // `.vscode/settings.json` cannot silently inject a pack folder — every doc
+  // comment and the setting's own description promise this, but the actual
+  // mechanism is one string in package.json. Removing or changing it would
+  // re-enable workspace-settings pack injection while every comment still
+  // claimed otherwise, with nothing else catching it. This pins it, the same
+  // pin-the-declarative-block pattern the menu/keybinding tests above use.
+  function packsProperty(): Record<string, unknown> {
+    const configuration = asRecord(
+      contributes.configuration,
+      'contributes.configuration',
+    );
+    const properties = asRecord(
+      configuration.properties,
+      'contributes.configuration.properties',
+    );
+    return asRecord(properties['markii.packs'], 'properties["markii.packs"]');
+  }
+
+  it('declares markii.packs as application scope (user settings only)', () => {
+    expect(packsProperty().scope).toBe('application');
+  });
+
+  it('defaults markii.packs to an empty list', () => {
+    expect(packsProperty().default).toEqual([]);
+  });
+});
+
+describe('contributes.configuration — run-on-open / scheduled refresh (#11)', () => {
+  function property(name: string): Record<string, unknown> {
+    const configuration = asRecord(
+      contributes.configuration,
+      'contributes.configuration',
+    );
+    const properties = asRecord(
+      configuration.properties,
+      'contributes.configuration.properties',
+    );
+    return asRecord(properties[name], `properties[${JSON.stringify(name)}]`);
+  }
+
+  it('markii.runOnOpen is a boolean defaulting off', () => {
+    const runOnOpen = property('markii.runOnOpen');
+    expect(runOnOpen.type).toBe('boolean');
+    expect(runOnOpen.default).toBe(false);
+  });
+
+  it('markii.refreshIntervalSeconds is a number defaulting to 0 (off)', () => {
+    const refresh = property('markii.refreshIntervalSeconds');
+    expect(refresh.type).toBe('number');
+    expect(refresh.default).toBe(0);
+    expect(refresh.minimum).toBe(0);
+  });
+});
+
 describe('contributes.keybindings — Ctrl+Shift+V', () => {
   it('binds ctrl+shift+v, with cmd+shift+v on macOS', () => {
     const entry = keybindingEntry();

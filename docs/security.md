@@ -87,6 +87,20 @@ read-only network function exposes no method or body at all, so there is
 nothing to escalate. An effectful call under an auto trigger fails cleanly
 and the consuming component shows a "requires manual run" hint.
 
+A second rule governs auto-run and scheduled runs, because they carry no
+click: they never prompt, and they never widen network access. Where a
+manual run may open a grant prompt and remember the answer, an auto or
+scheduled run resolves its allowlist only from a grant the user already made
+by hand, for that exact executable closure. A host the user has not already
+granted is simply unreachable on a timer or on open; the call fails as an
+ordinary capability denial and the note keeps showing its last-known values,
+marked stale. So a schedule can refresh the data a user already consented to,
+but it can never reach somewhere new, and no dialog ever appears without a
+user gesture behind it. The reference VS Code extension implements this split
+in `runOnce`: a manual trigger runs the interactive grant flow, while auto
+and scheduled triggers call `resolveStoredGrant`, which reads the stored
+grant and prompts nothing.
+
 ## The sandbox
 
 Scripts run in Lua 5.4 (wasmoon, WebAssembly) with an empty environment.
@@ -337,9 +351,33 @@ detection that terminates on its own rather than by the wall-clock kill, tier
 gating, a required module sharing the run's resource caps, and probes that no
 require or `load` internals leak to user code. One hardening landed with it: a
 fail-closed assertion in `runScript` refuses to run any user code if the
-load-capture window described under "Sandboxed require" is ever left open. The
-full independent adversarial pass over the require jail is the remaining step
-before the feature is considered audited.
+load-capture window described under "Sandboxed require" is ever left open.
+
+That independent adversarial pass over the whole pack arc has since run
+(August 2026), against the real interpreter and the real extension pack-loading
+path. It confirmed the require jail invariant end to end: no code-loading
+primitive reaches user code or a required module body, bytecode is rejected on
+both sides, modules run inside the caller's own resource caps, cycles terminate,
+and the per-run cache does not leak across runs. It also confirmed that webview
+pack loading is driven only by the `markii.packs` setting, never by note
+content, and that the setting's user-only application scope is what keeps a
+workspace from injecting packs. No escape, grant bypass, note-driven loading, or
+crash was found. Two LOW hardening items came out of it and are now fixed: the
+application-scope declaration is pinned by a test so it cannot be silently
+removed, and pre-reading a pack's shared Lua now applies a per-file size cap,
+matching the bundle snapshot's posture.
+
+Scheduled and auto-run execution then shipped in the reference extension (issue
+#11): a note can refresh on an interval or run once when its preview opens, both
+at the read-only tier. The two rules under "Triggers cap capabilities" are what
+make this sound: the tier is enforced in the worker regardless of grants (a real
+worker probe confirms an effectful call is refused under the auto and scheduled
+triggers while the same call succeeds under manual), and grants for these
+triggers are resolved from stored consent only, so a run without a click never
+prompts and never reaches a host the user did not already grant by hand. Because
+these triggers move execution off the explicit click for the first time, the
+surface warrants its own dedicated adversarial pass, tracked as the next step
+before it is considered fully audited.
 
 Two areas remain intentionally outside the audited surface, and are tracked
 rather than forgotten: the four known hang reproductions are covered by

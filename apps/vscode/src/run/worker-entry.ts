@@ -42,6 +42,7 @@ import {
   runDocumentScripts,
   type FailureKind,
   type RunSummaryEntry,
+  type RunTrigger,
 } from '@markii/runtime';
 import {
   createLuaExecutor,
@@ -62,6 +63,18 @@ import type { PackModulesMap } from '../packs/lua-resolver.js';
 /** The one job message this worker ever receives, posted once by `run-host.ts`. */
 export interface RunJob {
   text: string;
+  /**
+   * How this run was triggered (GitHub issue #11). Passed straight to
+   * `runDocumentScripts`, whose `tierForTrigger` (`@markii/runtime`) is THE
+   * SECURITY GATE: `'manual'` runs at the full capability tier, while
+   * `'auto'` and `'scheduled'` are forced to the read-only tier (GET,
+   * cache/bundle reads, cache writes — never POST/PATCH/bundle-write)
+   * regardless of what the net/bundle grants allow. Absent (an older host,
+   * or `run-host.ts` omitting it) defaults to `'manual'`, preserving the
+   * pre-#11 behavior; this default is safe because only the trusted host
+   * ever sets this field — note content can never influence it.
+   */
+  trigger?: RunTrigger;
   /** Hostnames (exact match, case-insensitive) this run's `net.*` calls may reach. */
   netAllowlist: string[];
   /** The persisted `cache.get` state to seed this run with (see `./script-requirements.ts`'s sibling host-side persistence). */
@@ -447,7 +460,10 @@ async function runJob(job: RunJob): Promise<RunResult> {
   const summary = await runDocumentScripts({
     scripts,
     executor,
-    trigger: 'manual',
+    // GitHub issue #11: the trigger the host sent (default `'manual'`) — its
+    // mapping to a capability tier (`tierForTrigger`) is the sandbox's own
+    // read-only gate for auto/scheduled runs. Never note-influenced.
+    trigger: job.trigger ?? 'manual',
     store,
     // `src=scripts/foo.lua` resolution (design point 4): the referenced
     // file's source lives in the snapshot under its own bundle-relative
@@ -527,9 +543,27 @@ function resultForInternalError(
   };
 }
 
+const RUN_TRIGGERS: ReadonlySet<string> = new Set([
+  'manual',
+  'auto',
+  'scheduled',
+]);
+
 function isRunJob(value: unknown): value is RunJob {
   if (typeof value !== 'object' || value === null) return false;
   const job = value as Record<string, unknown>;
+  // `trigger` is optional, but a PRESENT one must be a known trigger — a
+  // malformed job is rejected outright (fail-closed) rather than silently
+  // coerced, so a bad `trigger` can never quietly fall through to the
+  // full-capability `'manual'` default. Only the trusted host sets this, but
+  // validating it keeps the tier gate's input honest regardless.
+  if (
+    Object.prototype.hasOwnProperty.call(job, 'trigger') &&
+    job.trigger !== undefined &&
+    (typeof job.trigger !== 'string' || !RUN_TRIGGERS.has(job.trigger))
+  ) {
+    return false;
+  }
   return (
     typeof job.text === 'string' &&
     Array.isArray(job.netAllowlist) &&

@@ -49,6 +49,12 @@ Press :kbd[Ctrl+Shift+P] anytime.
   is only opened, and network access is granted one host at a time, with a
   prompt. Until you run them, script blocks show a collapsed marker and
   data-bound components show their quiet empty states.
+- **Monitoring notes.** A note's last values are remembered, so reopening it
+  shows its figures immediately, marked stale, before any re-run. Turn on
+  `markii.runOnOpen` to run a note once when its preview opens, or set
+  `markii.refreshIntervalSeconds` to refresh it on an interval. Both run at
+  the read-only tier: they reuse only the hosts you already granted by hand,
+  never prompt on a timer, and never add network access.
 - **Component packs.** Point the `markii.packs` setting, or the **Markii: Add
   Pack Folder…** command, at folders you trust as installed packs. Their
   prefixed components (for example `:::ana-timeline`) render in the preview,

@@ -10,6 +10,7 @@ import {
   hostPromptMessage,
   isSafeHostForPrompt,
   manyHostsPromptMessage,
+  resolveStoredGrant,
   runGrantFlow,
   type GrantFlowRequirements,
   type GrantMemento,
@@ -947,5 +948,92 @@ describe('runGrantFlow — PROMPT-STORM guard: many distinct hosts fold into one
 
     expect(promptManyHosts).not.toHaveBeenCalled();
     expect(result.allowedHosts).toEqual(['ok.example.com']);
+  });
+});
+
+describe('resolveStoredGrant — non-interactive (auto/scheduled), issue #11', () => {
+  const documentKey = 'file:///a.mk.md';
+  const requirements = requirementsFor({ hosts: ['api.example.com'] });
+
+  /** Persists a real grant for `requirements` by running the interactive flow once, allowing the host. */
+  async function seedGrant(memento: GrantMemento): Promise<void> {
+    await runGrantFlow({
+      documentKey,
+      requirements,
+      memento,
+      promptHost: alwaysAllow,
+      promptUnknownHosts: alwaysAllow,
+      promptManyHosts: alwaysAllow,
+    });
+  }
+
+  it('reuses a stored grant for the same closure, with no prompting', async () => {
+    const memento = fakeMemento();
+    await seedGrant(memento);
+
+    const result = await resolveStoredGrant({
+      documentKey,
+      requirements,
+      memento,
+    });
+    expect(result.allowedHosts).toEqual(['api.example.com']);
+  });
+
+  it('returns an empty allowlist when nothing is stored (never prompts, never widens)', async () => {
+    const memento = fakeMemento();
+    const result = await resolveStoredGrant({
+      documentKey,
+      requirements,
+      memento,
+    });
+    expect(result.allowedHosts).toEqual([]);
+    expect(result.allowedBundleGrants).toEqual([]);
+  });
+
+  it('returns empty when the stored grant is for different code (key mismatch)', async () => {
+    const memento = fakeMemento();
+    await seedGrant(memento);
+
+    const result = await resolveStoredGrant({
+      documentKey,
+      // Same host, DIFFERENT script code -> different grant key -> miss.
+      requirements: requirementsFor({
+        hosts: ['api.example.com'],
+        grantScripts: scripts('return 2'),
+      }),
+      memento,
+    });
+    expect(result.allowedHosts).toEqual([]);
+  });
+
+  it('never writes to storage (a miss does not persist an empty grant)', async () => {
+    const memento = fakeMemento();
+    const update = vi.spyOn(memento, 'update');
+    await resolveStoredGrant({ documentKey, requirements, memento });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('drops a stored grant whose host no longer passes today safety re-check (N-6)', async () => {
+    // Plant a record with the correct-looking shape but an unsafe host; even
+    // a matching key must not resurrect it non-interactively.
+    const memento = fakeMemento();
+    await seedGrant(memento);
+    const raw = memento.get<
+      Record<string, { key: string; allowedHosts: string[] }>
+    >('markii.netGrants', {});
+    const stored = raw[documentKey];
+    if (!stored) throw new Error('expected a seeded grant');
+    raw[documentKey] = {
+      key: stored.key,
+      allowedHosts: ['api.example.com', 'bad host with spaces'],
+    };
+    await memento.update('markii.netGrants', raw);
+
+    const result = await resolveStoredGrant({
+      documentKey,
+      requirements,
+      memento,
+    });
+    expect(result.allowedHosts).toEqual([]);
   });
 });

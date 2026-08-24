@@ -19,12 +19,23 @@ import { existsSync } from 'node:fs';
 import * as path from 'node:path';
 
 import type { CacheEntry } from '@markii/lua';
+import type { RunTrigger } from '@markii/runtime';
 import type { RunJob, RunResult } from './worker-entry.js';
 
 export type { RunJob, RunResult, RunFailure } from './worker-entry.js';
 
 export interface SpawnRunOptions {
   text: string;
+  /**
+   * How this run was triggered (GitHub issue #11), forwarded verbatim to the
+   * worker's `RunJob.trigger` and, from there, to `runDocumentScripts` — the
+   * value that `@markii/runtime`'s `tierForTrigger` maps to the execution
+   * tier THE SANDBOX ENFORCES. `'manual'` unlocks every granted capability;
+   * `'auto'`/`'scheduled'` are read-only regardless of what was granted.
+   * Omitted defaults to `'manual'` in the worker, preserving the pre-#11
+   * behavior for any caller that has not been updated.
+   */
+  trigger?: RunTrigger;
   netAllowlist: string[];
   cacheSnapshot: Record<string, CacheEntry>;
   /** Wall-clock budget for the whole run, enforced by this file's own external watchdog — never delegated to the worker. */
@@ -125,6 +136,7 @@ export async function spawnRun(options: SpawnRunOptions): Promise<RunResult> {
     text: options.text,
     netAllowlist: options.netAllowlist,
     cacheSnapshot: options.cacheSnapshot,
+    ...(options.trigger !== undefined ? { trigger: options.trigger } : {}),
     ...(options.limits !== undefined ? { limits: options.limits } : {}),
     ...(options.bundle !== undefined ? { bundle: options.bundle } : {}),
     ...(options.packModules !== undefined

@@ -6,9 +6,13 @@ import {
   MAX_CACHE_SNAPSHOT_BYTES,
   cacheStorageKeyFor,
   isCacheSnapshotShape,
+  mergePersistedValues,
+  readPersistedValues,
   runOnce,
   serializeCacheSnapshotIfSmallEnough,
+  valuesStorageKeyFor,
 } from './run-flow';
+import { runGrantFlow } from './grant-flow';
 
 function fence(name: string, body: string): string {
   return '```lua {name=' + name + '}\n' + body + '\n```\n';
@@ -584,5 +588,178 @@ describe('runOnce packModules forwarding', () => {
     });
 
     expect(spawnRun.mock.calls[0]?.[0]).not.toHaveProperty('packModules');
+  });
+});
+
+describe('runOnce — trigger tiers (issue #11)', () => {
+  it('forwards trigger to spawnRun (manual by default)', async () => {
+    const memento = fakeMemento();
+    const spawnRun = vi.fn((_o: SpawnRunOptions) =>
+      Promise.resolve(fakeRunResult()),
+    );
+    await runOnce({
+      documentKey: 'file:///a.mk.md',
+      text: fence('a', 'return 1'),
+      memento,
+      promptHost: () => Promise.resolve(true),
+      promptUnknownHosts: () => Promise.resolve(true),
+      promptManyHosts: () => Promise.resolve(true),
+      spawnRun,
+      timeoutMs: 15000,
+    });
+    expect(spawnRun.mock.calls[0]?.[0]?.trigger).toBe('manual');
+  });
+
+  it('an auto/scheduled run never prompts, even for an ungranted host', async () => {
+    const memento = fakeMemento();
+    const promptHost = vi.fn(() => Promise.resolve(true));
+    const spawnRun = vi.fn((_o: SpawnRunOptions) =>
+      Promise.resolve(fakeRunResult()),
+    );
+    const out = await runOnce({
+      documentKey: 'file:///a.mk.md',
+      text: fence('a', 'return net.fetch_json("https://api.example.com/x")'),
+      trigger: 'scheduled',
+      memento,
+      promptHost,
+      promptUnknownHosts: () => Promise.resolve(true),
+      promptManyHosts: () => Promise.resolve(true),
+      spawnRun,
+      timeoutMs: 15000,
+    });
+    expect(promptHost).not.toHaveBeenCalled();
+    // No stored grant -> empty allowlist, and trigger forwarded.
+    expect(spawnRun.mock.calls[0]?.[0]?.netAllowlist).toEqual([]);
+    expect(spawnRun.mock.calls[0]?.[0]?.trigger).toBe('scheduled');
+    expect(out.values.a?.value).toBe(2);
+  });
+
+  it('an auto run reuses a grant a prior manual run persisted, with no prompt', async () => {
+    const memento = fakeMemento();
+    const documentKey = 'file:///a.mk.md';
+    const text = fence(
+      'a',
+      'return net.fetch_json("https://api.example.com/x")',
+    );
+    // Seed a grant the manual way (through the same requirements runOnce derives).
+    const { extractRunRequirements } = await import('./script-requirements');
+    await runGrantFlow({
+      documentKey,
+      requirements: extractRunRequirements(text),
+      memento,
+      promptHost: () => Promise.resolve(true),
+      promptUnknownHosts: () => Promise.resolve(true),
+      promptManyHosts: () => Promise.resolve(true),
+    });
+
+    const promptHost = vi.fn(() => Promise.resolve(true));
+    const spawnRun = vi.fn((_o: SpawnRunOptions) =>
+      Promise.resolve(fakeRunResult()),
+    );
+    await runOnce({
+      documentKey,
+      text,
+      trigger: 'auto',
+      memento,
+      promptHost,
+      promptUnknownHosts: () => Promise.resolve(true),
+      promptManyHosts: () => Promise.resolve(true),
+      spawnRun,
+      timeoutMs: 15000,
+    });
+    expect(promptHost).not.toHaveBeenCalled();
+    expect(spawnRun.mock.calls[0]?.[0]?.netAllowlist).toEqual([
+      'api.example.com',
+    ]);
+  });
+});
+
+describe('runOnce — value persistence (issue #11, gap 1)', () => {
+  it('persists the run value store under the values key', async () => {
+    const memento = fakeMemento();
+    const spawnRun = () =>
+      Promise.resolve(
+        fakeRunResult({ values: { a: { value: 42, status: 'fresh' } } }),
+      );
+    await runOnce({
+      documentKey: 'file:///a.mk.md',
+      text: fence('a', 'return 42'),
+      memento,
+      promptHost: () => Promise.resolve(true),
+      promptUnknownHosts: () => Promise.resolve(true),
+      promptManyHosts: () => Promise.resolve(true),
+      spawnRun,
+      timeoutMs: 15000,
+    });
+    const persisted = readPersistedValues(memento, 'file:///a.mk.md');
+    expect(persisted.a?.value).toBe(42);
+    expect(memento.get(valuesStorageKeyFor('file:///a.mk.md'))).toBeDefined();
+  });
+
+  it('a failed run keeps the prior good value (last-known-good), marked stale', async () => {
+    const documentKey = 'file:///a.mk.md';
+    const memento = fakeMemento({
+      [valuesStorageKeyFor(documentKey)]: { a: { value: 7, status: 'fresh' } },
+    });
+    const spawnRun = () =>
+      Promise.resolve(
+        fakeRunResult({
+          values: {
+            a: {
+              value: undefined,
+              status: 'error',
+              failureKind: 'capability-denied',
+            },
+          },
+        }),
+      );
+    await runOnce({
+      documentKey,
+      text: fence('a', 'return net.fetch_json("https://api.example.com/x")'),
+      trigger: 'scheduled',
+      memento,
+      promptHost: () => Promise.resolve(true),
+      promptUnknownHosts: () => Promise.resolve(true),
+      promptManyHosts: () => Promise.resolve(true),
+      spawnRun,
+      timeoutMs: 15000,
+    });
+    const persisted = readPersistedValues(memento, documentKey);
+    expect(persisted.a?.value).toBe(7);
+    expect(persisted.a?.status).toBe('stale');
+  });
+});
+
+describe('mergePersistedValues', () => {
+  it('a fresh value always wins', () => {
+    const merged = mergePersistedValues(
+      { a: { value: 1, status: 'fresh' } },
+      { a: { value: 2, status: 'fresh' } },
+    );
+    expect(merged.a?.value).toBe(2);
+  });
+
+  it('an error keeps the prior good value, marked stale', () => {
+    const merged = mergePersistedValues(
+      { a: { value: 1, status: 'fresh' } },
+      { a: { value: undefined, status: 'error', failureKind: 'script-error' } },
+    );
+    expect(merged.a).toEqual({ value: 1, status: 'stale' });
+  });
+
+  it('an error with no prior value surfaces the error', () => {
+    const merged = mergePersistedValues(
+      {},
+      { a: { value: undefined, status: 'error', failureKind: 'script-error' } },
+    );
+    expect(merged.a?.status).toBe('error');
+  });
+
+  it('drops names only in the prior store', () => {
+    const merged = mergePersistedValues(
+      { gone: { value: 1, status: 'fresh' } },
+      { a: { value: 2, status: 'fresh' } },
+    );
+    expect(Object.keys(merged)).toEqual(['a']);
   });
 });
