@@ -1,6 +1,6 @@
 {
   "name": "@markii/html",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "A framework-free static HTML renderer for Markii (.mk.md): a registry-driven hast-to-HTML string engine. Zero React; for stopped-changing documents (publish, CI, email, archive).",
   "keywords": [
     "markdown",
@@ -54,9 +54,9 @@
   },
   "dependencies": {
     "hast-util-to-html": "^9.0.0",
-    "@markii/core": "0.6.0",
-    "@markii/runtime": "0.6.0",
-    "@markii/stdlib": "0.6.0"
+    "@markii/core": "0.7.0",
+    "@markii/runtime": "0.7.0",
+    "@markii/stdlib": "0.7.0"
   },
   "devDependencies": {
     "@types/hast": "^3.0.4"
