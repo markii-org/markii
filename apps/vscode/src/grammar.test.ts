@@ -250,35 +250,58 @@ describe('markii-directives.injection.json — shape', () => {
   });
 });
 
-describe('markii-directives.injection.json — agrees with package.json', () => {
-  it('scopeName matches contributes.grammars[0].scopeName', () => {
-    const root = asRecord(grammar, 'root');
-    const pkg = asRecord(packageJson, 'package.json');
-    const contributes = asRecord(pkg.contributes, 'package.json.contributes');
-    const grammars = contributes.grammars;
-    expect(Array.isArray(grammars)).toBe(true);
-    const first = asRecord(
-      (grammars as unknown[])[0],
-      'package.json.contributes.grammars[0]',
-    );
-    expect(first.scopeName).toBe(root.scopeName);
-  });
+/** The `contributes.grammars` entry whose `scopeName` equals `scopeName`, as a record. */
+function grammarEntry(scopeName: string): Record<string, unknown> {
+  const pkg = asRecord(packageJson, 'package.json');
+  const contributes = asRecord(pkg.contributes, 'package.json.contributes');
+  const grammars = contributes.grammars;
+  expect(Array.isArray(grammars)).toBe(true);
+  const found = (grammars as unknown[]).find(
+    (g) => isRecord(g) && g.scopeName === scopeName,
+  );
+  expect(found, `no grammar entry with scopeName "${scopeName}"`).toBeDefined();
+  return asRecord(found, `grammar entry ${scopeName}`);
+}
 
-  it('declared grammar path resolves to this grammar file on disk', () => {
-    const pkg = asRecord(packageJson, 'package.json');
-    const contributes = asRecord(pkg.contributes, 'package.json.contributes');
-    const grammars = contributes.grammars;
-    const first = asRecord(
-      (grammars as unknown[])[0],
-      'package.json.contributes.grammars[0]',
-    );
-    expect(typeof first.path).toBe('string');
+describe('markii-directives.injection.json — agrees with package.json', () => {
+  it('the injection grammar entry names this grammar file', () => {
+    const root = asRecord(grammar, 'root');
+    const entry = grammarEntry(root.scopeName as string);
+    expect(typeof entry.path).toBe('string');
     const declaredPath = resolve(
       import.meta.dirname,
       '..',
-      first.path as string,
+      entry.path as string,
     );
     expect(declaredPath).toBe(GRAMMAR_PATH);
+  });
+
+  it('the injection injects into both the markdown and the markii base scopes', () => {
+    const root = asRecord(grammar, 'root');
+    const entry = grammarEntry(root.scopeName as string);
+    expect(entry.injectTo).toEqual([
+      'text.html.markdown',
+      'text.html.markdown.markii',
+    ]);
+  });
+
+  it('a base grammar maps the markii language to a wrapper scope on disk', () => {
+    // The .mk.md base grammar (text.html.markdown.markii) is what makes
+    // .mk.md the `markii` language instead of `markdown`; it must exist,
+    // map to the markii language, and point at a real file.
+    const entry = grammarEntry('text.html.markdown.markii');
+    expect(entry.language).toBe('markii');
+    expect(typeof entry.path).toBe('string');
+    const declaredPath = resolve(
+      import.meta.dirname,
+      '..',
+      entry.path as string,
+    );
+    const base: unknown = JSON.parse(readFileSync(declaredPath, 'utf8'));
+    const baseRoot = asRecord(base, 'markii base grammar');
+    expect(baseRoot.scopeName).toBe('text.html.markdown.markii');
+    // It re-exposes the built-in markdown grammar unchanged.
+    expect(baseRoot.patterns).toEqual([{ include: 'text.html.markdown' }]);
   });
 });
 

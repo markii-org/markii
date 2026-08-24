@@ -54,12 +54,25 @@ export interface PreviewableDocumentLike {
  */
 const PREVIEWABLE_SCHEMES: ReadonlySet<string> = new Set(['file', 'untitled']);
 
-/** True when `document` is a markdown-language document living in a real (file or unsaved) editor — the set of documents the preview is willing to follow. */
+/**
+ * The language ids the preview follows: `markii` (what `.mk.md` files are,
+ * per package.json's `languages` contribution) and plain `markdown` (so the
+ * Markii preview can still render an ordinary `.md` file, which Markii is a
+ * superset of, if the user points it at one). A `.mk.md` file is the `markii`
+ * language, never `markdown`, which is what stops VS Code's built-in markdown
+ * preview commands from also targeting it.
+ */
+const PREVIEWABLE_LANGUAGES: ReadonlySet<string> = new Set([
+  'markii',
+  'markdown',
+]);
+
+/** True when `document` is a Markii- or markdown-language document living in a real (file or unsaved) editor — the set of documents the preview is willing to follow. */
 export function isPreviewableDocument(
   document: PreviewableDocumentLike,
 ): boolean {
   return (
-    document.languageId === 'markdown' &&
+    PREVIEWABLE_LANGUAGES.has(document.languageId) &&
     PREVIEWABLE_SCHEMES.has(document.uri.scheme)
   );
 }

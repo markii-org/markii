@@ -1,0 +1,6 @@
+{
+  "name": "Markii",
+  "scopeName": "text.html.markdown.markii",
+  "comment": "Markii (.mk.md) base grammar: the full built-in markdown grammar, unchanged, re-exposed under a Markii-specific scope. This exists so .mk.md files register as the `markii` language rather than `markdown`, which stops VS Code's built-in markdown preview commands from also targeting them (the source of the duplicate editor-title buttons). Directive highlighting is layered on top by markii-directives.injection.json, whose `L:text.html.markdown` injection selector matches this scope by prefix, so no change to that grammar's selector is needed.",
+  "patterns": [{ "include": "text.html.markdown" }]
+}

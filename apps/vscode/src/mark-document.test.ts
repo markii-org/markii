@@ -80,7 +80,25 @@ describe('isMarkFileName', () => {
 });
 
 describe('isPreviewableDocument', () => {
-  it('accepts a markdown document with the file scheme', () => {
+  it('accepts a markii document (what .mk.md files are) with the file scheme', () => {
+    expect(
+      isPreviewableDocument({
+        languageId: 'markii',
+        uri: { scheme: 'file' },
+      }),
+    ).toBe(true);
+  });
+
+  it('accepts a markii document with the untitled scheme', () => {
+    expect(
+      isPreviewableDocument({
+        languageId: 'markii',
+        uri: { scheme: 'untitled' },
+      }),
+    ).toBe(true);
+  });
+
+  it('accepts a plain markdown document with the file scheme (Markii is a superset)', () => {
     expect(
       isPreviewableDocument({
         languageId: 'markdown',

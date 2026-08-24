@@ -22,16 +22,20 @@
   },
   "main": "./dist/extension.js",
   "activationEvents": [
-    "onLanguage:markdown",
+    "onLanguage:markii",
     "onCommand:markii.openPreview"
   ],
   "contributes": {
     "languages": [
       {
-        "id": "markdown",
+        "id": "markii",
+        "aliases": [
+          "Markii"
+        ],
         "extensions": [
           ".mk.md"
-        ]
+        ],
+        "configuration": "./language-configuration.json"
       }
     ],
     "commands": [
@@ -81,7 +85,7 @@
       "commandPalette": [
         {
           "command": "markii.openPreview",
-          "when": "editorLangId == markdown"
+          "when": "editorLangId == markii"
         },
         {
           "command": "markii.runScripts",
@@ -89,7 +93,7 @@
         },
         {
           "command": "markii.resetScriptGrants",
-          "when": "editorLangId == markdown || markii.previewActive"
+          "when": "editorLangId == markii || markii.previewActive"
         },
         {
           "command": "markii.addPackFolder"
@@ -106,10 +110,16 @@
     ],
     "grammars": [
       {
+        "language": "markii",
+        "scopeName": "text.html.markdown.markii",
+        "path": "./syntaxes/markii.tmLanguage.json"
+      },
+      {
         "scopeName": "markdown.markii.injection",
         "path": "./syntaxes/markii-directives.injection.json",
         "injectTo": [
-          "text.html.markdown"
+          "text.html.markdown",
+          "text.html.markdown.markii"
         ]
       }
     ],
