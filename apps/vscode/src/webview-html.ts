@@ -14,6 +14,19 @@ export interface WebviewHtmlOptions {
   readonly cspSource: string;
   readonly nonce: string;
   readonly title: string;
+  /**
+   * Webview-visible URIs of every configured, installed pack's prebuilt
+   * registration script (GitHub issue #3 slice 5, docs/packs.md) — one per
+   * pack, resolved by `preview-panel.ts` from the `markii.packs` setting
+   * and already restricted to `localResourceRoots` entries covering ONLY
+   * those configured folders (never a workspace-wide root, never anything
+   * derived from note/document content). Each is loaded via its own
+   * `<script nonce=... src=...>` tag, in this array's order, BEFORE the
+   * main bundle — see `buildWebviewHtml`'s doc comment on the registration
+   * convention. Empty (or omitted) when no packs are configured; the shell
+   * is then byte-for-byte what it always was.
+   */
+  readonly packScriptUris?: readonly string[];
 }
 
 const HTML_ESCAPES: Readonly<Record<string, string>> = {
@@ -39,8 +52,45 @@ function escapeHtml(value: string): string {
  * Every option is treated as untrusted text and run through `escapeHtml`
  * before interpolation — `scriptUri`/`styleUri`/`cspSource` come from
  * `vscode.Webview.asWebviewUri`/`cspSource`, `nonce` from `createNonce`
- * below, and `title` is a static string today, but none of that is assumed
- * here: nothing reaches the markup unescaped.
+ * below, `packScriptUris` from `asWebviewUri` over the `markii.packs`
+ * setting's configured folders (never document content), and `title` is a
+ * static string today, but none of that is assumed here: nothing reaches
+ * the markup unescaped.
+ *
+ * ## Pack registration convention (GitHub issue #3 slice 5, docs/packs.md)
+ *
+ * Three script groups load in this fixed order, all under the SAME nonce
+ * (a nonce-scoped CSP authorizes every `<script nonce="...">` tag carrying
+ * it, inline or external — this is strictly tighter than `'unsafe-inline'`,
+ * which would authorize ANY inline script, forged or not):
+ *
+ * 1. A tiny inline bootstrap defines `window.__markiiRegisterPack`, a queue
+ *    a pack's registration call pushes onto (`window.__markiiPackRegistrations`).
+ * 2. Each pack's prebuilt registration script (`packScriptUris`), one
+ *    `<script>` tag per pack, loaded ONLY from `localResourceRoots` entries
+ *    the panel restricts to the exact folders `markii.packs` names — see
+ *    `preview-panel.ts`. A pack script calls
+ *    `window.__markiiRegisterPack(manifest, componentModules)` synchronously
+ *    at load time; `componentModules` are plain functions that reference
+ *    `window.__markiiReact` (the host's own React, set by step 3 below)
+ *    LAZILY, i.e. only when actually invoked to render, never at load
+ *    time — packs never bundle their own React copy, so there is only ever
+ *    one React instance in the page.
+ * 3. The main webview bundle (`scriptUri`) sets `window.__markiiReact` to
+ *    its own React import, reads `window.__markiiPackRegistrations`, merges
+ *    every registered pack into the render registry via `@markii/react`'s
+ *    `installPacks`, and mounts.
+ *
+ * If a pack script fails to load (a 404, a syntax error, anything) the
+ * `<script>` tag simply never calls `__markiiRegisterPack` — the queue is
+ * just missing that entry, `main.js` still loads and mounts normally, and
+ * every directive from that pack's namespace falls through to the ordinary
+ * unknown-component fallback box. Nothing here can break the rest of the
+ * page over one bad pack script.
+ *
+ * The bootstrap script (step 1) is emitted unconditionally, even with zero
+ * packs configured — it is a fixed handful of bytes with no dependency on
+ * `packScriptUris`, so there is no reason to special-case the empty case.
  */
 export function buildWebviewHtml(options: WebviewHtmlOptions): string {
   const scriptUri = escapeHtml(options.scriptUri);
@@ -48,6 +98,11 @@ export function buildWebviewHtml(options: WebviewHtmlOptions): string {
   const cspSource = escapeHtml(options.cspSource);
   const nonce = escapeHtml(options.nonce);
   const title = escapeHtml(options.title);
+  const packScriptUris = (options.packScriptUris ?? []).map(escapeHtml);
+
+  const packScriptTags = packScriptUris
+    .map((uri) => `<script nonce="${nonce}" src="${uri}"></script>`)
+    .join('\n');
 
   return `<!doctype html>
 <html lang="en">
@@ -57,11 +112,23 @@ export function buildWebviewHtml(options: WebviewHtmlOptions): string {
 <!--
   Content-Security-Policy, directive by directive:
 
-  - script-src is nonce-only: no 'unsafe-inline', no remote host. The
-    webview bundle (dist/webview/main.js) is a single classic IIFE built by
-    esbuild.config.mjs — nothing else is ever fetched or evaluated at
-    runtime, so a fresh nonce per HTML load is sufficient, and strictly
-    tighter than allowing inline script generally.
+  - script-src is nonce-only: no 'unsafe-inline', no remote host, and
+    deliberately NO added host/path entries for pack scripts either. A
+    nonce-scoped script-src authorizes every <script nonce="..."> element
+    carrying the matching nonce REGARDLESS of its src origin — that is the
+    mechanism, not a gap — so listing each pack's exact URL here would add
+    nothing (the nonce already covers it) while making the policy more
+    fragile (CSP path-source matching is exact/prefix-based and would need
+    to track every pack's resolved webview URI byte-for-byte). The actual
+    boundary on WHICH files a pack <script src=...> may load is
+    localResourceRoots (preview-panel.ts), restricted to exactly the
+    folders the markii.packs setting names — never a workspace-wide root,
+    never anything derived from note/document content. A fresh nonce per
+    HTML load, shared by the main bundle, the tiny inline pack-registration
+    bootstrap, and every pack script tag, is sufficient and strictly
+    tighter than allowing inline/remote script generally — see
+    buildWebviewHtml's doc comment for the registration convention this
+    supports.
 
   - style-src allows 'unsafe-inline' because the standard component set
     sets style ATTRIBUTES directly at render time — e.g.
@@ -88,6 +155,8 @@ export function buildWebviewHtml(options: WebviewHtmlOptions): string {
 </head>
 <body>
 <div id="root"><div class="doc"></div></div>
+<script nonce="${nonce}">window.__markiiPackRegistrations=[];window.__markiiRegisterPack=function(manifest,componentModules){window.__markiiPackRegistrations.push({manifest:manifest,componentModules:componentModules});};</script>
+${packScriptTags}
 <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>

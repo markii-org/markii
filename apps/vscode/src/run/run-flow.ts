@@ -28,6 +28,7 @@ import type { RunResult, SpawnRunOptions } from './run-host.js';
 import type { ValuesFailure } from '../protocol.js';
 import type { StoredValue } from '@markii/runtime';
 import type { BundleManifest } from '@markii/bundle';
+import type { PackModulesMap } from '../packs/lua-resolver.js';
 
 /**
  * Strips a `StoredValue`'s `error` field before it ever reaches the wire
@@ -139,6 +140,15 @@ export interface RunOnceOptions {
     buildSnapshot: () => Promise<Record<string, Uint8Array>>;
     persistCacheOut: (cacheOut: Record<string, Uint8Array>) => Promise<void>;
   };
+  /**
+   * Slice 5 of the pack-loading arc (GitHub issue #3): pre-read pack Lua
+   * modules for every installed pack (`../packs/pack-scripts.ts`'s
+   * `loadPackModules`), forwarded verbatim to `spawnRun`'s `packModules` so
+   * the worker's `require "packName/..."` can resolve them. Absent when no
+   * packs are configured — `require` for a pack namespace then denies
+   * exactly as it did before packs existed.
+   */
+  packModules?: PackModulesMap;
 }
 
 export interface RunOnceResult {
@@ -211,6 +221,9 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
     netAllowlist: grant.allowedHosts,
     cacheSnapshot: cacheSnapshot as SpawnRunOptions['cacheSnapshot'],
     timeoutMs: options.timeoutMs,
+    ...(options.packModules !== undefined
+      ? { packModules: options.packModules }
+      : {}),
     ...(options.bundle && bundleSnapshot
       ? {
           bundle: {

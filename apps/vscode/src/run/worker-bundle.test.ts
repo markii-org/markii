@@ -308,3 +308,54 @@ describe('worker bundle capability — no bundle field', () => {
     expect(result.cacheOut).toBeUndefined();
   });
 });
+
+describe('worker pack module require (GitHub issue #3 slice 5)', () => {
+  it('require "packName/modulePath" resolves from a pre-loaded packModules map', async () => {
+    const text = fence('a', 'local m = require "demo/http"\nreturn m.ok');
+    const result = await spawnRun({
+      text,
+      netAllowlist: [],
+      cacheSnapshot: {},
+      timeoutMs: 5000,
+      workerPath: WORKER_PATH,
+      packModules: { demo: { 'http.lua': 'return { ok = true }' } },
+    });
+
+    expect(result.failures).toEqual([]);
+    expect(result.values.a?.status).toBe('fresh');
+    expect(result.values.a?.value).toBe(true);
+  });
+
+  it('require for a pack namespace absent from the loaded map fails as an ordinary "no such module" error, not a denial', async () => {
+    // A resolver IS configured (packModules has an entry for "demo"), so
+    // this is a genuine miss — same treatment @markii/lua's require.ts
+    // gives any other missing module — never a capability denial, which is
+    // reserved for "no resolver at all" (the next test).
+    const text = fence('a', 'return require "nope/anything"');
+    const result = await spawnRun({
+      text,
+      netAllowlist: [],
+      cacheSnapshot: {},
+      timeoutMs: 5000,
+      workerPath: WORKER_PATH,
+      packModules: { demo: { 'http.lua': 'return {}' } },
+    });
+
+    expect(result.values.a?.status).toBe('error');
+    expect(result.values.a?.failureKind).toBe('script-error');
+  });
+
+  it('a bare run with no packModules denies a pack-namespaced require cleanly', async () => {
+    const text = fence('a', 'return require "demo/http"');
+    const result = await spawnRun({
+      text,
+      netAllowlist: [],
+      cacheSnapshot: {},
+      timeoutMs: 5000,
+      workerPath: WORKER_PATH,
+    });
+
+    expect(result.values.a?.status).toBe('error');
+    expect(result.values.a?.failureKind).toBe('capability-denied');
+  });
+});

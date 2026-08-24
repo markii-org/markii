@@ -1,9 +1,11 @@
 import { Component, useEffect, useMemo, useRef, useState } from 'react';
 import type { ErrorInfo, ReactElement, ReactNode } from 'react';
 import { renderMark } from '@markii/react';
-import { defaultRegistry } from '@markii/react/components';
+import type { Registry } from '@markii/react';
 import { createValueStore } from '@markii/runtime';
 import type { StoredValue } from '@markii/runtime';
+import { extractFrontmatterUses } from '@markii/core';
+import { resolveUses } from '@markii/pack';
 import { isHostToWebviewMessage, isNewerRevision } from '../protocol.js';
 import type { WebviewToHostMessage } from '../protocol.js';
 import { applyDocumentBase } from './document-images.js';
@@ -104,6 +106,19 @@ interface LocalState extends PersistedState {
    * message for a render-time failure. Cleared by the next `update`.
    */
   readonly bundleError?: string;
+  /**
+   * GitHub issue #3 slice 5 (docs/packs.md's `uses:` surfacing): the
+   * namespaces of every pack the host currently has installed
+   * (`protocol.ts`'s `UpdateMessage.packNamespaces`), as of the most recent
+   * `update`. `undefined` only before the first `update` arrives; the host
+   * always sends the field (possibly empty) once loaded.
+   */
+  readonly packNamespaces?: readonly string[];
+}
+
+export interface PreviewProps {
+  /** `defaultRegistry` merged with every pack `main.tsx` registered (`./pack-registry.ts`) — passed in rather than imported here so this component stays agnostic to WHERE the registry came from. */
+  registry: Registry;
 }
 
 function initialState(): LocalState {
@@ -130,7 +145,7 @@ function initialState(): LocalState {
  * data-bound components show their standard empty states, exactly as
  * before `markii.runScripts` existed.
  */
-export function Preview(): ReactElement {
+export function Preview({ registry }: PreviewProps): ReactElement {
   const [state, setState] = useState<LocalState>(initialState);
   const documentRef = useRef<HTMLDivElement>(null);
 
@@ -159,6 +174,7 @@ export function Preview(): ReactElement {
             // numbers only increase), so there's nothing to carry forward.
             runValues: undefined,
             bundleError: undefined,
+            packNamespaces: data.packNamespaces,
           };
         }
         if (data.type === 'bundle-error') {
@@ -220,8 +236,28 @@ export function Preview(): ReactElement {
   }, [state.runValues, state.revision]);
 
   const rendered = useMemo(
-    () => renderMark(state.text, defaultRegistry, store),
-    [state.text, store],
+    () => renderMark(state.text, registry, store),
+    [state.text, registry, store],
+  );
+
+  /**
+   * GitHub issue #3 slice 5 (docs/packs.md's `uses:` surfacing): resolves
+   * the document's own declared `uses:` frontmatter against the packs the
+   * host actually has installed (`state.packNamespaces`, from the most
+   * recent `update`). Purely informational — this never blocks rendering;
+   * a directive from a missing pack already shows the ordinary
+   * unknown-component fallback box regardless. `undefined`
+   * `packNamespaces` (no `update` received yet) is treated as "nothing
+   * installed", which only matters for the instant before the first
+   * `update` arrives.
+   */
+  const usesResolution = useMemo(
+    () =>
+      resolveUses(
+        extractFrontmatterUses(state.text),
+        state.packNamespaces ?? [],
+      ),
+    [state.text, state.packNamespaces],
   );
 
   // Relative image sources are resolved against the document's folder AFTER
@@ -257,6 +293,16 @@ export function Preview(): ReactElement {
         {state.readOnly === true && (
           <p className="mk-preview__readonly-marker">
             Read-only bundle preview
+          </p>
+        )}
+        {usesResolution.missing.length > 0 && (
+          <p
+            className="mk-preview__uses-marker"
+            title={`This note declares packs that are not installed: ${usesResolution.missing.join(', ')}. Add their folders to the markii.packs setting to enable them.`}
+          >
+            {usesResolution.missing.length === 1
+              ? `Pack not installed: ${usesResolution.missing[0]}`
+              : `Packs not installed: ${usesResolution.missing.join(', ')}`}
           </p>
         )}
         {rendered}

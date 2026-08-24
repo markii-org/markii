@@ -8,6 +8,12 @@ export default tseslint.config(
       '**/dist/**',
       '**/coverage/**',
       '**/.vite/**',
+      // Pack fixtures (GitHub issue #3 slice 5): plain, un-tsconfig'd
+      // source/build artifacts a pack ships (a .tsx component source, a
+      // hand-written prebuilt webview.js) — never compiled by this repo's
+      // own TypeScript project, so typescript-eslint's project service has
+      // nothing to check them against.
+      'apps/vscode/test-fixtures/**',
     ],
   },
   tseslint.configs.recommended,

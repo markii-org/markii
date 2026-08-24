@@ -12,7 +12,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const openPreviewCommand = vscode.commands.registerCommand(
     'markii.openPreview',
     (uri?: vscode.Uri) => {
-      openPreview(context, uri);
+      void openPreview(context, uri);
     },
   );
   const runScriptsCommand = vscode.commands.registerCommand(

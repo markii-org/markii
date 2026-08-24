@@ -33,6 +33,8 @@ export interface SpawnRunOptions {
   limits?: RunJob['limits'];
   /** Forwarded verbatim to the worker's `RunJob.bundle` (the bundle-fs capability snapshot) — see `./worker-entry.ts`. Absent for a bare `.mk.md` run. */
   bundle?: RunJob['bundle'];
+  /** Forwarded verbatim to the worker's `RunJob.packModules` (pre-read pack Lua modules) — see `./worker-entry.ts`. Absent when no packs are configured. */
+  packModules?: RunJob['packModules'];
   /**
    * Overrides the worker entry file this run spawns. Left unset,
    * `defaultWorkerPath` resolves it: the bundled `dist/run/worker.js` the
@@ -125,6 +127,9 @@ export async function spawnRun(options: SpawnRunOptions): Promise<RunResult> {
     cacheSnapshot: options.cacheSnapshot,
     ...(options.limits !== undefined ? { limits: options.limits } : {}),
     ...(options.bundle !== undefined ? { bundle: options.bundle } : {}),
+    ...(options.packModules !== undefined
+      ? { packModules: options.packModules }
+      : {}),
   };
 
   return new Promise<RunResult>((resolve) => {

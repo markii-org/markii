@@ -40,6 +40,8 @@ import {
   encodeBundleCacheForStorage,
   withPersistedCache,
 } from './run/bundle-run.js';
+import { loadPackContext } from './packs/pack-context.js';
+import type { PackContext } from './packs/pack-context.js';
 
 /**
  * Imports `vscode` — deliberately NOT unit-tested (vitest cannot resolve
@@ -122,6 +124,17 @@ interface ActivePreview {
   revision: number;
   /** `scheme://authority/path` keys of the `localResourceRoots` this panel was created with — see `retargetToDocument`. Fixed for the panel's whole life, because `localResourceRoots` itself is. */
   readonly rootKeys: readonly string[];
+  /**
+   * The `markii.packs` install state this panel was created with (GitHub
+   * issue #3 slice 5) — the webview's registration script URIs and
+   * `localResourceRoots` entries were built from this snapshot, and
+   * `runScripts` reuses its `packModules` for the Run path's
+   * `PackModuleResolver` without re-reading disk on every run. A setting
+   * change only takes effect on the next panel (re)creation, exactly like
+   * `localResourceRoots` itself already only takes effect that way (see
+   * `retargetToDocument`'s doc comment).
+   */
+  readonly packContext: PackContext;
   readonly debouncer: ReturnType<typeof createDebouncer<void>>;
   /**
    * Set for the duration of one `markii.runScripts` press. `runScripts`
@@ -180,9 +193,22 @@ function titleForSource(source: PreviewSource): string {
  * grant a very wide root such as the file-system root — one line, and an
  * open door from any previewed note to any file on the machine; (c) this.
  */
+/**
+ * GitHub issue #3 slice 5: adds ONE root per pack that actually ships a
+ * `webview.js` registration script (`packContext.webviewPacks`) — never a
+ * broader root, and never anything derived from the previewed document. A
+ * pack folder becomes loadable ONLY because it is named by the
+ * `markii.packs` setting (an application-scope, user-only setting — see
+ * `package.json` — never settable from a workspace's own
+ * `.vscode/settings.json`), exactly the same "explicit user trust decision,
+ * not content-derived" boundary `localResourceRootsFor`'s existing roots
+ * already draw for workspace folders and the previewed document's own
+ * folder.
+ */
 function localResourceRootsFor(
   context: vscode.ExtensionContext,
   source: PreviewSource,
+  packContext: PackContext,
 ): vscode.Uri[] {
   const roots: vscode.Uri[] = [
     vscode.Uri.joinPath(context.extensionUri, 'dist', 'webview'),
@@ -194,7 +220,33 @@ function localResourceRootsFor(
     const folder = documentFolder(source.document);
     if (folder) roots.push(folder);
   }
+  for (const pack of packContext.webviewPacks) {
+    roots.push(vscode.Uri.file(pack.folder));
+  }
   return roots;
+}
+
+/** The `markii.packs` setting's raw, unresolved entries. */
+function configuredPackFolders(): readonly string[] {
+  return vscode.workspace.getConfiguration('markii').get<string[]>('packs', []);
+}
+
+/** The single-root workspace's filesystem path, or `undefined` with none open — what a relative `markii.packs` entry resolves against (`./packs/resolve-pack-paths.ts`). */
+function workspaceRootPath(): string | undefined {
+  return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+}
+
+/**
+ * Loads the current `markii.packs` install state (GitHub issue #3 slice 5):
+ * resolves the setting's entries against the open workspace root, discovers
+ * and validates each folder's `pack.json`, and pre-reads every discovered
+ * pack's `scripts/*.lua` for the Run path. Called once per panel
+ * (re)creation — see `ActivePreview.packContext`'s doc comment on why a
+ * setting change needs a fresh panel to take effect, same as
+ * `localResourceRoots` itself.
+ */
+function loadCurrentPackContext(): Promise<PackContext> {
+  return loadPackContext(configuredPackFolders(), workspaceRootPath());
 }
 
 /**
@@ -234,6 +286,7 @@ function postUpdate(preview: ActivePreview): void {
       text: source.text,
       assets: source.assets,
       readOnly: true,
+      packNamespaces: preview.packContext.namespaces,
     };
     void preview.panel.webview.postMessage(message);
     return;
@@ -248,6 +301,7 @@ function postUpdate(preview: ActivePreview): void {
     // clone preserves an own property whose value is `undefined`, and the
     // wire format says a document with no folder OMITS the field.
     ...(baseUri === undefined ? {} : { baseUri }),
+    packNamespaces: preview.packContext.namespaces,
   };
   void preview.panel.webview.postMessage(message);
 }
@@ -270,10 +324,24 @@ function baseUriForDocument(
   );
 }
 
-/** Builds and assigns the webview's HTML, with a FRESH nonce every time — a nonce authorizes exactly one script load and must never be reused across HTML assignments. */
+/**
+ * Builds and assigns the webview's HTML, with a FRESH nonce every time — a
+ * nonce authorizes exactly one script load and must never be reused across
+ * HTML assignments.
+ *
+ * `packContext.webviewPacks` supplies the pack registration script URIs
+ * (GitHub issue #3 slice 5): each is resolved through THIS webview's own
+ * `asWebviewUri`, exactly like `scriptUri`/`styleUri` — never a bare
+ * filesystem path — so loading one is subject to the SAME
+ * `localResourceRoots` jail (`localResourceRootsFor` above, which is what
+ * actually grants access to each pack's folder, restricted to only the
+ * folders `markii.packs` names) as every other local resource this webview
+ * loads.
+ */
 function setHtml(
   panel: vscode.WebviewPanel,
   context: vscode.ExtensionContext,
+  packContext: PackContext,
 ): void {
   const webview = panel.webview;
   const webviewDistUri = vscode.Uri.joinPath(
@@ -287,6 +355,9 @@ function setHtml(
   const styleUri = webview
     .asWebviewUri(vscode.Uri.joinPath(webviewDistUri, 'main.css'))
     .toString();
+  const packScriptUris = packContext.webviewPacks.map((pack) =>
+    webview.asWebviewUri(vscode.Uri.file(pack.webviewScriptPath)).toString(),
+  );
 
   webview.html = buildWebviewHtml({
     scriptUri,
@@ -294,6 +365,7 @@ function setHtml(
     cspSource: webview.cspSource,
     nonce: createNonce(),
     title: DOCUMENT_TITLE,
+    packScriptUris,
   });
 }
 
@@ -344,11 +416,11 @@ function switchDocument(
  * same view column so the recreation reads as a refresh rather than the
  * preview jumping somewhere else.
  */
-function retargetToDocument(
+async function retargetToDocument(
   context: vscode.ExtensionContext,
   preview: ActivePreview,
   document: vscode.TextDocument,
-): void {
+): Promise<void> {
   const folder = documentFolder(document);
   if (!folder || isCoveredByRoots(preview.rootKeys, rootKey(folder))) {
     switchDocument(preview, document);
@@ -363,7 +435,7 @@ function retargetToDocument(
   // subscription during its own callback is supported), and `createPreview`
   // below immediately installs a fresh `active`.
   preview.panel.dispose();
-  createPreview(
+  await createPreview(
     context,
     { kind: 'document', document, ...(bundle ? { bundle } : {}) },
     viewColumn,
@@ -385,24 +457,24 @@ function activePreviewableDocument(): vscode.TextDocument | undefined {
  * `TextDocument`/folder to compare `rootKeys` against, so there is nothing
  * to gain from trying to reuse the current panel's roots.
  */
-function presentSource(
+async function presentSource(
   context: vscode.ExtensionContext,
   source: PreviewSource,
-): void {
+): Promise<void> {
   if (source.kind === 'document') {
     if (active) {
-      retargetToDocument(context, active, source.document);
+      await retargetToDocument(context, active, source.document);
       const current = active;
       if (current) current.panel.reveal(current.panel.viewColumn, true);
       return;
     }
-    createPreview(context, source);
+    await createPreview(context, source);
     return;
   }
 
   const viewColumn = active?.panel.viewColumn;
   active?.panel.dispose();
-  createPreview(context, source, viewColumn);
+  await createPreview(context, source, viewColumn);
   const current = active;
   if (current) current.panel.reveal(current.panel.viewColumn, true);
 }
@@ -425,12 +497,19 @@ function presentSource(
  * true context retention, at no standing memory cost while the panel is
  * hidden.
  */
-function createPreview(
+async function createPreview(
   context: vscode.ExtensionContext,
   source: PreviewSource,
   viewColumn?: vscode.ViewColumn,
-): void {
-  const roots = localResourceRootsFor(context, source);
+): Promise<void> {
+  // GitHub issue #3 slice 5: loaded fresh on every panel (re)creation, and
+  // BEFORE `localResourceRoots`/the HTML are built, since both depend on
+  // which packs are actually installed right now — see
+  // `ActivePreview.packContext`'s doc comment on why a `markii.packs`
+  // change only takes effect on the next (re)creation.
+  const packContext = await loadCurrentPackContext();
+
+  const roots = localResourceRootsFor(context, source, packContext);
   const panel = vscode.window.createWebviewPanel(
     VIEW_TYPE,
     titleForSource(source),
@@ -445,13 +524,14 @@ function createPreview(
     },
   );
 
-  setHtml(panel, context);
+  setHtml(panel, context, packContext);
 
   const preview: ActivePreview = {
     panel,
     source,
     revision: 0,
     rootKeys: roots.map(rootKey),
+    packContext,
     debouncer: createDebouncer<void>(DEBOUNCE_MS, () => {
       postUpdate(preview);
     }),
@@ -496,7 +576,7 @@ function createPreview(
     // previewable document resumes the familiar follow-the-editor behavior.
     vscode.window.onDidChangeActiveTextEditor((editor) => {
       if (!editor || !isPreviewableDocument(editor.document)) return;
-      retargetToDocument(context, preview, editor.document);
+      void retargetToDocument(context, preview, editor.document);
     }),
 
     // Rehydration: `retainContextWhenHidden: false` means the webview is
@@ -557,7 +637,7 @@ async function openDirectoryBundle(
   const resolution = await resolveBundleDocument(storage);
   if (!resolution.ok) {
     logBundleResolutionFailure(bundleName, resolution);
-    presentSource(context, {
+    await presentSource(context, {
       kind: 'bundle-error',
       title: bundlePreviewTitleFor(bundleName, false),
       message: bundleResolutionFailureMessage(resolution.reason),
@@ -570,7 +650,7 @@ async function openDirectoryBundle(
   try {
     document = await vscode.workspace.openTextDocument(documentUri);
   } catch {
-    presentSource(context, {
+    await presentSource(context, {
       kind: 'bundle-error',
       title: bundlePreviewTitleFor(bundleName, false),
       message: "This bundle's document could not be found.",
@@ -579,7 +659,7 @@ async function openDirectoryBundle(
   }
 
   await vscode.window.showTextDocument(document, { preview: false });
-  presentSource(context, {
+  await presentSource(context, {
     kind: 'document',
     document,
     bundle: {
@@ -619,7 +699,7 @@ async function openZipBundleArchive(
   try {
     stat = await vscode.workspace.fs.stat(bundleUri);
   } catch {
-    presentSource(context, {
+    await presentSource(context, {
       kind: 'bundle-error',
       title: bundlePreviewTitleFor(bundleName, true),
       message: 'This bundle could not be read.',
@@ -630,7 +710,7 @@ async function openZipBundleArchive(
     console.error(
       `Markii: zip bundle "${bundleName}" is ${stat.size} bytes, exceeding the archive open cap`,
     );
-    presentSource(context, {
+    await presentSource(context, {
       kind: 'bundle-error',
       title: bundlePreviewTitleFor(bundleName, true),
       message: 'This bundle is too large to open.',
@@ -642,7 +722,7 @@ async function openZipBundleArchive(
   try {
     bytes = await vscode.workspace.fs.readFile(bundleUri);
   } catch {
-    presentSource(context, {
+    await presentSource(context, {
       kind: 'bundle-error',
       title: bundlePreviewTitleFor(bundleName, true),
       message: 'This bundle could not be read.',
@@ -658,7 +738,7 @@ async function openZipBundleArchive(
       `Markii: zip bundle "${bundleName}" rejected:`,
       err instanceof Error ? err.message : String(err),
     );
-    presentSource(context, {
+    await presentSource(context, {
       kind: 'bundle-error',
       title: bundlePreviewTitleFor(bundleName, true),
       message:
@@ -670,7 +750,7 @@ async function openZipBundleArchive(
   const resolution = await resolveBundleDocument(storage);
   if (!resolution.ok) {
     logBundleResolutionFailure(bundleName, resolution);
-    presentSource(context, {
+    await presentSource(context, {
       kind: 'bundle-error',
       title: bundlePreviewTitleFor(bundleName, true),
       message: bundleResolutionFailureMessage(resolution.reason),
@@ -679,7 +759,7 @@ async function openZipBundleArchive(
   }
 
   const assets = await extractAssetsAsDataUris(storage);
-  presentSource(context, {
+  await presentSource(context, {
     kind: 'bundle-archive',
     text: resolution.text,
     assets,
@@ -738,7 +818,7 @@ async function openPreviewForUri(
   try {
     const document = await vscode.workspace.openTextDocument(uri);
     await vscode.window.showTextDocument(document, { preview: false });
-    presentSource(context, { kind: 'document', document });
+    await presentSource(context, { kind: 'document', document });
   } catch {
     void vscode.window.showErrorMessage(
       'Markii: could not open this item for preview.',
@@ -921,6 +1001,17 @@ export async function runScripts(
       promptBundleAccess: promptBundleAccessAdapter,
       spawnRun,
       timeoutMs: RUN_TIMEOUT_MS,
+      // Omitted entirely (not an empty object) when no packs are
+      // installed: `@markii/lua`'s `require` classifies a pack-namespaced
+      // `require` differently depending on whether a resolver exists at
+      // all (a clean 'capability-denied', "packs are not supported in this
+      // run") versus a resolver that just doesn't have that module (an
+      // ordinary 'script-error', "no such module") — passing `{}` here
+      // would silently switch every note to the second, wrong,
+      // classification whenever zero packs are configured.
+      ...(preview.packContext.packs.length > 0
+        ? { packModules: preview.packContext.packModules }
+        : {}),
       ...(bundleOptions ? { bundle: bundleOptions } : {}),
     });
 
@@ -992,12 +1083,12 @@ export async function resetScriptGrants(
  * active and no panel exists yet, informs the user instead of opening an
  * empty/blank preview.
  */
-export function openPreview(
+export async function openPreview(
   context: vscode.ExtensionContext,
   uri?: vscode.Uri,
-): void {
+): Promise<void> {
   if (uri) {
-    void openPreviewForUri(context, uri);
+    await openPreviewForUri(context, uri);
     return;
   }
 
@@ -1005,7 +1096,7 @@ export function openPreview(
 
   if (active) {
     if (document) {
-      retargetToDocument(context, active, document);
+      await retargetToDocument(context, active, document);
     }
     // Re-read `active`: `retargetToDocument` may have replaced the panel
     // (and therefore this variable) with a freshly created one.
@@ -1021,5 +1112,5 @@ export function openPreview(
     return;
   }
 
-  createPreview(context, { kind: 'document', document });
+  await createPreview(context, { kind: 'document', document });
 }

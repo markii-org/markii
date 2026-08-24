@@ -44,6 +44,7 @@ const markiiSrcRoots = {
   '@markii/stdlib': path.join(repoRoot, 'packages', 'markii-stdlib', 'src'),
   '@markii/runtime': path.join(repoRoot, 'packages', 'markii-runtime', 'src'),
   '@markii/lua': path.join(repoRoot, 'packages', 'markii-lua', 'src'),
+  '@markii/pack': path.join(repoRoot, 'packages', 'markii-pack', 'src'),
   '@markii/react': path.join(
     repoRoot,
     'packages',

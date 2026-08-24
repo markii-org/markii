@@ -542,3 +542,47 @@ describe('serializeCacheSnapshotIfSmallEnough', () => {
     expect(serializeCacheSnapshotIfSmallEnough(circular)).toBeUndefined();
   });
 });
+
+describe('runOnce packModules forwarding', () => {
+  it('forwards packModules to spawnRun verbatim when present', async () => {
+    const memento = fakeMemento();
+    const spawnRun = vi.fn((_options: SpawnRunOptions): Promise<RunResult> =>
+      Promise.resolve(fakeRunResult()),
+    );
+    const packModules = { demo: { 'http.lua': 'return {}' } };
+
+    await runOnce({
+      documentKey: 'file:///a.mk.md',
+      text: fence('a', 'return 1'),
+      memento,
+      promptHost: () => Promise.resolve(true),
+      promptUnknownHosts: () => Promise.resolve(true),
+      promptManyHosts: () => Promise.resolve(true),
+      spawnRun,
+      timeoutMs: 15000,
+      packModules,
+    });
+
+    expect(spawnRun.mock.calls[0]?.[0]?.packModules).toEqual(packModules);
+  });
+
+  it('omits packModules from the spawnRun call when not configured', async () => {
+    const memento = fakeMemento();
+    const spawnRun = vi.fn((_options: SpawnRunOptions): Promise<RunResult> =>
+      Promise.resolve(fakeRunResult()),
+    );
+
+    await runOnce({
+      documentKey: 'file:///a.mk.md',
+      text: fence('a', 'return 1'),
+      memento,
+      promptHost: () => Promise.resolve(true),
+      promptUnknownHosts: () => Promise.resolve(true),
+      promptManyHosts: () => Promise.resolve(true),
+      spawnRun,
+      timeoutMs: 15000,
+    });
+
+    expect(spawnRun.mock.calls[0]?.[0]).not.toHaveProperty('packModules');
+  });
+});

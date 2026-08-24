@@ -131,7 +131,7 @@ packages/markii-lua     Lua sandbox runtime (docs/security.md, L3) — no React,
   src/sandbox.ts     runScript(): assemble env + limits + caps, run, marshal result
   src/executor.ts    createLuaExecutor(): adapts runScript to @markii/runtime's ScriptExecutor
 apps/playground      thin Vite dev harness to view .mk.md files. NOT the product.
-apps/vscode          the "Markii" VS Code extension (v1: preview only) — an
+apps/vscode          the "Markii" VS Code extension (preview + Run + packs) — an
                      app/consumer of @markii/react, never a renderer:
   src/extension.ts   activation + the markii.openPreview command
   src/preview-panel.ts  the single webview panel; with extension.ts the ONLY
@@ -144,7 +144,17 @@ apps/vscode          the "Markii" VS Code extension (v1: preview only) — an
   src/webview-html.ts  the CSP shell: nonce'd script, no remote hosts
   src/webview/       the bundled React preview (renderMark + defaultRegistry)
                      and theme.css, mapping --vscode-* colors onto doc.css
-                     without forking it (theme-coverage.test.ts guards drift)
+                     without forking it (theme-coverage.test.ts guards drift);
+                     webview/pack-registry.ts is the webview half of pack
+                     loading (validates window.__markiiPackRegistrations,
+                     merges via installPacks, falls back on collision)
+  src/packs/         pack loading (issue #3 slice 5, docs/packs.md): discover.ts
+                     reads/validates pack.json per configured folder;
+                     resolve-pack-paths.ts resolves the markii.packs setting
+                     (user-scope) against the workspace root; pack-scripts.ts
+                     pre-reads each pack's scripts/*.lua; lua-resolver.ts is the
+                     pure worker-side PackModuleResolver; pack-context.ts
+                     composes them
   syntaxes/          TextMate injection grammar for the three directive forms
   esbuild.config.mjs two bundles: extension host (node/cjs, vscode external)
                      and webview (browser/iife); @markii/* aliased to src/

@@ -56,6 +56,17 @@ export interface UpdateMessage {
    * document or a directory-form bundle, both of which track a real file.
    */
   readonly readOnly?: boolean;
+  /**
+   * The namespaces of every pack `preview-panel.ts` currently has installed
+   * (GitHub issue #3 slice 5, docs/packs.md's `uses:` surfacing) — what the
+   * webview resolves a note's own `uses:` frontmatter declaration against
+   * via `@markii/pack`'s `resolveUses`, to show a quiet "pack not
+   * installed" marker instead of an unexplained fallback box. Omitted (not
+   * merely empty) when no packs are configured at all, so the webview can
+   * tell "zero packs installed" apart from "the host didn't say" — though
+   * both currently degrade the same way (an empty install set).
+   */
+  readonly packNamespaces?: readonly string[];
 }
 
 /**
@@ -248,7 +259,26 @@ function isUpdateMessage(value: unknown): value is UpdateMessage {
   ) {
     return false;
   }
+  if (
+    hasOwn(value, 'packNamespaces') &&
+    value.packNamespaces !== undefined &&
+    !isPackNamespacesArray(value.packNamespaces)
+  ) {
+    return false;
+  }
   return true;
+}
+
+/** A sane upper bound on how many pack namespaces one `update` message may list — real installs are a handful; this only exists to bound a hostile/corrupt message. */
+const MAX_PACK_NAMESPACES = 256;
+
+/** Every entry of `value` is a non-empty string, and the array itself is within `MAX_PACK_NAMESPACES`. */
+function isPackNamespacesArray(value: unknown): value is readonly string[] {
+  return (
+    Array.isArray(value) &&
+    value.length <= MAX_PACK_NAMESPACES &&
+    value.every((entry) => typeof entry === 'string' && entry.length > 0)
+  );
 }
 
 /** A sane upper bound on a bundle-error message — real ones are one short sentence (`bundle-resolve.ts`'s `bundleResolutionFailureMessage`). */

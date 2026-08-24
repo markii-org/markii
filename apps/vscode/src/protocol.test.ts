@@ -272,6 +272,69 @@ describe('isHostToWebviewMessage — assets/readOnly', () => {
   });
 });
 
+describe('isHostToWebviewMessage — packNamespaces', () => {
+  it('accepts a well-formed packNamespaces array', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'update',
+        revision: 1,
+        text: 'hi',
+        packNamespaces: ['ana', 'demo'],
+      }),
+    ).toBe(true);
+  });
+
+  it('accepts an empty packNamespaces array', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'update',
+        revision: 1,
+        text: 'hi',
+        packNamespaces: [],
+      }),
+    ).toBe(true);
+  });
+
+  it('accepts an omitted packNamespaces field', () => {
+    expect(
+      isHostToWebviewMessage({ type: 'update', revision: 1, text: 'hi' }),
+    ).toBe(true);
+  });
+
+  it('rejects a non-string entry', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'update',
+        revision: 1,
+        text: 'hi',
+        packNamespaces: ['ana', 42],
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects a packNamespaces field that is not an array', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'update',
+        revision: 1,
+        text: 'hi',
+        packNamespaces: 'ana',
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects an oversized packNamespaces array', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'update',
+        revision: 1,
+        text: 'hi',
+        packNamespaces: Array.from({ length: 257 }, (_, i) => `ns${i}`),
+      }),
+    ).toBe(false);
+  });
+});
+
 describe('isHostToWebviewMessage — bundle-error', () => {
   it('accepts a well-formed bundle-error message', () => {
     expect(

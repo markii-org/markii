@@ -55,14 +55,30 @@ one in a subfolder. Images from anywhere else, outside the note's folder and
 outside your open workspace, are not loaded, which is the
 editor's own rule for what a preview may read.
 
-## What v1 does and doesn't
+## What the extension does
 
-This version renders everything in the format: directives, the standard
-component set, layout wrappers, tables, frontmatter. It never runs
-scripts: script blocks (the ` ```lua {name=...} ` form) show as a
-collapsed marker and data-bound components (`stat`, `progress`, `chart`,
-`:value[...]`) show their quiet empty states. Script execution is a
-planned later version.
+It renders everything in the format: directives, the standard component
+set, layout wrappers, tables, and frontmatter. It also runs a note's
+scripts on demand. Press **Markii: Run Scripts** and each ` ```lua
+{name=...} ` block runs in a sandbox, feeding the data-bound components
+(`stat`, `progress`, `chart`, `:value[...]`). Scripts never run when a note
+is only opened, and network access is granted one host at a time, with a
+prompt, the first time a note reaches out. Until you run them, script
+blocks show a collapsed marker and data-bound components show their quiet
+empty states.
+
+### Component packs
+
+Packs let a note use components and shared Lua beyond the standard set.
+Point the `markii.packs` setting at one or more folders you trust as
+installed packs (see the
+[packs guide](https://github.com/sadigaxund/markii/blob/main/docs/packs.md)).
+Their prefixed components (for example `:::ana-timeline`) then render in the
+preview, and their shared Lua modules are reachable from `require "ana/..."`
+inside a note's scripts. A note that uses a pack you have not installed
+stays readable: the unknown component shows a labeled fallback box. The
+setting is user-scope only and is never read from a project's own settings,
+so opening someone else's repository can never load a pack on your behalf.
 
 The extension contains no rendering logic of its own; it hosts
 `@markii/react`, the format's reference renderer, in a webview. What the
@@ -89,5 +105,6 @@ that `{...}` group is inert there. That is accepted, because never disturbing th
 fence's own code highlighting matters more.
 
 Packaging: `npm run package -w markii-vscode` produces a `.vsix`
-(gitignored). Publishing to the Marketplace is a separate manual step
-requiring a publisher account.
+(gitignored). The release workflow publishes the extension to the
+Marketplace automatically on a version tag; see
+`.github/workflows/release.yml`.

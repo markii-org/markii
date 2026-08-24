@@ -56,6 +56,8 @@ import type { BundleFsGrant, BundleManifest } from '@markii/bundle';
 import { createScriptView } from '@markii/bundle';
 import { cacheFilesFrom } from './bundle-run.js';
 import { createSnapshotStorage } from './snapshot-storage.js';
+import { createPackModuleResolver } from '../packs/lua-resolver.js';
+import type { PackModulesMap } from '../packs/lua-resolver.js';
 
 /** The one job message this worker ever receives, posted once by `run-host.ts`. */
 export interface RunJob {
@@ -91,6 +93,17 @@ export interface RunJob {
     /** The user-granted bundle-fs permissions for this run (already the OUTCOME of the host's own grant flow, not the manifest's raw declaration) — `createScriptView` intersects this with what the manifest declares. */
     grantedBundlePermissions: BundleFsGrant[];
   };
+  /**
+   * Slice 5 of the pack-loading arc (GitHub issue #3): shared Lua modules
+   * from every configured, installed pack's `scripts/` directory, pre-read
+   * on the extension host (`../packs/pack-scripts.ts`) since this worker has
+   * no filesystem access of its own. Builds this run's `PackModuleResolver`
+   * (`../packs/lua-resolver.ts`) — a pure, synchronous, in-memory lookup, no
+   * I/O inside the worker. Absent for a run with no packs configured, in
+   * which case `require "packName/..."` denies exactly as it always has
+   * (`@markii/lua`'s own "no resolver configured" capability denial).
+   */
+  packModules?: PackModulesMap;
 }
 
 /** One failed script, in the shape the host needs to drive the grant/UI flow — never a raw thrown error. */
@@ -412,6 +425,9 @@ async function runJob(job: RunJob): Promise<RunResult> {
     netGrants: { get: netAllowlist, post: netAllowlist },
     cache: cache.provider,
     bundle: bundleView,
+    ...(job.packModules
+      ? { packModuleResolver: createPackModuleResolver(job.packModules) }
+      : {}),
     maxFetchBytes,
     limits: {
       ...(job.limits?.wallClockMs !== undefined

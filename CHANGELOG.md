@@ -29,6 +29,15 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
   `"react"` yields an empty registry so its directives fall back cleanly.
   `installPacks(packs, base?)` merges several packs onto a base registry and
   rejects the install (no partial merge) when two packs share a namespace.
+- **VS Code extension: pack loading (issue #3, slice 5)** — a `markii.packs`
+  setting (user-scope only) names folders trusted as installed packs.
+  Installed packs' components render in the preview via a documented
+  registration convention (each pack ships a `webview.js` that calls
+  `window.__markiiRegisterPack`, sharing the one webview React instance), and
+  their shared Lua modules are reachable from `require "packName/…"` in the
+  Run path. A note's `uses:` frontmatter is resolved against installed packs,
+  with a quiet marker for anything missing. Pack scripts load only from the
+  configured folders (via `localResourceRoots`), never from note content.
 
 ### Changed
 

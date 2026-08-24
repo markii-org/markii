@@ -1,0 +1,7 @@
+{
+  "name": "demo",
+  "engine": "react",
+  "components": {
+    "badge": "./Badge.tsx"
+  }
+}

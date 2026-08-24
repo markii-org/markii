@@ -87,6 +87,61 @@ describe('buildWebviewHtml', () => {
     const html = buildWebviewHtml({ ...BASE_OPTIONS, title: 'A <B> & C' });
     expect(html).toContain('A &lt;B&gt; &amp; C');
   });
+
+  it('defines the pack registration bootstrap even with no packs configured', () => {
+    const html = buildWebviewHtml(BASE_OPTIONS);
+    expect(html).toContain('window.__markiiRegisterPack');
+    expect(html).toContain('window.__markiiPackRegistrations=[]');
+  });
+
+  it('emits one nonce-carrying <script src> tag per pack, before the main bundle', () => {
+    const html = buildWebviewHtml({
+      ...BASE_OPTIONS,
+      packScriptUris: [
+        'https://example.test/packs/demo/pack.js',
+        'https://example.test/packs/other/pack.js',
+      ],
+    });
+    const demoTag = `<script nonce="${BASE_OPTIONS.nonce}" src="https://example.test/packs/demo/pack.js"></script>`;
+    const otherTag = `<script nonce="${BASE_OPTIONS.nonce}" src="https://example.test/packs/other/pack.js"></script>`;
+    expect(html).toContain(demoTag);
+    expect(html).toContain(otherTag);
+    expect(html.indexOf(demoTag)).toBeLessThan(html.indexOf(otherTag));
+    expect(html.indexOf(otherTag)).toBeLessThan(
+      html.indexOf(`src="${BASE_OPTIONS.scriptUri}"`),
+    );
+    expect(html.indexOf('__markiiRegisterPack')).toBeLessThan(
+      html.indexOf(demoTag),
+    );
+  });
+
+  it('escapes a hostile pack script URI', () => {
+    const html = buildWebviewHtml({
+      ...BASE_OPTIONS,
+      packScriptUris: ['https://example.test/x"><script>alert(1)</script>'],
+    });
+    expect(html).not.toContain('<script>alert(1)</script>');
+  });
+
+  it('omits pack script tags entirely when packScriptUris is empty or absent', () => {
+    const html = buildWebviewHtml(BASE_OPTIONS);
+    // Scoped to the <body> so the CSP explanation's prose examples
+    // (literal "<script ...>" text inside the <head> comment) are never
+    // mistaken for real tags.
+    const body = html.slice(html.indexOf('<body>'));
+    const scriptTagCount = (body.match(/<script /g) ?? []).length;
+    expect(scriptTagCount).toBe(2);
+  });
+
+  it('never adds a pack script host to the CSP script-src directive (the nonce alone authorizes it)', () => {
+    const html = buildWebviewHtml({
+      ...BASE_OPTIONS,
+      packScriptUris: ['https://packs.example.test/demo/pack.js'],
+    });
+    const csp = extractCsp(html);
+    const scriptSrc = /script-src ([^;]*);/.exec(csp)?.[1] ?? '';
+    expect(scriptSrc.trim()).toBe(`'nonce-${BASE_OPTIONS.nonce}'`);
+  });
 });
 
 describe('createNonce', () => {

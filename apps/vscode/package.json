@@ -104,7 +104,21 @@
           "text.html.markdown"
         ]
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Markii",
+      "properties": {
+        "markii.packs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "scope": "application",
+          "markdownDescription": "Folders the user explicitly trusts as installed Markii component packs (docs/packs.md). Each entry is either an absolute path, or a path relative to the open workspace folder. Pack code runs with the SAME trust as the extension's own bundle once loaded — only add a folder you trust. Loading is driven ONLY by this setting; a note's own content can never add, remove, or influence which packs load. This setting is USER-scope only (it cannot be set from a workspace's `.vscode/settings.json`), so opening someone else's project can never silently add a pack on your behalf."
+        }
+      }
+    }
   },
   "scripts": {
     "build": "tsc --noEmit -p tsconfig.json && node esbuild.config.mjs --production",
@@ -119,6 +133,7 @@
     "@markii/bundle": "*",
     "@markii/core": "*",
     "@markii/lua": "*",
+    "@markii/pack": "*",
     "@markii/react": "*",
     "@markii/runtime": "*"
   },
