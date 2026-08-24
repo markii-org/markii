@@ -1,10 +1,35 @@
 # Changelog
 
-All notable changes to Mark and the `@markii/*` packages are recorded here. The
+All notable changes to Markii and the `@markii/*` packages are recorded here. The
 format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [0.7.2] - 2026-08-24
+
+No library code changed in this release: every `@markii/*` package is
+byte-identical to 0.7.1 and moves only to keep the lockstep version line
+intact.
+
+### Changed
+
+- **The playground now seeds its editor from the repository's
+  `README.mk.md`.** The hosted demo previously showed
+  `apps/playground/demo.mk.md`, a second copy of the same tour that had to be
+  kept in step with the file at the repository root by hand. That copy is
+  gone: `README.mk.md` holds the content the app was showing, and the
+  playground imports it. Editing `README.mk.md` is now the way to change what
+  https://sadigaxund.github.io/markii/ displays.
+
+  The app's posture is unchanged. The import is resolved at build time, so the
+  document ships as a frozen string inside the bundle; every visitor starts
+  from a fresh in-memory copy, and nothing typed in the editor is persisted or
+  written back to the file.
+
+- **GitHub Pages republishes when `README.mk.md` changes.** The deploy
+  workflow's path filter now includes the file, so an edit to the document
+  reaches the hosted playground without a manual `workflow_dispatch`.
 
 ## [0.7.1] - 2026-08-24
 

@@ -1,6 +1,6 @@
 {
   "name": "@markii/react",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "description": "The reference React renderer for Mark (.mk.md): a registry-driven hast-to-React renderer (`.`), an optional standard component set + defaultRegistry (`./components`), and the document stylesheet (`./doc.css`).",
   "keywords": [
     "markdown",
@@ -54,10 +54,10 @@
   },
   "dependencies": {
     "hast-util-to-jsx-runtime": "^2.3.6",
-    "@markii/core": "0.7.1",
-    "@markii/pack": "0.7.1",
-    "@markii/runtime": "0.7.1",
-    "@markii/stdlib": "0.7.1"
+    "@markii/core": "0.7.2",
+    "@markii/pack": "0.7.2",
+    "@markii/runtime": "0.7.2",
+    "@markii/stdlib": "0.7.2"
   },
   "peerDependencies": {
     "react": "^18.3.1"

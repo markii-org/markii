@@ -1,6 +1,6 @@
 name: Deploy playground to GitHub Pages
 
-# Builds and publishes apps/playground (the .smd demo/reference app) to
+# Builds and publishes apps/playground (the .mk.md demo/reference app) to
 # GitHub Pages as a project site served at /markii/. This deploys the DEMO
 # app only — the @markii/* libraries are not published here (see
 # release.yml for the npm release scaffold).
@@ -12,6 +12,9 @@ on:
   push:
     branches: [main]
     paths:
+      # The playground seeds its editor with the root README.mk.md, so an edit
+      # to that file changes the deployed page and must republish it.
+      - 'README.mk.md'
       - 'apps/playground/**'
       - 'packages/**'
       - 'package.json'
