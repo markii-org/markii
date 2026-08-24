@@ -138,13 +138,21 @@
         "markii.runOnOpen": {
           "type": "boolean",
           "default": false,
-          "markdownDescription": "Run a note's scripts automatically when its preview first opens, at the READ-ONLY tier (GET requests, cache and bundle reads; never POST/PATCH or bundle writes). Off by default: scripts otherwise run only on an explicit **Markii: Run Scripts**. An auto-run never prompts and never adds network access — it reuses only the hosts you already granted by hand for that exact note; anything else fails cleanly and the note keeps showing its last-known values, marked stale."
+          "scope": "application",
+          "markdownDescription": "Run a note's scripts automatically when its preview first opens, at the READ-ONLY tier (GET requests, cache and bundle reads; never POST/PATCH or bundle writes). Off by default: scripts otherwise run only on an explicit **Markii: Run Scripts**. An auto-run never prompts and never adds network access — it reuses only the hosts you already granted by hand for that exact note; anything else fails cleanly and the note keeps showing its last-known values, marked stale. This setting is USER-scope only (it cannot be set from a workspace's `.vscode/settings.json`), so opening someone else's project can never start running scripts on your behalf."
         },
         "markii.refreshIntervalSeconds": {
           "type": "number",
           "default": 0,
           "minimum": 0,
-          "markdownDescription": "Re-run the previewed note's scripts on this interval, in seconds, at the READ-ONLY tier — for dashboard/monitoring notes. `0` (the default) turns scheduled refresh off. A positive value under 5 is treated as 5. Like auto-run, a scheduled run never prompts and never adds network access; it reuses only the hosts you already granted by hand. The interval is read when the preview opens; change it and reopen the preview to apply."
+          "scope": "application",
+          "markdownDescription": "Re-run the previewed note's scripts on this interval, in seconds, at the READ-ONLY tier — for dashboard/monitoring notes. `0` (the default) turns scheduled refresh off. A positive value under 5 is treated as 5. Like auto-run, a scheduled run never prompts and never adds network access; it reuses only the hosts you already granted by hand. The interval is read when the preview opens; change it and reopen the preview to apply. This setting is USER-scope only (it cannot be set from a workspace's `.vscode/settings.json`), so opening someone else's project can never start a refresh timer on your behalf."
+        },
+        "markii.allowPrivateNetworkAddresses": {
+          "type": "boolean",
+          "default": false,
+          "scope": "application",
+          "markdownDescription": "Allow a granted host to resolve to an address on this machine or your private network (loopback, RFC 1918/RFC 6598 ranges, link-local, including the cloud metadata address). Off by default: a granted hostname's DNS answer is checked, and a hostname that resolves to any such address is refused outright rather than reached, because a public-looking name resolving into your own machine or LAN is SSRF, including through DNS rebinding after the grant. A literal IP address or `localhost` you grant directly is always honored at any scope; this setting only affects a NAMED host's resolved address. Turn it on only if your deployment's internal DNS legitimately points names at private space (a corporate `git.internal`, for example) — otherwise leave it off. This setting is USER-scope only (it cannot be set from a workspace's `.vscode/settings.json`), so opening someone else's project can never widen network access on your behalf."
         }
       }
     }

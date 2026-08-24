@@ -54,11 +54,15 @@ function scrubStoredValueForWire(value: StoredValue): StoredValue {
 function scrubValuesForWire(
   values: Record<string, StoredValue>,
 ): Record<string, StoredValue> {
-  const scrubbed: Record<string, StoredValue> = {};
-  for (const [name, value] of Object.entries(values)) {
-    scrubbed[name] = scrubStoredValueForWire(value);
-  }
-  return scrubbed;
+  // `Object.fromEntries` for the same reason `mergePersistedValues` uses it:
+  // a plain `scrubbed[name] = ...` silently loses the value of a script
+  // legitimately named `__proto__`.
+  return Object.fromEntries(
+    Object.entries(values).map(([name, value]) => [
+      name,
+      scrubStoredValueForWire(value),
+    ]),
+  );
 }
 
 /** A `CacheEntry`-keyed snapshot, structurally — this module never imports `@markii/lua` just for the type; it only ever passes the value through. */
@@ -143,17 +147,29 @@ export function mergePersistedValues(
   previous: Record<string, StoredValue>,
   next: Record<string, StoredValue>,
 ): Record<string, StoredValue> {
-  const merged: Record<string, StoredValue> = {};
+  // Built through entries and `Object.fromEntries` rather than
+  // `merged[name] = ...`: assigning the name `__proto__` on a plain object
+  // sets its prototype instead of creating an own property, silently losing
+  // that value, and `__proto__` is a legal script name (docs/spec.md's
+  // `[A-Za-z_][A-Za-z0-9_-]*`). The same guard is in `./stale-values.ts`.
+  const merged: Array<[string, StoredValue]> = [];
   for (const [name, value] of Object.entries(next)) {
+    if (typeof value !== 'object' || value === null) continue;
     if (value.status !== 'error') {
-      merged[name] = value;
+      merged.push([name, value]);
       continue;
     }
-    const prior = Object.hasOwn(previous, name) ? previous[name] : undefined;
-    merged[name] =
-      prior && prior.status !== 'error' ? { ...prior, status: 'stale' } : value;
+    // `previous` is a PERSISTED store, guarded only down to "plain object"
+    // when it was read back, so an individual entry can be anything.
+    const priorRaw = Object.hasOwn(previous, name) ? previous[name] : undefined;
+    const prior =
+      typeof priorRaw === 'object' && priorRaw !== null ? priorRaw : undefined;
+    merged.push([
+      name,
+      prior && prior.status !== 'error' ? { ...prior, status: 'stale' } : value,
+    ]);
   }
-  return merged;
+  return Object.fromEntries(merged);
 }
 
 /** The JSON-and-size-guarded form of a value store to persist, or `undefined` to drop it (unserializable, or over `MAX_VALUES_SNAPSHOT_BYTES`) — same contract as `serializeCacheSnapshotIfSmallEnough`. */
@@ -211,6 +227,15 @@ export interface RunOnceOptions {
    * (docs/scripting.md); the tier gate in the worker is the other half.
    */
   trigger?: RunTrigger;
+  /**
+   * The DNS-rebinding / private-range policy (GitHub issue #10), forwarded
+   * verbatim to `spawnRun`'s `netPolicy` — see `./net-pinning.ts`'s
+   * `PinPolicy`. Omitted defaults to the fail-closed posture the worker
+   * itself applies (`allowRestrictedAddresses: false`); this is the
+   * deployment-level opt-in `markii.allowPrivateNetworkAddresses` maps to
+   * (`preview-panel.ts`), never something a note can set for itself.
+   */
+  netPolicy?: SpawnRunOptions['netPolicy'];
   memento: GrantMemento;
   promptHost: PromptHost;
   promptUnknownHosts: PromptUnknownHosts;
@@ -337,6 +362,9 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
     text: options.text,
     trigger,
     netAllowlist: grant.allowedHosts,
+    ...(options.netPolicy !== undefined
+      ? { netPolicy: options.netPolicy }
+      : {}),
     cacheSnapshot: cacheSnapshot as SpawnRunOptions['cacheSnapshot'],
     timeoutMs: options.timeoutMs,
     ...(options.packModules !== undefined

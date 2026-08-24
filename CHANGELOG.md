@@ -6,6 +6,94 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Security
+
+- **The network jail now resolves and pins addresses, closing DNS rebinding
+  and private-range SSRF (issue #10)** — `docs/security.md` previously
+  documented this as an accepted limitation of hostname grants. Every hop of
+  a request now resolves its host once, vets every address the resolver
+  returned, and connects to the vetted address, so the gap between resolving
+  and connecting is closed by construction. The certificate check and the
+  `Host` header still use the real hostname, so pinning weakens nothing
+  about server identity.
+
+  Addresses are judged by scope rather than by a short list of private
+  blocks: loopback, private, link-local, carrier-grade NAT, multicast, and
+  the reserved and documentation ranges are restricted, including the ones
+  that hide inside an IPv6 wrapper (IPv4-mapped, IPv4-compatible, 6to4,
+  NAT64), which is how incomplete filters are usually walked around. A grant
+  naming a literal address or `localhost` is still honored at any scope, so
+  pointing a note at a local development server keeps working; a grant
+  naming a host may only be reached at a public address, and a mixed answer
+  is refused outright rather than filtered. The new
+  `markii.allowPrivateNetworkAddresses` setting is the deployment opt-in for
+  internal DNS that legitimately points names at private space, and it is
+  user-scope only.
+
+  Verified against the real resolver and the real network, not only injected
+  answers: a granted public name whose genuine DNS answer is loopback is
+  refused, while a real GitHub API note still completes through TLS and a
+  redirect.
+
+### Changed
+
+- **The extension's network provider is built on `node:https` rather than
+  `fetch`** — `fetch` cannot pin where a socket connects without an undici
+  dispatcher, and adding a dependency for that is out of scope. Every
+  existing protection survives the port and is pinned by the tests that
+  covered it before: manual redirect following with a per-hop host check, the
+  streamed response-size cap with its `content-length` pre-check, the refusal
+  of credential-bearing URLs, and certificate verification. The default
+  headers `fetch` had been adding are now set explicitly, because dropping
+  them would have broken every note reading the GitHub API (403, no user
+  agent) while every local-server test stayed green.
+- `RunJob`, `SpawnRunOptions`, and `RunOnceOptions` gained an optional
+  `netPolicy`, and `createNetProvider` is now exported for testing. An absent
+  `netPolicy` fails closed.
+
+### Security
+
+- **Dedicated adversarial pass over auto-run and scheduled execution (issue
+  #12)** — the tracked next step `docs/security.md` named after 0.7.1 moved
+  script execution off the explicit click for the first time. The pass ran
+  against real worker threads, the real Lua sandbox, and real local HTTP
+  servers. The tier gate and the non-interactive grant rule held under every
+  attack tried: repeated scheduled and auto ticks could not reach POST,
+  PATCH, or a bundle write (even with the write declared in the manifest and
+  granted), could not escalate by seeding a cache entry for a later tick, and
+  could not do any of it through a pack's `require` either; and the
+  no-new-network claim was measured at the server's own request counter,
+  which stayed at zero.
+
+  One real gap and two robustness bugs came out of it, all fixed here:
+
+  - `markii.runOnOpen` and `markii.refreshIntervalSeconds` declared no
+    configuration scope, and an unscoped VS Code setting defaults to window
+    scope, which a workspace's `.vscode/settings.json` can set. A repository
+    could therefore enable unattended execution for anyone who opened it. The
+    network gate still held (a fresh clone has no stored grant, and an auto
+    run never prompts), so the exposure was capability-free sandboxed
+    execution rather than any reach outward, but the "no code runs without a
+    user gesture" property was broken. Both settings are now pinned to
+    `"scope": "application"`, matching `markii.packs`, and a test pins every
+    setting that can cause an unattended run.
+  - A corrupt entry in the persisted value store made rehydration throw
+    instead of degrading, which would have silently skipped the stale re-seed
+    and the run-on-open that follows it. Unusable entries are now skipped.
+  - A value named `__proto__`, which is a legal script name, was silently
+    dropped by output objects built with plain assignment. The rehydration,
+    merge, and wire-scrub paths now build their output so every name
+    survives, matching `@markii/runtime`'s own value store.
+
+  The pass's probe suites are committed as product code
+  (`scheduled-timer-tier.probe.test.ts`,
+  `scheduled-grant-network.probe.test.ts`,
+  `contributes-runopen-scope.probe.test.ts`,
+  `values-persistence-protocol.probe.test.ts`), and `docs/security.md`
+  records the result, the fixes, and one honest coverage limit: the timer
+  lifecycle itself lives in the module that imports the editor API and so was
+  reviewed by reading rather than execution.
+
 ## [0.7.2] - 2026-08-24
 
 No library code changed in this release: every `@markii/*` package is

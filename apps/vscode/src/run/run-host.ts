@@ -37,6 +37,15 @@ export interface SpawnRunOptions {
    */
   trigger?: RunTrigger;
   netAllowlist: string[];
+  /**
+   * The DNS-rebinding / private-range policy (GitHub issue #10), forwarded
+   * verbatim to the worker's `RunJob.netPolicy` — see `./net-pinning.ts`'s
+   * `PinPolicy` and `./worker-entry.ts`'s `createNetProvider`. Omitted
+   * defaults to the fail-closed posture in the worker
+   * (`allowRestrictedAddresses: false`), same pattern `trigger` and
+   * `packModules` already follow.
+   */
+  netPolicy?: RunJob['netPolicy'];
   cacheSnapshot: Record<string, CacheEntry>;
   /** Wall-clock budget for the whole run, enforced by this file's own external watchdog — never delegated to the worker. */
   timeoutMs: number;
@@ -137,6 +146,9 @@ export async function spawnRun(options: SpawnRunOptions): Promise<RunResult> {
     netAllowlist: options.netAllowlist,
     cacheSnapshot: options.cacheSnapshot,
     ...(options.trigger !== undefined ? { trigger: options.trigger } : {}),
+    ...(options.netPolicy !== undefined
+      ? { netPolicy: options.netPolicy }
+      : {}),
     ...(options.limits !== undefined ? { limits: options.limits } : {}),
     ...(options.bundle !== undefined ? { bundle: options.bundle } : {}),
     ...(options.packModules !== undefined

@@ -35,6 +35,9 @@
 import { parentPort } from 'node:worker_threads';
 import { existsSync } from 'node:fs';
 import * as path from 'node:path';
+import * as http from 'node:http';
+import * as https from 'node:https';
+import * as dns from 'node:dns';
 
 import { extractScripts, parse } from '@markii/core';
 import {
@@ -59,6 +62,13 @@ import { cacheFilesFrom } from './bundle-run.js';
 import { createSnapshotStorage } from './snapshot-storage.js';
 import { createPackModuleResolver } from '../packs/lua-resolver.js';
 import type { PackModulesMap } from '../packs/lua-resolver.js';
+import {
+  pinHostAddress,
+  pinnedLookup,
+  type HostLookup,
+  type PinnedAddress,
+  type PinPolicy,
+} from './net-pinning.js';
 
 /** The one job message this worker ever receives, posted once by `run-host.ts`. */
 export interface RunJob {
@@ -117,6 +127,17 @@ export interface RunJob {
    * (`@markii/lua`'s own "no resolver configured" capability denial).
    */
   packModules?: PackModulesMap;
+  /**
+   * The DNS-rebinding / private-range policy (GitHub issue #10) this run's
+   * `net.*` calls are pinned under — see `./net-pinning.ts`'s `PinPolicy`.
+   * Threaded the same way `trigger` and `packModules` are: forwarded
+   * verbatim from `SpawnRunOptions` (`./run-host.ts`) through to here, with
+   * no note content able to influence it. FAIL CLOSED: absent (an older
+   * host, or a caller that hasn't been updated) means
+   * `allowRestrictedAddresses: false` — the safe default — not "no policy
+   * at all".
+   */
+  netPolicy?: PinPolicy;
 }
 
 /** One failed script, in the shape the host needs to drive the grant/UI flow — never a raw thrown error. */
@@ -144,20 +165,12 @@ export interface RunResult {
   cacheOut?: Record<string, Uint8Array>;
 }
 
-/** Bare, lowercased hostname from a URL string, or `undefined` if the URL doesn't parse. */
-function hostnameOf(url: string): string | undefined {
-  try {
-    return new URL(url).hostname.toLowerCase();
-  } catch {
-    return undefined;
-  }
-}
-
 /**
  * A policy denial this module's `NetProvider` raises (an ungranted host, a
  * redirect off the allowlist, too many redirects, an over-size response, a
- * credential-bearing redirect target). This is NOT the same kind of denial
- * as `@markii/lua`'s own `netGrants` check inside `buildCapabilities` (which
+ * credential-bearing redirect target, a pinning refusal from
+ * `./net-pinning.ts`). This is NOT the same kind of denial as
+ * `@markii/lua`'s own `netGrants` check inside `buildCapabilities` (which
  * records on its own out-of-band `CapabilityDenials` handle): a denial
  * detected HERE happens inside this provider's own `get`/`post`/`patch`, one
  * level below that check. `netProviderDenial` (`@markii/lua`) brands the
@@ -187,87 +200,224 @@ function hostnameOf(url: string): string | undefined {
 const MAX_REDIRECTS = 5;
 
 /**
- * Reads `response`'s body, bounded to `maxFetchBytes` (B-2): a
- * `content-length` header over the cap is rejected WITHOUT reading
- * anything, and otherwise the body is streamed and the read is aborted
- * (via `controller`, the same `AbortController` the triggering `fetch` was
- * given) the moment the running byte total exceeds the cap — the whole
- * response is never buffered first. This mirrors the denial
- * `@markii/lua`'s own `maxFetchBytes` cap already produces for an
- * over-size response (see the `NetProvider` doc comment above on why this
- * provider's OWN cap must exist at all: the sandbox's cap runs on the text
- * this function already returned, too late to bound the read itself). An
- * over-size body is a policy refusal, so it throws `netProviderDenial`.
+ * The resolver `createNetProvider` pins against when the host does not
+ * inject one (GitHub issue #10): every address a real DNS lookup returns
+ * for a hostname, in the shape `pinHostAddress` (`./net-pinning.ts`)
+ * expects. `all: true` is what makes this the FULL set of addresses a name
+ * resolves to, rather than just the one Node's default resolution would
+ * pick — vetting only the address Node happened to choose is exactly the
+ * incomplete check a rebinding attacker relies on. `verbatim: true` asks
+ * Node not to reorder that set for connection-preference reasons, which
+ * have nothing to do with vetting it.
  */
-async function readBoundedBody(
-  response: Response,
-  maxFetchBytes: number,
-  controller: AbortController,
-): Promise<string> {
-  const declaredLength = response.headers.get('content-length');
-  if (declaredLength !== null) {
-    const declared = Number(declaredLength);
-    if (Number.isFinite(declared) && declared > maxFetchBytes) {
-      throw netProviderDenial(
-        `response declares ${declared} bytes, exceeding the ${maxFetchBytes}-byte cap`,
-      );
-    }
-  }
+const defaultHostLookup: HostLookup = async (hostname) => {
+  const results = await dns.promises.lookup(hostname, {
+    all: true,
+    verbatim: true,
+  });
+  return results.map((entry) => ({
+    address: entry.address,
+    family: entry.family,
+  }));
+};
 
-  const body = response.body;
-  if (!body) {
-    // No body stream at all (e.g. a HEAD-shaped 204) — nothing to bound.
-    return response.text();
-  }
+/**
+ * `hostname` with IPv6 brackets stripped, for the `hostname` option
+ * `http.request`/`https.request` take: Node re-adds the brackets itself
+ * (for the `Host` header and TLS SNI) whenever the raw address contains a
+ * `:`, so passing an already-bracketed literal through would double them.
+ */
+function bareHostname(hostname: string): string {
+  return hostname.startsWith('[') && hostname.endsWith(']')
+    ? hostname.slice(1, -1)
+    : hostname;
+}
 
-  const reader = body.getReader();
-  const decoder = new TextDecoder();
-  let total = 0;
-  let text = '';
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.byteLength;
-    if (total > maxFetchBytes) {
-      controller.abort();
-      throw netProviderDenial(`response exceeds the ${maxFetchBytes}-byte cap`);
-    }
-    text += decoder.decode(value, { stream: true });
-  }
-  text += decoder.decode();
-  return text;
+/** One hop's raw response — enough for the redirect loop to decide the next step. Never exposed to Lua directly; only the FINAL hop's `{status, body}` becomes a `NetResponse`. */
+interface HopResponse {
+  status: number;
+  location: string | undefined;
+  body: string;
 }
 
 /**
- * The worker's `NetProvider` (`@markii/lua`): plain Node `fetch`, gated to
- * `allowlist` for every one of `get`/`post`/`patch` — one allowlist governs
- * all three (docs/security.md: "the per-host allowlist is the real
- * boundary", not a GET/POST distinction). This is DEFENSE IN DEPTH, not the
- * primary gate — the primary gate is `netGrants` passed to
- * `createLuaExecutor` below, which `@markii/lua`'s `buildCapabilities`
- * already enforces before this provider is ever called (a disallowed host
- * never reaches here at all; it comes back as the standard
- * `'capability-denied'` failure kind, recorded through `@markii/lua`'s
- * non-spoofable denial-recording path — see `capabilities.ts`). Three
- * things this provider still checks/bounds on its own because
- * `buildCapabilities` cannot see them:
- *   - the allowlist is re-checked here too, so this provider is safe to
- *     reuse on its own (e.g. in a future capability) without relying on a
- *     caller to have already gated it;
- *   - a redirect is followed manually (`redirect: 'manual'`), never by
- *     `fetch` itself, and EVERY hop's target host is checked against the
- *     same allowlist BEFORE that hop is ever requested — an allowed host
- *     redirecting the request elsewhere is exactly the SSRF shape a
- *     host-string allowlist is meant to close, and `buildCapabilities` only
- *     ever sees the ORIGINAL request URL, never where a 3xx response
- *     actually sent the request. A hop landing on a non-allowed host is
- *     refused WITHOUT that hop's request ever being made (B-1);
- *   - the response body is read bounded to `maxFetchBytes`, never buffered
- *     whole first — see `readBoundedBody` (B-2).
+ * Issues exactly one HTTP(S) request, pinned to `pinned.address` via
+ * `pinnedLookup` (`./net-pinning.ts`, GitHub issue #10) — Node's `lookup`
+ * request option is what makes this possible without `fetch` (which has no
+ * such hook short of an undici dispatcher, and adding a dependency for that
+ * is out of scope; see `createNetProvider`'s doc comment). The socket can
+ * only ever connect to `pinned.address`, while `url.hostname` still drives
+ * the `Host` header and, for `https:`, the TLS certificate check and SNI —
+ * `rejectUnauthorized` is never touched here, so a certificate that does
+ * not cover the real hostname still fails the handshake (verified
+ * empirically against Node 22). `agent: false` so no pooled connection is
+ * ever reused across hosts or hops.
+ *
+ * The response body is read bounded to `maxFetchBytes` (B-2): a
+ * `content-length` header over the cap is rejected WITHOUT reading
+ * anything, and otherwise the read is aborted — the response socket is
+ * destroyed — the moment the running byte total exceeds the cap. The whole
+ * body is never buffered before that check runs; `chunks` only ever holds
+ * bytes already known to be within the cap.
  */
-function createNetProvider(
+function issueRequest(
+  url: URL,
+  method: string,
+  body: string | undefined,
+  pinned: PinnedAddress,
+  maxFetchBytes: number,
+): Promise<HopResponse> {
+  return new Promise((resolve, reject) => {
+    const mod = url.protocol === 'https:' ? https : http;
+    const bodyBuffer =
+      body !== undefined ? Buffer.from(body, 'utf8') : undefined;
+    // The headers `fetch` used to add on its own, restored explicitly now
+    // that this path builds the request itself. They are not cosmetic: with
+    // no `user-agent`, api.github.com answers 403 ("Please make sure your
+    // request has a User-Agent"), which would break every note fetching the
+    // GitHub API while every local-server test still passed. The values are
+    // exactly what Node's `fetch` sent for a string body, so this port
+    // changes nothing that leaves the machine.
+    const headers: Record<string, string> = {
+      'user-agent': 'node',
+      accept: '*/*',
+    };
+    if (bodyBuffer) {
+      headers['content-length'] = String(bodyBuffer.byteLength);
+      headers['content-type'] = 'text/plain;charset=UTF-8';
+    }
+
+    // Exactly-once settlement: several of the events below (`res`'s
+    // 'error' after a deliberate `destroy()`, `req`'s 'error' after the
+    // response already resolved) can fire in close succession once
+    // something has been torn down early. Every later one is a no-op.
+    let settled = false;
+    const settleResolve = (value: HopResponse): void => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+    const settleReject = (error: unknown): void => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    };
+
+    const req = mod.request(
+      {
+        protocol: url.protocol,
+        hostname: bareHostname(url.hostname),
+        port: url.port === '' ? undefined : Number(url.port),
+        path: `${url.pathname}${url.search}`,
+        method,
+        headers,
+        agent: false,
+        // Pins the socket to the vetted address (issue #10) without
+        // touching the `Host` header or the TLS certificate check — both
+        // are still driven by `hostname` above.
+        lookup: pinnedLookup(pinned),
+      },
+      (res) => {
+        const declaredLength = res.headers['content-length'];
+        if (declaredLength !== undefined) {
+          const declared = Number(declaredLength);
+          if (Number.isFinite(declared) && declared > maxFetchBytes) {
+            res.destroy();
+            settleReject(
+              netProviderDenial(
+                `response declares ${declared} bytes, exceeding the ${maxFetchBytes}-byte cap`,
+              ),
+            );
+            return;
+          }
+        }
+
+        let total = 0;
+        const chunks: Buffer[] = [];
+        res.on('data', (chunk: Buffer) => {
+          if (settled) return;
+          total += chunk.byteLength;
+          if (total > maxFetchBytes) {
+            res.destroy();
+            settleReject(
+              netProviderDenial(
+                `response exceeds the ${maxFetchBytes}-byte cap`,
+              ),
+            );
+            return;
+          }
+          chunks.push(chunk);
+        });
+        res.on('end', () => {
+          settleResolve({
+            status: res.statusCode ?? 0,
+            location: res.headers.location,
+            body: Buffer.concat(chunks).toString('utf8'),
+          });
+        });
+        res.on('error', (err) => settleReject(err));
+      },
+    );
+
+    req.on('error', (err) => {
+      settleReject(netProviderDenial(`request failed: ${describeThrown(err)}`));
+    });
+
+    if (bodyBuffer) req.write(bodyBuffer);
+    req.end();
+  });
+}
+
+/**
+ * The worker's `NetProvider` (`@markii/lua`): built on `node:http`/
+ * `node:https` rather than global `fetch` (GitHub issue #10) — `fetch` has
+ * no way to pin where a request's socket connects short of installing an
+ * undici dispatcher, and adding a dependency for that is out of scope
+ * (AGENTS.md's Stack list). `node:http`/`node:https`'s own `lookup` request
+ * option does the same job without one — see `issueRequest`'s doc comment
+ * for what it does and does not affect.
+ *
+ * One allowlist governs `get`/`post`/`patch` alike (docs/security.md: "the
+ * per-host allowlist is the real boundary", not a GET/POST distinction).
+ * This is DEFENSE IN DEPTH, not the primary gate — the primary gate is
+ * `netGrants` passed to `createLuaExecutor` below, which `@markii/lua`'s
+ * `buildCapabilities` already enforces before this provider is ever called
+ * (a disallowed host never reaches here at all; it comes back as the
+ * standard `'capability-denied'` failure kind, recorded through
+ * `@markii/lua`'s non-spoofable denial-recording path — see
+ * `capabilities.ts`).
+ *
+ * Per hop of a redirect chain, in this order:
+ *   1. the scheme must be `http:` or `https:` — anything else is refused;
+ *   2. a URL carrying credentials (`https://user:pass@host/...`) is refused
+ *      outright (N-4) — `fetch` used to give this for free by refusing to
+ *      construct a credentialed `Request`; this loop checks it explicitly
+ *      instead, on every hop, not only the first;
+ *   3. the hop's hostname is checked against `allowlist` — unchanged from
+ *      before this port. An allowed host redirecting the request elsewhere
+ *      is exactly the SSRF shape a host-string allowlist is meant to close,
+ *      and `buildCapabilities` only ever sees the ORIGINAL request URL,
+ *      never where a 3xx response actually sent the request. A hop landing
+ *      on a non-allowed host is refused WITHOUT that hop's request ever
+ *      being made (B-1);
+ *   4. `pinHostAddress` (`./net-pinning.ts`) resolves that hostname ONCE and
+ *      vets every address it got back against `policy` — the new
+ *      DNS-rebinding/private-range close from issue #10: a hostname
+ *      allowlist alone cannot see where a name actually resolves, or that
+ *      the record can change between the check and the connect;
+ *   5. the request is issued pinned to the vetted address (`issueRequest`),
+ *      so the socket can only ever reach where step 4 vetted — the
+ *      resolve-then-connect gap is closed by construction, not by
+ *      re-checking after the fact.
+ *
+ * The response body is read bounded to `maxFetchBytes`, never buffered
+ * whole first — see `issueRequest` (B-2).
+ */
+export function createNetProvider(
   allowlist: readonly string[],
   maxFetchBytes: number,
+  policy: PinPolicy,
+  lookup: HostLookup = defaultHostLookup,
 ): NetProvider {
   const allowed = new Set(allowlist.map((host) => host.toLowerCase()));
 
@@ -276,69 +426,62 @@ function createNetProvider(
     method: string,
     body: string | undefined,
   ): Promise<NetResponse> {
-    let url = startUrl;
+    let currentUrl = startUrl;
     for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-      const host = hostnameOf(url);
-      if (!host || !allowed.has(host)) {
+      let parsed: URL;
+      try {
+        parsed = new URL(currentUrl);
+      } catch {
+        throw netProviderDenial(`"${currentUrl}" is not a valid URL`);
+      }
+
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        throw netProviderDenial(`scheme "${parsed.protocol}" is not allowed`);
+      }
+      // N-4: a URL carrying credentials is refused outright, on every hop.
+      if (parsed.username !== '' || parsed.password !== '') {
         throw netProviderDenial(
-          `host "${host ?? url}" is not on the run's allowlist`,
+          `URL "${currentUrl}" embeds credentials, which is not allowed`,
         );
       }
 
-      const controller = new AbortController();
-      let response: Response;
-      try {
-        response = await fetch(url, {
-          method,
-          body,
-          redirect: 'manual',
-          signal: controller.signal,
-        });
-      } catch (err) {
-        // N-4 fix (docs/archive/PENTEST-REPORT-2026-08-23.md): a redirect Location that
-        // embeds credentials (`https://user:pass@host/...`) makes Node's
-        // `fetch` throw `TypeError: Request cannot be constructed from a URL
-        // that includes credentials` at construction time — the request is
-        // never actually sent, so this is a pure misclassification, not a
-        // real script bug. Convert it into an ordinary provider denial (same
-        // treatment every other policy refusal in this loop gets) instead of
-        // letting it surface as an unclassified `'script-error'`.
-        throw netProviderDenial(
-          `redirect target rejected: ${describeThrown(err)}`,
-        );
+      const host = parsed.hostname.toLowerCase();
+      if (!allowed.has(host)) {
+        throw netProviderDenial(`host "${host}" is not on the run's allowlist`);
       }
+
+      // Issue #10: resolve-then-pin, closing the DNS-rebinding / private-
+      // range SSRF gap a hostname allowlist alone cannot see.
+      const pinResult = await pinHostAddress(host, policy, lookup);
+      if (!pinResult.ok) {
+        throw netProviderDenial(pinResult.reason);
+      }
+
+      const response = await issueRequest(
+        parsed,
+        method,
+        body,
+        pinResult.pinned,
+        maxFetchBytes,
+      );
 
       if (response.status >= 300 && response.status < 400) {
-        const location = response.headers.get('location');
-        if (!location) {
+        if (!response.location) {
           throw netProviderDenial(
             'redirect response carried no Location header',
           );
         }
-        let nextUrl: string;
         try {
-          nextUrl = new URL(location, url).toString();
+          currentUrl = new URL(response.location, currentUrl).toString();
         } catch {
           throw netProviderDenial(
             'redirect response carried an unparseable Location header',
           );
         }
-        const nextHost = hostnameOf(nextUrl);
-        if (!nextHost || !allowed.has(nextHost)) {
-          throw netProviderDenial(
-            `redirected to disallowed host "${nextHost ?? nextUrl}"`,
-          );
-        }
-        url = nextUrl;
         continue;
       }
 
-      const responseBody = await readBoundedBody(
-        response,
-        maxFetchBytes,
-        controller,
-      );
-      return { status: response.status, body: responseBody };
+      return { status: response.status, body: response.body };
     }
     throw netProviderDenial(`exceeded ${MAX_REDIRECTS} redirects`);
   }
@@ -403,11 +546,18 @@ async function runJob(job: RunJob): Promise<RunResult> {
   const cache = createSnapshotCacheProvider(job.cacheSnapshot ?? {});
   const netAllowlist = job.netAllowlist ?? [];
   // The SAME cap governs this worker's own bounded body read
-  // (`readBoundedBody`, B-2) and `@markii/lua`'s own `maxFetchBytes` check —
+  // (`issueRequest`, B-2) and `@markii/lua`'s own `maxFetchBytes` check —
   // computed once, here, rather than letting each side default
   // independently, so the two can never quietly disagree.
   const maxFetchBytes = job.limits?.maxFetchBytes ?? DEFAULT_MAX_FETCH_BYTES;
-  const net = createNetProvider(netAllowlist, maxFetchBytes);
+  // GitHub issue #10, fail closed: an absent `netPolicy` (an older host, or
+  // a caller that hasn't been updated) means restricted addresses are NOT
+  // allowed — the same posture `@markii/lua`'s own defaults take, never the
+  // opposite.
+  const netPolicy: PinPolicy = job.netPolicy ?? {
+    allowRestrictedAddresses: false,
+  };
+  const net = createNetProvider(netAllowlist, maxFetchBytes, netPolicy);
 
   const tree = parse(job.text);
   const scripts = extractScripts(tree);
@@ -561,6 +711,20 @@ function isRunJob(value: unknown): value is RunJob {
     Object.prototype.hasOwnProperty.call(job, 'trigger') &&
     job.trigger !== undefined &&
     (typeof job.trigger !== 'string' || !RUN_TRIGGERS.has(job.trigger))
+  ) {
+    return false;
+  }
+  // Same fail-closed shape check for `netPolicy` (GitHub issue #10): a
+  // PRESENT but malformed policy is rejected outright rather than silently
+  // falling through to the safe default, keeping the pinning gate's input
+  // as honest as the tier gate's above.
+  if (
+    Object.prototype.hasOwnProperty.call(job, 'netPolicy') &&
+    job.netPolicy !== undefined &&
+    (typeof job.netPolicy !== 'object' ||
+      job.netPolicy === null ||
+      typeof (job.netPolicy as Record<string, unknown>)
+        .allowRestrictedAddresses !== 'boolean')
   ) {
     return false;
   }

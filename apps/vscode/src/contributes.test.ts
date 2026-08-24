@@ -183,6 +183,46 @@ describe('contributes.configuration — run-on-open / scheduled refresh (#11)', 
   });
 });
 
+describe('contributes.configuration — markii.allowPrivateNetworkAddresses application scope (#10)', () => {
+  // Same reasoning as `markii.packs`' H-1 pin above, applied to the
+  // network-widening setting GitHub issue #10 adds: `allowPrivateNetworkAddresses`
+  // lifts the refusal a granted host's resolved address would otherwise get
+  // when it lands in a loopback/private/link-local range (DNS rebinding /
+  // SSRF against the user's own machine or LAN). It is not an
+  // unattended-execution setting — see
+  // `contributes-runopen-scope.probe.test.ts`'s own list for that category —
+  // but the same workspace-injection concern applies to widening what a
+  // note's granted network access can reach: a repo's own
+  // `.vscode/settings.json` must not be able to flip it on for whoever opens
+  // that repo.
+  function property(name: string): Record<string, unknown> {
+    const configuration = asRecord(
+      contributes.configuration,
+      'contributes.configuration',
+    );
+    const properties = asRecord(
+      configuration.properties,
+      'contributes.configuration.properties',
+    );
+    return asRecord(properties[name], `properties[${JSON.stringify(name)}]`);
+  }
+
+  it('is a boolean defaulting off', () => {
+    const setting = property('markii.allowPrivateNetworkAddresses');
+    expect(setting.type).toBe('boolean');
+    expect(setting.default).toBe(false);
+  });
+
+  it('is pinned to application scope, so a workspace cannot widen network access on the reader behalf', () => {
+    expect(
+      Object.hasOwn(property('markii.allowPrivateNetworkAddresses'), 'scope'),
+    ).toBe(true);
+    expect(property('markii.allowPrivateNetworkAddresses').scope).toBe(
+      'application',
+    );
+  });
+});
+
 describe('contributes.keybindings — Ctrl+Shift+V', () => {
   it('binds ctrl+shift+v, with cmd+shift+v on macOS', () => {
     const entry = keybindingEntry();

@@ -272,6 +272,21 @@ function runOnOpenEnabled(): boolean {
 }
 
 /**
+ * Whether `markii.allowPrivateNetworkAddresses` (GitHub issue #10) is
+ * enabled — the deployment opt-in that lets a GRANTED host resolve to a
+ * loopback/private/link-local address instead of being refused. Off by
+ * default, which is the posture that closes the SSRF/DNS-rebinding case;
+ * see the setting's own `markdownDescription` in `package.json`. Read fresh
+ * on every run rather than cached, same as every other `markii.*` setting
+ * here — there is no panel-lifetime state to keep in sync.
+ */
+function allowPrivateNetworkAddresses(): boolean {
+  return vscode.workspace
+    .getConfiguration('markii')
+    .get<boolean>('allowPrivateNetworkAddresses', false);
+}
+
+/**
  * The lower bound on `markii.refreshIntervalSeconds` (GitHub issue #11):
  * refresh runs spawn a fresh worker each time, so a too-small interval would
  * be pure churn. A value between 1 and this clamps UP to this; 0 (the
@@ -1153,6 +1168,9 @@ async function runWithTrigger(
       documentKey,
       text,
       trigger,
+      netPolicy: {
+        allowRestrictedAddresses: allowPrivateNetworkAddresses(),
+      },
       memento: context.workspaceState,
       promptHost: promptHostAdapter,
       promptUnknownHosts: promptUnknownHostsAdapter,

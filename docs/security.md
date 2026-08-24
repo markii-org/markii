@@ -63,13 +63,39 @@ because the boundary is the hostname string, a script that builds a request
 URL at run time rather than writing it as a literal cannot be reasoned about
 in advance: the host cannot know which hostname it will name, so such a
 request is denied unless its host was granted through some other literal in
-the same note. Second, hostname allowlists share the standard limitation of
-their kind: a granted name whose DNS record changes between the grant and
-the request (DNS rebinding) can resolve somewhere the user did not intend,
-which a hostname check cannot detect. Pinning resolution and refusing
-private or loopback address ranges is the mitigation if a deployment needs
-it; the reference host does not do this yet, and grants for loopback or
-link-local hosts should be treated as the elevated trust they are.
+the same note. Second, a hostname is not an address, so the name the user
+granted and the machine the request reaches are two different things. A
+public name can answer with a private address, and a record can change
+between the check and the connection, which is DNS rebinding. A hostname
+check alone sees neither.
+
+The reference host closes that gap by resolving and pinning (issue #10).
+Every hop of a request resolves its host once, vets every address the
+resolver returned, and then connects to the vetted address itself, so the
+gap between resolving and connecting is closed by construction rather than
+by re-checking after the fact. The certificate check and the `Host` header
+still use the real hostname, so pinning weakens nothing about who the
+server proves itself to be. Addresses are judged by where they live rather
+than by a list of three private blocks: loopback, private, link-local,
+carrier-grade NAT, multicast, and the reserved and documentation ranges are
+all restricted, as are the addresses that hide inside an IPv6 wrapper, such
+as an IPv4-mapped or 6to4 address carrying a private one. That last part
+matters because those wrappers are the usual way an incomplete filter is
+walked around, along with the cloud metadata address at 169.254.169.254.
+
+A grant that names a literal address, or `localhost`, is honored at
+whatever scope it names. Nothing was resolved, so nothing could surprise
+the person who typed it, and pointing a note at a local development server
+stays possible. A grant that names a host may only be reached at a public
+address, and a name whose answer mixes public and restricted addresses is
+refused outright rather than filtered down to the public one, because
+filtering is exactly what a rebinding attacker wants. A deployment whose
+internal DNS legitimately points names at private space opts in with the
+`markii.allowPrivateNetworkAddresses` setting, which is user-scope only so
+a workspace cannot widen network reach for whoever opens it.
+
+One property of hostname grants is unchanged and still worth stating: a
+grant covers every port and path on the host it names.
 
 ## Triggers cap capabilities
 
@@ -211,10 +237,12 @@ tested, and the skills in `skills/` grade against this table.
 | `tier-caps` | An auto-run or scheduled run is read-only, and the read-only tier exposes no effectful method to escalate. | [Triggers cap capabilities](#triggers-cap-capabilities) |
 | `non-forgeable-class` | A limit breach or a capability denial is recorded outside the sandbox, so a script cannot forge or suppress how its own failure is classified. | [The sandbox](#the-sandbox); `CapabilityDenials` and the limit flags |
 | `isolate-required` | A host must run scripts in a dedicated terminatable isolate with an external wall-clock watchdog; auto-run and scheduled execution are unsound without it. | [The isolate requirement](#the-isolate-requirement); host code |
+| `address-vetted` | A request's host is resolved once and every returned address vetted before connecting, and the connection is pinned to the vetted address, so a name cannot be reached at a private or loopback address or rebound between check and connect. | [Capabilities](#capabilities); `pinHostAddress` and `pinnedLookup` in the extension's run path |
 | `bundle-jail` | `bundle.read` and `bundle.write` reject absolute paths, `..`, and symlink escapes, so a script never reaches outside its own bundle. | [The bundle jail](#the-bundle-jail); the `@markii/bundle` path jail |
 | `writes-to-cache` | A script's writes are confined to `.cache/`; it can never write the document or the manifest. | [The bundle jail](#the-bundle-jail); the write jail |
 | `bounded-open` | A file is size-checked before it is materialized and a zip archive before it is read, so opening or running a bundle cannot exhaust the host. | [The bundle jail](#the-bundle-jail) |
 | `cache-not-trusted` | A cached entry with an implausible timestamp is recomputed rather than served, so a shipped `.cache/` cannot pin stale values. | [The bundle jail](#the-bundle-jail) |
+| `unattended-is-user-scoped` | A setting that can make scripts run without a user gesture is user-scope only, so a workspace cannot enable unattended execution for whoever opens it. | [Triggers cap capabilities](#triggers-cap-capabilities); the extension's `contributes.configuration` scopes |
 | `values-are-data` | A script value reaches the page as data only; its text never becomes markup, and a failure carries only its kind, never its text. | [Capabilities](#capabilities); the failure-presentation seam in `@markii/react` |
 
 ## Verification status of the reference sandbox
@@ -374,10 +402,66 @@ make this sound: the tier is enforced in the worker regardless of grants (a real
 worker probe confirms an effectful call is refused under the auto and scheduled
 triggers while the same call succeeds under manual), and grants for these
 triggers are resolved from stored consent only, so a run without a click never
-prompts and never reaches a host the user did not already grant by hand. Because
-these triggers move execution off the explicit click for the first time, the
-surface warrants its own dedicated adversarial pass, tracked as the next step
-before it is considered fully audited.
+prompts and never reaches a host the user did not already grant by hand.
+
+That surface has now had its own dedicated adversarial pass (August 2026, issue
+#12), driven through real worker threads, the real Lua sandbox, and real local
+HTTP servers rather than mocks. The two rules held under attack. Repeated
+scheduled and auto ticks could not reach an effectful capability by any route
+tried: not a POST or PATCH with the host allowlisted, not a bundle write even
+with the write declared in the manifest and granted by the host, and not by
+seeding one tick's cache with capability-shaped data for a later tick to read,
+because the tier comes only from the trusted trigger the host passes and never
+from anything a script can write. The same refusals applied to code reached
+through a pack's `require`. On the grant side, a run without a click never
+prompted and never widened access: a whitespace-only edit, a comment-only edit,
+a renamed script, and a change to the content of a `src=` file all moved the
+closure key and left the scheduled run with an empty allowlist. The
+no-new-network claim was measured at the server rather than inferred from an
+error message, with the ungranted host's own request counter staying at zero
+across first-ever scheduled runs, auto runs, a script swapped between a manual
+grant and the next tick, and a note naming one granted and one declined host.
+
+The pass found one real gap and two narrower robustness bugs, all now fixed.
+The gap was a declaration, not logic: `markii.runOnOpen` and
+`markii.refreshIntervalSeconds` carried no configuration scope, and an
+unscoped VS Code setting defaults to window scope, which a workspace's own
+`.vscode/settings.json` can set. A repository could therefore turn on
+unattended execution for anyone who opened it, which is precisely what the
+`markii.packs` setting had been pinned to application scope to prevent. The
+network gate still held in that state, since a fresh clone carries no stored
+grant and an auto run never prompts, so what a workspace could actually cause
+was capability-free sandboxed execution rather than any reach outward. The
+property that no code runs without a user gesture was still broken, so both
+settings are now pinned to application scope and a test pins every setting
+that can cause an unattended run. The two smaller bugs were in the persisted
+value store: a corrupt entry made rehydration throw where it should degrade,
+and a value named `__proto__`, which is a legal script name, was silently
+dropped by an output object built with plain assignment. Both paths now skip
+what they cannot understand and build their output so that every name
+survives, matching the discipline `@markii/runtime`'s own value store already
+followed.
+
+One coverage limit from that pass is worth stating plainly rather than
+leaving implied. The timer lifecycle itself, meaning the interval's clearing
+on disposal, the at-most-once run on open across a hide and show, and the
+guard against overlapping ticks, lives in the one module that imports the
+editor API and therefore cannot be unit-tested in this repository. It was
+reviewed by reading rather than by execution, and the layer directly beneath
+it was probed. Closing that gap needs an editor-hosted integration test,
+which is tracked with the other host-level verification below.
+
+The resolve-and-pin work of issue #10 was verified against the real
+resolver and the real network rather than only against injected answers. A
+note granted a public name whose genuine DNS answer is a loopback address
+is refused as an ordinary capability denial, and a note granted
+`api.github.com` still completes a real request through TLS and a redirect.
+That second check earned its place: porting the request path off `fetch`,
+which was necessary because `fetch` cannot pin where a socket connects
+without pulling in a dependency, silently dropped the default headers
+`fetch` had been adding. With no user agent, the GitHub API answers 403,
+so every note reading it would have broken while a suite of local-server
+tests stayed green. The headers are now set explicitly and pinned by tests.
 
 Two areas remain intentionally outside the audited surface, and are tracked
 rather than forgotten: the four known hang reproductions are covered by
