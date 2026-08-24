@@ -21,7 +21,7 @@ and sandboxed scripts feeding them live data, in anything that speaks Markii.
 ````markdown
 # Example Markii note
 
-## you can use custom made `callout` type component
+## you can use custom components
 
 :::callout{type=warning title="Heads up"}
 This ships **Tuesday**.
