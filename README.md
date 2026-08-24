@@ -64,7 +64,7 @@ Ways to use Markii with no coding:
       <h4>VS Code extension</h4>
       Preview and run <code>.mk.md</code> files and <code>.mkz</code> bundles in the editor.
       <br /><br />
-      <a href="https://github.com/sadigaxund/markii/releases/latest/download/markii-vscode.vsix">Download the .vsix &rarr;</a>
+      <a href="https://marketplace.visualstudio.com/items?itemName=markii.markii-vscode">Get it on the Marketplace &rarr;</a>
       <br>
       <br>
     </td>
