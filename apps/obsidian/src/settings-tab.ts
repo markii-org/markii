@@ -9,6 +9,7 @@ import { appendPackFolder, removePackFolder } from './packs/pack-settings.js';
 import { resolvePackPaths } from '@markii/host';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
+import { folderPickerAvailable, pickFolder } from './pick-folder.js';
 
 /**
  * Imports `obsidian` — kept in its own file, alongside `src/main.ts`,
@@ -126,24 +127,38 @@ export class MarkiiSettingTab extends PluginSettingTab {
     }
 
     let newFolderValue = '';
-    new Setting(containerEl)
+    const addFolder = new Setting(containerEl)
       .setName('Add a pack folder')
       .setDesc('One pack, or a folder of packs. "~" and "./" both work.')
       .addText((text) => {
         text.setPlaceholder('/absolute/path/to/pack').onChange((value) => {
           newFolderValue = value;
         });
-      })
-      .addButton((button) => {
-        button.setButtonText('Add').onClick(() => {
-          this.applyPackFolderChange(
-            appendPackFolder(
-              this.plugin.packSettings.packFolders,
-              newFolderValue,
-            ),
-          );
+      });
+
+    if (folderPickerAvailable()) {
+      addFolder.addButton((button) => {
+        button.setButtonText('Browse').onClick(() => {
+          void pickFolder().then((picked) => {
+            if (picked === undefined) return;
+            this.applyPackFolderChange(
+              appendPackFolder(this.plugin.packSettings.packFolders, picked),
+            );
+          });
         });
       });
+    }
+
+    addFolder.addButton((button) => {
+      button.setButtonText('Add').onClick(() => {
+        this.applyPackFolderChange(
+          appendPackFolder(
+            this.plugin.packSettings.packFolders,
+            newFolderValue,
+          ),
+        );
+      });
+    });
   }
 
   /** Writes a new pack-folder list (or does nothing when the change was a no-op, e.g. adding a duplicate or removing an absent entry — see `appendPackFolder`/`removePackFolder`'s own doc comments) and redraws the tab so the list reflects it immediately. */

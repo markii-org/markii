@@ -21,6 +21,13 @@ import * as path from 'node:path';
 import type { CacheEntry } from '@markii/lua';
 import type { RunTrigger } from '@markii/runtime';
 import type { RunJob, RunResult } from './worker-entry.js';
+import type { IsolateSpawner, RunIsolate } from './isolate.js';
+
+export type {
+  IsolateSpawner,
+  RunIsolate,
+  SpawnIsolateOptions,
+} from './isolate.js';
 
 export type { RunJob, RunResult, RunFailure } from './worker-entry.js';
 
@@ -55,6 +62,21 @@ export interface SpawnRunOptions {
   bundle?: RunJob['bundle'];
   /** Forwarded verbatim to the worker's `RunJob.packModules` (pre-read pack Lua modules) — see `./worker-entry.ts`. Absent when no packs are configured. */
   packModules?: RunJob['packModules'];
+  /**
+   * Overrides the KIND of isolate this run spawns. Defaults to
+   * `workerThreadIsolate` (`node:worker_threads`), which is correct for
+   * every Node host. A host whose runtime cannot create worker threads —
+   * an Electron renderer, which is what an Obsidian plugin runs in —
+   * supplies its own; see `./isolate.ts` for the constraints an
+   * implementation must meet, and for what a Web Worker cannot bound that
+   * a worker thread can.
+   *
+   * The watchdog, the exactly-once settlement, and the never-rejects
+   * contract are NOT part of what this overrides: they stay in `spawnRun`
+   * for every host, so a new isolate kind cannot accidentally ship without
+   * a kill switch.
+   */
+  spawnIsolate?: IsolateSpawner;
   /**
    * Overrides the worker entry file this run spawns. This package cannot
    * know how a given host bundles or lays out its own `dist/` (that is
@@ -116,6 +138,39 @@ function execArgvFor(workerPath: string): string[] | undefined {
  */
 const WORKER_MAX_OLD_GENERATION_SIZE_MB = 128;
 
+/**
+ * The default isolate: a `node:worker_threads` worker, which is what every
+ * Node host (the VS Code extension host, this package's own tests) uses. It
+ * is the only kind that accepts `resourceLimits`, so it is also the only
+ * kind whose V8 heap is bounded — see `./isolate.ts` for why a host might
+ * still have to supply the other one.
+ */
+export const workerThreadIsolate: IsolateSpawner = (options): RunIsolate => {
+  const worker = new Worker(options.entryPath, {
+    ...(options.execArgv ? { execArgv: options.execArgv } : {}),
+    resourceLimits: {
+      maxOldGenerationSizeMb: options.maxOldGenerationSizeMb,
+    },
+  });
+  return {
+    send: (job) => {
+      worker.postMessage(job);
+    },
+    kill: () => {
+      void worker.terminate();
+    },
+    onMessage: (listener) => {
+      worker.once('message', listener);
+    },
+    onError: (listener) => {
+      worker.once('error', listener);
+    },
+    onExit: (listener) => {
+      worker.once('exit', listener);
+    },
+  };
+};
+
 function describeThrown(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
@@ -156,11 +211,11 @@ export async function spawnRun(options: SpawnRunOptions): Promise<RunResult> {
     let settled = false;
     let watchdogFired = false;
 
-    const worker = new Worker(workerPath, {
+    const spawnIsolate = options.spawnIsolate ?? workerThreadIsolate;
+    const worker = spawnIsolate({
+      entryPath: workerPath,
       ...(execArgv ? { execArgv } : {}),
-      resourceLimits: {
-        maxOldGenerationSizeMb: WORKER_MAX_OLD_GENERATION_SIZE_MB,
-      },
+      maxOldGenerationSizeMb: WORKER_MAX_OLD_GENERATION_SIZE_MB,
     });
 
     const watchdog = setTimeout(() => {
@@ -170,7 +225,7 @@ export async function spawnRun(options: SpawnRunOptions): Promise<RunResult> {
       // it here -- the worker's `exit` event (handled below) is what
       // settles this run's promise, and it fires as part of the same
       // termination sequence.
-      void worker.terminate();
+      worker.kill();
     }, options.timeoutMs);
     // Never let this timer keep the host process/extension-host alive on
     // its own.
@@ -185,14 +240,14 @@ export async function spawnRun(options: SpawnRunOptions): Promise<RunResult> {
       // including a normal successful `message`. `terminate()` on a
       // worker that has already exited (or is already exiting) is a safe
       // no-op, per Node's `worker_threads` documentation.
-      void worker.terminate();
+      worker.kill();
     }
 
-    worker.once('message', (result: RunResult) => {
-      settle(result);
+    worker.onMessage((result) => {
+      settle(result as RunResult);
     });
 
-    worker.once('error', (err) => {
+    worker.onError((err) => {
       settle({
         values: {},
         failures: [
@@ -206,7 +261,7 @@ export async function spawnRun(options: SpawnRunOptions): Promise<RunResult> {
       });
     });
 
-    worker.once('exit', (code) => {
+    worker.onExit((code) => {
       // A `message` already having settled this run is the ordinary
       // happy path -- `settle`'s own `terminate()` call produces exactly
       // this `exit` event, and `settle`'s guard makes it a no-op here.
@@ -258,7 +313,7 @@ export async function spawnRun(options: SpawnRunOptions): Promise<RunResult> {
     // worker that was already spawned (a safe no-op if the thread never
     // finished starting).
     try {
-      worker.postMessage(job);
+      worker.send(job);
     } catch (err) {
       settle({
         values: {},

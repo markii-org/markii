@@ -18,7 +18,16 @@ export type {
   RunFailure,
   SpawnRunOptions,
 } from './run/run-host.js';
-export { defaultWorkerPath, spawnRun } from './run/run-host.js';
+export {
+  defaultWorkerPath,
+  spawnRun,
+  workerThreadIsolate,
+} from './run/run-host.js';
+export type {
+  IsolateSpawner,
+  RunIsolate,
+  SpawnIsolateOptions,
+} from './run/isolate.js';
 
 export type {
   CacheSnapshot,
