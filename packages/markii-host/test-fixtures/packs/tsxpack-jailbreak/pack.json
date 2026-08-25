@@ -1,0 +1,7 @@
+{
+  "name": "tsxjailbreak",
+  "engine": "react",
+  "components": {
+    "stat": "./Stat.tsx"
+  }
+}

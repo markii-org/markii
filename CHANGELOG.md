@@ -40,6 +40,29 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
   Markii, revealed by the new command `Markii: Show Diagnostics`, listing
   every pack that loaded, every folder that did not and why, and every
   deprecated configuration entry.
+- **The Obsidian plugin runs scripts and loads packs** — it is now a full
+  second host rather than a viewer: a Run command backed by the same
+  terminatable worker isolate and watchdog the extension uses, grant prompts
+  as modals, auto-run and scheduled refresh at the read-only tier, and
+  component packs compiled from source exactly as in VS Code.
+
+  Everything that authorizes execution or network access is stored
+  device-locally rather than in plugin data, because plugin data lives inside
+  the vault and travels with Sync and with any shared copy. Obsidian has no
+  equivalent of an application-scoped setting, so this replaces it. A test
+  fails the suite if a grant path ever reaches vault-backed storage.
+
+- **The script-running host layer and the pack builder are shared** — both
+  live in a private, unpublished workspace package that the two apps consume,
+  so there is exactly one copy of the tier gate, the grant model, address
+  pinning, the isolate watchdog, pack discovery, and the builder. It has no
+  npm presence and is absent from the release workflow.
+
+  Pack compilation uses esbuild-wasm's in-process WebAssembly path in both
+  hosts. Its Node path spawns a `node` child process, and Obsidian's Electron
+  renderer has no `node` binary, so that path fails there outright. The
+  in-process path also measured faster.
+
 - **Packs can style themselves** — a pack's components import CSS the
   ordinary way, the build bundles one stylesheet per pack, and the host loads
   it after the document stylesheet and its own theme layer so a pack sees

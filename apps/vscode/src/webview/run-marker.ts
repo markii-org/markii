@@ -1,6 +1,6 @@
 /**
  * ITEM 3's webview-side presentation for a run's recorded outcome
- * (`../run/run-trace.ts`'s `RunTrace`, carried over the wire as
+ * (`@markii/host`'s `run/run-trace.ts` `RunTrace`, carried over the wire as
  * `protocol.ts`'s `UpdateMessage.lastRun`). Wording lives here — the one
  * home of this marker's text — mirroring how `@markii/react`'s
  * `failure-presentation.ts` is the one home of the renderer's own failure
@@ -12,7 +12,7 @@
  * already presents "this is not current" without spelling out a clock time.
  */
 
-/** The minimal shape this module needs off a wire-carried run trace — kept separate from `../run/run-trace.ts`'s `RunTrace` so this file never has to import a `RunTrigger` type it does not use. */
+/** The minimal shape this module needs off a wire-carried run trace — kept separate from `@markii/host`'s `run/run-trace.ts` `RunTrace` so this file never has to import a `RunTrigger` type it does not use. */
 export interface RunMarkerInput {
   readonly ranAt: number;
   readonly ok: boolean;

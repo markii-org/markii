@@ -144,8 +144,8 @@ describe('loadPackContext — compiling a pack with no prebuilt webview.js', () 
     });
 
     expect(context.webviewPacks).toHaveLength(1);
-    expect(context.webviewPacks[0]!.webviewScriptPath).toBe(compiledPath);
-    expect(context.packs[0]!.webviewScriptPath).not.toBe(compiledPath); // the original DiscoveredPack is untouched
+    expect(context.webviewPacks[0]!.scriptPath).toBe(compiledPath);
+    expect(context.packs[0]!.scriptPath).not.toBe(compiledPath); // the original DiscoveredPack is untouched
     expect(context.skipped).toEqual([]);
     expect(context.cssWarnings).toEqual([]);
   });
@@ -180,7 +180,7 @@ describe('loadPackContext — compiling a pack with no prebuilt webview.js', () 
       buildWebviewScript,
     });
 
-    expect(context.webviewPacks[0]!.webviewStylesheetPath).toBe(stylesheetPath);
+    expect(context.webviewPacks[0]!.stylesheetPath).toBe(stylesheetPath);
     expect(context.cssWarnings).toEqual([
       'pack "styled" CSS uses a raw color literal in "color: #fff;"',
     ]);
@@ -246,7 +246,7 @@ describe('loadPackContext — compiling a pack with no prebuilt webview.js', () 
 
     expect(called).toBe(false);
     expect(context.webviewPacks).toHaveLength(1);
-    expect(context.webviewPacks[0]!.webviewScriptPath).toBe(
+    expect(context.webviewPacks[0]!.scriptPath).toBe(
       path.join(packDir, 'webview.js'),
     );
   });

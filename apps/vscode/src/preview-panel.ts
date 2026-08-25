@@ -37,22 +37,24 @@ import {
   clearGrantForDocument,
   hostPromptMessage,
   manyHostsPromptMessage,
-} from './run/grant-flow.js';
-import { spawnRun } from './run/run-host.js';
-import { readPersistedValues, runOnce } from './run/run-flow.js';
-import { staleValuesForRehydration } from './run/stale-values.js';
-import { readLastRunTrace, writeLastRunTrace } from './run/run-trace.js';
-import type { RunTrigger, StoredValue } from '@markii/runtime';
-import {
+  spawnRun as spawnRunHost,
+  readPersistedValues,
+  runOnce,
+  staleValuesForRehydration,
+  readLastRunTrace,
+  writeLastRunTrace,
   buildBundleSnapshot,
   decodeBundleCacheFromStorage,
   encodeBundleCacheForStorage,
   withPersistedCache,
-} from './run/bundle-run.js';
+  buildPackRegistrationScript,
+} from '@markii/host';
+import type { RunResult, SpawnRunOptions } from '@markii/host';
+import { resolveWorkerPath } from './worker-path.js';
+import type { RunTrigger, StoredValue } from '@markii/runtime';
 import { MIN_REFRESH_INTERVAL_SECONDS } from './refresh-interval.js';
 import { loadPackContext } from './packs/pack-context.js';
 import type { PackContext } from './packs/pack-context.js';
-import { buildPackRegistrationScript } from './packs/pack-build.js';
 import {
   formatPackDiagnosticLines,
   skippedPackCount,
@@ -67,8 +69,26 @@ import {
  */
 
 const VIEW_TYPE = 'markii.preview';
-/** External wall-clock budget for one `markii.runScripts` press — forwarded verbatim to `spawnRun`'s own watchdog (`run/run-host.ts`); the worker cannot influence or extend it. */
+/** External wall-clock budget for one `markii.runScripts` press — forwarded verbatim to `spawnRun`'s own watchdog (`@markii/host`'s `run/run-host.ts`); the worker cannot influence or extend it. */
 const RUN_TIMEOUT_MS = 15_000;
+
+/**
+ * This extension's own `spawnRun` adapter: `@markii/host`'s `spawnRun`
+ * (`spawnRunHost`, imported above) takes an explicit `workerPath` rather
+ * than guessing a host's bundle layout — see that package's `run-host.ts`
+ * doc comment. `./worker-path.ts`'s `resolveWorkerPath` is THIS
+ * extension's answer for the packaged case (`dist/run/worker.js`); when it
+ * returns `undefined` (dev/Vitest, no `dist/` built yet), the explicit
+ * `undefined` still reaches `spawnRunHost` and its own `defaultWorkerPath`
+ * dev fallback (the sibling `worker-entry.ts` run via `tsx`) takes over,
+ * exactly as it did before this adapter existed.
+ */
+function spawnRun(options: SpawnRunOptions): Promise<RunResult> {
+  return spawnRunHost({
+    ...options,
+    workerPath: options.workerPath ?? resolveWorkerPath(),
+  });
+}
 /** The `when`-clause context key `package.json`'s `markii.runScripts` menu entries gate on — kept in sync with true whenever a preview panel exists, false once it's disposed. */
 const PREVIEW_ACTIVE_CONTEXT_KEY = 'markii.previewActive';
 /**
@@ -285,16 +305,16 @@ function packCacheDir(context: vscode.ExtensionContext): string {
 }
 
 /**
- * Absolute path to a REAL, unbundled `esbuild-wasm/lib/main.js` next to the
- * packaged extension (`esbuild.config.mjs` copies the whole `esbuild-wasm`
- * package there — see that file's doc comment), or `undefined` if it is
- * not present (dev/Vitest, where `dist/` has never been built this way) —
- * `./packs/pack-build.ts`'s `loadEsbuildWasm` then falls back to plain
+ * Absolute path to a REAL, unbundled `esbuild-wasm/lib/browser.js` next to
+ * the packaged extension (`esbuild.config.mjs` copies it there — see that
+ * file's doc comment), or `undefined` if it is not present (dev/Vitest,
+ * where `dist/` has never been built this way) — `@markii/host`'s
+ * `packs/pack-build.ts`'s `loadEsbuildWasm` then falls back to plain
  * `node_modules` resolution, exactly the same "undefined is always safe to
  * pass" posture `./run/worker-entry.ts`'s `resolveWasmUri` already takes
  * for wasmoon's `glue.wasm`.
  */
-function esbuildMainModulePath(
+function esbuildBrowserModulePath(
   context: vscode.ExtensionContext,
 ): string | undefined {
   const candidate = path.join(
@@ -302,7 +322,26 @@ function esbuildMainModulePath(
     'dist',
     'esbuild-wasm',
     'lib',
-    'main.js',
+    'browser.js',
+  );
+  return existsSync(candidate) ? candidate : undefined;
+}
+
+/**
+ * Absolute path to the `esbuild.wasm` binary sitting next to the copied
+ * `lib/browser.js` (same `esbuild.config.mjs` copy step) — what
+ * `loadEsbuildWasm` compiles via `WebAssembly.compile` before initializing
+ * esbuild-wasm's in-process build. `undefined` with the same fallback
+ * posture as `esbuildBrowserModulePath`.
+ */
+function esbuildWasmBinaryPath(
+  context: vscode.ExtensionContext,
+): string | undefined {
+  const candidate = path.join(
+    context.extensionUri.fsPath,
+    'dist',
+    'esbuild-wasm',
+    'esbuild.wasm',
   );
   return existsSync(candidate) ? candidate : undefined;
 }
@@ -374,12 +413,14 @@ function loadCurrentPackContext(
   context: vscode.ExtensionContext,
 ): Promise<PackContext> {
   const cacheDir = packCacheDir(context);
-  const mainModulePath = esbuildMainModulePath(context);
+  const browserModulePath = esbuildBrowserModulePath(context);
+  const wasmBinaryPath = esbuildWasmBinaryPath(context);
   return loadPackContext(configuredPackFolders(), workspaceRootPath(), {
     cacheDir,
     buildWebviewScript: (pack, dir) =>
       buildPackRegistrationScript(pack, dir, {
-        esbuildMainModulePath: mainModulePath,
+        esbuildBrowserModulePath: browserModulePath,
+        esbuildWasmBinaryPath: wasmBinaryPath,
       }),
   });
 }
@@ -552,8 +593,8 @@ function baseUriForDocument(
  * actually grants access to each pack's folder, restricted to only the
  * folders `markii.packs` names) as every other local resource this webview
  * loads. The same is true of `packStyleUris` (the pack-CSS design):
- * `webviewStylesheetPath` sits in the same cache directory as
- * `webviewScriptPath`, already covered by `packWebviewRoots`
+ * `stylesheetPath` sits in the same cache directory as
+ * `scriptPath`, already covered by `packWebviewRoots`
  * (`localResourceRootsFor`), and is only ever present when
  * `./packs/pack-build.ts` actually emitted a `.css` sibling.
  */
@@ -575,14 +616,12 @@ function setHtml(
     .asWebviewUri(vscode.Uri.joinPath(webviewDistUri, 'main.css'))
     .toString();
   const packScriptUris = packContext.webviewPacks.map((pack) =>
-    webview.asWebviewUri(vscode.Uri.file(pack.webviewScriptPath)).toString(),
+    webview.asWebviewUri(vscode.Uri.file(pack.scriptPath)).toString(),
   );
   const packStyleUris = packContext.webviewPacks
-    .filter((pack) => pack.webviewStylesheetPath !== undefined)
+    .filter((pack) => pack.stylesheetPath !== undefined)
     .map((pack) =>
-      webview
-        .asWebviewUri(vscode.Uri.file(pack.webviewStylesheetPath!))
-        .toString(),
+      webview.asWebviewUri(vscode.Uri.file(pack.stylesheetPath!)).toString(),
     );
 
   webview.html = buildWebviewHtml({

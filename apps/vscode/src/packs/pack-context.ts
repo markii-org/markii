@@ -1,12 +1,12 @@
 /**
- * Composes the pack-loading pieces (`./resolve-pack-paths.ts`,
- * `./discover.ts`, `./pack-scripts.ts`, `./pack-build.ts`) into the one
- * thing `preview-panel.ts` needs: everything about the currently
- * configured, installed packs, loaded once per panel. `vscode`-free —
- * every `vscode`-specific step (reading the `markii.packs` setting,
- * resolving `asWebviewUri`) stays in `preview-panel.ts`; this module only
- * takes the already-read setting value, workspace root, and (optionally)
- * an extension-owned cache directory as plain strings.
+ * Composes the pack-loading pieces (`@markii/host`'s `discoverPacks`,
+ * `loadPackModules`, `resolvePackPaths`, `buildPackRegistrationScript`)
+ * into the one thing `preview-panel.ts` needs: everything about the
+ * currently configured, installed packs, loaded once per panel.
+ * `vscode`-free — every `vscode`-specific step (reading the `markii.packs`
+ * setting, resolving `asWebviewUri`) stays in `preview-panel.ts`; this
+ * module only takes the already-read setting value, workspace root, and
+ * (optionally) an extension-owned cache directory as plain strings.
  */
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -14,37 +14,42 @@ import {
   createNodeFileReader,
   discoverPacks,
   installedNamespaces,
-} from './discover.js';
-import type { DiscoveredPack, SkippedPackFolder } from './discover.js';
-import { loadPackModules } from './pack-scripts.js';
-import type { PackModulesMap } from './lua-resolver.js';
-import { relativePackEntries, resolvePackPaths } from './resolve-pack-paths.js';
-import type { PackBuildOutcome } from './pack-build.js';
+  loadPackModules,
+  relativePackEntries,
+  resolvePackPaths,
+} from '@markii/host';
+import type {
+  DiscoveredPack,
+  PackBuildOutcome,
+  PackModulesMap,
+  SkippedPackFolder,
+} from '@markii/host';
 
 export interface PackContext {
   /** Every validated, non-colliding discovered pack. */
   readonly packs: readonly DiscoveredPack[];
-  /** Pre-read `scripts/*.lua` source for every discovered pack, for the Run path's `PackModuleResolver` (`./lua-resolver.ts`). */
+  /** Pre-read `scripts/*.lua` source for every discovered pack, for the Run path's `PackModuleResolver` (`@markii/host`'s `run/lua-resolver.ts`). */
   readonly packModules: PackModulesMap;
   /**
    * The subset of `packs` that have a usable registration script — either a
-   * prebuilt `webview.js` sitting next to `pack.json` (`./discover.ts`'s
-   * `webviewScriptPath` doc comment), or one `buildWebviewScript` compiled
-   * from the pack's `.tsx` sources (`./pack-build.ts`); in the built case,
-   * `webviewScriptPath` is overridden to point at the compiled output
-   * instead. What the webview's `<script src=...>` tags load. A pack with
-   * neither still counts toward `packs`/`packModules` (its Lua modules and
-   * namespace are real) but contributes nothing to the webview UI.
+   * prebuilt `webview.js` sitting next to `pack.json` (`@markii/host`'s
+   * `discover.ts`'s `scriptPath` doc comment), or one `buildWebviewScript`
+   * compiled from the pack's `.tsx` sources (`@markii/host`'s
+   * `pack-build.ts`); in the built case, `scriptPath` is overridden to
+   * point at the compiled output instead. What the webview's
+   * `<script src=...>` tags load. A pack with neither still counts toward
+   * `packs`/`packModules` (its Lua modules and namespace are real) but
+   * contributes nothing to the webview UI.
    */
   readonly webviewPacks: readonly DiscoveredPack[];
   /** Every discovered pack's namespace — what `resolveUses` (`@markii/pack`) checks a note's `uses:` declaration against. */
   readonly namespaces: readonly string[];
-  /** Configured folders that produced no usable pack, and why (developer-facing only). Also carries a build-failure reason for a pack whose `.tsx` sources failed to compile (`./pack-build.ts`) — it still counts toward `packs`, just not `webviewPacks`. */
+  /** Configured folders that produced no usable pack, and why (developer-facing only). Also carries a build-failure reason for a pack whose `.tsx` sources failed to compile (`@markii/host`'s `pack-build.ts`) — it still counts toward `packs`, just not `webviewPacks`. */
   readonly skipped: readonly SkippedPackFolder[];
   /**
    * ITEM 4: the ORIGINAL `markii.packs` entries (as configured, not
    * resolved) that are relative once `~` expansion is accounted for
-   * (`./resolve-pack-paths.ts`'s `relativePackEntries`) — a trap because
+   * (`@markii/host`'s `relativePackEntries`) — a trap because
    * `markii.packs` is USER-scoped (global): a relative entry silently means
    * a different folder in every workspace window it happens to be open in.
    * These entries still resolve and load exactly as before; this is a
@@ -54,19 +59,20 @@ export interface PackContext {
    */
   readonly deprecatedRelativeEntries: readonly string[];
   /**
-   * Pack CSS authoring warnings (`./pack-css-lint.ts`'s Rule A/B, raw color
-   * literals and the missing-namespace-prefix rule) against every built
-   * pack's emitted stylesheet — collected from `buildWebviewScript`'s
-   * `'built'` outcomes, cache hit or miss alike (`./pack-build.ts` re-lints
-   * a cached stylesheet on every load). Warnings only, developer-facing:
-   * never a build failure, never something shown as page content.
-   * `preview-panel.ts`'s `logPackDiagnostics` writes these to the "Markii"
-   * output channel (`./pack-diagnostics.ts`).
+   * Pack CSS authoring warnings (`@markii/host`'s `pack-css-lint.ts` Rule
+   * A/B, raw color literals and the missing-namespace-prefix rule) against
+   * every built pack's emitted stylesheet — collected from
+   * `buildWebviewScript`'s `'built'` outcomes, cache hit or miss alike
+   * (`@markii/host`'s `pack-build.ts` re-lints a cached stylesheet on every
+   * load). Warnings only, developer-facing: never a build failure, never
+   * something shown as page content. `preview-panel.ts`'s
+   * `logPackDiagnostics` writes these to the "Markii" output channel
+   * (`./pack-diagnostics.ts`).
    */
   readonly cssWarnings: readonly string[];
 }
 
-/** Builds one pack's webview registration script from source — injected so this module stays testable without a real esbuild-wasm invocation, and so `preview-panel.ts` can wire up the real `./pack-build.ts`'s `buildPackRegistrationScript` with production-specific options (the packaged `esbuild-wasm` location) that this module has no business knowing about. */
+/** Builds one pack's webview registration script from source — injected so this module stays testable without a real esbuild-wasm invocation, and so `preview-panel.ts` can wire up the real `@markii/host`'s `pack-build.ts`'s `buildPackRegistrationScript` with production-specific options (the packaged `esbuild-wasm` location) that this module has no business knowing about. */
 export type PackWebviewBuilder = (
   pack: DiscoveredPack,
   cacheDir: string,
@@ -85,19 +91,19 @@ export interface LoadPackContextOptions {
    * `buildWebviewScript` is never invoked.
    */
   readonly cacheDir?: string;
-  /** Defaults to `noopBuilder` (see above). `preview-panel.ts` passes `./pack-build.ts`'s `buildPackRegistrationScript`. */
+  /** Defaults to `noopBuilder` (see above). `preview-panel.ts` passes `@markii/host`'s `pack-build.ts`'s `buildPackRegistrationScript`. */
   readonly buildWebviewScript?: PackWebviewBuilder;
 }
 
 /**
  * Loads everything about the packs named by `configuredPacks` (the
- * `markii.packs` setting's raw value) resolved against `workspaceRoot` (see
- * `./resolve-pack-paths.ts`). Never throws: every step it composes already
- * degrades quietly (a missing/invalid manifest is skipped, a missing
- * `scripts/` directory contributes no modules, a missing `webview.js` with
- * no `cacheDir`/`buildWebviewScript` configured just excludes that pack
- * from `webviewPacks`, and a failed build is recorded in `skipped` rather
- * than thrown).
+ * `markii.packs` setting's raw value) resolved against `workspaceRoot`
+ * (see `@markii/host`'s `resolvePackPaths`). Never throws: every step it
+ * composes already degrades quietly (a missing/invalid manifest is
+ * skipped, a missing `scripts/` directory contributes no modules, a
+ * missing `webview.js` with no `cacheDir`/`buildWebviewScript` configured
+ * just excludes that pack from `webviewPacks`, and a failed build is
+ * recorded in `skipped` rather than thrown).
  */
 export async function loadPackContext(
   configuredPacks: readonly string[],
@@ -119,7 +125,7 @@ export async function loadPackContext(
   const cssWarnings: string[] = [];
 
   for (const pack of result.packs) {
-    if (existsSync(pack.webviewScriptPath)) {
+    if (existsSync(pack.scriptPath)) {
       webviewPacks.push(pack);
       continue;
     }
@@ -129,8 +135,8 @@ export async function loadPackContext(
     if (outcome.kind === 'built') {
       webviewPacks.push({
         ...pack,
-        webviewScriptPath: outcome.scriptPath,
-        webviewStylesheetPath: outcome.stylesheetPath,
+        scriptPath: outcome.scriptPath,
+        stylesheetPath: outcome.stylesheetPath,
       });
       cssWarnings.push(...outcome.warnings);
     } else if (outcome.kind === 'failed') {

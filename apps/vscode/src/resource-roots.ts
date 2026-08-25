@@ -67,9 +67,9 @@ export function isCoveredByRoots(
  * The `localResourceRoots` a preview panel needs to load every installed
  * pack's registration script (`preview-panel.ts`'s `localResourceRootsFor`
  * calls this): each pack's own folder (where a prebuilt `webview.js` sits,
- * per `./packs/discover.ts`'s `webviewScriptPath`), UNION the shared,
+ * per `./packs/discover.ts`'s `scriptPath`), UNION the shared,
  * extension-owned cache directory a compiled script may live under instead
- * (`./packs/pack-build.ts`, GitHub issue #3's compile-from-source slice) —
+ * (`@markii/host`'s `packs/pack-build.ts`, GitHub issue #3's compile-from-source slice) —
  * that directory sits OUTSIDE every configured pack folder (AGENTS.md's
  * cleanliness rule: never written into the user's own pack folder), so it
  * needs its own root or a compiled script's `<script src=...>` tag would

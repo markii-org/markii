@@ -2,9 +2,10 @@
 
 A pack is how components and shared Lua modules travel between people. The
 contract, the namespace rules, the registry merging, and the sandboxed
-`require` are implemented, and the reference host (the VS Code extension)
-loads packs. This page describes that shipped contract. There is no pack
-registry or marketplace, and none is planned here; the last section says why.
+`require` are implemented, and both reference hosts (the VS Code extension
+and the Obsidian plugin) load packs. This page describes that shipped
+contract. There is no pack registry or marketplace, and none is planned
+here; the last section says why.
 
 ## What a pack is
 
@@ -94,17 +95,20 @@ which namespaces each component and rejects two packs that claim the same
 namespace. You pass the merged registry to `renderMark`. Nothing loads at
 runtime: the pack is part of your bundle like any other import.
 
-In the VS Code extension, packs are installed through the `markii.packs`
-setting, a list of folders you trust as installed packs. The setting lives
-in your user settings only, so a project you open can never add a pack on
-your behalf. Each folder holds a `pack.json`, the component sources it
-names, and an optional `scripts/` folder of shared Lua. The extension
-validates each manifest and rejects namespace collisions, then does two
-things: it makes the pack's Lua modules reachable from `require "name/..."`
-in the Run path, and it loads the pack's components into the preview so they
-render. A note that names a pack you have not installed still reads: its
-components show the labeled fallback, and a quiet marker notes the missing
-pack.
+In an editor host, packs are installed by naming folders you trust. The VS
+Code extension uses the `markii.packs` setting, which lives in your user
+settings only, so a project you open can never add a pack on your behalf.
+The Obsidian plugin keeps its list in device-local storage rather than in
+plugin data, so a vault you sync or share carries none of your decisions
+about which code may run.
+
+Each folder holds a `pack.json`, the component sources it names, and an
+optional `scripts/` folder of shared Lua. A host validates each manifest and
+rejects namespace collisions, then does two things: it makes the pack's Lua
+modules reachable from `require "name/..."` in the Run path, and it loads
+the pack's components so they render. A note that names a pack you have not
+installed still reads: its components show the labeled fallback, and a quiet
+marker notes the missing pack.
 
 A configured folder may either be a pack itself or hold several. If the
 folder has no `pack.json` of its own, each immediate subfolder that has one
@@ -117,15 +121,17 @@ packs/            <- one entry in the setting
 ```
 
 The scan goes one level down and no further. Prefer absolute paths: the
-setting is user-scoped, so a relative entry means a different folder in
-every workspace you open, and the extension reports one as deprecated in its
-diagnostics. A leading `~` expands to your home directory, which keeps an
-absolute entry short.
+list is scoped to you rather than to a project, so a relative entry means a
+different folder in every workspace or vault you open, and a host reports
+one as deprecated in its diagnostics. A leading `~` expands to your home
+directory, which keeps an absolute entry short.
 
-A pack does not need to ship a built artifact. The extension compiles the
-component sources its manifest names, caches the result outside the pack's
-own folder so your files stay untouched, and rebuilds only when a source
-changes. A pack that does ship a prebuilt script is used as-is.
+A pack does not need to ship a built artifact. The host compiles the
+component sources its manifest names, along with any relative modules and
+CSS they import, caches the result outside the pack's own folder so your
+files stay untouched, and rebuilds when any file that went into the build
+changes. Reads during a build are confined to the pack's own folder. A pack
+that does ship a prebuilt script is used as-is.
 
 ## Styling a pack
 

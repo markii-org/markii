@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import * as path from 'node:path';
-import { spawnRun } from '../run/run-host.js';
-import { discoverPacks, createNodeFileReader } from './discover.js';
-import { loadPackModules } from './pack-scripts.js';
+import {
+  createNodeFileReader,
+  discoverPacks,
+  loadPackModules,
+  spawnRun,
+} from '@markii/host';
 
 /**
  * End-to-end coverage of the pack-loading pieces (GitHub issue #3 slice 5)
@@ -22,7 +25,10 @@ const FIXTURE_ROOT = path.resolve(
   '../../test-fixtures/packs',
 );
 const DEMO_PACK_DIR = path.join(FIXTURE_ROOT, 'demo');
-const WORKER_PATH = path.join(import.meta.dirname, '../run/worker-entry.ts');
+const WORKER_PATH = path.join(
+  import.meta.dirname,
+  '../../../../packages/markii-host/src/run/worker-entry.ts',
+);
 
 function fence(name: string, body: string): string {
   return '```lua {name=' + name + '}\n' + body + '\n```\n';
@@ -44,7 +50,7 @@ describe('exemplar pack fixture — discovery', () => {
     expect(pack.componentPaths.badge).toBe(
       path.join(DEMO_PACK_DIR, 'Badge.tsx'),
     );
-    expect(pack.webviewScriptPath).toBe(path.join(DEMO_PACK_DIR, 'webview.js'));
+    expect(pack.scriptPath).toBe(path.join(DEMO_PACK_DIR, 'webview.js'));
   });
 });
 

@@ -2,7 +2,7 @@
   "name": "markii-obsidian",
   "version": "0.1.0",
   "private": true,
-  "description": "Feasibility spike: a minimal Obsidian plugin that renders a .mk.md note with @markii/react in a side panel. Not the product — see AGENTS.md.",
+  "description": "An Obsidian plugin that renders a .mk.md note with @markii/react in a side panel and can run its scripts (network grants, auto-run, scheduled refresh — all device-local). Not the product — see AGENTS.md.",
   "type": "module",
   "scripts": {
     "generate:doc-css": "node scripts/generate-doc-css.ts",
@@ -14,8 +14,13 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@markii/bundle": "*",
     "@markii/core": "*",
+    "@markii/host": "*",
+    "@markii/lua": "*",
+    "@markii/pack": "*",
     "@markii/react": "*",
+    "@markii/runtime": "*",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

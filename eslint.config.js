@@ -14,6 +14,11 @@ export default tseslint.config(
       // own TypeScript project, so typescript-eslint's project service has
       // nothing to check them against.
       'apps/vscode/test-fixtures/**',
+      'packages/markii-host/test-fixtures/**',
+      // Obsidian plugin pack-loading fixture (a real .tsx pack with CSS and
+      // a relative helper import, compiled by the same @markii/host
+      // pack-build.ts used above): same reasoning as the two entries above.
+      'apps/obsidian/test-fixtures/**',
     ],
   },
   tseslint.configs.recommended,

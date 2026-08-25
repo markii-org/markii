@@ -1,0 +1,14 @@
+/*
+ * Fixture CSS for the `demo` pack (`src/packs/pack-context.fixture.test.ts`).
+ * Correctly prefixed, --mk-* token-based content only, so this fixture also
+ * proves the CSS lint rules (`@markii/host`'s `packs/pack-css-lint.ts`) stay
+ * silent on well-formed pack CSS.
+ */
+.mk-demo-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+  color: var(--mk-fg);
+  background: var(--mk-surface);
+  border: 1px solid var(--mk-border);
+}

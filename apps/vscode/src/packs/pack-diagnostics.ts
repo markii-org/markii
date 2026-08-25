@@ -6,43 +6,32 @@
  * actual `vscode.OutputChannel` and just writes these lines to it, which is
  * what keeps this module testable with vitest.
  *
- * Two kinds of line: one per configured folder that failed to produce a
- * usable pack (`skipped`, already carrying its own reason from
- * `discoverPacks`/`loadPackContext`), and one per pack that DID load, so a
- * working setup is just as confirmable as a broken one — silence either way
- * would leave a user guessing whether the setting was even read.
+ * The structural wording (one line per loaded pack, one per skipped
+ * folder, the CSS-warning lines, and any pack-registration lines) is
+ * shared across every host and lives in `@markii/host`'s
+ * `formatPackDiagnosticLines`. This file's own job is just the ONE piece
+ * that is genuinely VS-Code-specific: naming `markii.packs` (a user-scoped
+ * VS Code setting) in the deprecated-relative-entry line, since a relative
+ * entry there resolves against whichever workspace happens to be open —
+ * see `apps/obsidian/src/packs/pack-diagnostics.ts` for that host's own
+ * wording of the same warning.
+ *
+ * VS Code does not currently supply `invalidRegistrationReasons` /
+ * `registrationCollisions` (the pack-registration validation happens
+ * inside the webview, a separate process — see `../webview/pack-registry.ts`),
+ * so those are simply omitted here; `@markii/host`'s formatter already
+ * treats them as optional and contributes nothing when absent, so this is
+ * not a behavior change.
  */
+import {
+  formatPackDiagnosticLines as formatPackDiagnosticLinesShared,
+  skippedPackCount as skippedPackCountShared,
+} from '@markii/host';
 import type { PackContext } from './pack-context.js';
 
-/** One "Markii" line for each folder `discoverPacks`/`loadPackContext` could not turn into a usable pack. */
-function skippedLines(context: PackContext): string[] {
-  return context.skipped.map(
-    (entry) => `Skipped pack folder "${entry.folder}": ${entry.reason}`,
-  );
-}
-
-/**
- * ITEM 4: one "Markii" line per `markii.packs` entry that is relative
- * (`./resolve-pack-paths.ts`'s `relativePackEntries`), naming the entry and
- * explaining why it is worth fixing — `markii.packs` is a USER-scoped
- * setting, so a relative entry resolves against whatever workspace happens
- * to be open, meaning a different folder per window. This never blocks the
- * entry from loading; it is a deprecation warning only.
- */
-function deprecatedRelativeEntryLines(context: PackContext): string[] {
-  return context.deprecatedRelativeEntries.map(
-    (entry) =>
-      `Deprecated: markii.packs entry "${entry}" is relative, so it resolves to a different folder in every workspace (markii.packs is a user-scoped setting). Prefer an absolute path, or a "~/..." path.`,
-  );
-}
-
-/** One "Markii" line for each pack that loaded successfully, naming what a user would want to confirm: its name, namespace, and how many components it registered. */
-function loadedLines(context: PackContext): string[] {
-  return context.packs.map((pack) => {
-    const componentCount = Object.keys(pack.manifest.components).length;
-    const plural = componentCount === 1 ? 'component' : 'components';
-    return `Loaded pack "${pack.manifest.name}" (namespace: ${pack.manifest.name}, ${componentCount} ${plural})`;
-  });
+/** ITEM 4's wording: naming `markii.packs` as the offending, user-scoped setting. */
+function deprecatedEntryLine(entry: string): string {
+  return `Deprecated: markii.packs entry "${entry}" is relative, so it resolves to a different folder in every workspace (markii.packs is a user-scoped setting). Prefer an absolute path, or a "~/..." path.`;
 }
 
 /**
@@ -53,15 +42,16 @@ function loadedLines(context: PackContext): string[] {
  * anything to the channel (see `preview-panel.ts`'s `logPackDiagnostics`).
  */
 export function formatPackDiagnosticLines(context: PackContext): string[] {
-  return [
-    ...loadedLines(context),
-    ...skippedLines(context),
-    ...deprecatedRelativeEntryLines(context),
-    ...context.cssWarnings,
-  ];
+  return formatPackDiagnosticLinesShared({
+    packs: context.packs,
+    skipped: context.skipped,
+    deprecatedEntryLines:
+      context.deprecatedRelativeEntries.map(deprecatedEntryLine),
+    cssWarnings: context.cssWarnings,
+  });
 }
 
 /** How many configured folders failed to produce a usable pack — what the preview's quiet marker counts (`webview/preview.tsx`). */
 export function skippedPackCount(context: PackContext): number {
-  return context.skipped.length;
+  return skippedPackCountShared(context);
 }

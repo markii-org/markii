@@ -29,7 +29,7 @@ export interface WebviewHtmlOptions {
   readonly packScriptUris?: readonly string[];
   /**
    * Webview-visible URIs of every configured, installed pack's emitted
-   * stylesheet (`./packs/pack-build.ts`, the pack-CSS design) — a pack
+   * stylesheet (`@markii/host`'s `packs/pack-build.ts`, the pack-CSS design) — a pack
    * whose build produced no `.css` (no CSS import) simply has no entry
    * here. Rendered as `<link rel="stylesheet">` tags, in this array's
    * order, placed AFTER `styleUri`'s own `<link>` (`doc.css` + the host

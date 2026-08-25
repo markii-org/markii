@@ -3,7 +3,7 @@ import {
   formatPackDiagnosticLines,
   skippedPackCount,
 } from './pack-diagnostics.js';
-import type { DiscoveredPack, SkippedPackFolder } from './discover.js';
+import type { DiscoveredPack, SkippedPackFolder } from '@markii/host';
 import type { PackContext } from './pack-context.js';
 
 function pack(name: string, componentCount: number): DiscoveredPack {
@@ -15,7 +15,7 @@ function pack(name: string, componentCount: number): DiscoveredPack {
     manifest: { name, engine: 'react', components },
     componentPaths: {},
     scriptsDir: `/packs/${name}/scripts`,
-    webviewScriptPath: `/packs/${name}/webview.js`,
+    scriptPath: `/packs/${name}/webview.js`,
   };
 }
 

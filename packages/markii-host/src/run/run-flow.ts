@@ -1,0 +1,418 @@
+/**
+ * Slice 2's top-level orchestration for one `markii.runScripts` press:
+ * extract requirements -> run the grant flow -> read/spawn/persist the
+ * cache snapshot -> shape the result for the `values` wire message
+ * (`../protocol.ts`). Deliberately vscode-free, like every other module
+ * under `./`: the ONLY vscode-shaped things this needs (a Memento, a
+ * `spawnRun`-like runner, and two prompt functions) arrive as plain
+ * parameters, so `extension.ts`/`preview-panel.ts` — the only files
+ * allowed to import `vscode` — reduce to supplying those and posting the
+ * resulting message. See `./grant-flow.ts` and `./run-host.ts` for the
+ * pieces this file composes.
+ */
+import { extractRunRequirements } from './script-requirements.js';
+import { resolveStoredGrant, runGrantFlow } from './grant-flow.js';
+import type {
+  GrantFlowResult,
+  GrantMemento,
+  PromptBundleAccess,
+  PromptHost,
+  PromptManyHosts,
+  PromptUnknownHosts,
+} from './grant-flow.js';
+import {
+  bundleModulesFromSnapshot,
+  manifestBundleFsGrants,
+  manifestNetHosts,
+} from './bundle-run.js';
+import type { RunResult, SpawnRunOptions } from './run-host.js';
+import type { ValuesFailure } from '../values-failure.js';
+import type { RunTrigger, StoredValue } from '@markii/runtime';
+import type { BundleManifest } from '@markii/bundle';
+import type { PackModulesMap } from './lua-resolver.js';
+
+/**
+ * Strips a `StoredValue`'s `error` field before it ever reaches the wire
+ * (D-1): `.error` is whatever text the executor happened to produce —
+ * a raw Lua traceback, or (worse, per B-3) a net-provider denial message
+ * that can embed the actual request URL/host — and none of that is meant
+ * for the rendered page (AGENTS.md's cleanliness principle: quiet markers,
+ * never error dumps). This mirrors exactly what `runOnce` below already
+ * does to `RunResult.failures` (reduced to `{name, kind}`, never the raw
+ * message): `failureKind` is kept, so a renderer (`@markii/react`'s
+ * `failure-presentation.ts`) still branches on the closed `FailureKind`
+ * taxonomy — nothing in this reference renderer ever reads `.error` for
+ * display, only for a value that DIDN'T fail (`status !== 'error'`), where
+ * `error` is absent anyway.
+ */
+function scrubStoredValueForWire(value: StoredValue): StoredValue {
+  if (value.status !== 'error' || value.error === undefined) return value;
+  const { error: _error, ...rest } = value;
+  return rest;
+}
+
+function scrubValuesForWire(
+  values: Record<string, StoredValue>,
+): Record<string, StoredValue> {
+  // `Object.fromEntries` for the same reason `mergePersistedValues` uses it:
+  // a plain `scrubbed[name] = ...` silently loses the value of a script
+  // legitimately named `__proto__`.
+  return Object.fromEntries(
+    Object.entries(values).map(([name, value]) => [
+      name,
+      scrubStoredValueForWire(value),
+    ]),
+  );
+}
+
+/** A `CacheEntry`-keyed snapshot, structurally — this module never imports `@markii/lua` just for the type; it only ever passes the value through. */
+export type CacheSnapshot = Record<string, unknown>;
+
+/**
+ * A sane upper bound on a persisted cache snapshot: real cached `net.*`
+ * responses are small JSON payloads, so the cap exists to guarantee a
+ * runaway/adversarial script can never grow `workspaceState` without
+ * bound. A snapshot over this size is DROPPED, not truncated — a partial
+ * cache would silently look valid while missing entries a script assumed
+ * were still there, which is worse than starting the next run with none
+ * at all.
+ */
+export const MAX_CACHE_SNAPSHOT_BYTES = 1_000_000;
+
+/** The single `workspaceState`/Memento key a document's cache snapshot lives under. */
+export function cacheStorageKeyFor(documentKey: string): string {
+  return `markii.runCache:${documentKey}`;
+}
+
+/**
+ * The `workspaceState`/Memento key a document's LAST-KNOWN values live under
+ * (GitHub issue #11, gap 1). Separate from the cache snapshot
+ * (`cacheStorageKeyFor`): the cache is the sandbox's own `cache.get` state,
+ * keyed and TTL'd inside Lua; THIS is the rendered value store
+ * (`ValueStore.snapshot()`), the numbers a data-bound component actually
+ * showed. Persisting it is what lets a reopened monitoring note render its
+ * last figures instantly and offline, marked stale, before (or without) any
+ * re-run — exactly the "opening a note ... showing its last data marked as
+ * stale" behavior docs/scripting.md and docs/spec.md require.
+ */
+export function valuesStorageKeyFor(documentKey: string): string {
+  return `markii.runValues:${documentKey}`;
+}
+
+/** Same cap and drop-not-truncate posture as `MAX_CACHE_SNAPSHOT_BYTES` — a runaway value store never grows `workspaceState` without bound, and a too-large snapshot is dropped whole (a partial value store would silently omit names a note binds). */
+export const MAX_VALUES_SNAPSHOT_BYTES = 1_000_000;
+
+/**
+ * True for a value this module is willing to persist and re-hydrate as a
+ * last-known value store — the same "is this a plain object at all"
+ * shallow trust `isCacheSnapshotShape` applies. A renderer-side hostile-shape
+ * guard (`../protocol.ts`'s `isWireStoredValueRecord`) still re-validates
+ * every entry when the host re-posts these over the wire, so this only needs
+ * to keep a corrupt/foreign top-level value from being merged.
+ */
+function isStoredValueRecord(
+  value: unknown,
+): value is Record<string, StoredValue> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Reads a document's persisted last-known value store, or `{}` when there is
+ * none / it is unusable. Never throws, never trusts the stored shape past
+ * "plain object" — see `isStoredValueRecord`.
+ */
+export function readPersistedValues(
+  memento: GrantMemento,
+  documentKey: string,
+): Record<string, StoredValue> {
+  const raw = memento.get<unknown>(valuesStorageKeyFor(documentKey));
+  return isStoredValueRecord(raw) ? raw : {};
+}
+
+/**
+ * Merges a completed run's value store onto the previously-persisted one,
+ * keeping the LAST-KNOWN-GOOD value for any name whose fresh run FAILED
+ * (GitHub issue #11). A scheduled/auto run that hits a transient failure
+ * (offline, an API hiccup, an ungranted host under the read-only tier) must
+ * not wipe the good numbers a monitoring note was already showing — mirroring
+ * the same "the cache only ever remembers good data" guarantee
+ * docs/scripting.md gives `cache.get`. For each name in the new run: a
+ * non-error outcome always wins; an error outcome is kept ONLY if there is no
+ * prior good value to fall back to (so the error surfaces on a note that
+ * never succeeded), otherwise the prior value is retained and marked stale.
+ * Names present only in the prior store (a script the note no longer has) are
+ * dropped — the note's current scripts define the namespace.
+ */
+export function mergePersistedValues(
+  previous: Record<string, StoredValue>,
+  next: Record<string, StoredValue>,
+): Record<string, StoredValue> {
+  // Built through entries and `Object.fromEntries` rather than
+  // `merged[name] = ...`: assigning the name `__proto__` on a plain object
+  // sets its prototype instead of creating an own property, silently losing
+  // that value, and `__proto__` is a legal script name (docs/spec.md's
+  // `[A-Za-z_][A-Za-z0-9_-]*`). The same guard is in `./stale-values.ts`.
+  const merged: Array<[string, StoredValue]> = [];
+  for (const [name, value] of Object.entries(next)) {
+    if (typeof value !== 'object' || value === null) continue;
+    if (value.status !== 'error') {
+      merged.push([name, value]);
+      continue;
+    }
+    // `previous` is a PERSISTED store, guarded only down to "plain object"
+    // when it was read back, so an individual entry can be anything.
+    const priorRaw = Object.hasOwn(previous, name) ? previous[name] : undefined;
+    const prior =
+      typeof priorRaw === 'object' && priorRaw !== null ? priorRaw : undefined;
+    merged.push([
+      name,
+      prior && prior.status !== 'error' ? { ...prior, status: 'stale' } : value,
+    ]);
+  }
+  return Object.fromEntries(merged);
+}
+
+/** The JSON-and-size-guarded form of a value store to persist, or `undefined` to drop it (unserializable, or over `MAX_VALUES_SNAPSHOT_BYTES`) — same contract as `serializeCacheSnapshotIfSmallEnough`. */
+function valuesSnapshotIsSmallEnough(
+  values: Record<string, StoredValue>,
+): boolean {
+  let serialized: string;
+  try {
+    serialized = JSON.stringify(values);
+  } catch {
+    return false;
+  }
+  return serialized.length <= MAX_VALUES_SNAPSHOT_BYTES;
+}
+
+/** A plausible cache-snapshot shape read back from storage — never trusts it further than "is this a plain object at all" (an old/foreign/corrupt value degrades to "no cache", matching this whole module's fail-safe posture). */
+export function isCacheSnapshotShape(value: unknown): value is CacheSnapshot {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * The JSON text for `snapshot`, or `undefined` when it must be dropped
+ * instead of persisted: either it isn't serializable at all (a value
+ * `JSON.stringify` cannot handle), or its serialized size exceeds
+ * `MAX_CACHE_SNAPSHOT_BYTES`. Callers write `undefined` back to storage in
+ * that case — see `MAX_CACHE_SNAPSHOT_BYTES`'s doc comment on why a partial
+ * write is never attempted.
+ */
+export function serializeCacheSnapshotIfSmallEnough(
+  snapshot: CacheSnapshot,
+): string | undefined {
+  let serialized: string;
+  try {
+    serialized = JSON.stringify(snapshot);
+  } catch {
+    return undefined;
+  }
+  return serialized.length <= MAX_CACHE_SNAPSHOT_BYTES ? serialized : undefined;
+}
+
+export interface RunOnceOptions {
+  /** Stable identity for the note this run belongs to — `vscode.Uri.toString()` of the document, in the real adapter. Shared with `./grant-flow.ts`'s `documentKey`. */
+  documentKey: string;
+  text: string;
+  /**
+   * How this run was triggered (GitHub issue #11). `'manual'` (the default
+   * when omitted) is the only trigger that runs the INTERACTIVE grant flow
+   * (`runGrantFlow`) — prompting on a miss and persisting the answer — and
+   * the only one the worker maps to the full `'manual'` capability tier.
+   * `'auto'` (run-on-open) and `'scheduled'` (interval) both resolve grants
+   * NON-INTERACTIVELY (`resolveStoredGrant`): they reuse a grant the user
+   * already made by hand, never prompt, never persist, and the worker runs
+   * them at the read-only tier (`@markii/runtime`'s `tierForTrigger`). This
+   * is the run-path half of the "effects always cost a click" rule
+   * (docs/scripting.md); the tier gate in the worker is the other half.
+   */
+  trigger?: RunTrigger;
+  /**
+   * The DNS-rebinding / private-range policy (GitHub issue #10), forwarded
+   * verbatim to `spawnRun`'s `netPolicy` — see `./net-pinning.ts`'s
+   * `PinPolicy`. Omitted defaults to the fail-closed posture the worker
+   * itself applies (`allowRestrictedAddresses: false`); this is the
+   * deployment-level opt-in `markii.allowPrivateNetworkAddresses` maps to
+   * (`preview-panel.ts`), never something a note can set for itself.
+   */
+  netPolicy?: SpawnRunOptions['netPolicy'];
+  memento: GrantMemento;
+  promptHost: PromptHost;
+  promptUnknownHosts: PromptUnknownHosts;
+  /** PROMPT-STORM guard's consolidated gate — see `./grant-flow.ts`'s `MAX_HOST_PROMPTS`. */
+  promptManyHosts: PromptManyHosts;
+  /** Prompts for a bundle's declared bundle-fs grants — see `./grant-flow.ts`'s `PromptBundleAccess`. Only ever consulted when `bundle` (below) is set AND its manifest declares `permissions.bundle`. */
+  promptBundleAccess?: PromptBundleAccess;
+  /** Injected so this function is testable with a fake worker runner — the real adapter passes `./run-host.ts`'s `spawnRun`. */
+  spawnRun: (options: SpawnRunOptions) => Promise<RunResult>;
+  timeoutMs: number;
+  /**
+   * Slice 2 of the `.mkz` Run-path arc (GitHub issue #9): present only for a
+   * bundle-backed document. `buildSnapshot` is called exactly once per run
+   * (`./bundle-run.ts`'s `buildBundleSnapshot`, already applied to whatever
+   * `BundleStorage` the caller has) — deferred to run time rather than
+   * built eagerly, so a snapshot is only ever read when a run actually
+   * happens. As of the F-1 fix it is built BEFORE the grant flow rather
+   * than immediately before `spawnRun`, so a `src=` script's resolved
+   * content (`bundleModulesFromSnapshot`) can be folded into the grant
+   * closure `computeGrantKey` hashes, ahead of any prompting — still the
+   * same single call per run, just earlier. `persistCacheOut` receives the
+   * worker's `RunResult.cacheOut`
+   * (its bundle `cache/` subtree, post-run) when the run produced one, and
+   * is the caller's own persistence: writing back into a directory-form
+   * bundle on disk, or into extension storage keyed by bundle identity for
+   * a read-only zip form (see `preview-panel.ts`'s adapters).
+   */
+  bundle?: {
+    manifest: BundleManifest;
+    buildSnapshot: () => Promise<Record<string, Uint8Array>>;
+    persistCacheOut: (cacheOut: Record<string, Uint8Array>) => Promise<void>;
+  };
+  /**
+   * Slice 5 of the pack-loading arc (GitHub issue #3): pre-read pack Lua
+   * modules for every installed pack (`../packs/pack-scripts.ts`'s
+   * `loadPackModules`), forwarded verbatim to `spawnRun`'s `packModules` so
+   * the worker's `require "packName/..."` can resolve them. Absent when no
+   * packs are configured — `require` for a pack namespace then denies
+   * exactly as it did before packs existed.
+   */
+  packModules?: PackModulesMap;
+}
+
+export interface RunOnceResult {
+  values: Record<string, StoredValue>;
+  failures: ValuesFailure[];
+}
+
+/**
+ * Runs one manual pass of `options.text`'s scripts end to end: the grant
+ * flow decides the net allowlist (prompting only on a miss), the persisted
+ * cache snapshot seeds the run, and the run's own (possibly mutated) cache
+ * snapshot is written back — capped, never partially. The returned shape
+ * is exactly what the `values` wire message (`../protocol.ts`) needs,
+ * minus the `revision` tag, which the caller (who knows what revision this
+ * run was actually performed against) attaches. Every `StoredValue`'s raw
+ * `error` text is stripped before it is returned (D-1, `scrubValuesForWire`
+ * above) — same treatment `failures` already got.
+ */
+export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
+  const requirements = extractRunRequirements(options.text);
+
+  // Design point 5 (GitHub issue #9): a bundle's manifest-declared net hosts
+  // seed the grant flow too, unioned with whatever the static script scan
+  // already found — so a bundle prompts for what it DECLARES, not only for
+  // hosts a literal `net.fetch_json("https://...")` call site happens to
+  // reveal. Declaring is not granting: this only changes what gets PROMPTED
+  // for, never what ends up allowed without a prompt.
+  const manifestHosts = options.bundle
+    ? manifestNetHosts(options.bundle.manifest)
+    : [];
+  const mergedHosts = [...new Set([...requirements.hosts, ...manifestHosts])];
+  const bundleFsGrants = options.bundle
+    ? manifestBundleFsGrants(options.bundle.manifest)
+    : [];
+
+  // F-1 fix: the bundle snapshot is built BEFORE the grant flow now (it used
+  // to be built only after, purely to feed the run itself) specifically so
+  // any `src=` script file's CONTENT can be folded into the grant closure
+  // below — see `bundleModulesFromSnapshot`'s doc comment. This also means
+  // the snapshot is only ever built once per run, same as before.
+  const bundleSnapshot = options.bundle
+    ? await options.bundle.buildSnapshot()
+    : undefined;
+  const bundleModules =
+    options.bundle && bundleSnapshot
+      ? bundleModulesFromSnapshot(requirements.grantScripts, bundleSnapshot)
+      : undefined;
+
+  const trigger = options.trigger ?? 'manual';
+  const grantRequirements = {
+    ...requirements,
+    hosts: mergedHosts,
+    bundleFsGrants,
+    ...(bundleModules ? { bundleModules } : {}),
+  };
+
+  // GitHub issue #11: only a MANUAL run prompts and persists. An auto/
+  // scheduled run resolves grants non-interactively from what the user
+  // already granted by hand for this exact closure — never a modal on a
+  // timer, never a widened allowlist. See `resolveStoredGrant`'s doc comment.
+  const grant: GrantFlowResult =
+    trigger === 'manual'
+      ? await runGrantFlow({
+          documentKey: options.documentKey,
+          requirements: grantRequirements,
+          memento: options.memento,
+          promptHost: options.promptHost,
+          promptUnknownHosts: options.promptUnknownHosts,
+          promptManyHosts: options.promptManyHosts,
+          promptBundleAccess: options.promptBundleAccess,
+        })
+      : await resolveStoredGrant({
+          documentKey: options.documentKey,
+          requirements: grantRequirements,
+          memento: options.memento,
+        });
+
+  const cacheKey = cacheStorageKeyFor(options.documentKey);
+  const rawCache = options.memento.get<unknown>(cacheKey);
+  const cacheSnapshot = isCacheSnapshotShape(rawCache) ? rawCache : {};
+
+  const result = await options.spawnRun({
+    text: options.text,
+    trigger,
+    netAllowlist: grant.allowedHosts,
+    ...(options.netPolicy !== undefined
+      ? { netPolicy: options.netPolicy }
+      : {}),
+    cacheSnapshot: cacheSnapshot as SpawnRunOptions['cacheSnapshot'],
+    timeoutMs: options.timeoutMs,
+    ...(options.packModules !== undefined
+      ? { packModules: options.packModules }
+      : {}),
+    ...(options.bundle && bundleSnapshot
+      ? {
+          bundle: {
+            snapshot: bundleSnapshot,
+            manifest: options.bundle.manifest,
+            grantedBundlePermissions: grant.allowedBundleGrants,
+          },
+        }
+      : {}),
+  });
+
+  const nextSnapshotText = serializeCacheSnapshotIfSmallEnough(
+    result.cacheSnapshot,
+  );
+  await options.memento.update(
+    cacheKey,
+    nextSnapshotText === undefined ? undefined : result.cacheSnapshot,
+  );
+
+  if (options.bundle && result.cacheOut) {
+    await options.bundle.persistCacheOut(result.cacheOut);
+  }
+
+  // GitHub issue #11, gap 1: persist the (wire-scrubbed) value store as this
+  // note's last-known values, merged onto the prior store so a failed
+  // scheduled/auto run never wipes good numbers (`mergePersistedValues`).
+  // Dropped whole, never partially, if it fails the size/serialize guard.
+  const scrubbedValues = scrubValuesForWire(result.values);
+  const valuesKey = valuesStorageKeyFor(options.documentKey);
+  const mergedValues = mergePersistedValues(
+    readPersistedValues(options.memento, options.documentKey),
+    scrubbedValues,
+  );
+  await options.memento.update(
+    valuesKey,
+    valuesSnapshotIsSmallEnough(mergedValues) ? mergedValues : undefined,
+  );
+
+  return {
+    values: scrubbedValues,
+    failures: result.failures.map((failure) => ({
+      name: failure.name,
+      kind: failure.kind,
+    })),
+  };
+}

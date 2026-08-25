@@ -5,6 +5,35 @@
  * and load order) and merges every validated entry into the render registry
  * via `@markii/react`'s `installPacks`, on top of `defaultRegistry`.
  *
+ * ARCHITECTURAL NOTE (why this duplicates, rather than imports,
+ * `@markii/host`'s `packs/pack-render-registry.ts`): this webview bundle
+ * is a genuine browser sandbox — `esbuild.config.mjs`'s `webviewBuild` is
+ * `platform: 'browser'`/`format: 'iife'` with NO `external` entries at
+ * all, because VS Code's webview CSP forbids `require`/a module graph
+ * fetched at runtime (the whole point of a nonce-only `script-src`). It
+ * has no Node runtime to satisfy `node:fs`/`node:path`/etc., unlike
+ * `apps/obsidian`'s plugin bundle, which runs in Electron's renderer and
+ * marks `node:*` external in its OWN `esbuild.config.mjs` (real Node
+ * builtins are genuinely available there — see that file's `mainBuild`
+ * doc comment). `@markii/host`'s package export is one barrel
+ * (`src/index.ts`) that pulls in the whole Node-heavy Run/pack-build
+ * module graph, so importing even one pure function from it as a VALUE
+ * here breaks this bundle (confirmed empirically — esbuild fails to
+ * resolve `node:fs`, `node:worker_threads`, etc. reachable through that
+ * barrel). Splitting `@markii/host` into a browser-safe subpath export
+ * (the `@markii/bundle`/`./fs` pattern) would fix this properly, but that
+ * touches shared root config (`tsconfig.dev.json`'s path map,
+ * `scripts/workspace-aliases.config.ts`) outside this file's owning
+ * scope — flagged to the orchestrator rather than done here.
+ *
+ * What IS shared safely: the TYPE contract. `QueuedPackRegistration` is
+ * imported as a type-only import below (`import type`), which TypeScript
+ * erases before this file ever reaches esbuild — zero runtime cost, zero
+ * bundling impact — so this file's shape stays provably in sync with
+ * `@markii/host`'s (and `apps/obsidian`'s) same convention even though the
+ * VALIDATION LOGIC itself (`isPackComponentModules`/`toPackToInstall`)
+ * must stay duplicated here.
+ *
  * Every entry here crossed a JS boundary from a SEPARATELY LOADED script
  * file (a pack's prebuilt `webview.js`, not code this bundle compiled) —
  * same trust as this extension's own bundle once loaded (docs/security.md:
@@ -19,21 +48,7 @@ import { parsePackManifest } from '@markii/pack';
 import type { PackManifest } from '@markii/pack';
 import { createRegistry, installPacks, mergeRegistries } from '@markii/react';
 import type { PackToInstall, Registry, RegistryEntry } from '@markii/react';
-
-/**
- * One queued registration: `manifestJson` is the pack's `pack.json`
- * contents, embedded as a JSON string literal in the pack's build (the
- * SAME validator this extension's own manifest reading would use, via
- * `@markii/pack`'s `parsePackManifest` — never a second, looser parser).
- * `componentModules` is a plain object of local component name ->
- * `{component, inline?}`, matching `@markii/react`'s `PackComponentModules`
- * shape — checked structurally below, since nothing on this boundary is
- * typed at compile time.
- */
-interface QueuedPackRegistration {
-  readonly manifestJson: unknown;
-  readonly componentModules: unknown;
-}
+import type { QueuedPackRegistration } from '@markii/host';
 
 declare global {
   interface Window {
@@ -78,7 +93,7 @@ function hasOwn(value: object, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(value, key);
 }
 
-/** Structurally validates one `componentModules` object: every OWN entry has a function `component` and an optional boolean `inline`. Read with `Object.hasOwn` only — the same hostile-map discipline `@markii/pack`/`@markii/react` use throughout, so a `componentModules` object with a poisoned `__proto__` can't leak an inherited value in as a registered component. */
+/** Structurally validates one `componentModules` object: every OWN entry has a function `component` and an optional boolean `inline`. Read with `Object.hasOwn` only — the same hostile-map discipline `@markii/pack`/`@markii/react` use throughout, so a `componentModules` object with a poisoned `__proto__` can't leak an inherited value in as a registered component. Structurally identical to `@markii/host`'s `packs/pack-render-registry.ts` (this file's top doc comment explains why the logic itself, not just the type, can't be imported here). */
 function isPackComponentModules(
   value: unknown,
 ): value is Record<string, RegistryEntry> {

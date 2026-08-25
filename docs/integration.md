@@ -190,8 +190,17 @@ importance:
    failed to load, every deprecated configuration entry, and every failed
    run to it. The rendered note keeps only a quiet marker; the detail lives
    here. A failure recorded internally and reachable from neither is a bug.
-   The reference host uses an output channel named Markii, revealed by the
-   command `Markii: Show Diagnostics`.
+   The VS Code extension uses an output channel named Markii; the Obsidian
+   plugin uses the developer console with a notice for anything the user
+   must act on. Both expose a command that shows the current state.
+10. **Storage that does not travel.** Anything that authorizes execution or
+    network access, meaning grants, auto-run, and any scheduled interval,
+    is stored per user and per device, never anywhere that moves with the
+    content. VS Code's application-scoped settings and global state satisfy
+    this. Obsidian has no equivalent, because plugin data lives inside the
+    vault and rides Sync, so the plugin uses device-local storage instead.
+    Getting this wrong hands whoever receives a copy of the content
+    authority they never granted.
 
 ## Editor support
 

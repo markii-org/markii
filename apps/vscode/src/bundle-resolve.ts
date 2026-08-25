@@ -31,7 +31,7 @@ export type BundleResolutionFailureReason =
 /**
  * C-1 fix: a manifest or document over this many bytes is refused WITHOUT
  * being read into memory at all — `storage.size()` is consulted before
- * `storage.read()` (mirroring `apps/vscode/src/run/bundle-run.ts`'s
+ * `storage.read()` (mirroring `@markii/host`'s `run/bundle-run.ts`'s
  * `buildBundleSnapshot`). A real `manifest.json`/`note.mk.md` is tiny; this
  * exists only so a delivered bundle whose "document" is actually a
  * multi-gigabyte file can never force that allocation in the extension

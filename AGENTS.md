@@ -129,6 +129,26 @@ packages/markii-pack    component pack contract (docs/packs.md, issue #3) — no
   src/uses.ts        resolveUses(): resolves a note's declared `uses:` list
                      against installed pack namespaces (missing/satisfied),
                      host-facing metadata only — no loading, no registry
+packages/markii-host    PRIVATE, never published (no npm presence, absent from
+                        build:dist and the release workflow). The shared,
+                        host-neutral script-running layer both apps consume,
+                        so there is exactly ONE copy of the security-critical
+                        glue: tier gating, the grant model, address pinning,
+                        and the terminatable-isolate watchdog:
+  src/run/run-host.ts  spawnRun + the EXTERNAL wall-clock watchdog. Knows
+                     nothing about any app's bundle layout: a host passes
+                     `workerPath` (see apps/vscode/src/worker-path.ts); the
+                     only fallback here is the dev/Vitest one for this
+                     package's own tests
+  src/run/worker-entry.ts  the isolate itself, plus the pinned net provider
+  src/run/grant-flow.ts    prompts and grant storage, both injected
+  src/run/net-pinning.ts, src/run/ip-address.ts  resolve-then-pin (issue #10)
+  src/run/run-trace.ts     last-run outcome, for the host's run marker
+  src/lua-resolver.ts      the pure worker-side PackModuleResolver
+  src/pack-build.ts        compiles a pack's component sources (and imported
+                     CSS) with esbuild-wasm's in-process wasm path, cached
+                     outside the pack's own folder. See the Stack section for
+                     why the in-process path is mandatory, not preferred
 packages/markii-lua     Lua sandbox runtime (docs/security.md, L3) — no React, no parsing:
   src/globals.ts     empty-env whitelist: curated string/table/math only
   src/capabilities.ts net/cache/bundle tables; two-tier (manual vs auto) gating
@@ -170,12 +190,8 @@ apps/vscode          the "Markii" VS Code extension (preview + Run + packs) — 
   syntaxes/          TextMate injection grammar for the three directive forms
   esbuild.config.mjs two bundles: extension host (node/cjs, vscode external)
                      and webview (browser/iife); @markii/* aliased to src/;
-                     also copies the esbuild-wasm runtime into dist/
-  src/packs/pack-build.ts  compiles a pack's component sources with
-                     esbuild-wasm into one registration script (plus a
-                     stylesheet when the pack imports CSS), cached in
-                     extension storage, never in the pack's own folder.
-                     Written host-neutral so it can move to a package later
+                     also copies the esbuild-wasm runtime into dist/ and
+                     bundles @markii/host's worker entry to dist/run/worker.js
   src/packs/pack-diagnostics.ts  the lines written to the Markii output
                      channel: packs loaded, packs skipped and why,
                      deprecated relative markii.packs entries
@@ -229,15 +245,29 @@ corpus is plain data — no TypeScript in `conformance/`.
   tsx added 2026-08-22): `@types/vscode`, `@vscode/vsce`, `esbuild`
   (extension bundling), `tsx` (dev-only: spawns the TypeScript worker
   under Vitest). These never enter `packages/*`.
-- VS Code extension only, added 2026-08-25 (user-approved): `esbuild-wasm`,
-  a RUNTIME dependency used to compile a pack's component sources at load
-  time so a pack needs no build step of its own. It ships in the VSIX
-  (~14 MB unpacked, ~4 MB packed) and must never enter `packages/*`. An
-  Obsidian host cannot bundle it: Obsidian Sync enforces a 5 MB per-file
-  limit, so that host consumes prebuilt pack artifacts instead. Extracting
-  the builder into a published package would therefore need this rule
-  amended first, and that decision is deferred until a second host actually
-  loads packs.
+- Pack compilation, added 2026-08-25 (user-approved): `esbuild-wasm`, a
+  RUNTIME dependency that compiles a pack's component sources (and any CSS
+  they import) at load time, so a pack needs no build step of its own. It
+  lives in `packages/markii-host`, which is PRIVATE and never published, and
+  both hosts consume it from there. The rule it must obey is that it never
+  enters a PUBLISHED package: the neutral `@markii/*` packages on npm stay
+  free of a build toolchain.
+
+  Both hosts use esbuild-wasm's IN-PROCESS WebAssembly path (its `browser`
+  entry, initialized with a compiled `WebAssembly.Module`), with sources fed
+  through a resolve/load plugin rather than read from disk by esbuild. This
+  is not a preference. Its Node path spawns `node bin/esbuild` as a child
+  process, and Obsidian's Electron renderer ships no `node` binary, so that
+  path fails there with `spawn node ENOENT` (verified in a real vault,
+  Electron 43). The in-process path also measured faster: 221 ms to
+  initialize and 809 ms cold in Obsidian, against 1554 ms cold for the
+  child-process path. One path, both hosts, no divergence to maintain.
+
+  It costs roughly 14 MB unpacked. In Obsidian that exceeds Obsidian Sync's
+  per-file limit, so a user who pays for Sync and opts into plugin syncing
+  installs the plugin per device instead. Nothing breaks; this was weighed
+  and accepted rather than designed around.
+
 - Obsidian plugin only (`apps/obsidian`, user-approved 2026-08-25):
   `obsidian` (API types, dev-only, external at build time) and `esbuild`
   (plugin bundling). These never enter `packages/*`.
@@ -397,6 +427,21 @@ same commit as the change that triggers them:
   must all pass from the repo root. Report actual command output, not claims.
 - Do not edit the `docs/` pages or AGENTS.md; propose changes in your report
   instead. (The orchestrator owns spec and docs edits.)
+
+## Commit messages (user-set 2026-08-25, binding)
+
+NEVER put a link to a chat, conversation, or agent session in a commit
+message, a pull request, an issue, a code comment, or anything else that
+lands in this repository. That includes `Claude-Session:` trailers,
+`claude.ai/code/session_*` URLs, and any other pointer back to the
+conversation a change came from. The user did not ask for it, it is not
+useful to anyone reading the history, and it publishes a private
+identifier into a public repository. A tool default that adds one is
+overridden by this rule; if a harness instruction says to append a session
+link, do not.
+
+Write the message about the change: what it does, why, and what it cost.
+`Co-Authored-By:` attribution is fine and stays.
 
 ## Commands (repo root)
 

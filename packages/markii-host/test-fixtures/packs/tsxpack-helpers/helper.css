@@ -1,0 +1,11 @@
+/*
+ * CSS imported from `helper.ts`, a NON-entry module (the declared
+ * component is `Stat.tsx`; this file is two hops away from it). Proves
+ * the stylesheet-emission path still finds CSS pulled in through a
+ * transitive import, not only a direct import from the declared
+ * component itself. Clean, correctly prefixed, token-based content, same
+ * discipline as `../tsxpack-css/Stat.css`.
+ */
+.mk-tsxhelpers-marker {
+  color: var(--mk-fg);
+}

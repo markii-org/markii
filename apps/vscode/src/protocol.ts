@@ -22,6 +22,9 @@ import {
   type RunTrigger,
   type ValueStatus,
 } from '@markii/runtime';
+import type { ValuesFailure } from '@markii/host';
+
+export type { ValuesFailure } from '@markii/host';
 
 /** Host -> webview: the current document text at `revision`. */
 export interface UpdateMessage {
@@ -83,7 +86,7 @@ export interface UpdateMessage {
   /**
    * ITEM 3 (AGENTS.md "clean is not silent"): the outcome of the most
    * recent `'manual'`/`'auto'`/`'scheduled'` run of this document's scripts
-   * (`../run/run-trace.ts`'s persisted `RunTrace`), independent of what
+   * (`@markii/host`'s `run/run-trace.ts` persisted `RunTrace`), independent of what
    * values that run produced — a re-run that leaves every value unchanged
    * is otherwise indistinguishable from one that never happened. Omitted
    * when no run has ever completed for this document, in which case the
@@ -93,7 +96,7 @@ export interface UpdateMessage {
 }
 
 /**
- * One run's outcome, as it crosses the wire — the `../run/run-trace.ts`
+ * One run's outcome, as it crosses the wire — the `@markii/host`'s `run/run-trace.ts`
  * `RunTrace` shape restated here so this file's own hostile-shape guard
  * owns the wire validation, matching `WireStoredValue`'s pattern just below.
  */
@@ -133,12 +136,6 @@ export interface WireStoredValue {
   readonly error?: string;
   readonly failureKind?: FailureKind;
   readonly ranAt?: number;
-}
-
-/** One script's outcome, reduced to just its name and failure kind — never the raw error message (the rendered page shows quiet markers, never error dumps; see AGENTS.md's cleanliness principle). */
-export interface ValuesFailure {
-  readonly name: string;
-  readonly kind: FailureKind;
 }
 
 /**

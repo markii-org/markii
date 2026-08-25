@@ -255,11 +255,11 @@
   "dependencies": {
     "@markii/bundle": "*",
     "@markii/core": "*",
+    "@markii/host": "*",
     "@markii/lua": "*",
     "@markii/pack": "*",
     "@markii/react": "*",
     "@markii/runtime": "*",
-    "esbuild-wasm": "^0.28.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

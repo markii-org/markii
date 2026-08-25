@@ -5,17 +5,18 @@
  * Attacks item 6 of the issue-12 brief: `markii.runValues:*` persistence.
  *
  *  - Can the persisted store grow unbounded? (`MAX_VALUES_SNAPSHOT_BYTES`,
- *    `./run/run-flow.ts`)
+ *    `@markii/host`'s `run/run-flow.ts`)
  *  - Does a hostile or corrupt persisted value store degrade safely?
  *    (`readPersistedValues`, `staleValuesForRehydration`)
  *  - Can a stale re-seed inject markup into the page, or forge a
  *    `failureKind` the protocol guard should reject? (`./protocol.ts`'s
  *    `isHostToWebviewMessage`/`isWireStoredValueRecord`/`isValuesMessage`)
  *
- * All of this is vscode-free, plain-TypeScript logic (`./run/run-flow.ts`,
- * `./run/stale-values.ts`, `./protocol.ts`), so every case here executes
- * the REAL functions directly — no mocks of the functions under test, only
- * a fake `Memento`/`spawnRun` where `runOnce` needs a host adapter.
+ * All of this is vscode-free, plain-TypeScript logic (`@markii/host`'s
+ * `run/run-flow.ts` and `run/stale-values.ts`, plus this app's own
+ * `./protocol.ts`), so every case here executes the REAL functions
+ * directly — no mocks of the functions under test, only a fake
+ * `Memento`/`spawnRun` where `runOnce` needs a host adapter.
  */
 import { readFileSync } from 'node:fs';
 import { readdirSync, statSync } from 'node:fs';
@@ -26,11 +27,14 @@ import {
   readPersistedValues,
   runOnce,
   valuesStorageKeyFor,
-} from './run/run-flow';
-import type { GrantMemento, Thenable } from './run/grant-flow';
-import type { RunResult } from './run/worker-entry';
-import type { SpawnRunOptions } from './run/run-host';
-import { staleValuesForRehydration } from './run/stale-values';
+  staleValuesForRehydration,
+} from '@markii/host';
+import type {
+  GrantMemento,
+  Thenable,
+  RunResult,
+  SpawnRunOptions,
+} from '@markii/host';
 import {
   isHostToWebviewMessage,
   isNewerRevision,
