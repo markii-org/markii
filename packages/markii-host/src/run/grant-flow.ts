@@ -472,7 +472,28 @@ export async function runGrantFlow(
   }
 
   let finalAllowedHosts = allowedHosts;
-  if (needsUnknownPrompt) {
+  // The gate governs the per-host answers just collected: declining
+  // withdraws them. With NO grantable host it governs nothing, and asking
+  // anyway produces a dialog the user cannot satisfy — Allow grants no
+  // host, Deny withdraws no host, and because a run that ends with an
+  // empty allowlist is deliberately never persisted (C-3 below), the same
+  // unanswerable dialog reopens on every single Run press. A real note hit
+  // this: every `net.*` call site built its URL from a variable, so the
+  // static scan resolved zero hosts, and the gate became an infinite loop
+  // around a decision with no effect.
+  //
+  // Skipping it here cannot widen anything, and the equivalence is exact
+  // rather than a judgement call: with `safeHosts` empty, `allowedHosts`
+  // is already `[]` at this point, so BOTH branches of the gate produce
+  // `[]`. The outcome is identical with the prompt and without it.
+  //
+  // The user is not left uninformed, per AGENTS.md's "clean is not
+  // silent": the request is still denied at execution time with the
+  // ordinary `'capability-denied'` kind, which shows the component's quiet
+  // failure marker and writes the full reason to the host's diagnostics
+  // surface — naming the host actually attempted, which is strictly more
+  // useful than this gate's "some address, somewhere" wording could be.
+  if (needsUnknownPrompt && safeHosts.length > 0) {
     const allowed = await promptUnknownHosts();
     if (!allowed) {
       // Declining the "can't be listed in advance" gate withdraws every

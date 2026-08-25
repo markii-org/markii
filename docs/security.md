@@ -63,7 +63,20 @@ because the boundary is the hostname string, a script that builds a request
 URL at run time rather than writing it as a literal cannot be reasoned about
 in advance: the host cannot know which hostname it will name, so such a
 request is denied unless its host was granted through some other literal in
-the same note. Second, a hostname is not an address, so the name the user
+the same note. A consequence of that denial surfaced in use. When a note's `net` calls all
+build their URLs at run time, the scan resolves no hostname at all, and the
+consent gate that covers unlistable addresses was still shown. With nothing
+grantable behind it, accepting that gate granted no host and declining it
+withdrew none, and because a run that ends with an empty allowlist is never
+persisted, the same dialog reopened on every run. The gate is now shown only
+when at least one hostname was resolved, which is the only case where the
+answer can change the outcome. The reachable set is unchanged: it was empty
+before the gate and empty after it, whichever button was pressed. The
+denial itself still reaches the user, at execution time and naming the host
+actually attempted, through the component's quiet failure marker and the
+host's diagnostics surface.
+
+Second, a hostname is not an address, so the name the user
 granted and the machine the request reaches are two different things. A
 public name can answer with a private address, and a record can change
 between the check and the connection, which is DNS rebinding. A hostname

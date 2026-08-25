@@ -11,11 +11,21 @@ adds one rule on top: a *directive* places a component in the document.
 
 :::callout{type=info title="This box is a directive"}
 Type `:::callout` on a line, write any markdown inside, close with `:::`.
-Try changing `type=info` to `warning`.
+Try changing `type=info` to `warning`, then to `danger`.
+:::
+
+:::callout{type=warning title="Same box, different temper"}
+One attribute is the whole difference. Nothing else about the box changes.
+:::
+
+:::callout{type=danger title="And the loudest one"}
+Colors come from the host's theme, so this stays readable in light and dark.
 :::
 
 Small ones fit inside a sentence: press :kbd[Ctrl+Z] if you regret an edit,
-and mark things :badge[beta]{variant=info} or :badge[stable]{variant=success}.
+and mark things :badge[beta]{variant=info}, :badge[stable]{variant=success},
+:badge[slow]{variant=warning}, :badge[broken]{variant=danger}, or leave a
+badge :badge[plain] with no variant at all.
 
 ## The live part
 
@@ -72,6 +82,21 @@ That table is centered because of the wrapper, not because of anything in
 the table. There is deliberately nothing else to learn here: no style
 attributes, no pixel values.
 
+A `card` is the other half of the same idea. It draws a raised surface
+around whatever you put in it, and it holds ordinary markdown:
+
+::::row{cols=2}
+:::card
+### A card
+Headings, lists, and `code` all work inside one.
+:::
+
+:::card
+### Another
+Cards in a row share the width evenly, and stack when the pane gets narrow.
+:::
+::::
+
 ## More to play with
 
 Tabs hold alternative views of the same spot:
@@ -113,6 +138,16 @@ lets a note travel to machines with different components installed:
 Nothing here registers `timeline`, so this shows the fallback with the
 content preserved. Nothing is lost.
 :::
+
+Two smaller mistakes get their own quiet markers rather than silence. An
+inline component given attributes but no text has nothing to show, so it
+says so on hover:
+
+::badge{label="wrong"}
+
+And a block component written as though it were inline is labeled where it
+sits, without disturbing the sentence around it: :stat[oops]{data=nothing}
+lands mid-paragraph and the paragraph survives.
 
 Directive syntax inside a code fence stays literal, so examples are safe:
 

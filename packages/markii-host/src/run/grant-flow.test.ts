@@ -155,6 +155,86 @@ describe('runGrantFlow — first run (no stored grant)', () => {
   });
 });
 
+describe('runGrantFlow — nothing grantable (the unanswerable-prompt loop)', () => {
+  // Reported from a real note: every `net.*` call site built its URL from a
+  // variable, so the static scan resolved ZERO hosts and set
+  // `hasUnknownHosts`. The gate then opened a dialog whose Allow button
+  // could grant nothing, and because a run ending with an empty allowlist
+  // is never persisted (C-3), the identical dialog reopened on every Run
+  // press, forever.
+  const nothingGrantable = () =>
+    requirementsFor({ hosts: [], hasUnknownHosts: true });
+
+  it('does not open a gate that could not change the outcome', async () => {
+    const promptUnknownHosts = vi.fn(alwaysAllow);
+    const promptHost = vi.fn(alwaysAllow);
+
+    const result = await runGrantFlow({
+      documentKey: 'file:///a.mk.md',
+      requirements: nothingGrantable(),
+      memento: fakeMemento(),
+      promptHost,
+      promptUnknownHosts,
+      promptManyHosts: alwaysAllow,
+    });
+
+    expect(promptUnknownHosts).not.toHaveBeenCalled();
+    expect(promptHost).not.toHaveBeenCalled();
+    expect(result.allowedHosts).toEqual([]);
+  });
+
+  it('grants nothing either way, which is why skipping the gate is safe', async () => {
+    for (const answer of [alwaysAllow, alwaysDeny]) {
+      const result = await runGrantFlow({
+        documentKey: 'file:///a.mk.md',
+        requirements: nothingGrantable(),
+        memento: fakeMemento(),
+        promptHost: alwaysAllow,
+        promptUnknownHosts: answer,
+        promptManyHosts: alwaysAllow,
+      });
+      expect(result.allowedHosts).toEqual([]);
+    }
+  });
+
+  it('stays quiet across repeated runs instead of re-prompting forever', async () => {
+    const memento = fakeMemento();
+    const promptUnknownHosts = vi.fn(alwaysAllow);
+
+    for (let press = 0; press < 3; press++) {
+      await runGrantFlow({
+        documentKey: 'file:///a.mk.md',
+        requirements: nothingGrantable(),
+        memento,
+        promptHost: alwaysAllow,
+        promptUnknownHosts,
+        promptManyHosts: alwaysAllow,
+      });
+    }
+
+    expect(promptUnknownHosts).not.toHaveBeenCalled();
+  });
+
+  it('still gates normally as soon as ONE host is grantable', async () => {
+    const promptUnknownHosts = vi.fn(alwaysAllow);
+
+    const result = await runGrantFlow({
+      documentKey: 'file:///a.mk.md',
+      requirements: requirementsFor({
+        hosts: ['api.example.com'],
+        hasUnknownHosts: true,
+      }),
+      memento: fakeMemento(),
+      promptHost: alwaysAllow,
+      promptUnknownHosts,
+      promptManyHosts: alwaysAllow,
+    });
+
+    expect(promptUnknownHosts).toHaveBeenCalledTimes(1);
+    expect(result.allowedHosts).toEqual(['api.example.com']);
+  });
+});
+
 describe('runGrantFlow — a hostile/unrenderable host string', () => {
   it('never prompts with the raw string; folds it into the unknown-hosts gate instead', async () => {
     const memento = fakeMemento();
@@ -173,7 +253,12 @@ describe('runGrantFlow — a hostile/unrenderable host string', () => {
     });
 
     expect(promptHost).not.toHaveBeenCalled();
-    expect(promptUnknownHosts).toHaveBeenCalledTimes(1);
+    // No grantable host survived the safety filter, so the unknown-hosts
+    // gate governs nothing and is skipped rather than shown as a dialog
+    // the user cannot satisfy. What matters for safety is unchanged and
+    // asserted below: the hostile string reaches no prompt and no
+    // allowlist.
+    expect(promptUnknownHosts).not.toHaveBeenCalled();
     // The hostile string is never itself an allowed host -- there was no
     // per-host prompt that could have accepted it.
     expect(result.allowedHosts).toEqual([]);

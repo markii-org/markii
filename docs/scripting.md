@@ -224,6 +224,29 @@ small, flat, and holdable in one head:
 - `cache.get(key, ttl, fn)`: return cached value or compute and store it
 - `bundle.read(path)` / `bundle.write(path, data)`: bundle-scoped files
 
+Write the URL for a `net` call as one complete string literal, inside the
+call itself:
+
+```lua
+local repo = net.fetch_json("https://api.github.com/repos/x/y")
+```
+
+The reason is that the host reads your script before running any of it, to
+work out which hostnames to ask you about. That reading is a scan for
+literal URLs, not an evaluation of your code, so it can only see an address
+you wrote out in full. Assemble one from a variable, or join two pieces with
+`..`, and the scan finds no hostname to offer. Nothing gets granted, and the
+request is denied when it runs.
+
+This is a deliberate trade, not an oversight. A host that guessed at
+addresses your code computes would sometimes ask you about one hostname and
+then contact another, which is worse than asking you to write the address
+plainly. The same reasoning is set out in [security.md](security.md).
+
+A query string that varies is fine as long as the whole URL is still one
+literal per call. If you genuinely need several endpoints, write one call
+per endpoint and you will be asked once per hostname.
+
 What these hand back is ordinary Lua data, with no wrapper objects and no
 special access rules. A fetched result is a plain table: `type()` says
 `"table"`, `#` and `ipairs` work on arrays, and any part of it can go

@@ -6,6 +6,20 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A network consent prompt that could not be answered** — a note whose
+  `net` calls all built their URLs at run time resolved no hostname in the
+  pre-run scan, so the gate covering unlistable addresses opened with
+  nothing behind it. Accepting granted no host and declining withdrew none,
+  and because a run ending with an empty allowlist is deliberately never
+  persisted, the same dialog reopened on every Run press. The gate is now
+  shown only when at least one hostname was resolved, the only case where
+  the answer can change anything. Nothing reachable changed: the allowlist
+  was empty before the gate and after it, whichever button was pressed. The
+  denial still reaches the user at execution time, naming the host actually
+  attempted.
+
 ### Added
 
 - **A theming contract: `doc.css` now exposes a fifteen-token palette** —
