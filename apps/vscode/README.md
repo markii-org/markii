@@ -25,15 +25,8 @@ active, updates as you type, and matches your VS Code theme.
 
 Something to paste into a new file to see it work:
 
-```markdown
-# Hello Markii
+<img width="2324" height="1008" alt="image" src="https://github.com/user-attachments/assets/7b398ff7-8a52-4cdd-b76d-13dfcf5f8cf7" />
 
-:::callout{type=warning title="It works"}
-This is a **component**, not plain markdown.
-:::
-
-Press :kbd[Ctrl+Shift+P] anytime.
-```
 
 ## Configuration
 
