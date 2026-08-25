@@ -94,7 +94,7 @@ describe('loadPackContext', () => {
 
     const context = await loadPackContext(['sub/demo'], root, createRegistry());
     expect(context.packs).toHaveLength(1);
-    expect(context.deprecatedRelativeEntries).toEqual(['sub/demo']);
+    expect(context.relativeEntries).toEqual(['sub/demo']);
   });
 
   it('a pack whose script throws while running is skipped, with a reason, and never crashes the whole load', async () => {

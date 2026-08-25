@@ -67,8 +67,8 @@ export interface PackContext {
   readonly namespaces: readonly string[];
   /** Configured folders that produced no usable pack, and why (developer-facing only). Also carries a build-failure or script-evaluation-failure reason for a pack whose compiled script never registered — it still counts toward `packs`/`packModules`, just not `registry`. */
   readonly skipped: readonly SkippedPackFolder[];
-  /** Pack-folder setting entries that are relative (`./pack-paths.ts`'s `relativePackEntries`) — a deprecation warning, never a behavior change. */
-  readonly deprecatedRelativeEntries: readonly string[];
+  /** Pack-folder setting entries that are relative (`./pack-paths.ts`'s `relativePackEntries`) — an informational diagnostics note, never a behavior change. */
+  readonly relativeEntries: readonly string[];
   /** Pack CSS authoring warnings (`@markii/host`'s `packs/pack-css-lint.ts`) against every built pack's emitted stylesheet. Warnings only, developer-facing. */
   readonly cssWarnings: readonly string[];
   /** One line per malformed pack registration, dropped rather than installed (`./pack-render-registry.ts`). */
@@ -206,10 +206,7 @@ export async function loadPackContext(
   } = options;
   const homeDir = homedir();
   const folders = resolvePackPaths(configuredFolders, vaultRoot, homeDir);
-  const deprecatedRelativeEntries = relativePackEntries(
-    configuredFolders,
-    homeDir,
-  );
+  const relativeEntries = relativePackEntries(configuredFolders, homeDir);
 
   const discovery = await discoverPacks(folders, createNodeFileReader());
   const packModules = await loadPackModules(discovery.packs);
@@ -260,7 +257,7 @@ export async function loadPackContext(
     stylesheets,
     namespaces: installedNamespaces(discovery.packs),
     skipped,
-    deprecatedRelativeEntries,
+    relativeEntries,
     cssWarnings,
     invalidRegistrationReasons: invalidReasons,
     registrationCollisions: collisions,

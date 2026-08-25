@@ -23,7 +23,7 @@ export const PACK_SETTINGS_STORAGE_KEY = 'markii:packSettings';
 export const MAX_PACK_FOLDERS = 200;
 
 export interface PackSettings {
-  /** Absolute paths preferred; a leading `~` expands to the home directory (`../packs/pack-paths.ts`). A relative entry is honored but reported as deprecated in diagnostics, since it resolves differently in every vault this device opens. */
+  /** Absolute paths preferred; a leading `~` expands to the home directory (`../packs/pack-paths.ts`). A relative entry is honored, resolved against the open vault, and noted in diagnostics as vault-relative, since it loads a different folder in every vault this device opens. */
   readonly packFolders: readonly string[];
 }
 

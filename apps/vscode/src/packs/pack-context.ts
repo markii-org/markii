@@ -53,11 +53,11 @@ export interface PackContext {
    * `markii.packs` is USER-scoped (global): a relative entry silently means
    * a different folder in every workspace window it happens to be open in.
    * These entries still resolve and load exactly as before; this is a
-   * deprecation WARNING, never a behavior change. Developer-facing only —
+   * informational note, never a behavior change. Developer-facing only —
    * `preview-panel.ts`'s `logPackDiagnostics` writes one line per entry to
    * the "Markii" output channel.
    */
-  readonly deprecatedRelativeEntries: readonly string[];
+  readonly relativeEntries: readonly string[];
   /**
    * Pack CSS authoring warnings (`@markii/host`'s `pack-css-lint.ts` Rule
    * A/B, raw color literals and the missing-namespace-prefix rule) against
@@ -113,10 +113,7 @@ export async function loadPackContext(
   const { cacheDir, buildWebviewScript = noopBuilder } = options;
   const homeDir = homedir();
   const folders = resolvePackPaths(configuredPacks, workspaceRoot, homeDir);
-  const deprecatedRelativeEntries = relativePackEntries(
-    configuredPacks,
-    homeDir,
-  );
+  const relativeEntries = relativePackEntries(configuredPacks, homeDir);
   const result = await discoverPacks(folders, createNodeFileReader());
   const packModules = await loadPackModules(result.packs);
 
@@ -156,7 +153,7 @@ export async function loadPackContext(
     webviewPacks,
     namespaces: installedNamespaces(result.packs),
     skipped,
-    deprecatedRelativeEntries,
+    relativeEntries,
     cssWarnings,
   };
 }

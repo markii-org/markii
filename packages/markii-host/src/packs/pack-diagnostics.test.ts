@@ -19,7 +19,7 @@ function pack(name: string, componentCount: number): PackDiagnosticsPack {
 function context(
   packs: readonly PackDiagnosticsPack[],
   skipped: readonly PackDiagnosticsSkippedFolder[],
-  deprecatedEntryLines: readonly string[] = [],
+  relativeEntryLines: readonly string[] = [],
   cssWarnings: readonly string[] = [],
   invalidRegistrationReasons: readonly string[] = [],
   registrationCollisions: readonly string[] = [],
@@ -27,7 +27,7 @@ function context(
   return {
     packs,
     skipped,
-    deprecatedEntryLines,
+    relativeEntryLines,
     cssWarnings,
     invalidRegistrationReasons,
     registrationCollisions,
@@ -64,14 +64,14 @@ describe('formatPackDiagnosticLines', () => {
     expect(lines[1]).toContain('/packs/broken');
   });
 
-  it('splices in already-formatted deprecated-entry lines verbatim', () => {
+  it('splices in already-formatted relative-entry lines verbatim', () => {
     const lines = formatPackDiagnosticLines(
       context([], [], ['Deprecated: "packs/demo" is relative, ...']),
     );
     expect(lines).toEqual(['Deprecated: "packs/demo" is relative, ...']);
   });
 
-  it('lists deprecated-entry lines after loaded and skipped lines', () => {
+  it('lists relative-entry lines after loaded and skipped lines', () => {
     const lines = formatPackDiagnosticLines(
       context(
         [pack('ana', 1)],

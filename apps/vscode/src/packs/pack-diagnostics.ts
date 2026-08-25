@@ -11,7 +11,7 @@
  * shared across every host and lives in `@markii/host`'s
  * `formatPackDiagnosticLines`. This file's own job is just the ONE piece
  * that is genuinely VS-Code-specific: naming `markii.packs` (a user-scoped
- * VS Code setting) in the deprecated-relative-entry line, since a relative
+ * VS Code setting) in the relative-entry note, since a relative
  * entry there resolves against whichever workspace happens to be open —
  * see `apps/obsidian/src/packs/pack-diagnostics.ts` for that host's own
  * wording of the same warning.
@@ -29,9 +29,9 @@ import {
 } from '@markii/host';
 import type { PackContext } from './pack-context.js';
 
-/** ITEM 4's wording: naming `markii.packs` as the offending, user-scoped setting. */
-function deprecatedEntryLine(entry: string): string {
-  return `Deprecated: markii.packs entry "${entry}" is relative, so it resolves to a different folder in every workspace (markii.packs is a user-scoped setting). Prefer an absolute path, or a "~/..." path.`;
+/** ITEM 4's wording, softened to informational (docs/packs.md: "a host notes relative entries in its diagnostics"): naming `markii.packs` as the user-scoped setting the entry sits in. */
+function relativeEntryLine(entry: string): string {
+  return `markii.packs entry "${entry}" is workspace-relative: it loads from inside whichever workspace is open (markii.packs is a user-scoped setting), so each workspace supplies (or lacks) its own copy. Use an absolute or "~/..." path for one shared folder across workspaces.`;
 }
 
 /**
@@ -45,8 +45,7 @@ export function formatPackDiagnosticLines(context: PackContext): string[] {
   return formatPackDiagnosticLinesShared({
     packs: context.packs,
     skipped: context.skipped,
-    deprecatedEntryLines:
-      context.deprecatedRelativeEntries.map(deprecatedEntryLine),
+    relativeEntryLines: context.relativeEntries.map(relativeEntryLine),
     cssWarnings: context.cssWarnings,
   });
 }

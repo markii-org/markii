@@ -22,7 +22,7 @@ function pack(name: string, componentCount: number): DiscoveredPack {
 function context(
   packs: readonly DiscoveredPack[],
   skipped: readonly SkippedPackFolder[],
-  deprecatedRelativeEntries: readonly string[] = [],
+  relativeEntries: readonly string[] = [],
   cssWarnings: readonly string[] = [],
 ): PackContext {
   return {
@@ -31,7 +31,7 @@ function context(
     webviewPacks: packs,
     namespaces: packs.map((p) => p.manifest.name),
     skipped,
-    deprecatedRelativeEntries,
+    relativeEntries,
     cssWarnings,
   };
 }
@@ -66,14 +66,14 @@ describe('formatPackDiagnosticLines', () => {
     expect(lines[1]).toContain('/packs/broken');
   });
 
-  it('reports one line per deprecated relative markii.packs entry, naming the entry (ITEM 4)', () => {
+  it('reports one informational line per workspace-relative markii.packs entry, naming the entry (ITEM 4)', () => {
     const lines = formatPackDiagnosticLines(context([], [], ['packs/demo']));
     expect(lines).toHaveLength(1);
     expect(lines[0]).toContain('packs/demo');
-    expect(lines[0]).toContain('relative');
+    expect(lines[0]).toContain('workspace-relative');
   });
 
-  it('lists deprecated-entry lines after loaded and skipped lines', () => {
+  it('lists relative-entry lines after loaded and skipped lines', () => {
     const lines = formatPackDiagnosticLines(
       context(
         [pack('ana', 1)],

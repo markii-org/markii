@@ -158,6 +158,22 @@ function stripVarFallbacks(value: string): string {
 }
 
 /**
+ * The offending `property: value;` text as it appears in a warning line:
+ * collapsed to one line (a multi-line value like a formatted
+ * `linear-gradient(...)` would otherwise splinter the diagnostic across
+ * several console lines) and truncated past `MAX_DECLARATION_EXCERPT`
+ * characters — the excerpt exists to locate the declaration, not to
+ * reproduce it.
+ */
+const MAX_DECLARATION_EXCERPT = 100;
+
+function declarationExcerpt(property: string, value: string): string {
+  const oneLine = `${property.trim()}: ${value.trim()};`.replace(/\s+/g, ' ');
+  if (oneLine.length <= MAX_DECLARATION_EXCERPT) return oneLine;
+  return `${oneLine.slice(0, MAX_DECLARATION_EXCERPT - 1)}\u2026`;
+}
+
+/**
  * Rule A: warn when a declaration's value carries a raw color literal
  * (hex/`rgb()`/`rgba()`/`hsl()`/`hsla()`) instead of one of `doc.css`'s
  * `--mk-*` palette tokens — the exact bug this feature exists to prevent
@@ -179,7 +195,7 @@ export function lintPackCssColors(
     const value = match[2] ?? '';
     if (!COLOR_LITERAL_RE.test(stripVarFallbacks(value))) continue;
     warnings.push(
-      `pack "${packName}" CSS uses a raw color literal in "${property.trim()}: ${value.trim()};" — use an --mk-* palette token (see docs/integration.md's theming section) instead of a hardcoded color, or it will be unreadable once a host's dark theme remaps the palette.`,
+      `pack "${packName}" CSS uses a raw color literal in "${declarationExcerpt(property, value)}" — use an --mk-* palette token (see docs/integration.md's theming section) instead of a hardcoded color, or it will be unreadable once a host's dark theme remaps the palette.`,
     );
   }
   return warnings;

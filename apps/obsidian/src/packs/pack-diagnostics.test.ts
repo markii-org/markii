@@ -23,7 +23,7 @@ function pack(name: string, componentCount: number): DiscoveredPack {
 function context(
   packs: readonly DiscoveredPack[],
   skipped: readonly SkippedPackFolder[],
-  deprecatedRelativeEntries: readonly string[] = [],
+  relativeEntries: readonly string[] = [],
   cssWarnings: readonly string[] = [],
   invalidRegistrationReasons: readonly string[] = [],
   registrationCollisions: readonly string[] = [],
@@ -35,7 +35,7 @@ function context(
     stylesheets: [],
     namespaces: packs.map((p) => p.manifest.name),
     skipped,
-    deprecatedRelativeEntries,
+    relativeEntries,
     cssWarnings,
     invalidRegistrationReasons,
     registrationCollisions,
@@ -72,11 +72,11 @@ describe('formatPackDiagnosticLines', () => {
     expect(lines[1]).toContain('/packs/broken');
   });
 
-  it('reports one line per deprecated relative pack-folder entry, naming the entry', () => {
+  it('reports one informational line per vault-relative pack-folder entry, naming the entry', () => {
     const lines = formatPackDiagnosticLines(context([], [], ['packs/demo']));
     expect(lines).toHaveLength(1);
     expect(lines[0]).toContain('packs/demo');
-    expect(lines[0]).toContain('relative');
+    expect(lines[0]).toContain('vault-relative');
   });
 
   it('lists pack CSS warnings, then invalid-registration reasons, then a collision line, after everything else', () => {

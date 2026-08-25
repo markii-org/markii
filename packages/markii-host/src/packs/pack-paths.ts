@@ -92,7 +92,8 @@ export function resolvePackPaths(
 }
 
 /**
- * The deprecation-detection half: the ORIGINAL (unexpanded) entries in
+ * The detection half of the relative-entry diagnostics: the ORIGINAL
+ * (unexpanded) entries in
  * `packs` that are relative once `~` expansion is accounted for — i.e.
  * exactly the entries `resolvePackPaths` resolves against `baseDir` rather
  * than using as-is. A relative entry can silently mean a different folder

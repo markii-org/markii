@@ -10,11 +10,12 @@
  * folder, the CSS-warning lines, invalid-registration reasons, and the
  * namespace-collision line) is shared across every host and lives in
  * `@markii/host`'s `formatPackDiagnosticLines`. This file's own job is
- * just the ONE piece that is genuinely Obsidian-specific: naming this
- * plugin's device-local pack-folder list in the deprecated-relative-entry
- * line, since a relative entry there resolves against whichever vault
- * happens to be open — see `apps/vscode/src/packs/pack-diagnostics.ts` for
- * that host's own wording of the same warning.
+ * just the ONE piece that is genuinely Obsidian-specific: the wording of
+ * the relative-entry note. It is INFORMATIONAL: an Obsidian vault is a
+ * self-contained world, so "./packs" meaning "this vault's own packs
+ * folder" is a spelling a user may want on purpose — the note only states
+ * the per-vault consequence. (VS Code's own wording names its user-scoped
+ * `markii.packs` setting — see `apps/vscode/src/packs/pack-diagnostics.ts`.)
  */
 import {
   formatPackDiagnosticLines as formatPackDiagnosticLinesShared,
@@ -22,15 +23,15 @@ import {
 } from '@markii/host';
 import type { PackContext } from './pack-context.js';
 
-/** One line for each pack-folder entry that is relative — a device-local Obsidian install can open several vaults, and a relative entry resolves against whichever vault happens to be open, meaning a different folder per vault. Never blocks the entry from loading; a deprecation warning only. */
-function deprecatedEntryLine(entry: string): string {
-  return `Deprecated: pack folder entry "${entry}" is relative, so it resolves to a different folder in every vault you open it in. Prefer an absolute path, or a "~/..." path.`;
+/** One line for each pack-folder entry that is relative. Informational, never a warning: vault-relative packs are a supported spelling (a pack that lives inside the vault it serves), but since this plugin's folder list is device-local while the vault changes, the fact that the SAME entry loads a DIFFERENT folder per vault is worth stating where a user debugging a pack will look. */
+function relativeEntryLine(entry: string): string {
+  return `pack folder "${entry}" is vault-relative: it loads from inside whichever vault is open, so each vault supplies (or lacks) its own copy. Use an absolute or "~/..." path for one shared folder across vaults.`;
 }
 
 /**
  * The full set of diagnostic lines for one `loadPackContext` result, loaded
  * packs first (the confirmation that the setting is working at all), then
- * every skipped folder, then deprecated relative entries, then any pack CSS
+ * every skipped folder, then relative-entry notes, then any pack CSS
  * lint warnings, then any invalid-registration or namespace-collision lines
  * the render-registry step recorded (`@markii/host`'s `buildRenderRegistry`).
  */
@@ -38,8 +39,7 @@ export function formatPackDiagnosticLines(context: PackContext): string[] {
   return formatPackDiagnosticLinesShared({
     packs: context.packs,
     skipped: context.skipped,
-    deprecatedEntryLines:
-      context.deprecatedRelativeEntries.map(deprecatedEntryLine),
+    relativeEntryLines: context.relativeEntries.map(relativeEntryLine),
     cssWarnings: context.cssWarnings,
     invalidRegistrationReasons: context.invalidRegistrationReasons,
     registrationCollisions: context.registrationCollisions,

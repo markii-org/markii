@@ -120,11 +120,13 @@ packs/            <- one entry in the setting
   charts/pack.json
 ```
 
-The scan goes one level down and no further. Prefer absolute paths: the
-list is scoped to you rather than to a project, so a relative entry means a
-different folder in every workspace or vault you open, and a host reports
-one as deprecated in its diagnostics. A leading `~` expands to your home
-directory, which keeps an absolute entry short.
+The scan goes one level down and no further. A relative entry resolves
+against the open workspace or vault, so the same entry loads a different
+folder in each one you open. That can be exactly what you want (a pack
+kept inside the vault it serves) or a surprise (a pack that vanishes in
+the next vault), so a host notes relative entries in its diagnostics. For
+one shared folder across projects, use an absolute path; a leading `~`
+expands to your home directory, which keeps an absolute entry short.
 
 A pack does not need to ship a built artifact. The host compiles the
 component sources its manifest names, along with any relative modules and
