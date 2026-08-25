@@ -1,0 +1,10 @@
+{
+  "id": "markii",
+  "name": "Markii",
+  "version": "0.1.0",
+  "minAppVersion": "1.5.0",
+  "description": "Preview a Markii (.mk.md) note rendered by the reference @markii/react renderer in a side panel. Feasibility spike: no scripting, no packs, no editor integration yet.",
+  "author": "sadigaxund",
+  "authorUrl": "https://github.com/sadigaxund/markii",
+  "isDesktopOnly": true
+}

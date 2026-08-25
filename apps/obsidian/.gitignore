@@ -1,0 +1,5 @@
+# dist/ (the built main.js) is already covered by the repo's root .gitignore
+
+# generated from @markii/react's src/doc.css + src/obsidian-theme.css
+# (scripts/generate-doc-css.ts)
+styles.css

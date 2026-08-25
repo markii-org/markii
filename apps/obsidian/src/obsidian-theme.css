@@ -1,0 +1,75 @@
+/*
+ * Obsidian theming for `@markii/react`'s `doc.css`, appended AFTER it (see
+ * `scripts/generate-doc-css.ts`) so identical-specificity selectors here
+ * win the cascade. `doc.css` exposes a small token contract on `.doc` (its
+ * own "TIER 1 TOKENS" comment block: `--mk-bg`, `--mk-raised`, `--mk-fg`,
+ * `--mk-surface`, `--mk-surface-strong`, `--mk-border`, `--mk-muted`,
+ * `--mk-faint`, `--mk-accent`, and the five semantic hues `--mk-info`/
+ * `--mk-success`/`--mk-warning`/`--mk-danger`/`--mk-limit`) — every finer
+ * shade every component actually paints (a callout's tinted background, a
+ * badge's tinted text, ...) is DERIVED from those tokens inside `doc.css`
+ * itself via `color-mix()`. This sheet does not fork or edit that file and
+ * does not re-declare any individual component selector: it remaps ONLY
+ * these ~14 tokens onto Obsidian's own CSS custom properties, and every
+ * component becomes theme-correct for free, in both directions, whether
+ * the vault is on a light or a dark theme.
+ *
+ * Obsidian sets `.theme-dark`/`.theme-light` on `<body>` and swaps its own
+ * CSS custom properties per theme (see Obsidian's theming documentation);
+ * mapping onto those properties, rather than onto light/dark-specific hex
+ * literals of our own, is what makes this file work in both directions
+ * without a `.theme-dark` override block of its own.
+ *
+ * `src/theme-coverage.test.ts` reads both files off disk and asserts every
+ * Tier 1 token `doc.css` declares is redeclared here — the drift alarm
+ * that keeps this file honest as `doc.css` grows new tokens, modeled on
+ * `apps/vscode/src/webview/theme.css` + `theme-coverage.test.ts`.
+ */
+
+.doc {
+  --mk-bg: var(--background-primary);
+  --mk-raised: var(--background-primary-alt, var(--background-secondary));
+  --mk-fg: var(--text-normal);
+  --mk-surface: var(--background-secondary);
+  --mk-surface-strong: var(
+    --code-background,
+    var(--background-secondary-alt, var(--background-secondary))
+  );
+  --mk-border: var(--background-modifier-border);
+  --mk-muted: var(--text-muted);
+  --mk-faint: var(--text-faint);
+  --mk-accent: var(--text-accent);
+  --mk-on-accent: var(--text-on-accent, #fff);
+
+  --mk-info: var(--text-accent);
+  --mk-success: var(--text-success, #15803d);
+  --mk-warning: var(--text-warning, #d97706);
+  --mk-danger: var(--text-error, #dc2626);
+  --mk-limit: #7c3aed;
+}
+
+.doc {
+  color: var(--text-normal);
+  font-family: var(--font-text, var(--font-interface, sans-serif));
+}
+
+.doc pre,
+.doc code {
+  font-family: var(--font-monospace, monospace);
+}
+
+/*
+ * ---------- elements doc.css deliberately leaves to the browser ----------
+ * `doc.css` never styles `a`/`hr` at all, so there is nothing for the
+ * token remap above to cover — Obsidian's own theme already colors links
+ * and rules correctly, but the reference lives here for parity with the
+ * VS Code webview's identical comment.
+ */
+
+.doc a {
+  color: var(--text-accent);
+}
+
+.doc hr {
+  border-color: var(--background-modifier-border);
+}
