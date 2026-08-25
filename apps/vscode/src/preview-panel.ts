@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import { existsSync } from 'node:fs';
+import * as path from 'node:path';
 import type {
   BundleFsGrant,
   BundleManifest,
@@ -21,7 +23,11 @@ import { createDebouncer } from './debounce.js';
 import { isPreviewableDocument, previewTitleFor } from './mark-document.js';
 import { isWebviewToHostMessage } from './protocol.js';
 import type { HostToWebviewMessage, ValuesMessage } from './protocol.js';
-import { isCoveredByRoots, withTrailingSlash } from './resource-roots.js';
+import {
+  isCoveredByRoots,
+  packWebviewRoots,
+  withTrailingSlash,
+} from './resource-roots.js';
 import { buildWebviewHtml, createNonce } from './webview-html.js';
 import {
   ALLOW_LABEL,
@@ -35,6 +41,7 @@ import {
 import { spawnRun } from './run/run-host.js';
 import { readPersistedValues, runOnce } from './run/run-flow.js';
 import { staleValuesForRehydration } from './run/stale-values.js';
+import { readLastRunTrace, writeLastRunTrace } from './run/run-trace.js';
 import type { RunTrigger, StoredValue } from '@markii/runtime';
 import {
   buildBundleSnapshot,
@@ -42,8 +49,14 @@ import {
   encodeBundleCacheForStorage,
   withPersistedCache,
 } from './run/bundle-run.js';
+import { MIN_REFRESH_INTERVAL_SECONDS } from './refresh-interval.js';
 import { loadPackContext } from './packs/pack-context.js';
 import type { PackContext } from './packs/pack-context.js';
+import { buildPackRegistrationScript } from './packs/pack-build.js';
+import {
+  formatPackDiagnosticLines,
+  skippedPackCount,
+} from './packs/pack-diagnostics.js';
 
 /**
  * Imports `vscode` — deliberately NOT unit-tested (vitest cannot resolve
@@ -248,10 +261,50 @@ function localResourceRootsFor(
     const folder = documentFolder(source.document);
     if (folder) roots.push(folder);
   }
-  for (const pack of packContext.webviewPacks) {
-    roots.push(vscode.Uri.file(pack.folder));
+  const packRoots = packWebviewRoots(
+    packContext.webviewPacks.map((pack) => pack.folder),
+    packCacheDir(context),
+  );
+  for (const root of packRoots) {
+    roots.push(vscode.Uri.file(root));
   }
   return roots;
+}
+
+/**
+ * The extension-owned directory a pack's compiled registration script may
+ * be cached under (`./packs/pack-build.ts`'s `cacheDir` parameter) —
+ * derived from `ExtensionContext.globalStorageUri`, NEVER a pack's own
+ * folder (AGENTS.md's cleanliness rule: the user's file tree stays clean).
+ * `globalStorageUri` is per-extension already, so a `pack-cache`
+ * subdirectory is enough to keep it out of the way of whatever else the
+ * extension stores there.
+ */
+function packCacheDir(context: vscode.ExtensionContext): string {
+  return path.join(context.globalStorageUri.fsPath, 'pack-cache');
+}
+
+/**
+ * Absolute path to a REAL, unbundled `esbuild-wasm/lib/main.js` next to the
+ * packaged extension (`esbuild.config.mjs` copies the whole `esbuild-wasm`
+ * package there — see that file's doc comment), or `undefined` if it is
+ * not present (dev/Vitest, where `dist/` has never been built this way) —
+ * `./packs/pack-build.ts`'s `loadEsbuildWasm` then falls back to plain
+ * `node_modules` resolution, exactly the same "undefined is always safe to
+ * pass" posture `./run/worker-entry.ts`'s `resolveWasmUri` already takes
+ * for wasmoon's `glue.wasm`.
+ */
+function esbuildMainModulePath(
+  context: vscode.ExtensionContext,
+): string | undefined {
+  const candidate = path.join(
+    context.extensionUri.fsPath,
+    'dist',
+    'esbuild-wasm',
+    'lib',
+    'main.js',
+  );
+  return existsSync(candidate) ? candidate : undefined;
 }
 
 /** The `markii.packs` setting's raw, unresolved entries. */
@@ -287,14 +340,6 @@ function allowPrivateNetworkAddresses(): boolean {
 }
 
 /**
- * The lower bound on `markii.refreshIntervalSeconds` (GitHub issue #11):
- * refresh runs spawn a fresh worker each time, so a too-small interval would
- * be pure churn. A value between 1 and this clamps UP to this; 0 (the
- * default) means off and is left as 0.
- */
-const MIN_REFRESH_INTERVAL_SECONDS = 5;
-
-/**
  * The scheduled-refresh interval in milliseconds, or `undefined` when
  * refresh is off (`markii.refreshIntervalSeconds` at 0, its default, or any
  * non-positive/invalid value). A positive value below
@@ -317,14 +362,26 @@ function refreshIntervalMs(): number | undefined {
 /**
  * Loads the current `markii.packs` install state (GitHub issue #3 slice 5):
  * resolves the setting's entries against the open workspace root, discovers
- * and validates each folder's `pack.json`, and pre-reads every discovered
- * pack's `scripts/*.lua` for the Run path. Called once per panel
- * (re)creation — see `ActivePreview.packContext`'s doc comment on why a
- * setting change needs a fresh panel to take effect, same as
- * `localResourceRoots` itself.
+ * and validates each folder's `pack.json`, pre-reads every discovered
+ * pack's `scripts/*.lua` for the Run path, and — for a pack with no
+ * prebuilt `webview.js` — compiles one from its `.tsx` sources
+ * (`./packs/pack-build.ts`), cached under `packCacheDir(context)`. Called
+ * once per panel (re)creation — see `ActivePreview.packContext`'s doc
+ * comment on why a setting change needs a fresh panel to take effect, same
+ * as `localResourceRoots` itself.
  */
-function loadCurrentPackContext(): Promise<PackContext> {
-  return loadPackContext(configuredPackFolders(), workspaceRootPath());
+function loadCurrentPackContext(
+  context: vscode.ExtensionContext,
+): Promise<PackContext> {
+  const cacheDir = packCacheDir(context);
+  const mainModulePath = esbuildMainModulePath(context);
+  return loadPackContext(configuredPackFolders(), workspaceRootPath(), {
+    cacheDir,
+    buildWebviewScript: (pack, dir) =>
+      buildPackRegistrationScript(pack, dir, {
+        esbuildMainModulePath: mainModulePath,
+      }),
+  });
 }
 
 /**
@@ -335,6 +392,43 @@ function loadCurrentPackContext(): Promise<PackContext> {
  * cleared in the panel's `onDidDispose` handler.
  */
 let active: ActivePreview | undefined;
+
+/**
+ * The extension's one diagnostics surface (AGENTS.md's "clean is not
+ * silent": every failure needs a full diagnostic somewhere a user can find
+ * it, not just a quiet marker in the preview) — set once by
+ * `extension.ts`'s `activate` and written to by `logPackDiagnostics` below.
+ * `undefined` only in a test/host context that never called
+ * `setDiagnosticsChannel`; every write degrades to a no-op rather than
+ * throwing.
+ */
+let diagnosticsChannel: vscode.OutputChannel | undefined;
+
+/** Wires the "Markii" output channel `extension.ts` creates once at activation into this module, so `createPreview` can log pack diagnostics to it. */
+export function setDiagnosticsChannel(channel: vscode.OutputChannel): void {
+  diagnosticsChannel = channel;
+}
+
+/**
+ * Writes this pack load's diagnostic lines (`./packs/pack-diagnostics.ts`)
+ * to the "Markii" output channel — one line per successfully loaded pack
+ * (name, namespace, component count) and one per folder that failed, with
+ * the reason `discoverPacks` recorded. Called once per panel (re)creation,
+ * right after `loadCurrentPackContext`, so the channel accumulates a
+ * history across reloads rather than only ever showing the latest state.
+ * A load that found nothing configured at all writes nothing, so an empty
+ * channel still means something (this extension has never seen a pack
+ * folder) rather than "the last load failed silently".
+ */
+function logPackDiagnostics(packContext: PackContext): void {
+  if (!diagnosticsChannel) return;
+  const lines = formatPackDiagnosticLines(packContext);
+  if (lines.length === 0) return;
+  diagnosticsChannel.appendLine(
+    `Markii: pack load at ${new Date().toISOString()}`,
+  );
+  for (const line of lines) diagnosticsChannel.appendLine(`  ${line}`);
+}
 
 /**
  * Sends the panel's current source as a fresh message, bumping `revision`
@@ -358,6 +452,7 @@ function postUpdate(preview: ActivePreview): void {
   }
 
   if (source.kind === 'bundle-archive') {
+    const lastRun = readLastRunTrace(preview.memento, source.bundle.identity);
     const message: HostToWebviewMessage = {
       type: 'update',
       revision: preview.revision,
@@ -365,6 +460,8 @@ function postUpdate(preview: ActivePreview): void {
       assets: source.assets,
       readOnly: true,
       packNamespaces: preview.packContext.namespaces,
+      packSkippedCount: skippedPackCount(preview.packContext),
+      ...(lastRun ? { lastRun } : {}),
     };
     void preview.panel.webview.postMessage(message);
     postStalePersistedValues(preview, source);
@@ -372,6 +469,10 @@ function postUpdate(preview: ActivePreview): void {
   }
 
   const baseUri = baseUriForDocument(source.document, preview);
+  const lastRun = readLastRunTrace(
+    preview.memento,
+    source.document.uri.toString(),
+  );
   const message: HostToWebviewMessage = {
     type: 'update',
     revision: preview.revision,
@@ -381,6 +482,8 @@ function postUpdate(preview: ActivePreview): void {
     // wire format says a document with no folder OMITS the field.
     ...(baseUri === undefined ? {} : { baseUri }),
     packNamespaces: preview.packContext.namespaces,
+    packSkippedCount: skippedPackCount(preview.packContext),
+    ...(lastRun ? { lastRun } : {}),
   };
   void preview.panel.webview.postMessage(message);
   postStalePersistedValues(preview, source);
@@ -448,7 +551,11 @@ function baseUriForDocument(
  * `localResourceRoots` jail (`localResourceRootsFor` above, which is what
  * actually grants access to each pack's folder, restricted to only the
  * folders `markii.packs` names) as every other local resource this webview
- * loads.
+ * loads. The same is true of `packStyleUris` (the pack-CSS design):
+ * `webviewStylesheetPath` sits in the same cache directory as
+ * `webviewScriptPath`, already covered by `packWebviewRoots`
+ * (`localResourceRootsFor`), and is only ever present when
+ * `./packs/pack-build.ts` actually emitted a `.css` sibling.
  */
 function setHtml(
   panel: vscode.WebviewPanel,
@@ -470,6 +577,13 @@ function setHtml(
   const packScriptUris = packContext.webviewPacks.map((pack) =>
     webview.asWebviewUri(vscode.Uri.file(pack.webviewScriptPath)).toString(),
   );
+  const packStyleUris = packContext.webviewPacks
+    .filter((pack) => pack.webviewStylesheetPath !== undefined)
+    .map((pack) =>
+      webview
+        .asWebviewUri(vscode.Uri.file(pack.webviewStylesheetPath!))
+        .toString(),
+    );
 
   webview.html = buildWebviewHtml({
     scriptUri,
@@ -478,6 +592,7 @@ function setHtml(
     nonce: createNonce(),
     title: DOCUMENT_TITLE,
     packScriptUris,
+    packStyleUris,
   });
 }
 
@@ -619,7 +734,8 @@ async function createPreview(
   // which packs are actually installed right now — see
   // `ActivePreview.packContext`'s doc comment on why a `markii.packs`
   // change only takes effect on the next (re)creation.
-  const packContext = await loadCurrentPackContext();
+  const packContext = await loadCurrentPackContext(context);
+  logPackDiagnostics(packContext);
 
   const roots = localResourceRootsFor(context, source, packContext);
   const panel = vscode.window.createWebviewPanel(
@@ -1198,25 +1314,47 @@ async function runWithTrigger(
     // to, and touching `preview.panel` past disposal would itself throw.
     if (active !== preview) return;
 
+    // ITEM 3 (AGENTS.md "clean is not silent"): this run's own outcome,
+    // attached to its `values` message so the marker updates immediately —
+    // see `./run/run-trace.ts`'s doc comment and `ValuesMessage.lastRun`'s.
+    const lastRun = { trigger, ranAt: Date.now(), ok: true as const };
     const message: ValuesMessage = {
       type: 'values',
       revision,
       values: result.values,
       failures: result.failures,
+      lastRun,
     };
     // Awaited (not fire-and-forget) so a rejection here — e.g. a disposal
     // racing this exact call — lands in the catch below instead of becoming
     // its own unhandled rejection.
     await preview.panel.webview.postMessage(message);
+
+    // Persisted separately so a reopened panel (or the next `postUpdate`)
+    // can read it back without a fresh run — best-effort: a write failure
+    // here must never turn a successful run into a reported failure, so it
+    // is swallowed rather than routed through the catch below.
+    void writeLastRunTrace(context.workspaceState, documentKey, lastRun).then(
+      undefined,
+      () => {},
+    );
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
     console.error('markii.runScripts failed:', detail);
     // Quiet, stack-free message — AGENTS.md's cleanliness principle: the
     // rendered page (and its surrounding UI) shows quiet markers, never
-    // error dumps or machinery.
+    // error dumps or machinery. The SAME short detail is what the run
+    // marker's tooltip carries (`webview/run-marker.ts`'s `runMarkerTitle`)
+    // — never a raw stack, but never nothing either.
     void vscode.window.showErrorMessage(
       "Markii: running this note's scripts failed.",
     );
+    void writeLastRunTrace(context.workspaceState, documentKey, {
+      trigger,
+      ranAt: Date.now(),
+      ok: false,
+      reason: detail,
+    }).then(undefined, () => {});
   } finally {
     preview.running = false;
   }

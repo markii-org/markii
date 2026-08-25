@@ -62,3 +62,30 @@ export function isCoveredByRoots(
 ): boolean {
   return roots.some((root) => isWithinRoot(root, candidate));
 }
+
+/**
+ * The `localResourceRoots` a preview panel needs to load every installed
+ * pack's registration script (`preview-panel.ts`'s `localResourceRootsFor`
+ * calls this): each pack's own folder (where a prebuilt `webview.js` sits,
+ * per `./packs/discover.ts`'s `webviewScriptPath`), UNION the shared,
+ * extension-owned cache directory a compiled script may live under instead
+ * (`./packs/pack-build.ts`, GitHub issue #3's compile-from-source slice) —
+ * that directory sits OUTSIDE every configured pack folder (AGENTS.md's
+ * cleanliness rule: never written into the user's own pack folder), so it
+ * needs its own root or a compiled script's `<script src=...>` tag would
+ * be refused by the webview's resource jail.
+ *
+ * `cacheDir` is `undefined` whenever the caller has none configured (or
+ * nothing was ever compiled) — then this is just `packFolders`,
+ * deduplicated, unchanged from before this function existed. Plain strings
+ * in and out, `vscode`-free: `preview-panel.ts` maps every entry through
+ * `vscode.Uri.file(...)` itself.
+ */
+export function packWebviewRoots(
+  packFolders: readonly string[],
+  cacheDir: string | undefined,
+): string[] {
+  const roots = [...packFolders];
+  if (cacheDir !== undefined) roots.push(cacheDir);
+  return [...new Set(roots)];
+}

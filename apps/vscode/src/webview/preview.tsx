@@ -7,7 +7,8 @@ import type { StoredValue } from '@markii/runtime';
 import { extractFrontmatterUses } from '@markii/core';
 import { resolveUses } from '@markii/pack';
 import { isHostToWebviewMessage, isNewerRevision } from '../protocol.js';
-import type { WebviewToHostMessage } from '../protocol.js';
+import type { WebviewToHostMessage, WireRunTrace } from '../protocol.js';
+import { runMarkerLabel, runMarkerTitle } from './run-marker.js';
 import { applyDocumentBase } from './document-images.js';
 import {
   getPersistedState,
@@ -114,6 +115,25 @@ interface LocalState extends PersistedState {
    * always sends the field (possibly empty) once loaded.
    */
   readonly packNamespaces?: readonly string[];
+  /**
+   * ITEM 3 (AGENTS.md "clean is not silent"): the most recently recorded
+   * run outcome for this document (`protocol.ts`'s `WireRunTrace`) — drives
+   * the quiet "ran Nm ago" / "run failed Nm ago" footer marker, so a
+   * `'scheduled'`/`'auto'` run that changes nothing is still visibly not
+   * "nothing happened". `undefined` until a run's outcome (or a rehydrated
+   * one) has ever arrived for this document.
+   */
+  readonly lastRun?: WireRunTrace;
+  /**
+   * ITEM 2 (AGENTS.md "clean is not silent"): how many configured
+   * `markii.packs` folders failed to produce a usable pack, as of the most
+   * recent `update` (`protocol.ts`'s `UpdateMessage.packSkippedCount`).
+   * Drives the quiet "N packs failed to load" marker below, in the same
+   * visual register as `packNamespaces`'s own uses-marker; `undefined`
+   * (no `update` yet, or the host omitted it) is treated as "nothing
+   * failed", so the marker is absent until a real count arrives.
+   */
+  readonly packSkippedCount?: number;
 }
 
 export interface PreviewProps {
@@ -148,10 +168,23 @@ function initialState(): LocalState {
 export function Preview({ registry }: PreviewProps): ReactElement {
   const [state, setState] = useState<LocalState>(initialState);
   const documentRef = useRef<HTMLDivElement>(null);
+  // ITEM 3: the run marker's relative-time label ("ran 2m ago") is a
+  // function of wall-clock time, not just of `state` — without a ticking
+  // clock it would freeze at whatever it read on the message that set
+  // `lastRun`, drifting further from the truth the longer the panel stays
+  // open. Ticked coarsely (once a minute — matching the label's own
+  // minute-level granularity) rather than every second, since a stale
+  // second is never visible in a "Nm ago" phrase anyway.
+  const [now, setNow] = useState<number>(() => Date.now());
 
   useEffect(() => {
     // Mount-only: this handshake happens exactly once per webview instance.
     getVsCodeApi().postMessage(READY_MESSAGE);
+  }, []);
+
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(id);
   }, []);
 
   useEffect(() => {
@@ -175,6 +208,13 @@ export function Preview({ registry }: PreviewProps): ReactElement {
             runValues: undefined,
             bundleError: undefined,
             packNamespaces: data.packNamespaces,
+            packSkippedCount: data.packSkippedCount,
+            // ITEM 3: rehydrated from storage by `postUpdate` — see
+            // `preview-panel.ts`'s `readLastRunTrace`. `undefined` when no
+            // run has ever completed for this document, in which case the
+            // marker below stays absent, same as `packNamespaces`'s own
+            // omitted-vs-empty convention.
+            lastRun: data.lastRun,
           };
         }
         if (data.type === 'bundle-error') {
@@ -198,6 +238,13 @@ export function Preview({ registry }: PreviewProps): ReactElement {
         return {
           ...previous,
           runValues: { revision: data.revision, values: data.values },
+          // ITEM 3: a successful run's own outcome rides along on its
+          // `values` message so the marker updates immediately, without
+          // waiting for the next `update` (`protocol.ts`'s
+          // `ValuesMessage.lastRun`'s doc comment). A stale-value
+          // rehydration `values` message (`postStalePersistedValues`)
+          // carries no `lastRun` and so leaves the existing marker alone.
+          ...(data.lastRun ? { lastRun: data.lastRun } : {}),
         };
       });
     }
@@ -295,6 +342,31 @@ export function Preview({ registry }: PreviewProps): ReactElement {
             Read-only bundle preview
           </p>
         )}
+        {state.lastRun && (
+          <p
+            className={
+              state.lastRun.ok
+                ? 'mk-preview__run-marker'
+                : 'mk-preview__run-marker mk-preview__run-marker--failed'
+            }
+            title={runMarkerTitle(state.lastRun)}
+          >
+            {runMarkerLabel(state.lastRun, now)}
+          </p>
+        )}
+        {typeof state.packSkippedCount === 'number' &&
+          state.packSkippedCount > 0 && (
+            <p
+              className="mk-preview__pack-failure-marker"
+              title={
+                'Run "Markii: Show Diagnostics" to see which pack folders failed and why.'
+              }
+            >
+              {state.packSkippedCount === 1
+                ? '1 pack failed to load'
+                : `${state.packSkippedCount} packs failed to load`}
+            </p>
+          )}
         {usesResolution.missing.length > 0 && (
           <p
             className="mk-preview__uses-marker"

@@ -60,6 +60,21 @@
         "command": "markii.addPackFolder",
         "title": "Add Pack Folder…",
         "category": "Markii"
+      },
+      {
+        "command": "markii.enableScheduledRefresh",
+        "title": "Enable Scheduled Refresh…",
+        "category": "Markii"
+      },
+      {
+        "command": "markii.toggleRunOnOpen",
+        "title": "Toggle Run On Open",
+        "category": "Markii"
+      },
+      {
+        "command": "markii.showDiagnostics",
+        "title": "Show Diagnostics",
+        "category": "Markii"
       }
     ],
     "menus": {
@@ -97,6 +112,12 @@
         },
         {
           "command": "markii.addPackFolder"
+        },
+        {
+          "command": "markii.enableScheduledRefresh"
+        },
+        {
+          "command": "markii.toggleRunOnOpen"
         }
       ]
     },
@@ -155,7 +176,74 @@
           "markdownDescription": "Allow a granted host to resolve to an address on this machine or your private network (loopback, RFC 1918/RFC 6598 ranges, link-local, including the cloud metadata address). Off by default: a granted hostname's DNS answer is checked, and a hostname that resolves to any such address is refused outright rather than reached, because a public-looking name resolving into your own machine or LAN is SSRF, including through DNS rebinding after the grant. A literal IP address or `localhost` you grant directly is always honored at any scope; this setting only affects a NAMED host's resolved address. Turn it on only if your deployment's internal DNS legitimately points names at private space (a corporate `git.internal`, for example) — otherwise leave it off. This setting is USER-scope only (it cannot be set from a workspace's `.vscode/settings.json`), so opening someone else's project can never widen network access on your behalf."
         }
       }
-    }
+    },
+    "walkthroughs": [
+      {
+        "id": "gettingStarted",
+        "title": "Get Started with Markii",
+        "description": "Preview, run, and configure Markii (.mk.md) documents.",
+        "featuredFor": [
+          "**/*.mk.md"
+        ],
+        "steps": [
+          {
+            "id": "openPreview",
+            "title": "Open a preview",
+            "description": "Open a `.mk.md` file, then open the Markii preview.\n[Open Preview](command:markii.openPreview)",
+            "media": {
+              "markdown": "walkthrough/open-preview.md"
+            },
+            "completionEvents": [
+              "onCommand:markii.openPreview"
+            ]
+          },
+          {
+            "id": "runScripts",
+            "title": "Run a note's scripts",
+            "description": "Scripts never run just from opening a note. Run a note's Lua script blocks once, feeding its data-bound components.\n[Run Scripts](command:markii.runScripts)",
+            "media": {
+              "markdown": "walkthrough/run-scripts.md"
+            },
+            "completionEvents": [
+              "onCommand:markii.runScripts"
+            ]
+          },
+          {
+            "id": "settings",
+            "title": "Find the settings",
+            "description": "Markii's four settings are user-scope only, so a workspace can never set them for you. Open Settings filtered to Markii to see them.\n[Open Markii Settings](command:workbench.action.openSettings?%22markii%22)",
+            "media": {
+              "markdown": "walkthrough/settings.md"
+            },
+            "completionEvents": [
+              "onCommand:workbench.action.openSettings"
+            ]
+          },
+          {
+            "id": "installPack",
+            "title": "Install a component pack",
+            "description": "Add a folder you trust as a Markii component pack. Its components and shared Lua become available to your notes.\n[Add Pack Folder…](command:markii.addPackFolder)",
+            "media": {
+              "markdown": "walkthrough/install-pack.md"
+            },
+            "completionEvents": [
+              "onCommand:markii.addPackFolder"
+            ]
+          },
+          {
+            "id": "diagnostics",
+            "title": "Check diagnostics when something doesn't work",
+            "description": "Pack load failures and other quiet issues are written to the Markii output channel, not dumped into the preview.\n[Show Diagnostics](command:markii.showDiagnostics)",
+            "media": {
+              "markdown": "walkthrough/diagnostics.md"
+            },
+            "completionEvents": [
+              "onCommand:markii.showDiagnostics"
+            ]
+          }
+        ]
+      }
+    ]
   },
   "scripts": {
     "build": "tsc --noEmit -p tsconfig.json && node esbuild.config.mjs --production",
@@ -165,14 +253,15 @@
     "package": "npm run build && vsce package --no-dependencies"
   },
   "dependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
     "@markii/bundle": "*",
     "@markii/core": "*",
     "@markii/lua": "*",
     "@markii/pack": "*",
     "@markii/react": "*",
-    "@markii/runtime": "*"
+    "@markii/runtime": "*",
+    "esbuild-wasm": "^0.28.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@types/react": "^18.3.31",

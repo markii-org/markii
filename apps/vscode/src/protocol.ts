@@ -19,6 +19,7 @@
 import {
   FAILURE_KINDS,
   type FailureKind,
+  type RunTrigger,
   type ValueStatus,
 } from '@markii/runtime';
 
@@ -67,6 +68,40 @@ export interface UpdateMessage {
    * both currently degrade the same way (an empty install set).
    */
   readonly packNamespaces?: readonly string[];
+  /**
+   * How many configured `markii.packs` folders failed to produce a usable
+   * pack, as of the most recent pack load (`./packs/pack-diagnostics.ts`'s
+   * `skippedPackCount`) — what the webview counts for its quiet "N packs
+   * failed to load" marker (AGENTS.md's cleanliness principle: a marker in
+   * the note plus a full diagnostic in the host's Output channel, reachable
+   * via the `Markii: Show Diagnostics` command). Omitted (not zero) when no
+   * packs are configured at all, matching `packNamespaces`'s own
+   * omitted-vs-empty convention; the webview treats both the same (no
+   * marker).
+   */
+  readonly packSkippedCount?: number;
+  /**
+   * ITEM 3 (AGENTS.md "clean is not silent"): the outcome of the most
+   * recent `'manual'`/`'auto'`/`'scheduled'` run of this document's scripts
+   * (`../run/run-trace.ts`'s persisted `RunTrace`), independent of what
+   * values that run produced — a re-run that leaves every value unchanged
+   * is otherwise indistinguishable from one that never happened. Omitted
+   * when no run has ever completed for this document, in which case the
+   * webview shows no run marker at all.
+   */
+  readonly lastRun?: WireRunTrace;
+}
+
+/**
+ * One run's outcome, as it crosses the wire — the `../run/run-trace.ts`
+ * `RunTrace` shape restated here so this file's own hostile-shape guard
+ * owns the wire validation, matching `WireStoredValue`'s pattern just below.
+ */
+export interface WireRunTrace {
+  readonly trigger: RunTrigger;
+  readonly ranAt: number;
+  readonly ok: boolean;
+  readonly reason?: string;
 }
 
 /**
@@ -121,6 +156,16 @@ export interface ValuesMessage {
   readonly revision: number;
   readonly values: Readonly<Record<string, WireStoredValue>>;
   readonly failures: readonly ValuesFailure[];
+  /**
+   * ITEM 3: the SAME run's own outcome, attached directly to its own
+   * `values` result so a successful run's marker updates immediately —
+   * without waiting for the next `update` — rather than only ever being
+   * read back from storage on a later reopen (`preview-panel.ts`'s
+   * `postUpdate` still does that too, for the rehydration case). Omitted
+   * for `postStalePersistedValues`'s rehydration-only `values` message,
+   * which carries no run of its own to report.
+   */
+  readonly lastRun?: WireRunTrace;
 }
 
 /** Webview -> host: the webview's message listener has attached and it is ready to receive the first `update`. */
@@ -266,11 +311,67 @@ function isUpdateMessage(value: unknown): value is UpdateMessage {
   ) {
     return false;
   }
+  if (
+    hasOwn(value, 'packSkippedCount') &&
+    value.packSkippedCount !== undefined &&
+    !isValidSkippedCount(value.packSkippedCount)
+  ) {
+    return false;
+  }
+  if (
+    hasOwn(value, 'lastRun') &&
+    value.lastRun !== undefined &&
+    !isWireRunTrace(value.lastRun)
+  ) {
+    return false;
+  }
+  return true;
+}
+
+/** A valid `RunTrigger`: exactly one of `@markii/runtime`'s three trigger literals. */
+function isValidRunTrigger(value: unknown): value is RunTrigger {
+  return value === 'manual' || value === 'auto' || value === 'scheduled';
+}
+
+/** A sane upper bound on a run-failure reason — real ones are one short phrase (`preview-panel.ts` never forwards a raw stack, per AGENTS.md's cleanliness principle). */
+const MAX_RUN_REASON_LENGTH = 4096;
+
+function isWireRunTrace(value: unknown): value is WireRunTrace {
+  if (!isPlainObject(value)) return false;
+  if (!hasOwn(value, 'trigger') || !isValidRunTrigger(value.trigger)) {
+    return false;
+  }
+  if (
+    !hasOwn(value, 'ranAt') ||
+    typeof value.ranAt !== 'number' ||
+    !Number.isFinite(value.ranAt)
+  ) {
+    return false;
+  }
+  if (!hasOwn(value, 'ok') || typeof value.ok !== 'boolean') return false;
+  if (
+    hasOwn(value, 'reason') &&
+    value.reason !== undefined &&
+    (typeof value.reason !== 'string' ||
+      value.reason.length > MAX_RUN_REASON_LENGTH)
+  ) {
+    return false;
+  }
   return true;
 }
 
 /** A sane upper bound on how many pack namespaces one `update` message may list — real installs are a handful; this only exists to bound a hostile/corrupt message. */
 const MAX_PACK_NAMESPACES = 256;
+
+/** A valid `packSkippedCount`: a finite, non-negative integer bounded the same way `MAX_PACK_NAMESPACES` bounds the namespace list — real counts are a handful of folders. */
+function isValidSkippedCount(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= 0 &&
+    value <= MAX_PACK_NAMESPACES
+  );
+}
 
 /** Every entry of `value` is a non-empty string, and the array itself is within `MAX_PACK_NAMESPACES`. */
 function isPackNamespacesArray(value: unknown): value is readonly string[] {
@@ -384,6 +485,13 @@ function isValuesMessage(value: unknown): value is ValuesMessage {
     return false;
   }
   if (!hasOwn(value, 'failures') || !isValuesFailureArray(value.failures)) {
+    return false;
+  }
+  if (
+    hasOwn(value, 'lastRun') &&
+    value.lastRun !== undefined &&
+    !isWireRunTrace(value.lastRun)
+  ) {
     return false;
   }
   return true;

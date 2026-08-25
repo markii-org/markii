@@ -4,6 +4,7 @@ esbuild.config.mjs
 tsconfig.json
 vitest.config.*
 src/**
+test-fixtures/**
 **/*.map
 **/node_modules/**
 *.vsix

@@ -8,8 +8,143 @@
   margin-block-start: 1rem;
 }
 
+/*
+ * ============================================================================
+ * TIER 1 TOKENS — the theming contract
+ * ============================================================================
+ * Every host that wants a themed (in particular, a dark) `.doc` remaps ONLY
+ * these custom properties, deliberately scoped to `.doc` and not `:root`:
+ * `doc.css` is a library stylesheet embedded into other people's pages
+ * (Obsidian injects it globally), so it must stay polite and never claim
+ * `:root`. A host theme layer loaded after this one, at the same
+ * specificity, simply redeclares the ones below on `.doc` (or a more
+ * specific selector) to win the cascade — see `apps/vscode/src/webview/
+ * theme.css` and `apps/obsidian/src/obsidian-theme.css`.
+ *
+ * Nine neutrals + five semantic hues. This list is deliberately small: a
+ * host maps ~14 tokens instead of ~60 individual selectors, and a
+ * derivation layer below (Tier 2) builds every finer shade FROM these, so
+ * remapping these 14 makes every callout/badge/chart/etc. variant
+ * theme-correct for free.
+ */
 .doc {
-  color: #1a1a1a;
+  /* ---------- neutrals ---------- */
+  --mk-bg: #fff; /* page ground */
+  --mk-raised: #fff; /* raised surface for cards — distinct from ground; dark themes need real separation here where light themes get it from the border alone */
+  --mk-fg: #1a1a1a; /* body text */
+  --mk-surface: #f4f4f5; /* subtle fill one step off the ground: pre, kbd, script marker, details, default callout, zebra rows */
+  --mk-surface-strong: #f0f0f2; /* second step off the ground: inline code, th, progress track, default badge background */
+  --mk-border: #e4e4e7; /* hairlines */
+  --mk-muted: #52525b; /* secondary text: captions, labels, script summary */
+  --mk-faint: #94a3b8; /* tertiary/empty: missing values, empty-chart text, unfilled stars */
+  --mk-accent: #3b82f6; /* the single interactive/brand color: active tab, progress bar, chart stroke/fill */
+  --mk-on-accent: #fff; /* ink that sits ON a solid --mk-accent fill; a host must supply this because it cannot be derived: it depends on the accent's own lightness, not on the page palette */
+
+  /* ---------- semantic hues ---------- */
+  --mk-info: #3b82f6;
+  --mk-success: #15803d;
+  --mk-warning: #d97706;
+  --mk-danger: #dc2626;
+  --mk-limit: #7c3aed; /* the purple, used for the "hit a resource limit" failure kind */
+}
+
+/*
+ * ============================================================================
+ * TIER 2 DERIVATION FORMULAS
+ * ============================================================================
+ * Every finer shade `doc.css` needs (a callout's tinted background, a
+ * badge's tinted text) is a MIX of a Tier 1 hue against `--mk-bg`/`--mk-fg`,
+ * never a literal of its own. Because the mix targets those two tokens
+ * specifically, a dark host palette flips the derived shade's polarity
+ * correctly with no extra work on the host's part — the whole point of
+ * this refactor.
+ *
+ * Exactly three named percentages are used anywhere in this file. A future
+ * component reuses one of these three; it does not invent a fourth.
+ *
+ *   --mk-mix-variant-fill:  color-mix(in srgb, <hue> 14%, var(--mk-bg))
+ *     A quiet tinted background — callout body fill.
+ *   --mk-mix-strong-fill:   color-mix(in srgb, <hue> 18%, var(--mk-bg))
+ *     A slightly stronger tinted background — badge background.
+ *   --mk-mix-ink:           color-mix(in srgb, <hue> 85%, var(--mk-fg))
+ *     A hue nudged toward body text — usable as ink (badge text, star
+ *     color) or as a border (callout border).
+ *
+ * `color-mix()` is unsupported in most email clients, and a custom property
+ * whose value fails to parse does not fall back — the declaration goes
+ * invalid-at-computed-value and effectively vanishes. `doc.css` is embedded
+ * verbatim into `@markii/html`'s `exportHtmlDocument`, whose documented
+ * targets include email and archive output, so every derived token below is
+ * defined TWICE: first as a literal hex (today's existing light-mode
+ * value), then, guarded by `@supports (color: color-mix(in srgb, red,
+ * red))`, redefined via the real mix. A modern browser or either Electron
+ * host gets live derivation that tracks a remapped Tier 1 palette; an old
+ * email client silently keeps exactly today's light palette.
+ */
+.doc {
+  /* ---- literal light-mode fallback (used verbatim where color-mix is unsupported) ---- */
+  --mk-info-fill: #eff6ff;
+  --mk-info-strong-fill: #dbeafe;
+  --mk-info-ink: #3b82f6;
+  --mk-success-strong-fill: #dcfce7;
+  --mk-success-ink: #15803d;
+  --mk-warning-fill: #fffbeb;
+  --mk-warning-strong-fill: #fef3c7;
+  --mk-warning-ink: #d97706;
+  --mk-danger-fill: #fef2f2;
+  --mk-danger-strong-fill: #fee2e2;
+  --mk-danger-ink: #dc2626;
+  --mk-limit-ink: #7c3aed;
+  /*
+   * The keycap's inset depth line. Not a themed hue, but not theme-neutral
+   * either: a low-alpha BLACK line is invisible on a dark surface, so the
+   * literal below is only the no-`color-mix` fallback (where the palette is
+   * the light one anyway). The derivation in the `@supports` block below
+   * expresses it against `--mk-fg` instead, so it flips to a light line
+   * when a host supplies a dark palette, which is the correct depth cue
+   * there. Kept in this block, not the Tier 1 block above, so its literal
+   * stays inside a block the no-raw-color-literal test allows.
+   */
+  --mk-shadow-sm: rgba(0, 0, 0, 0.05);
+}
+
+@supports (color: color-mix(in srgb, red, red)) {
+  .doc {
+    --mk-shadow-sm: color-mix(in srgb, var(--mk-fg) 8%, transparent);
+
+    --mk-info-fill: color-mix(in srgb, var(--mk-info) 14%, var(--mk-bg));
+    --mk-info-strong-fill: color-mix(in srgb, var(--mk-info) 18%, var(--mk-bg));
+    --mk-info-ink: color-mix(in srgb, var(--mk-info) 85%, var(--mk-fg));
+
+    --mk-success-strong-fill: color-mix(
+      in srgb,
+      var(--mk-success) 18%,
+      var(--mk-bg)
+    );
+    --mk-success-ink: color-mix(in srgb, var(--mk-success) 85%, var(--mk-fg));
+
+    --mk-warning-fill: color-mix(in srgb, var(--mk-warning) 14%, var(--mk-bg));
+    --mk-warning-strong-fill: color-mix(
+      in srgb,
+      var(--mk-warning) 18%,
+      var(--mk-bg)
+    );
+    --mk-warning-ink: color-mix(in srgb, var(--mk-warning) 85%, var(--mk-fg));
+
+    --mk-danger-fill: color-mix(in srgb, var(--mk-danger) 14%, var(--mk-bg));
+    --mk-danger-strong-fill: color-mix(
+      in srgb,
+      var(--mk-danger) 18%,
+      var(--mk-bg)
+    );
+    --mk-danger-ink: color-mix(in srgb, var(--mk-danger) 85%, var(--mk-fg));
+
+    --mk-limit-ink: color-mix(in srgb, var(--mk-limit) 85%, var(--mk-fg));
+  }
+}
+
+.doc {
+  color: var(--mk-fg);
   font-family:
     system-ui,
     -apple-system,
@@ -20,13 +155,13 @@
 
 .doc pre {
   overflow-x: auto;
-  background: #f4f4f5;
+  background: var(--mk-surface);
   padding: 0.75rem 1rem;
   border-radius: 6px;
 }
 
 .doc code {
-  background: #f0f0f2;
+  background: var(--mk-surface-strong);
   border-radius: 3px;
   padding: 0.1em 0.35em;
   font-size: 0.9em;
@@ -55,18 +190,18 @@
 
 .doc th,
 .doc td {
-  border: 1px solid #e4e4e7;
+  border: 1px solid var(--mk-border);
   padding: 0.4rem 0.75rem;
   text-align: left;
 }
 
 .doc th {
   font-weight: 600;
-  background: #f8fafc;
+  background: var(--mk-surface-strong);
 }
 
 .doc tr:nth-child(even) {
-  background: #fafafa;
+  background: var(--mk-surface);
 }
 
 /* ---------- GFM task list ---------- */
@@ -90,26 +225,26 @@
 /* ---------- callout ---------- */
 
 .mk-callout {
-  border: 1px solid var(--mk-callout-border, #94a3b8);
+  border: 1px solid var(--mk-callout-border, var(--mk-border));
   border-left-width: 4px;
   border-radius: 6px;
   padding: 0.75rem 1rem;
-  background: var(--mk-callout-bg, #f8fafc);
+  background: var(--mk-callout-bg, var(--mk-surface));
 }
 
 .mk-callout--info {
-  --mk-callout-border: #3b82f6;
-  --mk-callout-bg: #eff6ff;
+  --mk-callout-border: var(--mk-info-ink);
+  --mk-callout-bg: var(--mk-info-fill);
 }
 
 .mk-callout--warning {
-  --mk-callout-border: #d97706;
-  --mk-callout-bg: #fffbeb;
+  --mk-callout-border: var(--mk-warning-ink);
+  --mk-callout-bg: var(--mk-warning-fill);
 }
 
 .mk-callout--danger {
-  --mk-callout-border: #dc2626;
-  --mk-callout-bg: #fef2f2;
+  --mk-callout-border: var(--mk-danger-ink);
+  --mk-callout-bg: var(--mk-danger-fill);
 }
 
 .mk-callout__header {
@@ -159,11 +294,11 @@
   padding: 0 0.4em;
   font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
   font-size: 0.85em;
-  border: 1px solid #c9ccd1;
+  border: 1px solid var(--mk-border);
   border-bottom-width: 2px;
   border-radius: 4px;
-  background: #f6f7f9;
-  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.05);
+  background: var(--mk-surface);
+  box-shadow: inset 0 -1px 0 var(--mk-shadow-sm);
 }
 
 /* ---------- rating ---------- */
@@ -172,11 +307,11 @@
   display: inline-flex;
   gap: 0.15em;
   font-size: 1.1em;
-  color: #cbd5e1;
+  color: var(--mk-faint);
 }
 
 .mk-rating__star--filled {
-  color: #f59e0b;
+  color: var(--mk-warning);
 }
 
 /* ---------- value interpolation ---------- */
@@ -187,14 +322,14 @@
 }
 
 .mk-value--stale {
-  color: #92400e;
-  border-bottom: 1px dashed #d97706;
+  color: var(--mk-warning-ink);
+  border-bottom: 1px dashed var(--mk-warning-ink);
 }
 
 .mk-value--missing {
   font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
   font-size: 0.9em;
-  color: #94a3b8;
+  color: var(--mk-faint);
   font-style: italic;
 }
 
@@ -206,29 +341,32 @@
  * distinct hue so a reader can tell "script bug" apart from "needs
  * permission" / "needs a manual run" / "hit a resource limit" at a glance,
  * with the full message still available via the `title` tooltip.
+ *
+ * Failure kinds map onto the Tier 1 semantic hues: script-error -> danger,
+ * capability-denied -> warning, tier-blocked -> info, limit -> limit.
  */
 .mk-value--script-error {
-  border-bottom: 1px dashed #ef4444;
+  border-bottom: 1px dashed var(--mk-danger-ink);
 }
 
 .mk-value--capability-denied {
-  border-bottom: 1px dashed #d97706;
+  border-bottom: 1px dashed var(--mk-warning-ink);
 }
 
 .mk-value--tier-blocked {
-  border-bottom: 1px dashed #2563eb;
+  border-bottom: 1px dashed var(--mk-info-ink);
 }
 
 .mk-value--limit {
-  border-bottom: 1px dashed #7c3aed;
+  border-bottom: 1px dashed var(--mk-limit-ink);
 }
 
 /* ---------- script marker ---------- */
 
 .mk-script {
-  border: 1px solid #d4d4d8;
+  border: 1px solid var(--mk-border);
   border-radius: 6px;
-  background: #fafafa;
+  background: var(--mk-surface);
 }
 
 .mk-script__summary {
@@ -236,11 +374,11 @@
   padding: 0.5rem 0.75rem;
   font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
   font-size: 0.85em;
-  color: #52525b;
+  color: var(--mk-muted);
 }
 
 .mk-script[open] > .mk-script__summary {
-  border-bottom: 1px solid #e4e4e7;
+  border-bottom: 1px solid var(--mk-border);
 }
 
 .mk-script__code {
@@ -253,16 +391,16 @@
   margin-block-start: 0;
   font-size: 0.85em;
   font-style: italic;
-  color: #94a3b8;
+  color: var(--mk-faint);
 }
 
 /* ---------- details ---------- */
 
 .mk-details {
-  border: 1px solid #d4d4d8;
+  border: 1px solid var(--mk-border);
   border-radius: 6px;
   padding: 0.75rem 1rem;
-  background: #fafafa;
+  background: var(--mk-surface);
 }
 
 .mk-details__summary {
@@ -291,10 +429,10 @@
 /* ---------- card ---------- */
 
 .mk-card {
-  border: 1px solid #e4e4e7;
+  border: 1px solid var(--mk-border);
   border-radius: 8px;
   padding: 1rem;
-  background: #fff;
+  background: var(--mk-raised);
 }
 
 .mk-card__title {
@@ -327,28 +465,28 @@
   font-size: 0.8em;
   font-weight: 600;
   border-radius: 999px;
-  color: var(--mk-badge-fg, #334155);
-  background: var(--mk-badge-bg, #e2e8f0);
+  color: var(--mk-badge-fg, var(--mk-fg));
+  background: var(--mk-badge-bg, var(--mk-surface-strong));
 }
 
 .mk-badge--info {
-  --mk-badge-fg: #1d4ed8;
-  --mk-badge-bg: #dbeafe;
+  --mk-badge-fg: var(--mk-info-ink);
+  --mk-badge-bg: var(--mk-info-strong-fill);
 }
 
 .mk-badge--success {
-  --mk-badge-fg: #15803d;
-  --mk-badge-bg: #dcfce7;
+  --mk-badge-fg: var(--mk-success-ink);
+  --mk-badge-bg: var(--mk-success-strong-fill);
 }
 
 .mk-badge--warning {
-  --mk-badge-fg: #b45309;
-  --mk-badge-bg: #fef3c7;
+  --mk-badge-fg: var(--mk-warning-ink);
+  --mk-badge-bg: var(--mk-warning-strong-fill);
 }
 
 .mk-badge--danger {
-  --mk-badge-fg: #b91c1c;
-  --mk-badge-bg: #fee2e2;
+  --mk-badge-fg: var(--mk-danger-ink);
+  --mk-badge-bg: var(--mk-danger-strong-fill);
 }
 
 /* ---------- figure ---------- */
@@ -367,7 +505,7 @@
 .mk-figure__caption {
   margin-block-start: 0.5rem;
   font-size: 0.9em;
-  color: #52525b;
+  color: var(--mk-muted);
 }
 
 .mk-figure__caption > :first-child {
@@ -383,7 +521,7 @@
 .mk-tabs__list {
   display: flex;
   gap: 0.25rem;
-  border-bottom: 1px solid #e4e4e7;
+  border-bottom: 1px solid var(--mk-border);
 }
 
 .mk-tabs__button {
@@ -393,14 +531,14 @@
   padding: 0.5rem 0.9rem;
   font: inherit;
   font-weight: 600;
-  color: #71717a;
+  color: var(--mk-muted);
   border-bottom: 2px solid transparent;
   margin-block-end: -1px;
 }
 
 .mk-tabs__button--active {
-  color: #1d4ed8;
-  border-bottom-color: #1d4ed8;
+  color: var(--mk-accent);
+  border-bottom-color: var(--mk-accent);
 }
 
 /* Blockifies inline-flex/inline-block children (`stat`, `badge`, ...) so they stack — see `.mk-callout__body`'s comment above for why this is load-bearing. */
@@ -434,25 +572,25 @@
 
 .mk-stat__label {
   font-size: 0.85em;
-  color: #71717a;
+  color: var(--mk-muted);
 }
 
 .mk-stat__delta {
   font-size: 0.85em;
   font-weight: 600;
-  color: #71717a;
+  color: var(--mk-muted);
 }
 
 .mk-stat__delta--up {
-  color: #15803d;
+  color: var(--mk-success-ink);
 }
 
 .mk-stat__delta--down {
-  color: #b91c1c;
+  color: var(--mk-danger-ink);
 }
 
 .mk-stat__delta--flat {
-  color: #71717a;
+  color: var(--mk-muted);
 }
 
 /* ---------- progress ---------- */
@@ -465,7 +603,7 @@
 
 .mk-progress__label {
   font-size: 0.85em;
-  color: #52525b;
+  color: var(--mk-muted);
   flex: 0 0 auto;
 }
 
@@ -473,13 +611,13 @@
   flex: 1 1 auto;
   height: 0.6rem;
   border-radius: 999px;
-  background: #e4e4e7;
+  background: var(--mk-border);
   overflow: hidden;
 }
 
 .mk-progress__bar {
   height: 100%;
-  background: #3b82f6;
+  background: var(--mk-accent);
   border-radius: inherit;
 }
 
@@ -487,7 +625,7 @@
   flex: 0 0 auto;
   font-size: 0.85em;
   font-variant-numeric: tabular-nums;
-  color: #52525b;
+  color: var(--mk-muted);
 }
 
 /* ---------- chart ---------- */
@@ -499,14 +637,14 @@
 
 .mk-chart__line {
   fill: none;
-  stroke: #3b82f6;
+  stroke: var(--mk-accent);
   stroke-width: 2;
   stroke-linejoin: round;
   stroke-linecap: round;
 }
 
 .mk-chart__bar {
-  fill: #3b82f6;
+  fill: var(--mk-accent);
 }
 
 .mk-chart--empty {
@@ -515,8 +653,8 @@
   justify-content: center;
   font-size: 0.8em;
   font-style: italic;
-  color: #94a3b8;
-  border: 1px dashed #d4d4d8;
+  color: var(--mk-faint);
+  border: 1px dashed var(--mk-border);
   border-radius: 6px;
 }
 
@@ -543,25 +681,25 @@
 .mk-stat--script-error,
 .mk-progress--script-error,
 .mk-chart--script-error {
-  border-bottom: 2px solid #ef4444;
+  border-bottom: 2px solid var(--mk-danger-ink);
 }
 
 .mk-stat--capability-denied,
 .mk-progress--capability-denied,
 .mk-chart--capability-denied {
-  border-bottom: 2px solid #d97706;
+  border-bottom: 2px solid var(--mk-warning-ink);
 }
 
 .mk-stat--tier-blocked,
 .mk-progress--tier-blocked,
 .mk-chart--tier-blocked {
-  border-bottom: 2px solid #2563eb;
+  border-bottom: 2px solid var(--mk-info-ink);
 }
 
 .mk-stat--limit,
 .mk-progress--limit,
 .mk-chart--limit {
-  border-bottom: 2px solid #7c3aed;
+  border-bottom: 2px solid var(--mk-limit-ink);
 }
 
 /* ---------- layout presets (docs/format.md) ---------- */
@@ -750,12 +888,27 @@
   margin-block-start: 1rem;
 }
 
+/* ---------- empty inline-component marker ---------- */
+
+/*
+ * Wraps an `inline: true` component that received no content
+ * (`::badge{label="x"}` instead of `:badge[x]`) — see `render.tsx`'s
+ * `isRegisteredInline`/`isEmptyContent` and `render.ts`'s HTML-engine
+ * mirror. The component underneath renders unchanged; this is a quiet
+ * perceptual hook only (a faint dashed underline, matching the treatment
+ * `.mk-value--stale` already gives a quiet-but-present state), with the
+ * reason carried in the `title` tooltip rather than in the page.
+ */
+.mk-inline-empty {
+  border-bottom: 1px dashed var(--mk-faint);
+}
+
 /* ---------- unknown directive fallback ---------- */
 
 .mk-unknown {
-  border: 1px dashed #94a3b8;
+  border: 1px dashed var(--mk-faint);
   border-radius: 6px;
-  color: #475569;
+  color: var(--mk-muted);
 }
 
 .mk-unknown--block {

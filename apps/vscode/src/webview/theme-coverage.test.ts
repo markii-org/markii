@@ -11,139 +11,141 @@ const DOC_CSS_PATH = path.resolve(
 const THEME_CSS_PATH = path.resolve(here, 'theme.css');
 
 /**
- * Selectors intentionally left WITHOUT a `theme.css` override, because their
- * `doc.css` color already reads correctly against any VS Code theme as-is.
- * Empty today — every hardcoded-color selector currently found in `doc.css`
- * has a themed override below. Add an entry here (with a one-line reason)
- * only for a genuinely theme-invariant color; prefer an override otherwise.
+ * `doc.css` now exposes its whole theming surface as a small Tier 1 token
+ * contract (its own "TIER 1 TOKENS" comment block) instead of ~60
+ * individually-colored selectors: every finer shade is derived from these
+ * tokens via `color-mix()`, so a host that remaps the tokens gets every
+ * component right for free. This test's only job is confirming `theme.css`
+ * actually redeclares each one — the drift alarm that keeps this file
+ * honest as `doc.css` grows new tokens.
+ *
+ * This replaces the old per-selector coverage test (which asserted every
+ * hardcoded-color selector in `doc.css` was re-declared here); that
+ * invariant no longer applies now that `doc.css` has no hardcoded
+ * component colors left to re-declare (see `@markii/react`'s
+ * `doc-css-tokens.test.ts`, which is the new home for that guarantee).
  */
-export const THEME_NEUTRAL_SELECTORS: readonly string[] = [];
 
-/** A property name this test cares about: any color-bearing CSS property, or an `@markii/react` `--mk-*` custom property. */
-const COLOR_PROP_PATTERN =
-  /^(color|background|background-color|border(-[a-z]+)*|fill|stroke|--mk-[a-z-]+)$/i;
-
-/** `#rgb`/`#rrggbb`(`aa`) — doc.css uses only 3- and 6-digit hex, but this is deliberately a little generous. */
-const HEX_COLOR_PATTERN = /#[0-9a-fA-F]{3,8}\b/;
+interface TopLevelBlock {
+  selector: string;
+  body: string;
+}
 
 function stripComments(css: string): string {
   return css.replace(/\/\*[\s\S]*?\*\//g, '');
 }
 
 /**
- * A DELIBERATELY DUMB CSS block splitter — this is a drift alarm, not a CSS
- * engine. It matches `<selector list> { <declarations> }` via a
- * brace-balance-naive regex, which is only sound because every rule body in
- * both `doc.css` and `theme.css` is flat (no nested rules, no `@media`
- * blocks containing color declarations, no strings containing braces). It
- * does not need to be more than that: its ONE job is finding which
- * selectors set a hardcoded hex color on a color-ish property.
+ * Splits `css` into its top-level blocks via brace-depth tracking, so a
+ * nested block (an `@supports` rule containing ordinary rule blocks, as
+ * `doc.css` now has) is returned as one block whose `body` includes its
+ * nested content, rather than misparsed by a flat, non-nesting splitter.
  */
-function extractRules(css: string): Array<{ selector: string; body: string }> {
-  const rules: Array<{ selector: string; body: string }> = [];
-  const pattern = /([^{}]+)\{([^{}]*)\}/g;
+function findTopLevelBlocks(css: string): TopLevelBlock[] {
+  const blocks: TopLevelBlock[] = [];
+  let depth = 0;
+  let selectorStart = 0;
+  let openIdx = -1;
+  for (let i = 0; i < css.length; i++) {
+    const ch = css[i];
+    if (ch === '{') {
+      if (depth === 0) openIdx = i;
+      depth++;
+    } else if (ch === '}') {
+      depth--;
+      if (depth === 0 && openIdx !== -1) {
+        const selector = css.slice(selectorStart, openIdx).trim();
+        const body = css.slice(openIdx + 1, i);
+        blocks.push({ selector, body });
+        selectorStart = i + 1;
+        openIdx = -1;
+      }
+    }
+  }
+  return blocks;
+}
+
+/** Every `--mk-*` custom property name declared directly (no nesting) in `body`. */
+function customPropertyNames(body: string): Set<string> {
+  const names = new Set<string>();
+  const pattern = /(--mk-[a-z0-9-]+)\s*:/g;
   let match: RegExpExecArray | null;
-  while ((match = pattern.exec(css)) !== null) {
-    const selector = (match[1] ?? '').trim();
-    const body = match[2] ?? '';
-    if (selector) rules.push({ selector, body });
+  while ((match = pattern.exec(body)) !== null) {
+    const name = match[1];
+    if (name) names.add(name);
   }
-  return rules;
+  return names;
 }
 
-/** Splits a comma-separated selector list into individually-checkable selectors, whitespace-normalized so multiline groups in `doc.css` compare equal to however `theme.css` happens to format the same list. */
-function splitSelectors(selectorList: string): string[] {
-  return selectorList
-    .split(',')
-    .map((selector) => selector.trim().replace(/\s+/g, ' '))
-    .filter((selector) => selector.length > 0);
-}
-
-/** True if any declaration in `body` sets a color-ish property to a value containing a hardcoded hex literal. */
-function bodyHasHardcodedColor(body: string): boolean {
-  return body.split(';').some((declaration) => {
-    const colonIndex = declaration.indexOf(':');
-    if (colonIndex === -1) return false;
-    const prop = declaration.slice(0, colonIndex).trim();
-    const value = declaration.slice(colonIndex + 1);
-    return COLOR_PROP_PATTERN.test(prop) && HEX_COLOR_PATTERN.test(value);
-  });
-}
-
-/** Every individual selector `css` sets a hardcoded hex color on, via a color-ish property (comma-groups split apart — see `splitSelectors`). */
-function hardcodedColorSelectors(css: string): Set<string> {
-  const selectors = new Set<string>();
-  for (const rule of extractRules(stripComments(css))) {
-    if (!bodyHasHardcodedColor(rule.body)) continue;
-    for (const selector of splitSelectors(rule.selector)) {
-      selectors.add(selector);
-    }
+/** The Tier 1 token names `doc.css` declares, read from its own token-definition block (the `.doc` block that sets `--mk-bg`). */
+function tier1TokenNames(docCss: string): Set<string> {
+  const blocks = findTopLevelBlocks(stripComments(docCss));
+  const tier1Block = blocks.find(
+    (b) => b.selector === '.doc' && /--mk-bg\s*:/.test(b.body),
+  );
+  if (!tier1Block) {
+    throw new Error(
+      'could not find the Tier 1 token-definition block in doc.css',
+    );
   }
-  return selectors;
+  return customPropertyNames(tier1Block.body);
 }
 
-/** Every individual selector `css` declares ANY rule for — body content doesn't matter here, presence in `theme.css` is the override signal. */
-function declaredSelectors(css: string): Set<string> {
-  const selectors = new Set<string>();
-  for (const rule of extractRules(stripComments(css))) {
-    for (const selector of splitSelectors(rule.selector)) {
-      selectors.add(selector);
-    }
-  }
-  return selectors;
+/** Every `--mk-*` custom property `css` declares anywhere (any block, any depth) — a host theme layer is free to set tokens at any selector, so this scans the whole file rather than one block. */
+function declaredCustomProperties(css: string): Set<string> {
+  return customPropertyNames(stripComments(css));
 }
 
-describe('theme.css color coverage', () => {
+describe('theme.css Tier 1 token coverage', () => {
   const docCss = readFileSync(DOC_CSS_PATH, 'utf8');
   const themeCss = readFileSync(THEME_CSS_PATH, 'utf8');
 
-  it('found a non-trivial number of hardcoded-color selectors (sanity check that the parser is actually matching doc.css)', () => {
-    expect(hardcodedColorSelectors(docCss).size).toBeGreaterThan(10);
+  it('found a non-trivial number of Tier 1 tokens (sanity check that the parser is actually matching doc.css)', () => {
+    expect(tier1TokenNames(docCss).size).toBeGreaterThan(10);
   });
 
-  it('overrides, or explicitly allowlists, every hardcoded-color selector in doc.css', () => {
-    const hardcoded = hardcodedColorSelectors(docCss);
-    const overridden = declaredSelectors(themeCss);
-    const allowlisted = new Set(THEME_NEUTRAL_SELECTORS);
+  it('redeclares every Tier 1 token doc.css defines', () => {
+    const tokens = tier1TokenNames(docCss);
+    const declared = declaredCustomProperties(themeCss);
 
-    const uncovered = [...hardcoded]
-      .filter(
-        (selector) => !overridden.has(selector) && !allowlisted.has(selector),
-      )
-      .sort();
+    const missing = [...tokens].filter((token) => !declared.has(token)).sort();
 
-    expect(uncovered).toEqual([]);
+    expect(
+      missing,
+      missing.length > 0
+        ? `theme.css does not redeclare the following doc.css Tier 1 token(s): ${missing.join(', ')}`
+        : undefined,
+    ).toEqual([]);
   });
 
-  it('has no stale allowlist entries (every allowlisted selector genuinely appears in doc.css)', () => {
-    const hardcoded = hardcodedColorSelectors(docCss);
-    for (const selector of THEME_NEUTRAL_SELECTORS) {
-      expect(hardcoded.has(selector)).toBe(true);
-    }
+  it('self-test: the coverage mechanism actually flags a genuinely uncovered token', () => {
+    const fakeDocCss = '.doc { --mk-bg: #fff; --mk-made-up: #123456; }';
+    const fakeThemeCss = '.doc { --mk-bg: var(--host-bg); }';
+    const tokens = tier1TokenNames(fakeDocCss);
+    const declared = declaredCustomProperties(fakeThemeCss);
+    expect(tokens.has('--mk-made-up')).toBe(true);
+    expect(declared.has('--mk-made-up')).toBe(false);
   });
 
-  it('self-test: the coverage mechanism actually flags a genuinely uncovered selector', () => {
-    const fakeDocCss = '.made-up-selector { color: #123456; }';
-    const fakeThemeCss = '.something-else { color: red; }';
-    const hardcoded = hardcodedColorSelectors(fakeDocCss);
-    const overridden = declaredSelectors(fakeThemeCss);
-    expect(hardcoded.has('.made-up-selector')).toBe(true);
-    expect(overridden.has('.made-up-selector')).toBe(false);
+  it('self-test: a token redeclared anywhere in the theme sheet is recognized as covered', () => {
+    const fakeDocCss = '.doc { --mk-bg: #fff; --mk-fg: #000; }';
+    const fakeThemeCss =
+      '.doc { --mk-bg: var(--host-bg); --mk-fg: var(--host-fg); }';
+    const tokens = tier1TokenNames(fakeDocCss);
+    const declared = declaredCustomProperties(fakeThemeCss);
+    expect([...tokens].every((t) => declared.has(t))).toBe(true);
   });
 
-  it('self-test: a matching selector in the override sheet is recognized as covered', () => {
-    const fakeDocCss = '.made-up-selector { color: #123456; }';
-    const fakeThemeCss = '.made-up-selector { color: var(--mkv-fg); }';
-    const hardcoded = hardcodedColorSelectors(fakeDocCss);
-    const overridden = declaredSelectors(fakeThemeCss);
-    expect([...hardcoded].every((selector) => overridden.has(selector))).toBe(
-      true,
-    );
-  });
-
-  it('self-test: a non-color property (e.g. box-shadow rgba, grid-template-columns) is not flagged', () => {
-    const fakeDocCss =
-      '.x { box-shadow: inset 0 -1px 0 rgba(0,0,0,0.05); grid-template-columns: 1fr; }';
-    expect(hardcodedColorSelectors(fakeDocCss).size).toBe(0);
+  it('self-test: the parser handles nested @supports content correctly', () => {
+    const fake = `
+      .doc { --mk-bg: #fff; }
+      @supports (color: color-mix(in srgb, red, red)) {
+        .doc { --mk-info-fill: color-mix(in srgb, red 10%, blue); }
+      }
+    `;
+    const blocks = findTopLevelBlocks(stripComments(fake));
+    expect(blocks).toHaveLength(2);
+    const supports = blocks.find((b) => b.selector.startsWith('@supports'));
+    expect(supports?.body).toContain('--mk-info-fill');
   });
 });

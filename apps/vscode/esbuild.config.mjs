@@ -75,7 +75,24 @@ const extensionBuild = {
   platform: 'node',
   format: 'cjs',
   target: 'node18',
-  external: ['vscode'],
+  // `esbuild-wasm`, alongside `vscode`: `src/packs/pack-build.ts` (GitHub
+  // issue #3's compile-pack-from-source slice) `require()`s esbuild-wasm's
+  // OWN `lib/main.js` at runtime rather than importing it normally,
+  // because esbuild-wasm's Node API refuses to run once bundled into
+  // another file (it checks its own `__filename`/`__dirname` against the
+  // real package layout and throws otherwise — confirmed empirically).
+  // `copyEsbuildWasm` below copies the whole package next to
+  // `dist/extension.js` so that real, unbundled `require()` has something
+  // to find at runtime; `pack-build.ts`'s `loadEsbuildWasm` doc comment
+  // has the other half of this contract.
+  external: ['vscode', 'esbuild-wasm'],
+  // `src/packs/pack-build.ts` references `import.meta.url` (guarded by a
+  // `typeof require` runtime check — see its `resolveRequire` doc
+  // comment) purely for the ESM/dev-and-Vitest half of that check; the
+  // CJS half this build produces never evaluates it. esbuild's warning
+  // here is accurate but inert — silenced rather than left as permanent
+  // build noise.
+  logOverride: { 'empty-import-meta': 'silent' },
 };
 
 /** @type {import('esbuild').BuildOptions} */
@@ -133,6 +150,48 @@ function copyWasmGlue() {
   copyFileSync(source, dest);
 }
 
+const esbuildWasmOutDir = path.join(here, 'dist', 'esbuild-wasm');
+
+/**
+ * Copies the REAL, unbundled `esbuild-wasm` package next to
+ * `dist/extension.js` (`dist/esbuild-wasm/`), preserving its own internal
+ * relative layout exactly — `lib/main.js` at `lib/`, `bin/esbuild` at
+ * `bin/`, `wasm_exec_node.js` and `esbuild.wasm` at the package root — so
+ * `src/packs/pack-build.ts`'s `loadEsbuildWasm`, given
+ * `dist/esbuild-wasm/lib/main.js`, can `require()` it directly at
+ * runtime and have it resolve its own sibling files exactly as it would
+ * from a real `node_modules/esbuild-wasm` install (`preview-panel.ts`'s
+ * `esbuildMainModulePath` points here). Only these five files: the rest
+ * of the published package (`.d.ts` files, the browser-only `esm`/`lib`
+ * variants, docs) is dead weight for a Node host. `esbuild.wasm` is what
+ * dominates this copy's size (see this file's own top doc comment
+ * pattern for `glue.wasm` — same idea, a real WASM binary that cannot be
+ * bundled into JS source).
+ */
+function copyEsbuildWasm() {
+  mkdirSync(path.join(esbuildWasmOutDir, 'lib'), { recursive: true });
+  mkdirSync(path.join(esbuildWasmOutDir, 'bin'), { recursive: true });
+  const packageDir = path.join(repoRoot, 'node_modules', 'esbuild-wasm');
+  const files = [
+    ['lib/main.js', 'lib/main.js'],
+    ['bin/esbuild', 'bin/esbuild'],
+    // `wasm_exec_node.js` (the Node-side harness `bin/esbuild` runs)
+    // `require()`s `./wasm_exec` (Go's own WebAssembly loader) as a
+    // sibling — both are needed, confirmed empirically: omitting
+    // `wasm_exec.js` fails with `Cannot find module './wasm_exec'` the
+    // first time a build actually runs.
+    ['wasm_exec_node.js', 'wasm_exec_node.js'],
+    ['wasm_exec.js', 'wasm_exec.js'],
+    ['esbuild.wasm', 'esbuild.wasm'],
+  ];
+  for (const [from, to] of files) {
+    copyFileSync(
+      path.join(packageDir, ...from.split('/')),
+      path.join(esbuildWasmOutDir, ...to.split('/')),
+    );
+  }
+}
+
 if (watch) {
   const contexts = await Promise.all([
     context(extensionBuild),
@@ -140,6 +199,7 @@ if (watch) {
     context(workerBuild),
   ]);
   copyWasmGlue();
+  copyEsbuildWasm();
   await Promise.all(contexts.map((ctx) => ctx.watch()));
 } else {
   await Promise.all([
@@ -148,4 +208,5 @@ if (watch) {
     build(workerBuild),
   ]);
   copyWasmGlue();
+  copyEsbuildWasm();
 }

@@ -1,0 +1,7 @@
+{
+  "name": "tsxbadcss",
+  "engine": "react",
+  "components": {
+    "stat": "./Stat.tsx"
+  }
+}

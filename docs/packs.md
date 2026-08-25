@@ -34,6 +34,19 @@ like a language import, the author opts in by typing the prefix. Directive
 names cannot contain `:` (it is reserved syntax), so the namespace separator
 is `-` or `_`.
 
+The prefix is added by the host, not written in the manifest. A manifest key
+names the component *inside* its pack, and the directive an author types is
+the pack name joined to that key:
+
+```
+pack "ana" + component "timeline"  ->  :::ana-timeline
+```
+
+This is the one place pack authors reliably go wrong. Naming the manifest
+key `ana-timeline` inside a pack already called `ana` produces the directive
+`ana-ana-timeline`, which no note types, so every use of it falls back to
+the unknown-component box. Keep manifest keys bare.
+
 Your own components stay unprefixed; prefixes exist for other people's
 packs. On a literal collision the registry resolves last-wins by merge
 order, but prefixes make collisions a non-issue in practice. The bundle's
@@ -84,14 +97,73 @@ runtime: the pack is part of your bundle like any other import.
 In the VS Code extension, packs are installed through the `markii.packs`
 setting, a list of folders you trust as installed packs. The setting lives
 in your user settings only, so a project you open can never add a pack on
-your behalf. Each folder holds a `pack.json`, the pack's built component
-script, and an optional `scripts/` folder of shared Lua. The extension
+your behalf. Each folder holds a `pack.json`, the component sources it
+names, and an optional `scripts/` folder of shared Lua. The extension
 validates each manifest and rejects namespace collisions, then does two
 things: it makes the pack's Lua modules reachable from `require "name/..."`
-in the Run path, and it loads the pack's component script into the preview so
-its components render. A note that names a pack you have not installed still
-reads: its components show the labeled fallback, and a quiet marker notes the
-missing pack.
+in the Run path, and it loads the pack's components into the preview so they
+render. A note that names a pack you have not installed still reads: its
+components show the labeled fallback, and a quiet marker notes the missing
+pack.
+
+A configured folder may either be a pack itself or hold several. If the
+folder has no `pack.json` of its own, each immediate subfolder that has one
+is treated as a pack, so a single entry covers a directory of them:
+
+```
+packs/            <- one entry in the setting
+  timeline/pack.json
+  charts/pack.json
+```
+
+The scan goes one level down and no further. Prefer absolute paths: the
+setting is user-scoped, so a relative entry means a different folder in
+every workspace you open, and the extension reports one as deprecated in its
+diagnostics. A leading `~` expands to your home directory, which keeps an
+absolute entry short.
+
+A pack does not need to ship a built artifact. The extension compiles the
+component sources its manifest names, caches the result outside the pack's
+own folder so your files stay untouched, and rebuilds only when a source
+changes. A pack that does ship a prebuilt script is used as-is.
+
+## Styling a pack
+
+A pack styles itself with an ordinary CSS import from a component:
+
+```tsx
+import './timeline.css';
+```
+
+The build bundles it into one stylesheet per pack, delivered alongside the
+pack's components. There is no `styles` field in the manifest: the manifest
+lists sources, and the build decides outputs. A host loads that stylesheet
+after the document stylesheet and after its own theme layer, so a pack sees
+resolved theme values and is not overridden by the host's broader rules.
+
+Two rules keep packs from interfering with each other and with themes. Both
+are reported as warnings in the host's diagnostics rather than enforced, so
+a pack that breaks them still loads.
+
+The first is color. Express every color through the `--mk-*` palette
+documented in [integration.md](integration.md), or derive one from it, and
+reserve a literal for a genuinely theme-invariant brand color:
+
+```css
+.mk-ana-timeline__rule {
+  border-color: var(--mk-border);
+  background: color-mix(in srgb, var(--mk-accent) 14%, var(--mk-bg));
+}
+```
+
+A hardcoded color looks correct while you write it and becomes unreadable
+the moment someone opens the note in a dark theme. This is the single most
+common way a pack breaks for other people.
+
+The second is naming. Every selector starts with `.mk-` followed by the pack
+name and a hyphen, so `.mk-ana-timeline__rule` for the pack `ana`. Because
+two installed packs can never share a namespace, prefixed class names can
+never collide either.
 
 The component script follows a small registration convention. When it loads,
 it calls a function the host provides and hands over its manifest and its

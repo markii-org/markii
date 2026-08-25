@@ -34,6 +34,18 @@ who they serve — with the third acting as the overriding scope test:
    Scope test for any change: does it keep both the file tree and the
    rendered page clean while still serving the power-user workflow?
 
+   **Clean is not silent.** Every failure has exactly two homes and must
+   reach both: a quiet, labeled marker in the rendered note, with the
+   reason available out of the text flow (tooltip, collapsed marker), and
+   a full diagnostic in the host's designated diagnostics surface. A
+   failure that is recorded internally but reachable from neither surface
+   is a bug of the same severity as an error dump in the page. Wording
+   lives in the failure-presentation module only; the diagnostics surface
+   is the host's, named in `docs/integration.md`'s host checklist. Test
+   for any failure path: could a user, without opening developer tools or
+   bisecting the file, discover that this failed and why? If not, the
+   change is not clean, it is mute.
+
 ## Repo layout (npm workspaces)
 
 ```
@@ -157,7 +169,37 @@ apps/vscode          the "Markii" VS Code extension (preview + Run + packs) — 
                      composes them
   syntaxes/          TextMate injection grammar for the three directive forms
   esbuild.config.mjs two bundles: extension host (node/cjs, vscode external)
-                     and webview (browser/iife); @markii/* aliased to src/
+                     and webview (browser/iife); @markii/* aliased to src/;
+                     also copies the esbuild-wasm runtime into dist/
+  src/packs/pack-build.ts  compiles a pack's component sources with
+                     esbuild-wasm into one registration script (plus a
+                     stylesheet when the pack imports CSS), cached in
+                     extension storage, never in the pack's own folder.
+                     Written host-neutral so it can move to a package later
+  src/packs/pack-diagnostics.ts  the lines written to the Markii output
+                     channel: packs loaded, packs skipped and why,
+                     deprecated relative markii.packs entries
+apps/obsidian        the "Markii" Obsidian plugin (desktop only) — an
+                     app/consumer of @markii/react, never a renderer.
+                     Feasibility spike scope: a side-leaf/main-tab preview
+                     of the active .mk.md, no scripting, no packs, no
+                     markdown post-processor, no Live Preview extension:
+  src/main.ts        Plugin subclass: view registration, the preview
+                     command, settings load. With view.tsx and
+                     settings-tab.ts the ONLY files allowed to import
+                     `obsidian` (guarded by src/obsidian-import-guard.test.ts)
+  src/view.tsx       ItemView owning a React root, re-rendering on active
+                     file and vault change
+  src/render-document.tsx  the obsidian-free render seam
+  src/settings.ts    settings shape + hostile-input normalization. Cosmetic
+                     preferences only: anything authorizing execution or
+                     network must use app.saveLocalStorage (device-local),
+                     never saveData (travels with vault sync)
+  src/obsidian-theme.css  maps doc.css's 14 Tier 1 tokens onto Obsidian's
+                     theme variables; src/theme-coverage.test.ts fails when
+                     a token is left unmapped
+  scripts/generate-doc-css.ts  concatenates doc.css + the theme layer into
+                     the generated, gitignored styles.css Obsidian loads
 ```
 
 Platform renderers live under `packages/platforms/*` (a workspace root alongside
@@ -187,6 +229,18 @@ corpus is plain data — no TypeScript in `conformance/`.
   tsx added 2026-08-22): `@types/vscode`, `@vscode/vsce`, `esbuild`
   (extension bundling), `tsx` (dev-only: spawns the TypeScript worker
   under Vitest). These never enter `packages/*`.
+- VS Code extension only, added 2026-08-25 (user-approved): `esbuild-wasm`,
+  a RUNTIME dependency used to compile a pack's component sources at load
+  time so a pack needs no build step of its own. It ships in the VSIX
+  (~14 MB unpacked, ~4 MB packed) and must never enter `packages/*`. An
+  Obsidian host cannot bundle it: Obsidian Sync enforces a 5 MB per-file
+  limit, so that host consumes prebuilt pack artifacts instead. Extracting
+  the builder into a published package would therefore need this rule
+  amended first, and that decision is deferred until a second host actually
+  loads packs.
+- Obsidian plugin only (`apps/obsidian`, user-approved 2026-08-25):
+  `obsidian` (API types, dev-only, external at build time) and `esbuild`
+  (plugin bundling). These never enter `packages/*`.
 
 ## Architecture rules (from the spec — violations are bugs)
 
@@ -289,9 +343,23 @@ same commit as the change that triggers them:
   under `.github/`. A non-published _app_ workspace (playground, vscode)
   joins the repo layout only; `build:dist` and the release workflow list
   npm packages.
+- **New PUBLISHED npm package** → before its first release, the user must
+  publish version 0.0.1 by hand and configure OIDC trusted publishing for it
+  on npm. The release workflow publishes via trusted publishing, which
+  cannot bootstrap a package that does not exist yet, so a new package
+  silently fails its first release otherwise. STOP and remind the user of
+  this step as soon as a new published package is proposed; do not wait
+  until release time to raise it.
 - **New stdlib component** → contract in `@markii/stdlib`, component + tests
   in `@markii/react`, `doc.css` for its internals (never outer margins), and
-  the component list in this file's repo layout.
+  the component list in this file's repo layout. Its colors come from
+  `doc.css`'s Tier 1 tokens or the three named derivations, never a raw
+  literal: `doc-css-tokens.test.ts` fails on one.
+- **New Tier 1 token in `doc.css`** → it is part of the public theming
+  contract (`docs/integration.md`), so it needs that page updated, every
+  host theme layer mapping it (each host's coverage test fails until they
+  do), and a CHANGELOG entry. Renaming or removing one is a breaking
+  change: pack stylesheets consume these names.
 - **New `ScriptExecutor` implementation** (any engine adapted behind
   `@markii/runtime`'s seam) → it MUST pass `conformance/executor/` plus an
   independent adversarial pass before merge, and that pass's findings update

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   isCoveredByRoots,
   isWithinRoot,
+  packWebviewRoots,
   withTrailingSlash,
 } from './resource-roots';
 
@@ -92,5 +93,37 @@ describe('isCoveredByRoots', () => {
 
   it('is false for an empty root list', () => {
     expect(isCoveredByRoots([], 'file:///home/u/project')).toBe(false);
+  });
+});
+
+describe('packWebviewRoots', () => {
+  it('returns just the pack folders, deduplicated, when cacheDir is undefined', () => {
+    expect(
+      packWebviewRoots(['/packs/a', '/packs/b', '/packs/a'], undefined),
+    ).toEqual(['/packs/a', '/packs/b']);
+  });
+
+  it('adds the cache directory alongside the pack folders', () => {
+    expect(
+      packWebviewRoots(['/packs/a'], '/ext/global-storage/pack-cache'),
+    ).toEqual(['/packs/a', '/ext/global-storage/pack-cache']);
+  });
+
+  it('never derives a root that is not one of the given inputs (no workspace-wide widening)', () => {
+    const roots = packWebviewRoots(
+      ['/packs/a'],
+      '/ext/global-storage/pack-cache',
+    );
+    expect(roots).toEqual(['/packs/a', '/ext/global-storage/pack-cache']);
+    expect(roots).not.toContain('/');
+    expect(roots).not.toContain('/packs');
+  });
+
+  it('is empty for no pack folders and no cache directory', () => {
+    expect(packWebviewRoots([], undefined)).toEqual([]);
+  });
+
+  it('deduplicates when the cache directory equals a pack folder', () => {
+    expect(packWebviewRoots(['/shared'], '/shared')).toEqual(['/shared']);
   });
 });

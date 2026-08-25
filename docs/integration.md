@@ -84,6 +84,64 @@ optional value store and vault store for documents that use scripting, and
 `renderMarkNode` renders a single block from a parsed document under the
 same contract, for hosts that need block-level granularity.
 
+## Theming a host
+
+The reference stylesheet `doc.css` is shared by every host, and the standard
+components carry no light or dark variants of their own. A host never
+detects which theme is active. Instead it supplies values for a small
+palette, and because the host's own theme variables already differ between
+light and dark, the document follows automatically.
+
+The palette is fifteen custom properties, declared on `.doc`:
+
+| Token | What it is for |
+| --- | --- |
+| `--mk-bg` | the page ground |
+| `--mk-raised` | raised surfaces such as cards, which dark themes need to separate from the ground |
+| `--mk-fg` | body text |
+| `--mk-surface` | one step off the ground: code blocks, keycaps, script markers, details, zebra rows |
+| `--mk-surface-strong` | two steps off: inline code, table headers, progress tracks |
+| `--mk-border` | hairlines |
+| `--mk-muted` | secondary text such as captions and labels |
+| `--mk-faint` | tertiary text: missing values, empty states, unfilled stars |
+| `--mk-accent` | the single interactive color: active tabs, progress bars, chart strokes |
+| `--mk-on-accent` | ink that sits on a solid `--mk-accent` fill |
+| `--mk-info` | the informational hue |
+| `--mk-success` | the success hue |
+| `--mk-warning` | the warning hue, also the rating star |
+| `--mk-danger` | the danger hue |
+| `--mk-limit` | the hue for a run that hit a resource limit |
+
+Everything else is derived. Each semantic variant's fill, strong fill, and
+ink are mixed from its hue against `--mk-bg` or `--mk-fg` at three fixed
+ratios, so a host maps the palette and every variant becomes correct in both
+directions for free. A host should not override the derived properties.
+
+Mapping the palette is the whole job:
+
+```css
+.doc {
+  --mk-bg: var(--editor-background, #fff);
+  --mk-fg: var(--editor-foreground, #1a1a1a);
+}
+```
+
+Keep a literal fallback in each `var()` so a theme that omits a variable
+still yields a readable color.
+
+The derivations use `color-mix`, guarded by `@supports`. Where it is
+unavailable, which in practice means email clients receiving a document from
+the static HTML renderer, the literal light-mode values apply instead. This
+is why a host must map the palette rather than restyle individual
+components: a component rule that a host overrides by selector is a rule the
+derivation no longer reaches.
+
+`doc.css` is guarded by a test that fails if any raw color literal appears
+outside the palette and its fallback block, and each host has a test that
+fails if its theme layer leaves a palette entry unmapped. Adding a token to
+the palette therefore breaks every host until it is mapped, which is the
+intended behavior.
+
 ## Host responsibilities for scripting (L3)
 
 The libraries deliberately stop at the seam where application policy begins.
@@ -127,6 +185,13 @@ importance:
    intersect the granted permissions, keep writes confined to `.cache/`,
    and include the content of `src=` script files in the grant-key closure
    so editing a bundled script re-prompts.
+9. **A diagnostics surface.** A host that loads packs or runs scripts names
+   one place where failures are readable in full, and routes every pack that
+   failed to load, every deprecated configuration entry, and every failed
+   run to it. The rendered note keeps only a quiet marker; the detail lives
+   here. A failure recorded internally and reachable from neither is a bug.
+   The reference host uses an output channel named Markii, revealed by the
+   command `Markii: Show Diagnostics`.
 
 ## Editor support
 

@@ -335,6 +335,164 @@ describe('isHostToWebviewMessage — packNamespaces', () => {
   });
 });
 
+describe('isHostToWebviewMessage — packSkippedCount', () => {
+  it('accepts a well-formed packSkippedCount', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'update',
+        revision: 1,
+        text: 'hi',
+        packSkippedCount: 2,
+      }),
+    ).toBe(true);
+  });
+
+  it('accepts a zero packSkippedCount', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'update',
+        revision: 1,
+        text: 'hi',
+        packSkippedCount: 0,
+      }),
+    ).toBe(true);
+  });
+
+  it('accepts an omitted packSkippedCount field', () => {
+    expect(
+      isHostToWebviewMessage({ type: 'update', revision: 1, text: 'hi' }),
+    ).toBe(true);
+  });
+
+  it('rejects a negative packSkippedCount', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'update',
+        revision: 1,
+        text: 'hi',
+        packSkippedCount: -1,
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects a non-integer packSkippedCount', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'update',
+        revision: 1,
+        text: 'hi',
+        packSkippedCount: 1.5,
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects an oversized packSkippedCount', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'update',
+        revision: 1,
+        text: 'hi',
+        packSkippedCount: 257,
+      }),
+    ).toBe(false);
+  });
+});
+
+describe('isHostToWebviewMessage — lastRun', () => {
+  it('accepts a well-formed successful lastRun', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'update',
+        revision: 1,
+        text: 'hi',
+        lastRun: { trigger: 'scheduled', ranAt: 1000, ok: true },
+      }),
+    ).toBe(true);
+  });
+
+  it('accepts a well-formed failed lastRun with a reason', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'update',
+        revision: 1,
+        text: 'hi',
+        lastRun: {
+          trigger: 'auto',
+          ranAt: 1000,
+          ok: false,
+          reason: 'timed out',
+        },
+      }),
+    ).toBe(true);
+  });
+
+  it('accepts an omitted lastRun field', () => {
+    expect(
+      isHostToWebviewMessage({ type: 'update', revision: 1, text: 'hi' }),
+    ).toBe(true);
+  });
+
+  it('rejects an invalid trigger', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'update',
+        revision: 1,
+        text: 'hi',
+        lastRun: { trigger: 'nightly', ranAt: 1000, ok: true },
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects a non-finite ranAt', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'update',
+        revision: 1,
+        text: 'hi',
+        lastRun: { trigger: 'manual', ranAt: Infinity, ok: true },
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects a non-boolean ok', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'update',
+        revision: 1,
+        text: 'hi',
+        lastRun: { trigger: 'manual', ranAt: 1000, ok: 'yes' },
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects an oversized reason', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'update',
+        revision: 1,
+        text: 'hi',
+        lastRun: {
+          trigger: 'manual',
+          ranAt: 1000,
+          ok: false,
+          reason: 'x'.repeat(5000),
+        },
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects a lastRun that is not an object', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'update',
+        revision: 1,
+        text: 'hi',
+        lastRun: 'nope',
+      }),
+    ).toBe(false);
+  });
+});
+
 describe('isHostToWebviewMessage — bundle-error', () => {
   it('accepts a well-formed bundle-error message', () => {
     expect(

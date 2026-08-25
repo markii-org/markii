@@ -237,5 +237,20 @@ jobs:
           else
             VSIX=$(ls apps/vscode/markii-vscode-*.vsix)
             echo "publishing $VSIX to the Marketplace"
-            npx --yes @vscode/vsce publish --packagePath "$VSIX"
+            # The `vsce show` pre-check above races Marketplace propagation: a
+            # freshly published version is not listed for several minutes, so a
+            # re-run of the same tag reaches this branch and then fails with
+            # "already exists" (observed on v0.7.2, whose second run went red
+            # for a version its first run had just published successfully).
+            # Treating that specific message as success makes the step
+            # genuinely idempotent instead of idempotent-when-not-racing.
+            PUBLISH_LOG=$(mktemp)
+            if npx --yes @vscode/vsce publish --packagePath "$VSIX" 2>&1 | tee "$PUBLISH_LOG"; then
+              echo "published $VSIX"
+            elif grep -qi 'already exists' "$PUBLISH_LOG"; then
+              echo "markii.markii-vscode@$VERSION was already published (propagation race), treating as success"
+            else
+              echo "vsce publish failed" >&2
+              exit 1
+            fi
           fi

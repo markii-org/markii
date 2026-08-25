@@ -1,0 +1,11 @@
+/*
+ * Fixture CSS for `tsxpack-badcss` (pack-build.fixture.test.ts): deliberately
+ * violates BOTH warning rules from `../../../src/packs/pack-css-lint.ts` —
+ * a raw hex color literal (Rule A) and an unprefixed selector (Rule B) — so
+ * the real, end-to-end esbuild build path can be asserted to surface both
+ * warnings against genuinely emitted (bundled) CSS, not just the unit-level
+ * lint module tests.
+ */
+.stat {
+  color: #123456;
+}

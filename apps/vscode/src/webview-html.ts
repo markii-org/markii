@@ -27,6 +27,19 @@ export interface WebviewHtmlOptions {
    * is then byte-for-byte what it always was.
    */
   readonly packScriptUris?: readonly string[];
+  /**
+   * Webview-visible URIs of every configured, installed pack's emitted
+   * stylesheet (`./packs/pack-build.ts`, the pack-CSS design) — a pack
+   * whose build produced no `.css` (no CSS import) simply has no entry
+   * here. Rendered as `<link rel="stylesheet">` tags, in this array's
+   * order, placed AFTER `styleUri`'s own `<link>` (`doc.css` + the host
+   * theme layer, `./webview/main.tsx`'s load order) — see
+   * `buildWebviewHtml`'s doc comment for why this order is part of the
+   * contract, not incidental. Empty (or omitted) when no pack produced a
+   * stylesheet; the shell is then unchanged from before this field
+   * existed except for the omitted tags.
+   */
+  readonly packStyleUris?: readonly string[];
 }
 
 const HTML_ESCAPES: Readonly<Record<string, string>> = {
@@ -91,6 +104,24 @@ function escapeHtml(value: string): string {
  * The bootstrap script (step 1) is emitted unconditionally, even with zero
  * packs configured — it is a fixed handful of bytes with no dependency on
  * `packScriptUris`, so there is no reason to special-case the empty case.
+ *
+ * ## Pack stylesheet load order (the pack-CSS design)
+ *
+ * A pack's emitted stylesheet (`packStyleUris`, one `<link
+ * rel="stylesheet">` per pack that has one) loads in `<head>` right after
+ * `styleUri`'s own `<link>` — which is `doc.css` followed by the host's
+ * theme layer, bundled together as `./webview/main.tsx` documents. That
+ * order is part of the contract, not incidental: loading pack CSS AFTER
+ * `doc.css` lets a pack consume the resolved `--mk-*` token values (the
+ * whole point of Rule A in `./packs/pack-css-lint.ts` — a token only
+ * resolves to something once `doc.css` has declared it), and loading it
+ * AFTER the theme layer means the theme layer's broad selectors (see
+ * `./webview/theme.css`) can never accidentally override a pack's own
+ * rules just by cascade order. `style-src` already authorizes same-origin
+ * `cspSource` URIs (needed for the standard component set's inline style
+ * attributes — see the CSP comment below), so no nonce is needed on a
+ * `<link>` tag; `localResourceRoots` (`preview-panel.ts`) is what actually
+ * gates which stylesheet files may load, same as every pack script.
  */
 export function buildWebviewHtml(options: WebviewHtmlOptions): string {
   const scriptUri = escapeHtml(options.scriptUri);
@@ -99,9 +130,13 @@ export function buildWebviewHtml(options: WebviewHtmlOptions): string {
   const nonce = escapeHtml(options.nonce);
   const title = escapeHtml(options.title);
   const packScriptUris = (options.packScriptUris ?? []).map(escapeHtml);
+  const packStyleUris = (options.packStyleUris ?? []).map(escapeHtml);
 
   const packScriptTags = packScriptUris
     .map((uri) => `<script nonce="${nonce}" src="${uri}"></script>`)
+    .join('\n');
+  const packStyleTags = packStyleUris
+    .map((uri) => `<link rel="stylesheet" href="${uri}">`)
     .join('\n');
 
   return `<!doctype html>
@@ -151,6 +186,7 @@ export function buildWebviewHtml(options: WebviewHtmlOptions): string {
 -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${cspSource} https: data:; style-src ${cspSource} 'unsafe-inline'; font-src ${cspSource}; script-src 'nonce-${nonce}';">
 <link rel="stylesheet" href="${styleUri}">
+${packStyleTags}
 <title>${title}</title>
 </head>
 <body>

@@ -110,3 +110,24 @@ export function dataStateClassName(
   if (kindClass) classes.push(kindClass);
   return classes.join(' ');
 }
+
+/**
+ * The class `render.tsx` wraps an INLINE-registered component in when it
+ * receives no content — e.g. `::badge{label="x"}`, where the author put the
+ * text in an attribute instead of the directive's body. The component still
+ * renders exactly as registered (AGENTS.md's cleanliness principle: this is
+ * a marker, never a fallback box, and content is never destroyed); this
+ * class is a quiet visual hook only, styled in `doc.css` off Tier 1 tokens.
+ */
+export const EMPTY_INLINE_MARKER_CLASS = 'mk-inline-empty';
+
+/**
+ * The `title` tooltip for `EMPTY_INLINE_MARKER_CLASS`: names the directive
+ * and states the likely mistake, so the reason lives out of the text flow
+ * per AGENTS.md's "clean is not silent" rule. Kept here — the one home of
+ * failure wording — so `@markii/react` and `@markii/html` say exactly the
+ * same thing.
+ */
+export function emptyInlineTitle(name: string): string {
+  return `${name}: no content (an attribute may have been used where directive text was expected)`;
+}

@@ -20,7 +20,12 @@ import { readRegistryComponent, resolveDirectiveAlias } from './registry.js';
 import { resolveLayoutAttributes } from './layout.js';
 import { escapeHtml } from './escape.js';
 import { resolveScopedPath, type ValueScope } from './resolve.js';
-import { failureKindClass, failureTitle } from './failure-presentation.js';
+import {
+  failureKindClass,
+  failureTitle,
+  EMPTY_INLINE_MARKER_CLASS,
+  emptyInlineTitle,
+} from './failure-presentation.js';
 import { stringifyStoredValue } from './value-format.js';
 
 /** The hast tag name `@markii/core`'s `toHast` marks every directive with (`to-hast.ts`'s `DIRECTIVE_TAG`). */
@@ -206,6 +211,19 @@ function isFormMismatch(
   if (kind !== TEXT_DIRECTIVE_KIND) return false;
   try {
     return entry.inline === false;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Whether `entry` is registered `inline: true`, read the same
+ * hostile-configuration-safe way `isFormMismatch` reads `entry.inline`.
+ * Mirrors `@markii/react`'s `isRegisteredInline`.
+ */
+function isRegisteredInline(entry: HtmlRegistryEntry): boolean {
+  try {
+    return entry.inline === true;
   } catch {
     return false;
   }
@@ -407,8 +425,9 @@ function renderDirectiveContent(
   }
 
   const binding = resolveDataAttribute(attributes, scope);
+  let rendered: string;
   try {
-    return component(
+    rendered = component(
       binding.attributes,
       childrenHtml,
       withDataBinding(ctx, binding),
@@ -416,6 +435,18 @@ function renderDirectiveContent(
   } catch {
     return componentError(name || '(unnamed)', inline, childrenHtml);
   }
+
+  // ITEM 1 (AGENTS.md "clean is not silent"): mirrors `@markii/react`'s
+  // identical check in `renderDirectiveContent` — an `inline: true`
+  // component with no content still renders exactly as registered, wrapped
+  // in the same quiet marker/title, so the two engines produce identical
+  // markup for this case.
+  if (isRegisteredInline(entry) && childrenHtml.trim() === '') {
+    const title = escapeHtml(emptyInlineTitle(name));
+    return `<span class="${EMPTY_INLINE_MARKER_CLASS}" title="${title}">${rendered}</span>`;
+  }
+
+  return rendered;
 }
 
 /** Turns one `<mk-directive>` element (children already transformed) into its HTML string, including the layout wrapper for block directives. */

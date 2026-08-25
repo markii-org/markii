@@ -1,64 +1,58 @@
 /*
  * VS Code theming for `@markii/react`'s `doc.css`, loaded AFTER it (see
  * `main.tsx`) so identical-specificity selectors here win the cascade.
- * `doc.css` hardcodes light-mode hex colors throughout — this sheet does
- * NOT fork or edit that file; it re-declares every one of its color-ish
- * selectors, deriving each surface from the editor's own theme colors
- * instead, so the preview stays legible across light, dark, AND
- * high-contrast VS Code themes. Layout/spacing is left entirely alone
- * (Architecture rule 4 lives in `doc.css`); only `color`/`background`/
- * `border`/`fill`/`stroke`/font-family are touched here.
+ * `doc.css` exposes a small token contract on `.doc` (its own "TIER 1
+ * TOKENS" comment block: `--mk-bg`, `--mk-raised`, `--mk-fg`,
+ * `--mk-surface`, `--mk-surface-strong`, `--mk-border`, `--mk-muted`,
+ * `--mk-faint`, `--mk-accent`, and the five semantic hues `--mk-info`/
+ * `--mk-success`/`--mk-warning`/`--mk-danger`/`--mk-limit`) — every finer
+ * shade every component actually paints (a callout's tinted background, a
+ * badge's tinted text, ...) is DERIVED from those tokens inside `doc.css`
+ * itself via `color-mix()`. This sheet does not fork or edit that file and
+ * does not re-declare any individual component selector: it remaps ONLY
+ * these ~14 tokens onto the editor's own theme colors, and every component
+ * becomes theme-correct for free.
  *
  * `theme-coverage.test.ts` reads both files off disk and asserts every
- * hardcoded-color selector in `doc.css` is either re-declared here or
- * explicitly allowlisted with a reason — the drift alarm that keeps this
- * file honest as `doc.css` grows new components.
+ * Tier 1 token `doc.css` declares is redeclared here — the drift alarm
+ * that keeps this file honest as `doc.css` grows new tokens.
  */
 
-:root {
-  /* ---------- base surface tokens (fixed contract, see the task) ---------- */
-  --mkv-bg: var(--vscode-editor-background, #fff);
-  --mkv-fg: var(--vscode-editor-foreground, #1a1a1a);
-  --mkv-surface: color-mix(in srgb, var(--mkv-fg) 6%, var(--mkv-bg));
-  --mkv-surface-strong: color-mix(in srgb, var(--mkv-fg) 12%, var(--mkv-bg));
-  --mkv-border: color-mix(in srgb, var(--mkv-fg) 24%, var(--mkv-bg));
-  --mkv-muted: color-mix(in srgb, var(--mkv-fg) 60%, var(--mkv-bg));
-  --mkv-accent: var(--vscode-textLink-foreground, #1d4ed8);
+.doc {
+  --mk-bg: var(--vscode-editor-background, #fff);
+  --mk-fg: var(--vscode-editor-foreground, #1a1a1a);
+  --mk-raised: var(--vscode-editor-background, #fff);
+  --mk-surface: color-mix(in srgb, var(--mk-fg) 6%, var(--mk-bg));
+  --mk-surface-strong: color-mix(in srgb, var(--mk-fg) 12%, var(--mk-bg));
+  --mk-border: color-mix(in srgb, var(--mk-fg) 24%, var(--mk-bg));
+  --mk-muted: color-mix(in srgb, var(--mk-fg) 60%, var(--mk-bg));
+  --mk-faint: color-mix(in srgb, var(--mk-fg) 40%, var(--mk-bg));
+  --mk-accent: var(--vscode-textLink-foreground, #1d4ed8);
+  --mk-on-accent: var(--vscode-button-foreground, #fff);
 
-  /*
-   * ---------- semantic hue seeds ----------
-   * The exact hues `doc.css` already uses per state, kept as the "brand"
-   * identity for each status — only their LIGHTNESS is re-derived below
-   * (mixed against `--mkv-bg` for a fill, or nudged toward `--mkv-fg` for
-   * text/borders) so the hue reads the same in every theme while staying
-   * legible against it.
-   */
-  --mkv-hue-info: #3b82f6;
-  --mkv-hue-success: #15803d;
-  --mkv-hue-warning: #d97706;
-  --mkv-hue-danger: #dc2626;
-  --mkv-hue-danger-strong: #ef4444;
-  --mkv-hue-danger-deep: #b91c1c;
-  --mkv-hue-purple: #7c3aed;
-  --mkv-hue-amber: #f59e0b;
+  --mk-info: #3b82f6;
+  --mk-success: #15803d;
+  --mk-warning: #d97706;
+  --mk-danger: #dc2626;
+  --mk-limit: #7c3aed;
 }
 
 body {
-  background: var(--mkv-bg);
-  color: var(--mkv-fg);
+  background: var(--mk-bg);
+  color: var(--mk-fg);
 }
 
 /*
- * The one layout-adjacent exception the task calls out by name: a webview
- * has no host page around `.doc` (unlike the playground's own chrome), so a
- * reading measure and breathing room are given here rather than left at
- * `doc.css`'s zero. No other spacing/layout property is touched.
+ * The one layout-adjacent exception the original design called out by
+ * name: a webview has no host page around `.doc` (unlike the playground's
+ * own chrome), so a reading measure and breathing room are given here
+ * rather than left at `doc.css`'s zero. No other spacing/layout property
+ * is touched.
  */
 .doc {
   max-width: 48rem;
   margin-inline: auto;
   padding: 1rem 1.25rem 2rem;
-  color: var(--mkv-fg);
   font-family: var(--vscode-font-family, system-ui, sans-serif);
 }
 
@@ -73,21 +67,13 @@ body {
   );
 }
 
-.doc pre {
-  background: var(--mkv-surface);
-}
-
-.doc code {
-  background: var(--mkv-surface-strong);
-}
-
 /*
  * ---------- elements doc.css deliberately leaves to the browser ----------
- * `theme-coverage.test.ts` can only police selectors `doc.css` actually
- * colors; these are the reverse case. A link and a rule get their color from
- * the user agent, which assumes a light page — the default link blue on a
- * dark editor background is the one genuinely illegible thing left after
- * everything above. Colors only; no new decoration `doc.css` does not have.
+ * A link and a rule get their color from the user agent, which assumes a
+ * light page — the default link blue on a dark editor background is the
+ * one genuinely illegible thing left after the token remap above, since
+ * `doc.css` never styles `a`/`hr` at all (nothing for the token layer to
+ * cover). Colors only; no new decoration `doc.css` does not have.
  */
 
 .doc a {
@@ -96,327 +82,17 @@ body {
 
 .doc a:hover,
 .doc a:active {
-  color: var(--vscode-textLink-activeForeground, var(--mkv-accent));
+  color: var(--vscode-textLink-activeForeground, var(--mk-accent));
 }
 
 .doc hr {
-  border-color: var(--mkv-border);
-}
-
-/* ---------- GFM table ---------- */
-
-.doc th,
-.doc td {
-  border-color: var(--mkv-border);
-}
-
-.doc th {
-  background: var(--mkv-surface-strong);
-}
-
-.doc tr:nth-child(even) {
-  background: var(--mkv-surface);
-}
-
-/* ---------- callout ---------- */
-
-.mk-callout {
-  border-color: var(--mk-callout-border, var(--mkv-border));
-  background: var(--mk-callout-bg, var(--mkv-surface));
-}
-
-.mk-callout--info {
-  --mk-callout-border: color-mix(
-    in srgb,
-    var(--mkv-hue-info) 85%,
-    var(--mkv-fg)
-  );
-  --mk-callout-bg: color-mix(in srgb, var(--mkv-hue-info) 14%, var(--mkv-bg));
-}
-
-.mk-callout--warning {
-  --mk-callout-border: color-mix(
-    in srgb,
-    var(--mkv-hue-warning) 85%,
-    var(--mkv-fg)
-  );
-  --mk-callout-bg: color-mix(
-    in srgb,
-    var(--mkv-hue-warning) 14%,
-    var(--mkv-bg)
-  );
-}
-
-.mk-callout--danger {
-  --mk-callout-border: color-mix(
-    in srgb,
-    var(--mkv-hue-danger) 85%,
-    var(--mkv-fg)
-  );
-  --mk-callout-bg: color-mix(in srgb, var(--mkv-hue-danger) 14%, var(--mkv-bg));
-}
-
-/* ---------- kbd ---------- */
-
-.mk-kbd {
-  border-color: var(--mkv-border);
-  background: var(--mkv-surface);
-}
-
-/* ---------- rating ---------- */
-
-.mk-rating {
-  color: var(--mkv-border);
-}
-
-.mk-rating__star--filled {
-  color: color-mix(in srgb, var(--mkv-hue-amber) 85%, var(--mkv-fg));
-}
-
-/* ---------- value interpolation ---------- */
-
-.mk-value--stale {
-  color: color-mix(in srgb, var(--mkv-hue-warning) 80%, var(--mkv-fg));
-  border-bottom-color: color-mix(
-    in srgb,
-    var(--mkv-hue-warning) 85%,
-    var(--mkv-fg)
-  );
-}
-
-.mk-value--missing {
-  color: var(--mkv-muted);
-}
-
-.mk-value--script-error {
-  border-bottom-color: color-mix(
-    in srgb,
-    var(--mkv-hue-danger-strong) 85%,
-    var(--mkv-fg)
-  );
-}
-
-.mk-value--capability-denied {
-  border-bottom-color: color-mix(
-    in srgb,
-    var(--mkv-hue-warning) 85%,
-    var(--mkv-fg)
-  );
-}
-
-.mk-value--tier-blocked {
-  border-bottom-color: color-mix(
-    in srgb,
-    var(--mkv-hue-info) 85%,
-    var(--mkv-fg)
-  );
-}
-
-.mk-value--limit {
-  border-bottom-color: color-mix(
-    in srgb,
-    var(--mkv-hue-purple) 85%,
-    var(--mkv-fg)
-  );
-}
-
-/* ---------- script marker ---------- */
-
-.mk-script {
-  border-color: var(--mkv-border);
-  background: var(--mkv-surface);
-}
-
-.mk-script__summary {
-  color: var(--mkv-muted);
-}
-
-.mk-script[open] > .mk-script__summary {
-  border-bottom-color: var(--mkv-border);
-}
-
-.mk-script__empty {
-  color: var(--mkv-muted);
-}
-
-/* ---------- details ---------- */
-
-.mk-details {
-  border-color: var(--mkv-border);
-  background: var(--mkv-surface);
-}
-
-/* ---------- card ---------- */
-
-.mk-card {
-  border-color: var(--mkv-border);
-  background: var(--mkv-surface);
-}
-
-/* ---------- badge ---------- */
-
-.mk-badge {
-  color: var(--mk-badge-fg, var(--mkv-fg));
-  background: var(--mk-badge-bg, var(--mkv-surface-strong));
-}
-
-.mk-badge--info {
-  --mk-badge-fg: color-mix(in srgb, var(--mkv-hue-info) 80%, var(--mkv-fg));
-  --mk-badge-bg: color-mix(in srgb, var(--mkv-hue-info) 18%, var(--mkv-bg));
-}
-
-.mk-badge--success {
-  --mk-badge-fg: color-mix(in srgb, var(--mkv-hue-success) 80%, var(--mkv-fg));
-  --mk-badge-bg: color-mix(in srgb, var(--mkv-hue-success) 18%, var(--mkv-bg));
-}
-
-.mk-badge--warning {
-  --mk-badge-fg: color-mix(in srgb, var(--mkv-hue-warning) 80%, var(--mkv-fg));
-  --mk-badge-bg: color-mix(in srgb, var(--mkv-hue-warning) 18%, var(--mkv-bg));
-}
-
-.mk-badge--danger {
-  --mk-badge-fg: color-mix(
-    in srgb,
-    var(--mkv-hue-danger-deep) 80%,
-    var(--mkv-fg)
-  );
-  --mk-badge-bg: color-mix(
-    in srgb,
-    var(--mkv-hue-danger-deep) 18%,
-    var(--mkv-bg)
-  );
-}
-
-/* ---------- figure ---------- */
-
-.mk-figure__caption {
-  color: var(--mkv-muted);
-}
-
-/* ---------- tabs ---------- */
-
-.mk-tabs__list {
-  border-bottom-color: var(--mkv-border);
-}
-
-.mk-tabs__button {
-  color: var(--mkv-muted);
-}
-
-.mk-tabs__button--active {
-  color: var(--mkv-accent);
-  border-bottom-color: var(--mkv-accent);
-}
-
-/* ---------- stat ---------- */
-
-.mk-stat__label {
-  color: var(--mkv-muted);
-}
-
-.mk-stat__delta {
-  color: var(--mkv-muted);
-}
-
-.mk-stat__delta--up {
-  color: color-mix(in srgb, var(--mkv-hue-success) 85%, var(--mkv-fg));
-}
-
-.mk-stat__delta--down {
-  color: color-mix(in srgb, var(--mkv-hue-danger-deep) 85%, var(--mkv-fg));
-}
-
-.mk-stat__delta--flat {
-  color: var(--mkv-muted);
-}
-
-/* ---------- progress ---------- */
-
-.mk-progress__label {
-  color: var(--mkv-muted);
-}
-
-.mk-progress__track {
-  background: var(--mkv-surface-strong);
-}
-
-.mk-progress__bar {
-  background: var(--mkv-accent);
-}
-
-.mk-progress__percent {
-  color: var(--mkv-muted);
-}
-
-/* ---------- chart ---------- */
-
-.mk-chart__line {
-  stroke: var(--mkv-accent);
-}
-
-.mk-chart__bar {
-  fill: var(--mkv-accent);
-}
-
-.mk-chart--empty {
-  color: var(--mkv-muted);
-  border-color: var(--mkv-border);
-}
-
-/* ---------- data-binding state (docs/scripting.md) ---------- */
-
-.mk-stat--script-error,
-.mk-progress--script-error,
-.mk-chart--script-error {
-  border-bottom-color: color-mix(
-    in srgb,
-    var(--mkv-hue-danger-strong) 85%,
-    var(--mkv-fg)
-  );
-}
-
-.mk-stat--capability-denied,
-.mk-progress--capability-denied,
-.mk-chart--capability-denied {
-  border-bottom-color: color-mix(
-    in srgb,
-    var(--mkv-hue-warning) 85%,
-    var(--mkv-fg)
-  );
-}
-
-.mk-stat--tier-blocked,
-.mk-progress--tier-blocked,
-.mk-chart--tier-blocked {
-  border-bottom-color: color-mix(
-    in srgb,
-    var(--mkv-hue-info) 85%,
-    var(--mkv-fg)
-  );
-}
-
-.mk-stat--limit,
-.mk-progress--limit,
-.mk-chart--limit {
-  border-bottom-color: color-mix(
-    in srgb,
-    var(--mkv-hue-purple) 85%,
-    var(--mkv-fg)
-  );
-}
-
-/* ---------- unknown directive fallback ---------- */
-
-.mk-unknown {
-  border-color: var(--mkv-border);
-  color: var(--mkv-muted);
+  border-color: var(--mk-border);
 }
 
 /* ---------- this extension's own quiet error state (webview/preview.tsx) ---------- */
 
 .mk-preview__error {
-  color: var(--mkv-muted);
+  color: var(--mk-muted);
   font-size: 0.9em;
   font-style: italic;
 }
@@ -424,7 +100,7 @@ body {
 /* ---------- read-only zip-form bundle preview marker (webview/preview.tsx) ---------- */
 
 .mk-preview__readonly-marker {
-  color: var(--mkv-muted);
+  color: var(--mk-muted);
   font-size: 0.85em;
   font-style: italic;
   margin-block-end: 1rem;
@@ -433,9 +109,33 @@ body {
 /* ---------- missing-pack quiet marker (webview/preview.tsx, docs/packs.md's uses: surfacing) ---------- */
 
 .mk-preview__uses-marker {
-  color: var(--mkv-muted);
+  color: var(--mk-muted);
   font-size: 0.85em;
   font-style: italic;
   margin-block-end: 1rem;
   cursor: default;
+}
+
+/* ---------- pack-load-failure quiet marker (webview/preview.tsx, ITEM 2's diagnostics surface) ---------- */
+
+.mk-preview__pack-failure-marker {
+  color: var(--mk-muted);
+  font-size: 0.85em;
+  font-style: italic;
+  margin-block-end: 1rem;
+  cursor: default;
+}
+
+/* ---------- last-run outcome quiet marker (webview/preview.tsx, ITEM 3) ---------- */
+
+.mk-preview__run-marker {
+  color: var(--mk-muted);
+  font-size: 0.85em;
+  font-style: italic;
+  margin-block-end: 1rem;
+  cursor: default;
+}
+
+.mk-preview__run-marker--failed {
+  color: var(--mk-danger);
 }

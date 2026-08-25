@@ -1,0 +1,20 @@
+/*
+ * Fixture CSS for `tsxpack-css` (pack-build.fixture.test.ts): exercises the
+ * "a pack that imports CSS gets a sibling stylesheet" path with clean
+ * input — correctly prefixed selectors and --mk-* tokens only, so this
+ * fixture also proves the color/prefix lint rules stay SILENT on
+ * well-formed pack CSS (the companion `tsxpack-badcss` fixture proves they
+ * fire).
+ */
+.mk-tsxcss-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+  color: var(--mk-fg);
+  background: var(--mk-surface);
+  border: 1px solid var(--mk-border);
+}
+
+.mk-tsxcss-stat:hover {
+  border-color: var(--mk-accent);
+}

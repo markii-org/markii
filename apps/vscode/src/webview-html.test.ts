@@ -142,6 +142,37 @@ describe('buildWebviewHtml', () => {
     const scriptSrc = /script-src ([^;]*);/.exec(csp)?.[1] ?? '';
     expect(scriptSrc.trim()).toBe(`'nonce-${BASE_OPTIONS.nonce}'`);
   });
+
+  it('emits one <link rel="stylesheet"> tag per pack stylesheet, AFTER the main styleUri link and before <title>', () => {
+    const html = buildWebviewHtml({
+      ...BASE_OPTIONS,
+      packStyleUris: [
+        'https://example.test/packs/demo/pack.css',
+        'https://example.test/packs/other/pack.css',
+      ],
+    });
+    const mainLink = `<link rel="stylesheet" href="${BASE_OPTIONS.styleUri}">`;
+    const demoLink = `<link rel="stylesheet" href="https://example.test/packs/demo/pack.css">`;
+    const otherLink = `<link rel="stylesheet" href="https://example.test/packs/other/pack.css">`;
+    expect(html.indexOf(mainLink)).toBeGreaterThanOrEqual(0);
+    expect(html.indexOf(mainLink)).toBeLessThan(html.indexOf(demoLink));
+    expect(html.indexOf(demoLink)).toBeLessThan(html.indexOf(otherLink));
+    expect(html.indexOf(otherLink)).toBeLessThan(html.indexOf('<title>'));
+  });
+
+  it('escapes a hostile pack stylesheet URI', () => {
+    const html = buildWebviewHtml({
+      ...BASE_OPTIONS,
+      packStyleUris: ['https://example.test/x"><script>alert(1)</script>'],
+    });
+    expect(html).not.toContain('<script>alert(1)</script>');
+  });
+
+  it('omits pack stylesheet tags entirely when packStyleUris is empty or absent', () => {
+    const html = buildWebviewHtml(BASE_OPTIONS);
+    const linkTagCount = (html.match(/<link /g) ?? []).length;
+    expect(linkTagCount).toBe(1); // just the main styleUri link
+  });
 });
 
 describe('createNonce', () => {

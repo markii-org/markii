@@ -72,3 +72,17 @@ export function dataStateClassName(
   if (kindClass) classes.push(kindClass);
   return classes.join(' ');
 }
+
+/**
+ * The class `render.ts` wraps an INLINE-registered component in when it
+ * receives no content (e.g. `::badge{label="x"}`, text put in an attribute
+ * instead of the directive body). Ported from `@markii/react`'s copy of this
+ * module so both engines say and style the same thing; see that copy's doc
+ * comment for the full rationale.
+ */
+export const EMPTY_INLINE_MARKER_CLASS = 'mk-inline-empty';
+
+/** The `title` tooltip for `EMPTY_INLINE_MARKER_CLASS`. Ported verbatim from `@markii/react`. */
+export function emptyInlineTitle(name: string): string {
+  return `${name}: no content (an attribute may have been used where directive text was expected)`;
+}

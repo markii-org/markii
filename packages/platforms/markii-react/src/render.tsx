@@ -28,6 +28,10 @@ import { ScriptMarker } from './components/script-marker.js';
 import { UnknownDirective } from './components/unknown-directive.js';
 import { ValueDirective } from './components/value-directive.js';
 import { resolveScopedPath } from './store-path.js';
+import {
+  EMPTY_INLINE_MARKER_CLASS,
+  emptyInlineTitle,
+} from './components/failure-presentation.js';
 
 function parseAttributes(json: string | undefined): DirectiveAttributes {
   if (!json) return {};
@@ -246,6 +250,45 @@ function isFormMismatch(
 }
 
 /**
+ * Whether `entry` is registered `inline: true` — read the same
+ * hostile-configuration-safe way `isFormMismatch` reads `entry.inline`
+ * (a throwing getter degrades to "not inline", never an exception escaping
+ * render). Only an explicit `true` counts, matching how `isFormMismatch`
+ * only trusts an explicit `false`: `undefined` means "this registration
+ * says nothing about kind" and gets none of the empty-content handling
+ * below.
+ */
+function isRegisteredInline(entry: RegistryEntry): boolean {
+  try {
+    return entry.inline === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Whether `children` amounts to no content at all — `undefined`/`null`/
+ * `false`, an all-whitespace string, or an array whose members are all
+ * themselves empty by this same test (recursing through the arrays
+ * hast-util-to-jsx-runtime produces for a directive with zero or
+ * whitespace-only inner markdown). Used only to detect the ITEM 1 case: an
+ * `inline: true` component written with nothing between its brackets/braces
+ * (`::badge{label="x"}` instead of `:badge[x]`) — the inline form exists to
+ * wrap text, so zero content there is an authoring mistake worth a quiet
+ * marker, never a reason to withhold rendering.
+ */
+function isEmptyContent(children: ReactNode): boolean {
+  if (children === undefined || children === null || children === false) {
+    return true;
+  }
+  if (typeof children === 'string') return children.trim() === '';
+  if (Array.isArray(children)) {
+    return (children as ReactNode[]).every((child) => isEmptyContent(child));
+  }
+  return false;
+}
+
+/**
  * Renders one directive's content (registry component, `:value[...]`
  * built-in, or the unknown-directive fallback) given its already
  * layout-stripped `attributes` — the part of `DirectiveElement` that does
@@ -350,11 +393,31 @@ function renderDirectiveContent(
           dataFailureKind: binding.dataFailureKind,
         }
       : {};
-  return (
+  const rendered = (
     <Component attributes={binding.attributes} {...dataProps}>
       {children}
     </Component>
   );
+
+  // ITEM 1 (AGENTS.md "clean is not silent"): an inline component that got
+  // no content is an authoring mistake, not a rendering failure — the
+  // component still renders exactly as registered (no fallback box, no
+  // destroyed content), wrapped in a quiet marker whose `title` carries the
+  // reason out of the text flow. Scoped to an EXPLICIT `inline: true`
+  // registration, so a component that says nothing about its kind keeps
+  // rendering exactly as before this rule existed.
+  if (isRegisteredInline(entry) && isEmptyContent(children)) {
+    return (
+      <span
+        className={EMPTY_INLINE_MARKER_CLASS}
+        title={emptyInlineTitle(name)}
+      >
+        {rendered}
+      </span>
+    );
+  }
+
+  return rendered;
 }
 
 /**

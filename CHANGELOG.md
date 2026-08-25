@@ -6,6 +6,95 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **A theming contract: `doc.css` now exposes a fifteen-token palette** —
+  the reference stylesheet previously hardcoded 36 colors, so every host had
+  to restyle it selector by selector: 60 overrides in the VS Code layer, 54
+  in the Obsidian one, each an opportunity to miss one. A real user hit the
+  consequence as unreadable gray-on-white cards in dark mode. Hosts now map
+  fifteen custom properties on `.doc` and every finer shade is derived from
+  them by three fixed mixes, so a remapped palette makes every callout,
+  badge, and chart variant correct in both directions with no further work.
+  The palette is documented in `docs/integration.md` and is a public
+  contract: renaming a token is a breaking change.
+
+  The derivations use `color-mix` guarded by `@supports`, with the previous
+  literal values as the fallback, because `doc.css` is embedded verbatim into
+  the static HTML renderer's output and a custom property that fails to parse
+  does not fall back, it vanishes. Three tests hold the line: `doc.css` may
+  contain no raw color literal outside its token blocks, and each host fails
+  until its layer maps every token.
+
+- **The extension compiles a pack's component sources** — a pack previously
+  had to ship a prebuilt registration script that nothing in this project
+  produced, so a pack of ordinary `.tsx` files loaded, claimed its namespace,
+  and contributed no components at all, silently. Sources are now compiled on
+  load with `esbuild-wasm`, cached outside the pack's own folder so the
+  user's file tree stays clean, and rebuilt only when a source changes. A
+  pack that does ship a prebuilt script is still used as-is.
+- **A `markii.packs` entry may name a folder of packs** — a configured folder
+  with no `pack.json` of its own now has each immediate subfolder checked for
+  one, so a directory of packs is a single entry. One level, no recursion.
+- **A diagnostics surface for the extension** — an output channel named
+  Markii, revealed by the new command `Markii: Show Diagnostics`, listing
+  every pack that loaded, every folder that did not and why, and every
+  deprecated configuration entry.
+- **Packs can style themselves** — a pack's components import CSS the
+  ordinary way, the build bundles one stylesheet per pack, and the host loads
+  it after the document stylesheet and its own theme layer so a pack sees
+  resolved theme values. Without this a pack rendered entirely unstyled, its
+  CSS having no way to travel with it. There is deliberately no manifest
+  field: the manifest lists sources, the build decides outputs. Two authoring
+  rules are reported as diagnostics rather than enforced, so a pack that
+  breaks them still loads: colors go through the `--mk-*` palette, and
+  selectors carry the pack's own `.mk-<name>-` prefix, which makes class
+  collisions impossible for the same reason namespace collisions already are.
+- A leading `~` in a `markii.packs` entry expands to the home directory.
+
+### Changed
+
+- **The extension's network provider is built on `node:https` rather than
+  `fetch`** — `fetch` cannot pin where a socket connects without an undici
+  dispatcher, and adding a dependency for that is out of scope. Every
+  existing protection survives the port and is pinned by the tests that
+  covered it before: manual redirect following with a per-hop host check, the
+  streamed response-size cap with its `content-length` pre-check, the refusal
+  of credential-bearing URLs, and certificate verification. The default
+  headers `fetch` had been adding are now set explicitly, because dropping
+  them would have broken every note reading the GitHub API (403, no user
+  agent) while every local-server test stayed green.
+- `RunJob`, `SpawnRunOptions`, and `RunOnceOptions` gained an optional
+  `netPolicy`, and `createNetProvider` is now exported for testing. An absent
+  `netPolicy` fails closed.
+- **Both host theme layers are now token maps** — the VS Code and Obsidian
+  stylesheets drop their per-selector overrides in favor of mapping the
+  fifteen-token palette onto each host's own theme variables.
+
+### Deprecated
+
+- A relative entry in `markii.packs` still resolves as before, but is
+  reported in diagnostics. The setting is user-scoped, so a relative entry
+  means a different folder in every workspace; absolute paths are preferred.
+
+### Fixed
+
+- **Failures that were recorded and never shown** — three separate silent
+  failures were found in one evening by a user bisecting by hand, so
+  AGENTS.md now states the principle directly: clean is not silent, and a
+  failure reachable from neither the note nor the host's diagnostics surface
+  is a bug as severe as an error dump. Acting on it: a pack that fails to
+  load reports the reason and shows a quiet marker in the preview, an auto or
+  scheduled run leaves a visible trace so a working schedule is
+  distinguishable from a broken one, and an inline component written with no
+  content carries a marker explaining the likely mistake instead of rendering
+  an empty box.
+- The Marketplace publish step no longer fails a re-run of an already
+  published tag. Its pre-check raced Marketplace propagation, which turned
+  the second 0.7.2 run red for a version its own first run had just
+  published; the publisher's own "already exists" is now treated as success.
+- The VSIX no longer ships test fixtures.
+
 ### Security
 
 - **The network jail now resolves and pins addresses, closing DNS rebinding
@@ -34,24 +123,6 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
   answers: a granted public name whose genuine DNS answer is loopback is
   refused, while a real GitHub API note still completes through TLS and a
   redirect.
-
-### Changed
-
-- **The extension's network provider is built on `node:https` rather than
-  `fetch`** — `fetch` cannot pin where a socket connects without an undici
-  dispatcher, and adding a dependency for that is out of scope. Every
-  existing protection survives the port and is pinned by the tests that
-  covered it before: manual redirect following with a per-hop host check, the
-  streamed response-size cap with its `content-length` pre-check, the refusal
-  of credential-bearing URLs, and certificate verification. The default
-  headers `fetch` had been adding are now set explicitly, because dropping
-  them would have broken every note reading the GitHub API (403, no user
-  agent) while every local-server test stayed green.
-- `RunJob`, `SpawnRunOptions`, and `RunOnceOptions` gained an optional
-  `netPolicy`, and `createNetProvider` is now exported for testing. An absent
-  `netPolicy` fails closed.
-
-### Security
 
 - **Dedicated adversarial pass over auto-run and scheduled execution (issue
   #12)** — the tracked next step `docs/security.md` named after 0.7.1 moved

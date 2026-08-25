@@ -35,6 +35,40 @@ This is a **component**, not plain markdown.
 Press :kbd[Ctrl+Shift+P] anytime.
 ```
 
+## Configuration
+
+Markii has four settings: `markii.packs`, `markii.runOnOpen`,
+`markii.refreshIntervalSeconds`, and `markii.allowPrivateNetworkAddresses`.
+All four are user-scope only. A workspace's `.vscode/settings.json` cannot
+set them, on purpose: it is what stops a repository you open from silently
+enabling script execution, loading a pack, or widening network access on
+your behalf.
+
+To reach them:
+
+- Open Settings and search for "Markii".
+- Run **Welcome: Open Walkthrough...** from the Command Palette and pick
+  "Get Started with Markii" for a short walkthrough that links to each
+  setting.
+- If you use profiles and want the raw JSON, run **Preferences: Open
+  Application Settings (JSON)**, not the usual "Open User Settings (JSON)"
+  command; application-scope settings live there.
+
+A worked example, in that JSON file:
+
+```json
+{
+  "markii.runOnOpen": true,
+  "markii.refreshIntervalSeconds": 30,
+  "markii.packs": ["/home/me/markii-packs/analytics"]
+}
+```
+
+Two commands write these settings without opening the JSON by hand:
+**Markii: Toggle Run On Open** flips `markii.runOnOpen`, and **Markii:
+Enable Scheduled Refresh…** prompts for a number of seconds and writes
+`markii.refreshIntervalSeconds`.
+
 ## Features
 
 - **Components.** Renders the whole format: directives, the standard
