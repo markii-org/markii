@@ -46,8 +46,15 @@ class ConfirmModal extends Modal {
     const { contentEl } = this;
     contentEl.empty();
     contentEl.createEl('p', { text: this.message });
-    const buttons = contentEl.createDiv({ cls: 'markii-confirm-buttons' });
-    const allow = buttons.createEl('button', { text: ALLOW_LABEL });
+    // Obsidian's own `modal-button-container` class carries the flex row
+    // and inter-button gap every core dialog uses; a bare div left the two
+    // buttons touching. `mod-cta` marks Allow as the accented action, again
+    // matching core dialogs.
+    const buttons = contentEl.createDiv({ cls: 'modal-button-container' });
+    const allow = buttons.createEl('button', {
+      text: ALLOW_LABEL,
+      cls: 'mod-cta',
+    });
     allow.addEventListener('click', () => this.settle(true));
     const dontAllow = buttons.createEl('button', { text: DONT_ALLOW_LABEL });
     dontAllow.addEventListener('click', () => this.settle(false));

@@ -5,20 +5,17 @@ import { createValueStore } from '@markii/runtime';
 import type { RunTrigger, StoredValue } from '@markii/runtime';
 import {
   buildPackRegistrationScript,
-  readLastRunTrace,
   readPersistedValues,
   runOnce,
   spawnRun as spawnRunHost,
   staleValuesForRehydration,
-  writeLastRunTrace,
 } from '@markii/host';
-import type { RunTrace, SpawnRunOptions } from '@markii/host';
+import type { SpawnRunOptions, ValuesFailure } from '@markii/host';
 import { extractFrontmatterUses } from '@markii/core';
 import { resolveUses } from '@markii/pack';
 import { defaultRegistry } from '@markii/react/components';
 import { renderDocument } from './render-document.js';
 import { createLocalStorageMemento } from './run/local-storage-memento.js';
-import { runMarkerLabel, runMarkerTitle } from './run/run-marker.js';
 import {
   promptHostModal,
   promptManyHostsModal,
@@ -44,21 +41,20 @@ const MK_MD_SUFFIX = '.mk.md';
 /** External wall-clock budget for one run — forwarded verbatim to `spawnRun`'s own watchdog (`@markii/host`'s `run/run-host.ts`); the worker cannot influence or extend it. Matches `apps/vscode/src/preview-panel.ts`'s `RUN_TIMEOUT_MS`. */
 const RUN_TIMEOUT_MS = 15_000;
 
-/** How often the run marker's relative-time label ("ran 2m ago") is refreshed while the preview is open — coarse, since the label itself is minute-grained. */
-const MARKER_TICK_MS = 60_000;
-
 /**
  * Imports `obsidian` — see `src/main.ts`'s file-scope note and
  * `src/obsidian-import-guard.test.ts`. This view owns the Run path's whole
  * lifecycle for the note it is currently showing: reading the file,
  * running its scripts (manual command, at-most-once run-on-open, and the
- * scheduled-refresh timer), and rendering both the resulting values and a
- * quiet outcome marker (AGENTS.md's cleanliness principle). It is wiring
- * only — the actual grant/run/tier logic lives entirely in `@markii/host`
- * and `@markii/runtime`.
+ * scheduled-refresh timer), and rendering the resulting values. A run's
+ * outcome is reported through `Notice` + the developer console
+ * (`reportRunOutcome` below) rather than an in-page marker — this host has
+ * real notifications, so the page itself stays clean (AGENTS.md's
+ * cleanliness principle). It is wiring only — the actual grant/run/tier
+ * logic lives entirely in `@markii/host` and `@markii/runtime`.
  *
  * STORAGE: every persisted value this view touches (network grants, the
- * run cache, last-known values, the last-run trace) goes through
+ * run cache, last-known values) goes through
  * `createLocalStorageMemento`, backed by `app.saveLocalStorage`/
  * `loadLocalStorage` — device-local, never `saveData`. See
  * `src/run/local-storage-memento.ts`'s top comment and
@@ -70,12 +66,10 @@ export class MarkiiPreviewView extends ItemView {
   private root: Root | null = null;
   private currentFile: TFile | null = null;
   private values: Record<string, StoredValue> | undefined;
-  private lastRun: RunTrace | undefined;
   private running = false;
   /** At-most-once run-on-open, for this view's whole lifetime — mirrors `apps/vscode/src/preview-panel.ts`'s `ActivePreview.ranOnOpen` (panel-lifetime, not per-document: switching notes in the same view does not re-trigger it). */
   private ranOnOpen = false;
   private refreshTimer: ReturnType<typeof setInterval> | undefined;
-  private markerTickTimer: ReturnType<typeof setInterval> | undefined;
   /**
    * This preview's currently-loaded component packs (docs/packs.md) —
    * loaded once per preview open (see `onOpen` below and
@@ -134,13 +128,6 @@ export class MarkiiPreviewView extends ItemView {
       }),
     );
 
-    // The marker's relative-time label is a function of wall-clock time,
-    // not just of when a run completed — tick a re-render so "ran 2m ago"
-    // keeps advancing while the preview stays open.
-    this.markerTickTimer = setInterval(() => {
-      if (this.lastRun) void this.refresh();
-    }, MARKER_TICK_MS);
-
     // Scheduled refresh (read-only tier, `@markii/runtime`'s trigger-to-tier
     // gate): read once here, like every other per-view setting — a change
     // to `markii.refreshIntervalSeconds` takes effect on the next preview
@@ -171,10 +158,6 @@ export class MarkiiPreviewView extends ItemView {
     if (this.refreshTimer !== undefined) {
       clearInterval(this.refreshTimer);
       this.refreshTimer = undefined;
-    }
-    if (this.markerTickTimer !== undefined) {
-      clearInterval(this.markerTickTimer);
-      this.markerTickTimer = undefined;
     }
     if (this.packContext) {
       removePackStylesheets(
@@ -358,34 +341,56 @@ export class MarkiiPreviewView extends ItemView {
       if (this.currentFile?.path !== documentKey) return;
 
       this.values = result.values;
-      const trace: RunTrace = { trigger, ranAt: Date.now(), ok: true };
-      this.lastRun = trace;
-      void writeLastRunTrace(memento, documentKey, trace).then(
-        undefined,
-        () => {},
-      );
+      this.reportRunOutcome(trigger, result.failures);
       await this.refresh();
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err);
       console.error('Markii: runScripts failed:', detail);
-      // AGENTS.md's cleanliness principle: quiet, stack-free notice — the
-      // same short detail is what the run marker's own title tooltip
-      // carries (`run-marker.ts`'s `runMarkerTitle`), never a raw stack.
-      new Notice("Markii: running this note's scripts failed.");
-      const trace: RunTrace = {
-        trigger,
-        ranAt: Date.now(),
-        ok: false,
-        reason: detail,
-      };
-      this.lastRun = trace;
-      void writeLastRunTrace(memento, documentKey, trace).then(
-        undefined,
-        () => {},
-      );
+      // AGENTS.md's cleanliness principle: a quiet, stack-free notice for
+      // the run a user just asked for; a scheduled/auto run failing this
+      // way is reported to the console only, so a bad timer never turns
+      // into a notification every interval.
+      if (trigger === 'manual') {
+        new Notice("Markii: running this note's scripts failed.");
+      }
       if (this.currentFile?.path === documentKey) await this.refresh();
     } finally {
       this.running = false;
+    }
+  }
+
+  /**
+   * A completed run's outcome, on this host's two designated surfaces
+   * (AGENTS.md, "clean is not silent"): every failure gets a full line in
+   * the developer console, and a MANUAL run — the one a user is actively
+   * watching for — additionally gets a `Notice` either way. A scheduled/
+   * auto run stays quiet on success (its updated values are the feedback)
+   * and quiet-but-logged on failure, so a monitoring note can never turn
+   * into a notification drip; its per-value failure markers still render
+   * in the page itself.
+   */
+  private reportRunOutcome(
+    trigger: RunTrigger,
+    failures: readonly ValuesFailure[],
+  ): void {
+    if (failures.length === 0) {
+      if (trigger === 'manual') new Notice("Markii: this note's scripts ran.");
+      return;
+    }
+    console.error(
+      `[markii] run (${trigger}) finished with ${String(failures.length)} failure(s):`,
+    );
+    for (const failure of failures) {
+      console.error(`[markii]   ${failure.name}: ${failure.kind}`);
+    }
+    if (trigger === 'manual') {
+      const what =
+        failures.length === 1
+          ? 'a script failed'
+          : `${String(failures.length)} scripts failed`;
+      new Notice(
+        `Markii: ${what} — open the developer console ("Show Markii diagnostics") for details.`,
+      );
     }
   }
 
@@ -400,7 +405,6 @@ export class MarkiiPreviewView extends ItemView {
 
     if (!file || !file.path.endsWith(MK_MD_SUFFIX)) {
       this.values = undefined;
-      this.lastRun = undefined;
       this.root.render(
         createElement(
           'p',
@@ -412,18 +416,16 @@ export class MarkiiPreviewView extends ItemView {
     }
 
     if (isNewFile) {
-      // A freshly-shown note: forget the previous note's values/marker and
+      // A freshly-shown note: forget the previous note's values and
       // rehydrate this one's last-known values (marked stale — GitHub
       // issue #11's rehydration behavior, `staleValuesForRehydration`) so
       // it renders its last figures instantly, before (or without) any
       // fresh run.
-      const memento = this.memento();
-      const persisted = readPersistedValues(memento, file.path);
+      const persisted = readPersistedValues(this.memento(), file.path);
       this.values =
         Object.keys(persisted).length > 0
           ? staleValuesForRehydration(persisted)
           : undefined;
-      this.lastRun = readLastRunTrace(memento, file.path);
     }
 
     const text = await this.app.vault.cachedRead(file);
@@ -452,16 +454,6 @@ export class MarkiiPreviewView extends ItemView {
           { className: 'doc' },
           renderDocument(text, store, registry),
         ),
-        this.lastRun
-          ? createElement(
-              'p',
-              {
-                className: 'mk-obsidian-run-marker',
-                title: runMarkerTitle(this.lastRun),
-              },
-              runMarkerLabel(this.lastRun, Date.now()),
-            )
-          : null,
         usesResolution.missing.length > 0
           ? createElement(
               'p',

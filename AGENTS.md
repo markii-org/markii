@@ -239,8 +239,10 @@ apps/obsidian        the "Markii" Obsidian plugin (desktop only) — an
                      the suite if a run/grant path ever calls saveData
   src/run/           the host seam onto @markii/host: local-storage-memento
                      (GrantMemento over saveLocalStorage, never throws on a
-                     full store), worker-path, run-marker; run-modals.ts
-                     carries the grant prompts
+                     full store) and browser-worker (blob-URL Web Worker
+                     setup); run-modals.ts carries the grant prompts. Run
+                     outcomes surface as Notice + console, not an in-page
+                     marker
   src/packs/         pack loading against @markii/host's shared discovery:
                      pack-settings (the folder list), pack-context,
                      pack-runtime, pack-styles, pack-diagnostics (the
