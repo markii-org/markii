@@ -8,6 +8,30 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Scripts can run in the Obsidian plugin** — pressing Run did nothing
+  there. Obsidian's Electron renderer cannot create a `node:worker_threads`
+  worker ("The V8 platform used by this instance of Node does not support
+  creating Workers"), and probing a real vault showed forking a Node child
+  through `ELECTRON_RUN_AS_NODE` failing there too. The isolate is now
+  chosen by the host: `@markii/host` exposes an `IsolateSpawner` seam,
+  Node hosts keep the worker thread they always used, and the Obsidian
+  plugin supplies a Web Worker.
+
+  The watchdog, the exactly-once settlement, and the never-rejects contract
+  stayed outside the seam, so a new isolate kind inherits them rather than
+  reimplementing them. One bug that made visible: the watchdog settled a
+  timed-out run on the isolate's exit event, and a Web Worker has none, so
+  it would have killed the isolate and then waited forever. It now settles
+  on its own timer.
+
+  A Web Worker has no `node:dns`, so the pinned request that closes the
+  DNS-rebinding gap moved to the host, which still has Node and runs the
+  same code. The isolate asks for a fetch over a message. The reachable set
+  is unchanged and the boundary is stronger: an isolate with no network
+  stack cannot bypass the allowlist. What is genuinely lost is the V8 heap
+  cap, which a Web Worker does not accept; docs/security.md says so plainly
+  rather than implying the two isolate kinds are equivalent.
+
 - **A network consent prompt that could not be answered** — a note whose
   `net` calls all built their URLs at run time resolved no hostname in the
   pre-run scan, so the gate covering unlistable addresses opened with

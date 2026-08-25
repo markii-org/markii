@@ -183,6 +183,17 @@ application exits rather than the run reporting an error. A host in that
 position should say so, and should not present its memory ceiling as
 equivalent to a worker thread's.
 
+Where the isolate is a Web Worker, the pinned request cannot run inside it
+either: pinning needs a DNS resolver and a socket the caller chooses the
+address for, and a Web Worker has neither. The reference Obsidian plugin
+therefore performs the request in its host, using the same pinning code the
+worker-thread host runs, and the isolate asks for it over a message. The
+protection is unchanged, and the boundary gets stronger rather than weaker:
+an isolate with no network stack has nothing to bypass the allowlist with.
+A refusal made in the host is marked as a policy denial on the wire, so it
+still reaches the script as a capability error rather than as an ordinary
+failure.
+
 Auto-run and scheduled execution are only sound on top of that watchdog,
 because they carry no user gesture: an auto-run note that hangs would freeze
 the host on open. Manual runs share the requirement but at least fail behind

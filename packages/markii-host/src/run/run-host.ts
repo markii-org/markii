@@ -218,6 +218,20 @@ export async function spawnRun(options: SpawnRunOptions): Promise<RunResult> {
       maxOldGenerationSizeMb: WORKER_MAX_OLD_GENERATION_SIZE_MB,
     });
 
+    function watchdogFailure(): RunResult {
+      return {
+        values: {},
+        failures: [
+          {
+            name: '<document>',
+            message: `run exceeded its ${options.timeoutMs}ms watchdog and was terminated`,
+            kind: 'limit',
+          },
+        ],
+        cacheSnapshot: options.cacheSnapshot,
+      };
+    }
+
     const watchdog = setTimeout(() => {
       watchdogFired = true;
       // Fire-and-forget: `terminate()`'s own returned promise resolves
@@ -226,6 +240,15 @@ export async function spawnRun(options: SpawnRunOptions): Promise<RunResult> {
       // settles this run's promise, and it fires as part of the same
       // termination sequence.
       worker.kill();
+      // ...except where there IS no exit event to wait for. A Web Worker's
+      // `terminate()` is immediate and silent, so a host using one would
+      // otherwise hang here forever, having killed the isolate and then
+      // waited for a notification that never comes. Settling directly is
+      // correct for both kinds: a worker thread's `exit` still arrives and
+      // is a no-op against `settled`, and this run's outcome does not
+      // depend on how promptly the runtime reports the death of something
+      // already terminated.
+      settle(watchdogFailure());
     }, options.timeoutMs);
     // Never let this timer keep the host process/extension-host alive on
     // its own.
@@ -268,17 +291,7 @@ export async function spawnRun(options: SpawnRunOptions): Promise<RunResult> {
       if (settled) return;
 
       if (watchdogFired) {
-        settle({
-          values: {},
-          failures: [
-            {
-              name: '<document>',
-              message: `run exceeded its ${options.timeoutMs}ms watchdog and was terminated`,
-              kind: 'limit',
-            },
-          ],
-          cacheSnapshot: options.cacheSnapshot,
-        });
+        settle(watchdogFailure());
         return;
       }
 

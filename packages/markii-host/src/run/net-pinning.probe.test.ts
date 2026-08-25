@@ -17,8 +17,8 @@
  */
 import * as http from 'node:http';
 import { afterEach, describe, expect, it } from 'vitest';
-import { isNetProviderDenial } from '@markii/lua';
-import { createNetProvider } from './worker-entry';
+import { isNetProviderDenial, netProviderDenial } from '@markii/lua';
+import { createNetProvider } from './net-provider';
 import type { HostLookup, ResolvedAddress } from './net-pinning';
 
 interface LocalServer {
@@ -67,6 +67,7 @@ describe('issue #10: a public-looking name rebound to a private address is refus
       ['api.example.com'],
       1_000_000,
       { allowRestrictedAddresses: false },
+      netProviderDenial,
       lookupTo({ address: '127.0.0.1', family: 4 }),
     );
 
@@ -85,6 +86,7 @@ describe('issue #10: a public-looking name rebound to a private address is refus
       ['api.example.com'],
       1_000_000,
       { allowRestrictedAddresses: true },
+      netProviderDenial,
       lookupTo({ address: '127.0.0.1', family: 4 }),
     );
 
@@ -121,6 +123,7 @@ describe('issue #10: a redirect landing on a rebound host is refused before that
         ['127.0.0.1', 'internal.example.com'],
         1_000_000,
         { allowRestrictedAddresses: false },
+        netProviderDenial,
         async (hostname: string) => {
           if (hostname === '127.0.0.1')
             return [{ address: '127.0.0.1', family: 4 }];
@@ -176,9 +179,12 @@ describe('issue #10: the port preserves the headers fetch sent', () => {
     }
 
     try {
-      const provider = createNetProvider(['127.0.0.1'], 1_000_000, {
-        allowRestrictedAddresses: false,
-      });
+      const provider = createNetProvider(
+        ['127.0.0.1'],
+        1_000_000,
+        { allowRestrictedAddresses: false },
+        netProviderDenial,
+      );
       await provider.get(`http://127.0.0.1:${address.port}/x`);
     } finally {
       await new Promise<void>((done) => server.close(() => done()));
@@ -203,9 +209,12 @@ describe('issue #10: the port preserves the headers fetch sent', () => {
     }
 
     try {
-      const provider = createNetProvider(['127.0.0.1'], 1_000_000, {
-        allowRestrictedAddresses: false,
-      });
+      const provider = createNetProvider(
+        ['127.0.0.1'],
+        1_000_000,
+        { allowRestrictedAddresses: false },
+        netProviderDenial,
+      );
       // `post` is optional on the provider contract; the `seen` assertions
       // below fail loudly if it was somehow absent and nothing was sent.
       await provider.post?.(`http://127.0.0.1:${address.port}/x`, '{"a":1}');

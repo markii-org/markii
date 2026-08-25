@@ -28,6 +28,12 @@ export type {
   RunIsolate,
   SpawnIsolateOptions,
 } from './run/isolate.js';
+export { createBrowserIsolate } from './run/browser-isolate.js';
+export type {
+  BrowserIsolateOptions,
+  WorkerLike,
+} from './run/browser-isolate.js';
+export { createNetProvider } from './run/net-provider.js';
 
 export type {
   CacheSnapshot,

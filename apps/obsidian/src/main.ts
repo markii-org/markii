@@ -23,7 +23,11 @@ import {
   normalizePackSettings,
 } from './packs/pack-settings.js';
 import type { PackSettings } from './packs/pack-settings.js';
-import { resolveWorkerPath } from './run/worker-path.js';
+import {
+  createBrowserWorkerSetup,
+  type BrowserWorkerSetup,
+} from './run/browser-worker.js';
+import { createNetProvider } from '@markii/host';
 
 /**
  * Imports `obsidian` — deliberately NOT unit-tested (Vitest cannot resolve
@@ -60,13 +64,23 @@ export default class MarkiiPlugin extends Plugin {
    * so a `markii.runScripts` press simply fails cleanly (see
    * `src/view.tsx`'s `runScripts`) rather than silently doing nothing.
    */
-  workerPath: string | undefined;
+  /**
+   * The Web Worker isolate this host runs scripts in, plus the blob URLs it
+   * owns. `undefined` means the worker bundle is missing (a dev tree before
+   * a build), which the run path reports rather than throwing over.
+   *
+   * A Web Worker rather than the `node:worker_threads` one `@markii/host`
+   * defaults to, because Obsidian's Electron renderer supports neither
+   * worker threads nor forking a Node child — see
+   * `src/run/browser-worker.ts`.
+   */
+  browserWorker: BrowserWorkerSetup | undefined;
 
   override async onload(): Promise<void> {
     await this.loadSettings();
     this.loadLocalSettings();
     this.loadPackSettings();
-    this.workerPath = this.resolveWorkerPath();
+    this.browserWorker = this.createBrowserWorker();
 
     this.registerView(
       MARKII_PREVIEW_VIEW_TYPE,
@@ -234,9 +248,35 @@ export default class MarkiiPlugin extends Plugin {
     return existsSync(candidate) ? candidate : undefined;
   }
 
-  private resolveWorkerPath(): string | undefined {
+  /**
+   * Frees the blob URLs the Web Worker isolate holds. A blob URL pins its
+   * bytes in memory until revoked, and one of them is the 14 MB wasm
+   * module, so leaking them across a plugin reload is not a rounding
+   * error.
+   */
+  override onunload(): void {
+    this.browserWorker?.dispose();
+  }
+
+  private createBrowserWorker(): BrowserWorkerSetup | undefined {
     const dir = this.pluginDir();
-    return dir ? resolveWorkerPath(dir) : undefined;
+    if (!dir) return undefined;
+    // The pinned provider runs HERE, in the renderer, because the isolate
+    // is a Web Worker with no `node:dns` to pin with. It is the same
+    // provider the VS Code extension runs inside its worker thread, so the
+    // DNS-rebinding protection (issue #10) is unchanged by the move; what
+    // changes is that the sandbox can no longer reach a network stack at
+    // all. The plain-Error denial is deliberate: the brand that classifies
+    // a refusal is re-applied inside the worker, which is where
+    // `@markii/lua` lives (see `@markii/host`'s `net-bridge.ts`).
+    return createBrowserWorkerSetup(dir, (allowlist, maxFetchBytes, policy) =>
+      createNetProvider(
+        allowlist,
+        maxFetchBytes,
+        policy as Parameters<typeof createNetProvider>[2],
+        (message) => new Error(message),
+      ),
+    );
   }
 
   /**

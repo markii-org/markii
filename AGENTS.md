@@ -139,8 +139,29 @@ packages/markii-host    PRIVATE, never published (no npm presence, absent from
                      nothing about any app's bundle layout: a host passes
                      `workerPath` (see apps/vscode/src/worker-path.ts); the
                      only fallback here is the dev/Vitest one for this
-                     package's own tests
-  src/run/worker-entry.ts  the isolate itself, plus the pinned net provider
+                     package's own tests. The watchdog, exactly-once
+                     settlement, and the never-rejects contract live HERE
+                     for every host, never behind the isolate seam
+  src/run/isolate.ts   the IsolateSpawner seam: which KIND of isolate a
+                     host can create. Node hosts get workerThreadIsolate
+                     (the only kind that accepts a V8 heap cap); an
+                     Electron renderer supports neither worker threads nor
+                     forking a Node child, so it gets a Web Worker
+  src/run/browser-isolate.ts  the Web Worker implementation, started from a
+                     blob URL (Chromium refuses file:// workers)
+  src/run/run-job.ts   the engine-neutral half of a run, shared by both
+                     worker entries so the sandbox, tier gate, and failure
+                     classification cannot drift between hosts
+  src/run/net-provider.ts  the pinned request (resolve-then-pin). NO
+                     @markii/lua runtime import: it also runs in the
+                     Obsidian RENDERER on behalf of a Web Worker, and that
+                     bundle must not carry a Lua engine it never runs, so
+                     the denial brand is injected
+  src/run/net-bridge.ts + net-bridge-worker.ts  the protocol that lets a Web
+                     Worker ask its host to perform a pinned fetch; split so
+                     only the worker half imports @markii/lua
+  src/run/worker-entry.ts  the Node isolate entry
+  src/run/worker-entry-browser.ts  the Web Worker isolate entry
   src/run/grant-flow.ts    prompts and grant storage, both injected
   src/run/net-pinning.ts, src/run/ip-address.ts  resolve-then-pin (issue #10)
   src/run/run-trace.ts     last-run outcome, for the host's run marker

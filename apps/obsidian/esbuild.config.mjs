@@ -127,6 +127,23 @@ const mainBuild = {
 };
 
 /** @type {import('esbuild').BuildOptions} */
+/**
+ * The Run path's isolate, built for a WEB WORKER rather than a worker
+ * thread. Obsidian's Electron renderer refuses `node:worker_threads`
+ * ("The V8 platform used by this instance of Node does not support
+ * creating Workers"), and forking a Node child through
+ * `ELECTRON_RUN_AS_NODE` was measured failing here too, so this is the
+ * only isolate this host can create. `worker-entry-browser.ts` is the
+ * matching entry: it shares `run-job.ts` with the Node worker, and differs
+ * only in getting its network through `@markii/host`'s net bridge (the
+ * HOST performs the pinned request, since a Web Worker has no `node:dns`)
+ * and its `glue.wasm` from a URL.
+ *
+ * `format: 'iife'` because a Web Worker started from a blob URL is a
+ * classic worker, not a module worker. `platform: 'browser'` so nothing
+ * Node-shaped is pulled in; if this bundle ever grows a `node:` import the
+ * build fails here, which is exactly the guard wanted.
+ */
 const workerBuild = {
   ...shared,
   entryPoints: [
@@ -136,18 +153,24 @@ const workerBuild = {
       'markii-host',
       'src',
       'run',
-      'worker-entry.ts',
+      'worker-entry-browser.ts',
     ),
   ],
-  outfile: path.join(here, 'dist', 'worker.js'),
-  platform: 'node',
-  format: 'cjs',
-  target: 'node18',
-  // Spawned by file path via `worker_threads`, never `require`d by
-  // Obsidian itself — there is no `obsidian` module in this bundle's graph
-  // at all (`src/run/**` is host-free by design), so nothing needs to be
-  // external here.
-  external: [],
+  outfile: path.join(here, 'dist', 'worker.browser.js'),
+  platform: 'browser',
+  format: 'iife',
+  target: 'es2022',
+  // wasmoon's Emscripten bundle carries BOTH environments and picks one at
+  // runtime, guarded by `typeof location === 'undefined'`. Inside a Web
+  // Worker `location` is defined, so its Node branch never executes — but
+  // esbuild still tries to resolve the `url`/`module` imports sitting in
+  // that dead branch. Marking them external leaves the branch intact and
+  // unreachable. The banner below makes sure that if it ever DID run, it
+  // fails with a sentence rather than a bare ReferenceError.
+  external: ['url', 'module'],
+  banner: {
+    js: "var require = (m) => { throw new Error('markii: the Lua runtime took its Node code path inside a Web Worker (tried to require ' + m + ')'); };",
+  },
 };
 
 const workerOutDir = path.join(here, 'dist');

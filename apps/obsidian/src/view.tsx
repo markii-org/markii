@@ -306,9 +306,9 @@ export class MarkiiPreviewView extends ItemView {
     const file = this.currentFile;
     if (!file) return;
 
-    if (!this.plugin.workerPath) {
+    if (!this.plugin.browserWorker) {
       console.error(
-        'Markii: runScripts skipped — no bundled worker.js found next to main.js (run `npm run build`).',
+        'Markii: runScripts skipped — no bundled worker.browser.js found next to main.js (run `npm run build`).',
       );
       if (trigger === 'manual') {
         new Notice(
@@ -317,7 +317,7 @@ export class MarkiiPreviewView extends ItemView {
       }
       return;
     }
-    const workerPath = this.plugin.workerPath;
+    const { spawnIsolate } = this.plugin.browserWorker;
 
     this.running = true;
     const documentKey = file.path;
@@ -337,8 +337,17 @@ export class MarkiiPreviewView extends ItemView {
         promptHost: promptHostModal(this.app),
         promptUnknownHosts: promptUnknownHostsModal(this.app),
         promptManyHosts: promptManyHostsModal(this.app),
+        // `workerPath` is still passed because `spawnRun` hands it to the
+        // isolate as its entry; the Web Worker implementation ignores the
+        // value and starts from the blob URL it minted at load. The
+        // watchdog, the settlement rules, and the never-rejects contract
+        // are `spawnRun`'s either way.
         spawnRun: (options: SpawnRunOptions) =>
-          spawnRunHost({ ...options, workerPath }),
+          spawnRunHost({
+            ...options,
+            workerPath: 'worker.browser.js',
+            spawnIsolate,
+          }),
         timeoutMs: RUN_TIMEOUT_MS,
         ...(packModules !== undefined ? { packModules } : {}),
       });
