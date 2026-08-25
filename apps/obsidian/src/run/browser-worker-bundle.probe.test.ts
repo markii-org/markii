@@ -13,9 +13,13 @@
  * it loaded — before any job arrived — and every Run in the installed
  * plugin settled as a failure the preview then showed nothing for. No
  * unit test caught it because none executed the bundle. This one does,
- * and the shim below deliberately withholds everything a real
- * `DedicatedWorkerGlobalScope` lacks: `document`, `window`, `process`,
- * and `Buffer`.
+ * and the shim below deliberately withholds what a worker lacks
+ * (`document`, `window`) while PROVIDING a Node-shaped `process` —
+ * because Obsidian creates its workers WITH Node integration, and
+ * wasmoon's environment sniff seeing that `process` sent it down a Node
+ * path a blob worker cannot complete (`import('module')`, verified in a
+ * real vault). The build banner shadows `process`/`Buffer`/`require` for
+ * the whole bundle; these tests fail if that mask ever stops working.
  */
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -97,22 +101,16 @@ it('the built worker bundle loads and completes a Lua run under a worker-faithfu
     'process',
     'Buffer',
     source,
-  ) as (
-    self: unknown,
-    location: unknown,
-    importScripts: unknown,
-    document: undefined,
-    window: undefined,
-    process: undefined,
-    buffer: undefined,
-  ) => void;
+  ) as (...args: unknown[]) => void;
+  // The `process` handed in mimics Obsidian's node-integrated worker; the
+  // bundle's banner must shadow it before wasmoon's environment sniff runs.
   load(
     workerScope,
     workerScope.location,
     workerScope.importScripts,
     undefined,
     undefined,
-    undefined,
+    { versions: { node: '22.0.0' }, platform: 'linux' },
     undefined,
   );
 
@@ -227,7 +225,7 @@ it('a net.fetch_json call crosses the net bridge and comes back as a value', asy
     workerScope.importScripts,
     undefined,
     undefined,
-    undefined,
+    { versions: { node: '22.0.0' }, platform: 'linux' },
     undefined,
   );
 

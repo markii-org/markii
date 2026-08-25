@@ -239,6 +239,59 @@ describe('buildPackRegistrationScript — real esbuild-wasm against the tsxpack 
     }
   }, 30_000);
 
+  it('a host reload (fresh pack-build module, esbuild-wasm still in the require cache) builds again instead of dying on a second initialize', async () => {
+    // The real-vault failure this guards: Obsidian re-evaluates a plugin's
+    // main.js on disable/enable, so pack-build's module-level init cache is
+    // gone, but the renderer's require cache still holds the ALREADY
+    // INITIALIZED esbuild-wasm instance — whose initialize() may be called
+    // only once. The driver below performs exactly that sequence in one
+    // process: build, evict pack-build (not esbuild-wasm) from the require
+    // cache, re-require, build again into a fresh cache dir (so the second
+    // build cannot shortcut through a cache hit).
+    const packDir = path.join(await makeTempDir(), 'tsxpack');
+    await cp(TSXPACK_DIR, packDir, { recursive: true });
+    const cacheDirA = await makeTempDir();
+    const cacheDirB = await makeTempDir();
+    const workDir = await makeTempDir();
+
+    const driverPath = path.join(workDir, 'run-reload.cjs');
+    const driverSource = `
+      const fs = require('node:fs');
+      const path = require('node:path');
+      const packBuildPath = ${JSON.stringify(PACK_BUILD_TS)};
+      const packDir = ${JSON.stringify(packDir)};
+      function packSource() {
+        const manifest = JSON.parse(fs.readFileSync(path.join(packDir, 'pack.json'), 'utf8'));
+        const componentPaths = {};
+        for (const [localName, relativePath] of Object.entries(manifest.components)) {
+          componentPaths[localName] = path.join(packDir, relativePath);
+        }
+        return { folder: packDir, manifest, componentPaths };
+      }
+      (async () => {
+        const first = await require(packBuildPath).buildPackRegistrationScript(packSource(), ${JSON.stringify(cacheDirA)});
+        for (const key of Object.keys(require.cache)) {
+          if (!key.includes('esbuild-wasm')) delete require.cache[key];
+        }
+        const second = await require(packBuildPath).buildPackRegistrationScript(packSource(), ${JSON.stringify(cacheDirB)});
+        process.stdout.write(JSON.stringify({ first: first.kind, second }));
+      })().catch((err) => {
+        process.stdout.write(JSON.stringify({ first: 'threw', second: { kind: 'failed', reason: String(err && err.stack || err) } }));
+      });
+    `;
+    writeFileSync(driverPath, driverSource, 'utf8');
+    const output = execFileSync('node', ['--require', 'tsx/cjs', driverPath], {
+      encoding: 'utf8',
+      timeout: 60_000,
+    });
+    const { first, second } = JSON.parse(output) as {
+      first: string;
+      second: PackBuildOutcome;
+    };
+    expect(first).toBe('built');
+    expect(second.kind).toBe('built');
+  });
+
   it('a second call for the same fixture is a cache hit (no change in output, same path)', async () => {
     const workDir = await makeTempDir();
     const cacheDir = await makeTempDir();

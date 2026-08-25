@@ -278,7 +278,19 @@ function loadEsbuildWasm(
         wasmBinaryPath ?? req.resolve('esbuild-wasm/esbuild.wasm');
       const wasmBytes = await nodeReadFile(wasmPath);
       const wasmModule = await WebAssembly.compile(wasmBytes);
-      await mod.initialize({ wasmModule, worker: false });
+      try {
+        await mod.initialize({ wasmModule, worker: false });
+      } catch (error) {
+        // This module-level cache does not survive a HOST reload, but the
+        // esbuild-wasm module can: Obsidian re-evaluates a plugin's
+        // main.js on disable/enable while the renderer's require cache
+        // keeps the already-initialized esbuild-wasm instance, so the
+        // fresh plugin's first initialize() hits its once-per-instance
+        // guard. That module IS initialized and its build() works — reuse
+        // it. Any other failure is a real one and still propagates.
+        const message = error instanceof Error ? error.message : String(error);
+        if (!message.includes('more than once')) throw error;
+      }
       cachedBuildFn = mod.build;
       return mod.build;
     })();

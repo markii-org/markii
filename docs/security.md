@@ -194,6 +194,24 @@ A refusal made in the host is marked as a policy denial on the wire, so it
 still reaches the script as a capability error rather than as an ordinary
 failure.
 
+One Electron-specific finding qualifies the Web Worker picture further.
+Obsidian creates its workers with Node integration enabled, so `process`,
+`require`, and `Buffer` exist inside the isolate's global scope. This had
+two consequences. The first was functional: the Lua runtime's environment
+detection saw `process` and took a Node code path a blob worker cannot
+complete, so every run failed; the worker bundle now shadows those
+globals at its top, which restores the browser path and keeps the
+bundle's own code off Node APIs. The second is a boundary statement that
+must be made honestly: that shadowing is scoping, not a privilege
+boundary. Sandboxed Lua still cannot reach JavaScript at all, and that
+remains the enforced line. But a hypothetical interpreter escape inside
+this particular isolate would find real Node capabilities in reach,
+where the same escape inside a plain browser worker would not. The
+watchdog, the allowlist, and the host-side pinned request are unaffected;
+the difference is only in what an escaped script's JavaScript could
+touch, and a host with node-integrated workers should know it sits in
+that position.
+
 Auto-run and scheduled execution are only sound on top of that watchdog,
 because they carry no user gesture: an auto-run note that hangs would freeze
 the host on open. Manual runs share the requirement but at least fail behind

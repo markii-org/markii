@@ -183,15 +183,21 @@ export const workerBuild = {
   format: 'iife',
   target: 'es2022',
   // wasmoon's Emscripten bundle carries BOTH environments and picks one at
-  // runtime, guarded by `typeof location === 'undefined'`. Inside a Web
-  // Worker `location` is defined, so its Node branch never executes — but
-  // esbuild still tries to resolve the `url`/`module` imports sitting in
-  // that dead branch. Marking them external leaves the branch intact and
-  // unreachable. The banner below makes sure that if it ever DID run, it
-  // fails with a sentence rather than a bare ReferenceError.
+  // runtime by sniffing the globals. Obsidian creates its Web Workers WITH
+  // Node integration (`process`, `require`, and `Buffer` all exist inside
+  // them — verified in a real vault: without the mask below, wasmoon takes
+  // its Node path and dies on `import('module')`, which a classic blob
+  // worker cannot resolve). The banner's `var process/Buffer = undefined`
+  // shadows those globals for the whole bundle, so the sniff sees a plain
+  // DedicatedWorkerGlobalScope and takes the browser path both hosts
+  // actually support; the `require` guard likewise shadows the real
+  // integration-provided `require`, so if the Node branch is ever reached
+  // anyway it fails with a sentence rather than doing real Node work.
+  // `url`/`module` stay external so esbuild leaves that (now unreachable)
+  // branch's imports unresolved instead of failing the build.
   external: ['url', 'module'],
   banner: {
-    js: "var require = (m) => { throw new Error('markii: the Lua runtime took its Node code path inside a Web Worker (tried to require ' + m + ')'); };",
+    js: "var process = undefined, Buffer = undefined; var require = (m) => { throw new Error('markii: the Lua runtime took its Node code path inside a Web Worker (tried to require ' + m + ')'); };",
   },
 };
 
