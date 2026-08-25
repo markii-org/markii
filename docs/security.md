@@ -168,6 +168,21 @@ runs on. The runtime contract is therefore normative:
 Worker or worker thread) with an external wall-clock watchdog that
 terminates the isolate when a run overruns.**
 
+Which KIND of isolate a host can use is decided by the host's runtime, and
+the two are not equivalent in what they can bound. A worker thread accepts
+a V8 heap cap, so the reference VS Code extension limits each run's worker
+to 128 MB and a runaway allocation dies inside that ceiling. A Web Worker
+accepts no such cap. Where a host has only Web Workers available, as an
+Electron renderer does, script memory is still bounded inside the
+interpreter by the sandbox's own Lua memory limit, and a wedged run is
+still killed by the watchdog, but a large allocation on the JavaScript side
+of the isolate is bounded only by the browser engine. The realistic
+consequence is worse than a failed run: exhausting a Web Worker's heap can
+take down the renderer that hosts it, which for an editor means the
+application exits rather than the run reporting an error. A host in that
+position should say so, and should not present its memory ceiling as
+equivalent to a worker thread's.
+
 Auto-run and scheduled execution are only sound on top of that watchdog,
 because they carry no user gesture: an auto-run note that hangs would freeze
 the host on open. Manual runs share the requirement but at least fail behind

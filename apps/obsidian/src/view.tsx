@@ -108,6 +108,19 @@ export class MarkiiPreviewView extends ItemView {
     container.addClass('mk-obsidian-preview');
     this.root = createRoot(container);
 
+    // The rendered pane is where a reader actually is when they want to
+    // re-run a note, so the controls belong in ITS header rather than only
+    // in the source editor's. `ItemView.addAction` puts them next to the
+    // view's own menu, and this view is created fresh per open, so there
+    // is nothing to deduplicate.
+    this.addAction('play', 'Run Markii scripts', () => {
+      void this.runScripts('manual');
+    });
+    this.addAction('bug', 'Show Markii diagnostics', () => {
+      this.logPackDiagnostics();
+      new Notice('Markii: pack diagnostics printed to the console.');
+    });
+
     this.registerEvent(
       this.app.workspace.on('active-leaf-change', () => {
         void this.refresh();

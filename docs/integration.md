@@ -151,7 +151,11 @@ importance:
 1. **A terminatable isolate.** Run scripts in a Web Worker or worker thread
    with an external wall-clock watchdog that terminates it on overrun. This
    is normative, and auto-run is unsound without it; see
-   [security.md](security.md).
+   [security.md](security.md). Pick the isolate your runtime actually
+   supports rather than the one you would prefer: an Electron renderer has
+   no worker threads, and a worker thread accepts a heap cap that a Web
+   Worker does not. If you land on a Web Worker, record the missing cap
+   where your users can find it.
 2. **The grant store and prompts.** Persist grants keyed by
    `computeGrantKey`'s executable-closure hash, re-prompt when the key
    changes, and word network prompts as "can send data to `<host>`".

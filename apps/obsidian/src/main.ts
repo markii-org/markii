@@ -148,15 +148,11 @@ export default class MarkiiPlugin extends Plugin {
       },
     );
     preview.addClass(marker);
-
-    view.addAction('play', 'Run Markii scripts', () => {
-      const active = this.activePreviewView();
-      if (!active) {
-        new Notice('Markii: open the preview first.');
-        return;
-      }
-      void active.runScripts('manual');
-    });
+    // Run deliberately does NOT go here. It needs an open preview to act
+    // on, so from a source editor it could only ever scold the user for
+    // not having one; it lives in the preview's own header instead
+    // (`src/view.tsx`'s `onOpen`), which is where a reader is when they
+    // want to re-run a note.
   }
 
   /**
