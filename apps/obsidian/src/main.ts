@@ -1,5 +1,11 @@
 import { existsSync } from 'node:fs';
-import { FileSystemAdapter, Notice, Plugin, WorkspaceLeaf } from 'obsidian';
+import {
+  FileSystemAdapter,
+  MarkdownView,
+  Notice,
+  Plugin,
+  WorkspaceLeaf,
+} from 'obsidian';
 import * as path from 'node:path';
 import { MARKII_PREVIEW_VIEW_TYPE, MarkiiPreviewView } from './view.js';
 import { MarkiiSettingTab } from './settings-tab.js';
@@ -88,6 +94,20 @@ export default class MarkiiPlugin extends Plugin {
       },
     });
 
+    // Without these, the only way to reach the plugin is the command
+    // palette. The ribbon icon is always visible; the header action appears
+    // only on a `.mk.md` note, right where the reader is already looking.
+    this.addRibbonIcon('layout-template', 'Open Markii Preview', () => {
+      void this.openPreview();
+    });
+
+    this.registerEvent(
+      this.app.workspace.on('active-leaf-change', () => {
+        this.addHeaderActions();
+      }),
+    );
+    this.addHeaderActions();
+
     this.addCommand({
       id: 'show-markii-diagnostics',
       name: 'Show Markii diagnostics',
@@ -102,6 +122,40 @@ export default class MarkiiPlugin extends Plugin {
         view.logPackDiagnostics();
         new Notice('Markii: pack diagnostics printed to the console.');
       },
+    });
+  }
+
+  /**
+   * Puts a Markii button in the header of the `.mk.md` note being edited,
+   * so the preview is reachable without the command palette. Obsidian
+   * re-creates a view's header actions when the leaf changes, so this runs
+   * on every `active-leaf-change`; the guard class keeps a repeated call
+   * from stacking duplicate icons onto a header that survived.
+   */
+  private addHeaderActions(): void {
+    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+    if (!view) return;
+    if (!view.file?.path.endsWith('.mk.md')) return;
+
+    const marker = 'markii-header-action';
+    if (view.containerEl.querySelector(`.${marker}`)) return;
+
+    const preview = view.addAction(
+      'layout-template',
+      'Open Markii Preview',
+      () => {
+        void this.openPreview();
+      },
+    );
+    preview.addClass(marker);
+
+    view.addAction('play', 'Run Markii scripts', () => {
+      const active = this.activePreviewView();
+      if (!active) {
+        new Notice('Markii: open the preview first.');
+        return;
+      }
+      void active.runScripts('manual');
     });
   }
 

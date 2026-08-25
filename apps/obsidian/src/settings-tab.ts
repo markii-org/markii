@@ -6,6 +6,9 @@ import {
   normalizeLocalSettings,
 } from './local-settings.js';
 import { appendPackFolder, removePackFolder } from './packs/pack-settings.js';
+import { resolvePackPaths } from '@markii/host';
+import { existsSync } from 'node:fs';
+import { homedir } from 'node:os';
 
 /**
  * Imports `obsidian` — kept in its own file, alongside `src/main.ts`,
@@ -36,11 +39,7 @@ export class MarkiiSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName('Preview placement')
-      .setDesc(
-        'Where "Open Markii Preview" opens the preview. Main area gives ' +
-          'the document readable width, split beside your note; right ' +
-          'sidebar keeps it as a narrow, always-visible panel.',
-      )
+      .setDesc('Where the preview opens.')
       .addDropdown((dropdown) => {
         dropdown
           .addOption('main', 'Main area (split beside the editor)')
@@ -53,22 +52,13 @@ export class MarkiiSettingTab extends PluginSettingTab {
 
     containerEl.createEl('h3', { text: 'Scripting' });
     containerEl.createEl('p', {
-      text:
-        'These settings are stored on THIS DEVICE only (Obsidian’s ' +
-        'local storage, not your vault). They never sync, and they never ' +
-        'travel with a shared or cloned copy of this vault — the same is ' +
-        'true of every network permission you grant a note’s scripts.',
+      text: 'Stored on this device only. Never synced, never shared.',
       cls: 'setting-item-description',
     });
 
     new Setting(containerEl)
       .setName('Run scripts when a note opens')
-      .setDesc(
-        'Runs a note’s scripts once, read-only, the first time its ' +
-          'preview opens. Never prompts for network access on its own — ' +
-          'it only reuses a permission you already granted by hand with ' +
-          '"Run Markii scripts".',
-      )
+      .setDesc('Read-only, once per preview. Never prompts.')
       .addToggle((toggle) => {
         toggle
           .setValue(this.plugin.localSettings.runOnOpen)
@@ -83,10 +73,7 @@ export class MarkiiSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName('Scheduled refresh interval (seconds)')
       .setDesc(
-        `0 turns scheduled refresh off. A value below ` +
-          `${String(MIN_REFRESH_INTERVAL_SECONDS)} is treated as ` +
-          `${String(MIN_REFRESH_INTERVAL_SECONDS)}. Like run-on-open, a ` +
-          'scheduled run is read-only and never prompts.',
+        `0 is off. Minimum ${String(MIN_REFRESH_INTERVAL_SECONDS)} seconds.`,
       )
       .addText((text) => {
         text
@@ -105,28 +92,35 @@ export class MarkiiSettingTab extends PluginSettingTab {
 
     containerEl.createEl('h3', { text: 'Component packs' });
     containerEl.createEl('p', {
-      text:
-        'Folders you trust as installed component packs (docs/packs.md). ' +
-        'This list authorizes CODE EXECUTION — a pack’s sources are ' +
-        'compiled and run to render its components, and its scripts/*.lua ' +
-        'becomes require-able from your notes’ scripts. Like every ' +
-        'setting on this page, it is stored on this device only and never ' +
-        'syncs or travels with a shared or cloned vault. Absolute paths ' +
-        'are preferred; a leading "~" expands to your home directory. ' +
-        'Reloading a pack (after editing its source, or after changing ' +
-        'this list) requires closing and reopening the Markii preview.',
+      text: 'Adding a folder lets its code run. Only add folders you trust.',
       cls: 'setting-item-description',
     });
 
-    for (const folder of this.plugin.packSettings.packFolders) {
-      new Setting(containerEl).setName(folder).addExtraButton((button) => {
+    // Show what each entry actually RESOLVES to, not the raw string the
+    // user typed: a `~` or `./` entry means nothing on its own, and a
+    // folder that does not exist would otherwise fail silently at load
+    // time with the settings tab still looking correct. A path that is
+    // shell-escaped (`Obsidian\ Github`) is the common way to get a
+    // missing folder here, and this is what makes that visible.
+    const configured = this.plugin.packSettings.packFolders;
+    const resolved = resolvePackPaths(
+      configured,
+      this.plugin.vaultBasePath(),
+      homedir(),
+    );
+    for (const [index, folder] of configured.entries()) {
+      const absolute = resolved[index] ?? folder;
+      const found = existsSync(absolute);
+      const row = new Setting(containerEl)
+        .setName(absolute)
+        .setDesc(found ? '' : 'Folder not found.');
+      if (!found) row.descEl.addClass('mod-warning');
+      row.addExtraButton((button) => {
         button
           .setIcon('trash')
           .setTooltip('Remove this pack folder')
           .onClick(() => {
-            this.applyPackFolderChange(
-              removePackFolder(this.plugin.packSettings.packFolders, folder),
-            );
+            this.applyPackFolderChange(removePackFolder(configured, folder));
           });
       });
     }
@@ -134,11 +128,7 @@ export class MarkiiSettingTab extends PluginSettingTab {
     let newFolderValue = '';
     new Setting(containerEl)
       .setName('Add a pack folder')
-      .setDesc(
-        'The folder itself, or a parent folder holding several packs ' +
-          '(each immediate subfolder with its own pack.json counts as its ' +
-          'own pack — one level deep, no recursion).',
-      )
+      .setDesc('One pack, or a folder of packs. "~" and "./" both work.')
       .addText((text) => {
         text.setPlaceholder('/absolute/path/to/pack').onChange((value) => {
           newFolderValue = value;
