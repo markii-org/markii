@@ -41,7 +41,10 @@ export default tseslint.config(
     },
   },
   {
-    files: ['**/*.config.{js,ts,mjs,cjs}'],
+    // esbuild.options.mjs sits beside esbuild.config.mjs (the options
+    // split out so a Vitest probe can import them) and is the same kind of
+    // plain, un-tsconfig'd build script.
+    files: ['**/*.config.{js,ts,mjs,cjs}', '**/esbuild.options.mjs'],
     languageOptions: {
       parserOptions: {
         projectService: false,
