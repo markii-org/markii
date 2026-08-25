@@ -10,7 +10,7 @@ import {
   spawnRun as spawnRunHost,
   staleValuesForRehydration,
 } from '@markii/host';
-import type { SpawnRunOptions, ValuesFailure } from '@markii/host';
+import type { RunOnceResult, SpawnRunOptions } from '@markii/host';
 import { extractFrontmatterUses } from '@markii/core';
 import { resolveUses } from '@markii/pack';
 import { defaultRegistry } from '@markii/react/components';
@@ -79,6 +79,8 @@ export class MarkiiPreviewView extends ItemView {
    * `uses:` marker, exactly as if no packs were configured.
    */
   private packContext: PackContext | undefined;
+  /** The last completed run's failure details (`RunOnceResult.failureDetails`), kept so the "Show Markii diagnostics" command can replay them on demand — diagnostics-surface only, never rendered into the page. */
+  private lastRunFailures: RunOnceResult['failureDetails'] = [];
 
   constructor(leaf: WorkspaceLeaf, plugin: MarkiiPlugin) {
     super(leaf);
@@ -230,6 +232,16 @@ export class MarkiiPreviewView extends ItemView {
     for (const line of lines) {
       console.log(`[markii]   ${line}`);
     }
+    if (this.lastRunFailures.length > 0) {
+      console.log(
+        `[markii] last run's ${String(this.lastRunFailures.length)} failure(s):`,
+      );
+      for (const failure of this.lastRunFailures) {
+        console.log(
+          `[markii]   ${failure.name} (${failure.kind}): ${failure.message}`,
+        );
+      }
+    }
   }
 
   /** A `Notice` for pack failures a user must act on — a skipped folder, or two packs sharing a namespace — never for the routine "nothing configured" case. */
@@ -341,7 +353,8 @@ export class MarkiiPreviewView extends ItemView {
       if (this.currentFile?.path !== documentKey) return;
 
       this.values = result.values;
-      this.reportRunOutcome(trigger, result.failures);
+      this.lastRunFailures = result.failureDetails;
+      this.reportRunOutcome(trigger, result.failureDetails);
       await this.refresh();
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err);
@@ -371,7 +384,7 @@ export class MarkiiPreviewView extends ItemView {
    */
   private reportRunOutcome(
     trigger: RunTrigger,
-    failures: readonly ValuesFailure[],
+    failures: RunOnceResult['failureDetails'],
   ): void {
     if (failures.length === 0) {
       if (trigger === 'manual') new Notice("Markii: this note's scripts ran.");
@@ -381,7 +394,9 @@ export class MarkiiPreviewView extends ItemView {
       `[markii] run (${trigger}) finished with ${String(failures.length)} failure(s):`,
     );
     for (const failure of failures) {
-      console.error(`[markii]   ${failure.name}: ${failure.kind}`);
+      console.error(
+        `[markii]   ${failure.name} (${failure.kind}): ${failure.message}`,
+      );
     }
     if (trigger === 'manual') {
       const what =

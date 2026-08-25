@@ -23,6 +23,12 @@ import * as path from 'node:path';
 import { afterAll, expect, it } from 'vitest';
 import { build } from 'esbuild';
 import { workerBuild } from '../../esbuild.options.mjs';
+import {
+  isNetBridgeRequest,
+  serveNetRequest,
+  type NetBridgeReply,
+} from '@markii/host';
+import type { NetProvider } from '@markii/lua';
 
 const outDir = mkdtempSync(path.join(tmpdir(), 'markii-worker-probe-'));
 
@@ -138,4 +144,118 @@ it('the built worker bundle loads and completes a Lua run under a worker-faithfu
   expect(result.failures).toEqual([]);
   expect(result.values.greeting?.status).toBe('fresh');
   expect(result.values.greeting?.value).toBe('hello 3');
+}, 60_000);
+
+it('a net.fetch_json call crosses the net bridge and comes back as a value', async () => {
+  const outfile = path.join(outDir, 'worker.net.js');
+  await build({
+    ...workerBuild,
+    outfile,
+    minify: false,
+    sourcemap: false,
+    logLevel: 'silent',
+  });
+  const source = readFileSync(outfile, 'utf8');
+  const wasmBytes = readFileSync(
+    path.join(repoRoot, 'node_modules', 'wasmoon', 'dist', 'glue.wasm'),
+  );
+  const wasmUri = URL.createObjectURL(
+    new Blob([new Uint8Array(wasmBytes)], { type: 'application/wasm' }),
+  );
+
+  // A canned provider in place of the real pinned one: the point of this
+  // test is the BRIDGE round trip (worker request message -> host
+  // serveNetRequest -> reply message -> resolved Lua value), not the
+  // network. `serveNetRequest` is the exact host half `browser-isolate.ts`
+  // wires up.
+  const cannedProvider: NetProvider = {
+    get: async (url: string) => ({
+      status: 200,
+      body: JSON.stringify({ answered: url }),
+    }),
+  };
+
+  let settleResult: (message: unknown) => void = () => {};
+  const resultArrived = new Promise<unknown>((resolve) => {
+    settleResult = resolve;
+  });
+  const listeners: ((event: { data: unknown }) => void)[] = [];
+  const workerScope = {
+    postMessage: (message: unknown) => {
+      if (isNetBridgeRequest(message)) {
+        void serveNetRequest(
+          message,
+          cannedProvider,
+          (reply: NetBridgeReply) => {
+            // Delivered on a fresh macrotask, the way a real postMessage
+            // round trip arrives.
+            setTimeout(() => {
+              for (const listener of listeners) listener({ data: reply });
+            }, 0);
+          },
+        );
+        return;
+      }
+      settleResult(message);
+    },
+    addEventListener: (
+      type: string,
+      listener: (event: { data: unknown }) => void,
+    ) => {
+      if (type === 'message') listeners.push(listener);
+    },
+    location: { href: 'blob://markii-probe' },
+    constructor: { name: 'DedicatedWorkerGlobalScope' },
+    importScripts: () => {
+      throw new Error('importScripts is not expected to be called');
+    },
+  };
+
+  const load = new Function(
+    'self',
+    'location',
+    'importScripts',
+    'document',
+    'window',
+    'process',
+    'Buffer',
+    source,
+  ) as (...args: unknown[]) => void;
+  load(
+    workerScope,
+    workerScope.location,
+    workerScope.importScripts,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+  );
+
+  const text = [
+    '```lua {name=fetched}',
+    'local data = net.fetch_json("https://api.example.com/data")',
+    'return data.answered',
+    '```',
+    '',
+    ':value[fetched]',
+    '',
+  ].join('\n');
+  const job = {
+    text,
+    trigger: 'manual',
+    netAllowlist: ['api.example.com'],
+    cacheSnapshot: {},
+    wasmUri,
+  };
+  for (const listener of listeners) listener({ data: job });
+
+  const result = (await resultArrived) as {
+    values: Record<string, { value?: unknown; status?: string }>;
+    failures: { name: string; message: string }[];
+  };
+  URL.revokeObjectURL(wasmUri);
+
+  expect(result.failures).toEqual([]);
+  expect(result.values.fetched?.status).toBe('fresh');
+  expect(result.values.fetched?.value).toBe('https://api.example.com/data');
 }, 60_000);

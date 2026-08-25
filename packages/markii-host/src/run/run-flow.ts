@@ -282,6 +282,20 @@ export interface RunOnceOptions {
 export interface RunOnceResult {
   values: Record<string, StoredValue>;
   failures: ValuesFailure[];
+  /**
+   * The same failures, message included, for the host's DIAGNOSTICS
+   * surface only (the "Markii" output channel, a developer console) —
+   * never for the rendered page or any per-note UI, which take the
+   * scrubbed `failures` above (D-1: a message can be a raw Lua traceback,
+   * or a denial that embeds the request URL). AGENTS.md's "clean is not
+   * silent": a failure whose reason reaches neither surface is a bug, and
+   * `{name, kind}` alone is not a reason a user can act on.
+   */
+  failureDetails: {
+    name: string;
+    kind: ValuesFailure['kind'];
+    message: string;
+  }[];
 }
 
 /**
@@ -413,6 +427,11 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
     failures: result.failures.map((failure) => ({
       name: failure.name,
       kind: failure.kind,
+    })),
+    failureDetails: result.failures.map((failure) => ({
+      name: failure.name,
+      kind: failure.kind,
+      message: failure.message,
     })),
   };
 }

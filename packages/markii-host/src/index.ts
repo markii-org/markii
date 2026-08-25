@@ -34,6 +34,8 @@ export type {
   WorkerLike,
 } from './run/browser-isolate.js';
 export { createNetProvider } from './run/net-provider.js';
+export { isNetBridgeRequest, serveNetRequest } from './run/net-bridge.js';
+export type { NetBridgeReply, NetBridgeRequest } from './run/net-bridge.js';
 
 export type {
   CacheSnapshot,
