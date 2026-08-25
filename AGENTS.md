@@ -196,22 +196,35 @@ apps/vscode          the "Markii" VS Code extension (preview + Run + packs) — 
                      channel: packs loaded, packs skipped and why,
                      deprecated relative markii.packs entries
 apps/obsidian        the "Markii" Obsidian plugin (desktop only) — an
-                     app/consumer of @markii/react, never a renderer.
-                     Feasibility spike scope: a side-leaf/main-tab preview
-                     of the active .mk.md, no scripting, no packs, no
-                     markdown post-processor, no Live Preview extension:
-  src/main.ts        Plugin subclass: view registration, the preview
-                     command, settings load. With view.tsx and
+                     app/consumer of @markii/react, never a renderer. A full
+                     second host: preview, Run, packs. Still absent by
+                     design: a markdown post-processor (Reading view renders
+                     inline) and a Live Preview CM6 extension:
+  src/main.ts        Plugin subclass: view registration, the three commands
+                     (Open Markii Preview, Run Markii scripts, Show Markii
+                     diagnostics), settings load. With view.tsx and
                      settings-tab.ts the ONLY files allowed to import
                      `obsidian` (guarded by src/obsidian-import-guard.test.ts)
   src/view.tsx       ItemView owning a React root, re-rendering on active
                      file and vault change
   src/render-document.tsx  the obsidian-free render seam
-  src/settings.ts    settings shape + hostile-input normalization. Cosmetic
-                     preferences only: anything authorizing execution or
-                     network must use app.saveLocalStorage (device-local),
-                     never saveData (travels with vault sync)
-  src/obsidian-theme.css  maps doc.css's 14 Tier 1 tokens onto Obsidian's
+  src/settings.ts    plugin-data settings: COSMETIC ONLY (preview placement).
+                     Anything authorizing execution or network belongs in
+                     local-settings.ts, never here: saveData writes inside
+                     the vault and travels with Sync
+  src/local-settings.ts  the device-local half, via app.saveLocalStorage:
+                     runOnOpen, refreshIntervalSeconds, pack folders. The
+                     rule is executable: src/storage-boundary.test.ts fails
+                     the suite if a run/grant path ever calls saveData
+  src/run/           the host seam onto @markii/host: local-storage-memento
+                     (GrantMemento over saveLocalStorage, never throws on a
+                     full store), worker-path, run-marker; run-modals.ts
+                     carries the grant prompts
+  src/packs/         pack loading against @markii/host's shared discovery:
+                     pack-settings (the folder list), pack-context,
+                     pack-runtime, pack-styles, pack-diagnostics (the
+                     console + notice surface named in docs/integration.md)
+  src/obsidian-theme.css  maps doc.css's 15 Tier 1 tokens onto Obsidian's
                      theme variables; src/theme-coverage.test.ts fails when
                      a token is left unmapped
   scripts/generate-doc-css.ts  concatenates doc.css + the theme layer into
