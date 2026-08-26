@@ -265,6 +265,21 @@ Import rule: @markii/core must never import React or anything from @markii/react
 implements); the playground imports @markii/react. The conformance
 corpus is plain data — no TypeScript in `conformance/`.
 
+## Repo structure policy (user-set 2026-08-26)
+
+One repo, deliberately, while the host seam is still moving: the
+security-critical shared layer (`packages/markii-host`) is unpublished by
+design, and app fixes routinely land across it and an app in one commit.
+Monorepo does NOT mean lockstep releases: the npm packages, the VS Code
+extension, and the Obsidian plugin each version and ship independently.
+
+The graduation rule: an app earns its own repository once it has shipped
+three consecutive releases consuming only PUBLISHED @markii/* packages,
+with no same-day core change needed. Until an app meets that bar, do not
+propose splitting it out, and do not build mirror-repo PR-sync machinery
+(one-way, CI-generated release mirrors are fine when distribution needs
+them).
+
 ## Stack (fixed — do not add alternatives)
 
 - TypeScript (strict), React 18, Vite, Vitest
