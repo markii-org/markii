@@ -6,6 +6,8 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-08-26
+
 ### Fixed
 
 - **Obsidian runs survive the real Electron environment** — three failures
