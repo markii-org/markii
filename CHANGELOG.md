@@ -8,6 +8,33 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Obsidian runs survive the real Electron environment** — three failures
+  found by testing the installed plugin in a real vault. The Web Worker
+  bundle died on load (`decode-named-character-reference`'s browser build
+  touches `document` at module top level; the worker build now resolves
+  its DOM-free variant). Obsidian creates workers WITH Node integration,
+  so the Lua runtime's environment sniff saw `process` and took a Node
+  path a blob worker cannot complete; the bundle now shadows
+  `process`/`Buffer` at its top. And disabling/re-enabling the plugin
+  re-initialized `esbuild-wasm`, which its once-per-instance guard
+  refuses; the loader now reuses the already-initialized module. All three
+  are covered by executed probes that run the real bundle under a
+  worker-faithful global surface, including the net bridge round trip.
+
+- **Run failures are no longer mute in Obsidian** — a run that failed
+  inside the worker changed nothing on screen and printed nothing. Every
+  failure now gets a full console line (message included, via `runOnce`'s
+  new diagnostics-only `failureDetails`), a manual run always answers
+  with a notice, and the in-page "ran just now" marker is gone in favor
+  of notifications. The grant dialog's buttons use Obsidian's own modal
+  styling instead of sitting unstyled and touching.
+
+- **Relative pack-folder entries are a note, not a deprecation** — both
+  hosts now state the actual consequence (the same entry loads a
+  different folder per vault/workspace) as an informational diagnostics
+  line, and pack CSS lint warnings quote the offending declaration on one
+  truncated line instead of splintering across the console.
+
 - **Scripts can run in the Obsidian plugin** — pressing Run did nothing
   there. Obsidian's Electron renderer cannot create a `node:worker_threads`
   worker ("The V8 platform used by this instance of Node does not support
