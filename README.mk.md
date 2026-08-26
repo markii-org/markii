@@ -122,7 +122,7 @@ A collapsible block, closed by default. How is the tour so far, by the way?
 
 And a figure pairs an image with a markdown caption:
 
-::::figure{src="https://raw.githubusercontent.com/sadigaxund/markii/refs/heads/main/apps/playground/public/nature.jpeg"}
+::::figure{src="https://raw.githubusercontent.com/markii-org/markii/refs/heads/main/apps/playground/public/nature.jpeg"}
 
 **Figure 1.** The caption is markdown, so it can hold *emphasis* or links.
 ::::
@@ -160,7 +160,7 @@ Not rendered, because it is inside a fence.
 ## Where to go next
 
 This playground is a demo, not the product. The format and its libraries
-live in the [repository](https://github.com/sadigaxund/markii); start with
-[the format guide](https://github.com/sadigaxund/markii/blob/main/docs/format.md)
+live in the [repository](https://github.com/markii-org/markii); start with
+[the format guide](https://github.com/markii-org/markii/blob/main/docs/format.md)
 to learn everything a document can contain, or install the Markii VS Code
 extension to preview `.mk.md` files in your editor.

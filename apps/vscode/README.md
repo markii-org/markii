@@ -3,7 +3,7 @@
 Preview for Markii (`.mk.md`) documents: CommonMark plus a small directive
 syntax that renders components: callouts, cards, tabs, dashboard stats,
 and more. See the
-[format guide](https://github.com/sadigaxund/markii/blob/main/docs/format.md)
+[format guide](https://github.com/markii-org/markii/blob/main/docs/format.md)
 for the full picture.
 
 ## Getting started
@@ -88,7 +88,7 @@ Enable Scheduled Refresh…** prompts for a number of seconds and writes
   scripts. A note that uses a pack you have not installed stays readable: the
   unknown component shows a labeled fallback. The setting is user-scope only,
   so opening someone else's project never loads a pack on your behalf. See the
-  [packs guide](https://github.com/sadigaxund/markii/blob/main/docs/packs.md).
+  [packs guide](https://github.com/markii-org/markii/blob/main/docs/packs.md).
 - **Images.** Local images resolve relative to the note (`nice.png` beside
   it, `img/nice.png` in a subfolder) and remote images load over https.
   Anything outside the note's folder and your workspace is not loaded, the
@@ -101,7 +101,7 @@ reference implementation renders.
 ## Contributing
 
 The extension lives in the
-[Markii monorepo](https://github.com/sadigaxund/markii). Build, debug, and
+[Markii monorepo](https://github.com/markii-org/markii). Build, debug, and
 release details are in the repo's
-[AGENTS.md](https://github.com/sadigaxund/markii/blob/main/AGENTS.md); issues
+[AGENTS.md](https://github.com/markii-org/markii/blob/main/AGENTS.md); issues
 and pull requests are welcome there.

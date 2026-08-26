@@ -13,11 +13,11 @@
   ],
   "license": "MIT",
   "author": "sadigaxund",
-  "homepage": "https://github.com/sadigaxund/markii#readme",
-  "bugs": "https://github.com/sadigaxund/markii/issues",
+  "homepage": "https://github.com/markii-org/markii#readme",
+  "bugs": "https://github.com/markii-org/markii/issues",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sadigaxund/markii.git",
+    "url": "git+https://github.com/markii-org/markii.git",
     "directory": "packages/platforms/markii-react"
   },
   "type": "module",

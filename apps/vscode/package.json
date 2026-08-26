@@ -10,7 +10,7 @@
   "author": "sadigaxund",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sadigaxund/markii.git",
+    "url": "git+https://github.com/markii-org/markii.git",
     "directory": "apps/vscode"
   },
   "categories": [

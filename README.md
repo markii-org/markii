@@ -5,7 +5,7 @@
 # Markii
 
 <p align="center">
-  <a href="https://github.com/sadigaxund/markii/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/sadigaxund/markii/ci.yml?branch=main&label=CI" /></a>
+  <a href="https://github.com/markii-org/markii/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/markii-org/markii/ci.yml?branch=main&label=CI" /></a>
   <a href="https://www.npmjs.com/package/@markii/react"><img alt="npm" src="https://img.shields.io/npm/v/@markii/react?logo=npm&label=npm" /></a>
   <a href="LICENSE"><img alt="license: MIT" src="https://img.shields.io/badge/license-MIT-green" /></a>
   <a href="docs/README.md"><img alt="docs" src="https://img.shields.io/badge/docs-read-1E3A5F" /></a>
@@ -61,7 +61,7 @@ Ways to use Markii with no coding:
       <h4>Playground</h4>
       Try Markii live in the browser: source, rendered view, Run.
       <br /><br />
-      <a href="https://github.com/sadigaxund/markii-vault">Open the playground &rarr;</a>
+      <a href="https://github.com/markii-org/markii-vault">Open the playground &rarr;</a>
       <br><br>
       <img src="res/screenshots/playground.png" width="100%" alt="The playground: source on the left, rendered document on the right" />
       <br>

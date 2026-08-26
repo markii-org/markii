@@ -824,5 +824,5 @@ implementation split across six packages.
 - **Documentation and demo**: the design spec (`DESIGN.md`), a README, and a
   hosted playground.
 
-[0.2.0]: https://github.com/sadigaxund/markii/releases/tag/v0.2.0
-[0.1.0]: https://github.com/sadigaxund/markii/releases/tag/v0.1.0
+[0.2.0]: https://github.com/markii-org/markii/releases/tag/v0.2.0
+[0.1.0]: https://github.com/markii-org/markii/releases/tag/v0.1.0

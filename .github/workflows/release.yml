@@ -19,14 +19,14 @@
 #   - The `@markii` scope is owned by the publishing account or org.
 #   - Each @markii/* package has a Trusted Publisher configured on npmjs.com
 #     (Package Settings -> Trusted Publisher) pointing at THIS repo
-#     (sadigaxund/markii) and workflow file (release.yml). No token is used —
+#     (markii-org/markii) and workflow file (release.yml). No token is used —
 #     the `id-token: write` permission below lets `npm publish` authenticate
 #     to npm over OIDC, and npm records build provenance automatically.
 #   - The legacy `NPM_TOKEN` secret is no longer read by this workflow; it can
 #     be left in place as a revert option, or deleted once OIDC is proven.
 #
 # The stable tarball names mean the newest assets are always reachable at:
-#   https://github.com/sadigaxund/markii/releases/latest/download/markii-core.tgz
+#   https://github.com/markii-org/markii/releases/latest/download/markii-core.tgz
 #   (and markii-stdlib.tgz, markii-bundle.tgz, markii-pack.tgz,
 #    markii-runtime.tgz, markii-lua.tgz, markii-react.tgz, markii-html.tgz)
 
