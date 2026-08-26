@@ -37,3 +37,76 @@ jobs:
       - run: npm run build
 
       - run: npm run lint
+
+  # The apps and tests build @markii/* from src/ (workspace aliases), so
+  # nothing above ever exercises the PUBLISHED artifacts: a packaging bug
+  # (a broken exports map, a file missing from `files`, a dist build that
+  # does not compile) would sail through test/build/lint and only surface
+  # for a real npm consumer. This job packs every library package exactly
+  # as the release workflow does and installs the tarballs into a fresh
+  # out-of-tree project that imports the two ends of the dependency graph
+  # (@markii/core at the bottom, the zero-React @markii/html renderer at
+  # the top) and renders a real document through them.
+  packed-consumer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build:dist
+
+      - name: Pack every library package
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/markii-tarballs
+          for dir in packages/markii-core packages/markii-stdlib \
+                     packages/markii-bundle packages/markii-pack \
+                     packages/markii-runtime packages/markii-lua \
+                     packages/platforms/markii-react packages/platforms/markii-html; do
+            name=$(node -p "require('./$dir/package.json').name")
+            npm pack -w "$name" --pack-destination /tmp/markii-tarballs >/dev/null
+          done
+          ls -1 /tmp/markii-tarballs
+
+      - name: Install the tarballs into a fresh consumer and render a document
+        run: |
+          set -euo pipefail
+          mkdir /tmp/markii-consumer && cd /tmp/markii-consumer
+          npm init -y >/dev/null
+          npm pkg set type=module
+          # All eight tarballs at once, so @markii/* dependency ranges
+          # resolve against the packed versions rather than the registry.
+          npm install /tmp/markii-tarballs/*.tgz react@18 react-dom@18 >/dev/null
+          cat > smoke.mjs <<'SMOKE'
+          import { parse, toHast } from '@markii/core';
+          import { renderMarkToHtml } from '@markii/html';
+          import { defaultHtmlRegistry } from '@markii/html/components';
+          import { createValueStore } from '@markii/runtime';
+          const doc = [
+            '# Packed consumer',
+            '',
+            ':::callout{type=info title="From the tarballs"}',
+            'Rendered through the published artifacts.',
+            ':::',
+            '',
+          ].join('\n');
+          parse(doc);
+          toHast(doc);
+          createValueStore({});
+          const html = renderMarkToHtml(doc, defaultHtmlRegistry);
+          if (
+            !html.includes('From the tarballs') ||
+            !html.includes('callout') ||
+            html.includes('failed to render')
+          ) {
+            console.error('unexpected render output:', html.slice(0, 400));
+            process.exit(1);
+          }
+          console.log('packed consumer render OK,', html.length, 'chars');
+          SMOKE
+          node smoke.mjs
