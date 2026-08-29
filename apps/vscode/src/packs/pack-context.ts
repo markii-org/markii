@@ -17,11 +17,13 @@ import {
   loadPackModules,
   relativePackEntries,
   resolvePackPaths,
+  resolvePrebuiltPack,
 } from '@markii/host';
 import type {
   DiscoveredPack,
   PackBuildOutcome,
   PackModulesMap,
+  PackPathExists,
   SkippedPackFolder,
 } from '@markii/host';
 
@@ -70,6 +72,21 @@ export interface PackContext {
    * (`./pack-diagnostics.ts`).
    */
   readonly cssWarnings: readonly string[];
+  /**
+   * Packs that ship BOTH a prebuilt `webview.js` and component sources on
+   * disk (`@markii/host`'s `resolvePrebuiltPack`'s `shadowedComponentSources`).
+   * Informational: the prebuilt script is what actually loads, and the
+   * sources sitting next to it are never compiled or read. Never a failure
+   * — shipping both is a supported state (docs/packs.md: rebuilding the
+   * prebuilt artifacts from those very sources with a host's "build pack
+   * for distribution" command is the point). `./pack-diagnostics.ts` turns
+   * this into an output-channel-only line, never a window notification and
+   * never counted in `skipped`/`skippedPackCount`.
+   */
+  readonly prebuiltShadowedPacks: readonly {
+    readonly name: string;
+    readonly folder: string;
+  }[];
 }
 
 /** Builds one pack's webview registration script from source — injected so this module stays testable without a real esbuild-wasm invocation, and so `preview-panel.ts` can wire up the real `@markii/host`'s `pack-build.ts`'s `buildPackRegistrationScript` with production-specific options (the packaged `esbuild-wasm` location) that this module has no business knowing about. */
@@ -93,6 +110,15 @@ export interface LoadPackContextOptions {
   readonly cacheDir?: string;
   /** Defaults to `noopBuilder` (see above). `preview-panel.ts` passes `@markii/host`'s `pack-build.ts`'s `buildPackRegistrationScript`. */
   readonly buildWebviewScript?: PackWebviewBuilder;
+  /**
+   * Whether an absolute path exists on disk — injected (defaults to
+   * `existsSync`) purely so this module stays testable without touching
+   * real disk, in the same spirit as `buildWebviewScript` above. Used both
+   * for the plain "does this pack have a prebuilt webview.js at all" check
+   * and, via `@markii/host`'s `resolvePrebuiltPack`, for the sibling
+   * `webview.css`/shadowed-sources checks.
+   */
+  readonly pathExists?: PackPathExists;
 }
 
 /**
@@ -110,7 +136,11 @@ export async function loadPackContext(
   workspaceRoot: string | undefined,
   options: LoadPackContextOptions = {},
 ): Promise<PackContext> {
-  const { cacheDir, buildWebviewScript = noopBuilder } = options;
+  const {
+    cacheDir,
+    buildWebviewScript = noopBuilder,
+    pathExists = existsSync,
+  } = options;
   const homeDir = homedir();
   const folders = resolvePackPaths(configuredPacks, workspaceRoot, homeDir);
   const relativeEntries = relativePackEntries(configuredPacks, homeDir);
@@ -120,10 +150,24 @@ export async function loadPackContext(
   const skipped: SkippedPackFolder[] = [...result.skipped];
   const webviewPacks: DiscoveredPack[] = [];
   const cssWarnings: string[] = [];
+  const prebuiltShadowedPacks: { name: string; folder: string }[] = [];
 
   for (const pack of result.packs) {
-    if (existsSync(pack.scriptPath)) {
-      webviewPacks.push(pack);
+    const prebuilt = await resolvePrebuiltPack(pack, pathExists);
+    if (prebuilt !== undefined) {
+      webviewPacks.push({
+        ...pack,
+        scriptPath: prebuilt.scriptPath,
+        ...(prebuilt.stylesheetPath !== undefined
+          ? { stylesheetPath: prebuilt.stylesheetPath }
+          : {}),
+      });
+      if (prebuilt.shadowedComponentSources.length > 0) {
+        prebuiltShadowedPacks.push({
+          name: pack.manifest.name,
+          folder: pack.folder,
+        });
+      }
       continue;
     }
     if (cacheDir === undefined) continue;
@@ -155,5 +199,6 @@ export async function loadPackContext(
     skipped,
     relativeEntries,
     cssWarnings,
+    prebuiltShadowedPacks,
   };
 }

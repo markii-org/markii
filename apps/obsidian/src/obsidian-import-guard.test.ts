@@ -22,12 +22,19 @@ import { describe, expect, it } from 'vitest';
  * that UI wiring is unit-testable regardless of which file it lives in —
  * kept separate from `view.tsx` (which uses it) purely to keep that file
  * from growing into a do-everything module.
+ *
+ * `pack-modals.ts` was added the same way for the "Build Markii pack for
+ * distribution" command (issue #15, gap 3): its pack picker and overwrite
+ * confirmation are Obsidian `SuggestModal`/`Modal` subclasses, equally
+ * untestable regardless of file, and kept separate from `main.ts` for the
+ * same do-everything-module reason.
  */
 const ALLOWED_FILES = new Set([
   'main.ts',
   'view.tsx',
   'settings-tab.ts',
   'run-modals.ts',
+  'pack-modals.ts',
 ]);
 
 const IMPORT_PATTERN =

@@ -33,6 +33,10 @@ function context(
   cssWarnings: readonly string[] = [],
   invalidRegistrationReasons: readonly string[] = [],
   registrationCollisions: readonly string[] = [],
+  prebuiltShadowedPacks: readonly {
+    readonly name: string;
+    readonly folder: string;
+  }[] = [],
 ): PackContext {
   return {
     packs,
@@ -45,6 +49,7 @@ function context(
     cssWarnings,
     invalidRegistrationReasons,
     registrationCollisions,
+    prebuiltShadowedPacks,
   };
 }
 
@@ -111,6 +116,61 @@ describe('formatPackDiagnosticLines', () => {
   it('an empty cssWarnings/invalidRegistrationReasons/registrationCollisions list contributes nothing', () => {
     const lines = formatPackDiagnosticLines(context([pack('ana', 1)], []));
     expect(lines).toHaveLength(1);
+  });
+
+  it('reports one informational line per prebuilt pack that shadows component sources, naming the pack', () => {
+    const lines = formatPackDiagnosticLines(
+      context(
+        [pack('ana', 1)],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [{ name: 'ana', folder: '/packs/ana' }],
+      ),
+    );
+    expect(lines).toHaveLength(2);
+    expect(lines[1]).toContain('ana');
+    expect(lines[1]).toContain('prebuilt');
+    expect(lines[1]).toContain('webview.js');
+  });
+
+  it('the shadow line sits between the relative-entry lines and the CSS warnings', () => {
+    const lines = formatPackDiagnosticLines(
+      context(
+        [pack('ana', 1)],
+        [],
+        ['packs/demo'],
+        ['pack "ana" CSS uses a raw color literal in "color: #fff;"'],
+        [],
+        [],
+        [{ name: 'ana', folder: '/packs/ana' }],
+      ),
+    );
+    expect(lines).toHaveLength(4);
+    expect(lines[0]).toContain('ana');
+    expect(lines[1]).toContain('vault-relative');
+    expect(lines[2]).toContain('prebuilt');
+    expect(lines[3]).toContain('raw color literal');
+  });
+
+  it('is absent when no pack shadows anything', () => {
+    const lines = formatPackDiagnosticLines(context([pack('ana', 1)], []));
+    expect(lines.some((line) => line.includes('prebuilt'))).toBe(false);
+  });
+
+  it('does not affect skippedPackCount', () => {
+    const withShadow = context(
+      [pack('ana', 1)],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [{ name: 'ana', folder: '/packs/ana' }],
+    );
+    expect(skippedPackCount(withShadow)).toBe(0);
   });
 });
 

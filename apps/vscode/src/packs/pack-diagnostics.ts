@@ -35,6 +35,19 @@ function relativeEntryLine(entry: string): string {
 }
 
 /**
+ * Issue #15, gap 2's wording: informs, never warns, that a pack's prebuilt
+ * `webview.js` is what actually loaded and its sibling component sources
+ * were not compiled. Names this host's own build command
+ * (`markii.buildPackForDistribution`) so the note is actionable. Output
+ * channel only — never a window notification, and never counted toward
+ * `skippedPackCount` (see `PackContext.prebuiltShadowedPacks`'s doc
+ * comment): shipping both is a supported state, not a failure.
+ */
+function prebuiltShadowLine(pack: { name: string; folder: string }): string {
+  return `Pack "${pack.name}" is using its prebuilt webview.js, so the component sources in that folder are not compiled. Edits to them take effect only after you delete webview.js or rebuild it with Markii: Build Pack for Distribution.`;
+}
+
+/**
  * The full set of diagnostic lines for one `loadPackContext` result, loaded
  * packs first (the confirmation that the setting is working at all) then
  * every skipped folder with its reason. Empty when nothing is configured at
@@ -46,6 +59,7 @@ export function formatPackDiagnosticLines(context: PackContext): string[] {
     packs: context.packs,
     skipped: context.skipped,
     relativeEntryLines: context.relativeEntries.map(relativeEntryLine),
+    prebuiltShadowLines: context.prebuiltShadowedPacks.map(prebuiltShadowLine),
     cssWarnings: context.cssWarnings,
   });
 }

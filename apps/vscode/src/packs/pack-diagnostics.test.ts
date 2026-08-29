@@ -24,6 +24,7 @@ function context(
   skipped: readonly SkippedPackFolder[],
   relativeEntries: readonly string[] = [],
   cssWarnings: readonly string[] = [],
+  prebuiltShadowedPacks: readonly { name: string; folder: string }[] = [],
 ): PackContext {
   return {
     packs,
@@ -33,6 +34,7 @@ function context(
     skipped,
     relativeEntries,
     cssWarnings,
+    prebuiltShadowedPacks,
   };
 }
 
@@ -101,6 +103,45 @@ describe('formatPackDiagnosticLines', () => {
   });
 
   it('an empty cssWarnings list contributes nothing', () => {
+    const lines = formatPackDiagnosticLines(context([pack('ana', 1)], []));
+    expect(lines).toHaveLength(1);
+  });
+
+  it("reports one informational line per prebuilt-shadowed pack, naming the pack and this host's build command", () => {
+    const lines = formatPackDiagnosticLines(
+      context(
+        [pack('ana', 1)],
+        [],
+        [],
+        [],
+        [{ name: 'ana', folder: '/packs/ana' }],
+      ),
+    );
+    expect(lines).toHaveLength(2);
+    expect(lines[1]).toContain('ana');
+    expect(lines[1]).toContain('webview.js');
+    expect(lines[1]).toContain('Build Pack for Distribution');
+  });
+
+  it('lists prebuilt-shadow lines after relative-entry lines and before CSS warnings', () => {
+    const lines = formatPackDiagnosticLines(
+      context(
+        [pack('ana', 1)],
+        [{ folder: '/packs/broken', reason: 'x' }],
+        ['packs/demo'],
+        ['pack "ana" CSS uses a raw color literal in "color: #fff;"'],
+        [{ name: 'ana', folder: '/packs/ana' }],
+      ),
+    );
+    expect(lines).toHaveLength(5);
+    expect(lines[0]).toContain('ana');
+    expect(lines[1]).toContain('/packs/broken');
+    expect(lines[2]).toContain('packs/demo');
+    expect(lines[3]).toContain('prebuilt webview.js');
+    expect(lines[4]).toContain('raw color literal');
+  });
+
+  it('an empty prebuiltShadowedPacks list contributes nothing', () => {
     const lines = formatPackDiagnosticLines(context([pack('ana', 1)], []));
     expect(lines).toHaveLength(1);
   });

@@ -202,7 +202,14 @@ importance:
    The VS Code extension uses an output channel named Markii; the Obsidian
    plugin uses the developer console with a notice for anything the user
    must act on. Both expose a command that shows the current state.
-10. **Storage that does not travel.** Anything that authorizes execution or
+10. **Prebuilt pack conventions, if you load packs.** A pack shipping a
+    prebuilt `webview.js` may ship a `webview.css` beside it: load and
+    unload that exactly like a stylesheet you compiled yourself, keyed by
+    the pack's namespace, and treat its absence as normal. When a pack has
+    both a prebuilt script and component sources on disk, say so on your
+    diagnostics surface as an informational line; it is a supported state
+    and never warrants a notification.
+11. **Storage that does not travel.** Anything that authorizes execution or
     network access, meaning grants, auto-run, and any scheduled interval,
     is stored per user and per device, never anywhere that moves with the
     content. VS Code's application-scoped settings and global state satisfy

@@ -1,11 +1,28 @@
 import * as vscode from 'vscode';
 import {
+  esbuildBrowserModulePath,
+  esbuildWasmBinaryPath,
   openPreview,
+  packCacheDir,
   resetScriptGrants,
   runScripts,
   setDiagnosticsChannel,
 } from './preview-panel.js';
 import { appendPackFolder } from './packs/add-pack-folder.js';
+import {
+  createNodePackDistributionFs,
+  discoverConfiguredPacksForDistribution,
+  NO_PACKS_CONFIGURED_MESSAGE,
+  packDistributionDiagnosticLines,
+  packDistributionQuickPickItem,
+  packDistributionResultMessage,
+  packOverwriteConfirmMessage,
+} from './packs/build-pack-distribution.js';
+import {
+  buildPackForDistribution,
+  buildPackRegistrationScript,
+} from '@markii/host';
+import type { DiscoveredPack } from '@markii/host';
 import {
   parseRefreshIntervalSeconds,
   refreshIntervalValidationMessage,
@@ -100,6 +117,89 @@ async function toggleRunOnOpen(): Promise<void> {
 }
 
 /**
+ * The `markii.buildPackForDistribution` command (GitHub issue #15, gap 3):
+ * compiles a configured pack and writes its prebuilt `webview.js`/
+ * `webview.css` into the pack's own folder — the one, deliberate exception
+ * to never writing inside a pack folder (see `@markii/host`'s
+ * `packs/pack-distribute.ts`). All the testable pieces (pack discovery, the
+ * `PackDistributionFs`, the quick-pick item shape, every user-facing
+ * string) live in `./packs/build-pack-distribution.ts`; this function is
+ * `vscode` wiring only: reads `markii.packs`/the workspace root, offers a
+ * quick pick when more than one pack is configured, and shows the
+ * resulting message. The build's warnings and any failure reason are also
+ * written to `diagnosticsChannel`, this extension's one diagnostics
+ * surface, so the full detail is never only in a transient popup.
+ */
+async function buildPackForDistributionCommand(
+  context: vscode.ExtensionContext,
+  diagnosticsChannel: vscode.OutputChannel,
+): Promise<void> {
+  const configuredPacks = vscode.workspace
+    .getConfiguration('markii')
+    .get<string[]>('packs', []);
+  const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+
+  const packs = await discoverConfiguredPacksForDistribution(
+    configuredPacks,
+    workspaceRoot,
+  );
+  if (packs.length === 0) {
+    void vscode.window.showInformationMessage(NO_PACKS_CONFIGURED_MESSAGE);
+    return;
+  }
+
+  let chosen: DiscoveredPack;
+  if (packs.length === 1) {
+    chosen = packs[0]!;
+  } else {
+    const items = packs.map(packDistributionQuickPickItem);
+    const picked = await vscode.window.showQuickPick(items, {
+      title: 'Markii: Build Pack for Distribution',
+      placeHolder: 'Choose a pack to build',
+    });
+    if (!picked) return; // cancelled
+    const index = items.indexOf(picked);
+    chosen = packs[index]!;
+  }
+
+  const cacheDir = packCacheDir(context);
+  const browserModulePath = esbuildBrowserModulePath(context);
+  const wasmBinaryPath = esbuildWasmBinaryPath(context);
+
+  const outcome = await buildPackForDistribution({
+    pack: chosen,
+    cacheDir,
+    build: (pack, dir) =>
+      buildPackRegistrationScript(pack, dir, {
+        esbuildBrowserModulePath: browserModulePath,
+        esbuildWasmBinaryPath: wasmBinaryPath,
+      }),
+    fs: createNodePackDistributionFs(),
+    confirmOverwrite: async (request) => {
+      const choice = await vscode.window.showWarningMessage(
+        packOverwriteConfirmMessage(request),
+        { modal: true },
+        'Overwrite',
+      );
+      return choice === 'Overwrite';
+    },
+  });
+
+  // Both homes of the outcome, always: the short popup, and the full
+  // detail (a failure's verbatim reason, the written paths and byte sizes,
+  // any pack-CSS lint warnings) on the diagnostics surface.
+  const message = packDistributionResultMessage(outcome);
+  for (const line of packDistributionDiagnosticLines(outcome)) {
+    diagnosticsChannel.appendLine(line);
+  }
+  if (outcome.kind === 'failed') {
+    void vscode.window.showWarningMessage(message);
+  } else {
+    void vscode.window.showInformationMessage(message);
+  }
+}
+
+/**
  * Extension entry point. Imports `vscode` — deliberately NOT unit-tested
  * (vitest cannot resolve `vscode`); this file is wiring only, registering
  * the commands `package.json`'s `contributes.commands` declares
@@ -161,6 +261,12 @@ export function activate(context: vscode.ExtensionContext): void {
       void toggleRunOnOpen();
     },
   );
+  const buildPackForDistributionCommandHandle = vscode.commands.registerCommand(
+    'markii.buildPackForDistribution',
+    () => {
+      void buildPackForDistributionCommand(context, diagnosticsChannel);
+    },
+  );
   context.subscriptions.push(
     diagnosticsChannel,
     showDiagnosticsCommand,
@@ -170,6 +276,7 @@ export function activate(context: vscode.ExtensionContext): void {
     addPackFolderCommand,
     enableScheduledRefreshCommand,
     toggleRunOnOpenCommand,
+    buildPackForDistributionCommandHandle,
   );
 }
 

@@ -9,13 +9,21 @@
  * The structural wording (one line per loaded pack, one per skipped
  * folder, the CSS-warning lines, invalid-registration reasons, and the
  * namespace-collision line) is shared across every host and lives in
- * `@markii/host`'s `formatPackDiagnosticLines`. This file's own job is
- * just the ONE piece that is genuinely Obsidian-specific: the wording of
- * the relative-entry note. It is INFORMATIONAL: an Obsidian vault is a
+ * `@markii/host`'s `formatPackDiagnosticLines`. This file's own job is the
+ * pieces that are genuinely Obsidian-specific: the wording of the
+ * relative-entry note, and the wording of the prebuilt-shadow note.
+ *
+ * The relative-entry note is INFORMATIONAL: an Obsidian vault is a
  * self-contained world, so "./packs" meaning "this vault's own packs
  * folder" is a spelling a user may want on purpose — the note only states
  * the per-vault consequence. (VS Code's own wording names its user-scoped
  * `markii.packs` setting — see `apps/vscode/src/packs/pack-diagnostics.ts`.)
+ *
+ * The prebuilt-shadow note is also INFORMATIONAL (issue #15): a pack
+ * folder that holds both a prebuilt `webview.js` and its component sources
+ * is a supported shape, never a failure, so this note names this plugin's
+ * own "Build Markii pack for distribution" command rather than treating
+ * the situation as something to fix.
  */
 import {
   formatPackDiagnosticLines as formatPackDiagnosticLinesShared,
@@ -26,6 +34,22 @@ import type { PackContext } from './pack-context.js';
 /** One line for each pack-folder entry that is relative. Informational, never a warning: vault-relative packs are a supported spelling (a pack that lives inside the vault it serves), but since this plugin's folder list is device-local while the vault changes, the fact that the SAME entry loads a DIFFERENT folder per vault is worth stating where a user debugging a pack will look. */
 function relativeEntryLine(entry: string): string {
   return `pack folder "${entry}" is vault-relative: it loads from inside whichever vault is open, so each vault supplies (or lacks) its own copy. Use an absolute or "~/..." path for one shared folder across vaults.`;
+}
+
+/**
+ * One informational line for a pack whose prebuilt `webview.js` shadows
+ * component sources still present in the same folder (`@markii/host`'s
+ * `resolvePrebuiltPack`, issue #15). Never a failure: shipping both the
+ * built artifact and its sources is a supported distribution shape. This
+ * line names the plugin's own "Build Markii pack for distribution" command
+ * (`./build-pack-distribution.ts`, wired in `../main.ts`) since that is how
+ * a user would refresh the prebuilt script after editing the sources.
+ */
+function prebuiltShadowLine(pack: {
+  readonly name: string;
+  readonly folder: string;
+}): string {
+  return `Pack "${pack.name}" is using its prebuilt webview.js, so the component sources in that folder are not compiled. Edits to them take effect only after you delete webview.js or rebuild it with the Build Markii pack for distribution command.`;
 }
 
 /**
@@ -113,6 +137,7 @@ export function formatPackDiagnosticLines(context: PackContext): string[] {
     packs: context.packs,
     skipped: context.skipped,
     relativeEntryLines: context.relativeEntries.map(relativeEntryLine),
+    prebuiltShadowLines: context.prebuiltShadowedPacks.map(prebuiltShadowLine),
     cssWarnings: context.cssWarnings,
     invalidRegistrationReasons: context.invalidRegistrationReasons,
     registrationCollisions: context.registrationCollisions,

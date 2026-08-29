@@ -190,6 +190,35 @@ export {
   skippedPackCount,
 } from './packs/pack-diagnostics.js';
 
+// Prebuilt-pack convention (issue #15): the sibling webview.js/webview.css
+// distribution shape, and the shadowing detection docs/packs.md describes.
+export type {
+  PackPathExists,
+  PrebuiltPackResolution,
+} from './packs/prebuilt.js';
+export {
+  PREBUILT_SCRIPT_FILENAME,
+  PREBUILT_STYLESHEET_FILENAME,
+  prebuiltScriptPathFor,
+  prebuiltStylesheetPathFor,
+  resolvePrebuiltPack,
+} from './packs/prebuilt.js';
+
+// "Build pack for distribution" (issue #15, gap 3): compiles a pack and
+// writes its prebuilt artifacts into the pack's OWN folder, the one
+// documented exception to never writing inside a pack folder.
+export type {
+  BuildPackForDistributionOptions,
+  ConfirmPackOverwrite,
+  PackDistributionBuilder,
+  PackDistributionFs,
+  PackDistributionOutcome,
+} from './packs/pack-distribute.js';
+export {
+  buildPackForDistribution,
+  resolveDistributionTarget,
+} from './packs/pack-distribute.js';
+
 export type {
   BuildRenderRegistryResult,
   QueuedPackRegistration,

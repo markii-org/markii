@@ -156,8 +156,16 @@ install that would restore the capability, rather than failing silently or
 dumping a compiler error. A prebuilt pack loads either way.
 
 When a pack folder holds both a `webview.js` and sources, the prebuilt
-script wins and the sources are ignored, so delete the built file while
-developing and produce a fresh one when you ship.
+script wins and the sources are ignored. The host says so on its
+diagnostics surface, as an informational line rather than a failure:
+shipping both is a normal state for a pack you develop and also
+distribute. While you are developing, delete the built file so your edits
+take effect, and produce a fresh one when you ship.
+
+The prebuilt filenames are a host convention layered on the pack
+contract, the same way `webview.js` always was. The manifest gains no
+field for them: `pack.json` keeps describing the sources, and a host
+simply prefers the built files when they are present.
 
 ## Styling a pack
 
@@ -204,6 +212,37 @@ application would. Pack components use the host's own renderer instance
 rather than bundling their own copy. A host that loads packs this way limits
 what it will load to exactly the configured folders, and never lets a note's
 content decide what runs.
+
+A prebuilt pack carries its stylesheet the same way it carries its script:
+as a `webview.css` sitting next to `webview.js`. The host loads it exactly
+like a stylesheet it compiled itself, keyed by the pack's namespace, so it
+is ordered after the document stylesheet and the theme layer and is removed
+again when the pack goes away. A pack with no styles simply ships no
+`webview.css`, and its absence is not an error.
+
+Do not inject a stylesheet from inside the component script. It works, but
+the host can no longer remove it or order it against the theme, so the pack
+leaks style into notes that are no longer using it.
+
+## Building a pack for distribution
+
+Once a pack works from source, one command turns it into the prebuilt form.
+In VS Code it is "Markii: Build Pack for Distribution"; in Obsidian it is
+"Build Markii pack for distribution". Both ask which pack when more than
+one is configured, compile it, and write `webview.js`, plus `webview.css`
+when the pack has styles, into the pack's own folder. If those files are
+already there, the command asks before replacing them, and it reports where
+it wrote and how large the result is.
+
+This is the one time a host writes inside a pack folder, and it happens
+only because the author asked for it by name. Loading a pack never writes
+there: the build cache for the from-source path lives outside the pack, so
+an ordinary preview leaves the folder untouched.
+
+The command needs the compiler, so an install that does not carry one
+cannot run it. It says so plainly and names the install that would restore
+it. Ship the resulting files with `pack.json`, and the pack loads on every
+install of every host.
 
 ## What the reference project provides, and what it doesn't
 

@@ -75,6 +75,11 @@
         "command": "markii.showDiagnostics",
         "title": "Show Diagnostics",
         "category": "Markii"
+      },
+      {
+        "command": "markii.buildPackForDistribution",
+        "title": "Build Pack for Distribution",
+        "category": "Markii"
       }
     ],
     "menus": {
@@ -118,6 +123,9 @@
         },
         {
           "command": "markii.toggleRunOnOpen"
+        },
+        {
+          "command": "markii.buildPackForDistribution"
         }
       ]
     },

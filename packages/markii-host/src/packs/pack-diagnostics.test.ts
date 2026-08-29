@@ -23,11 +23,13 @@ function context(
   cssWarnings: readonly string[] = [],
   invalidRegistrationReasons: readonly string[] = [],
   registrationCollisions: readonly string[] = [],
+  prebuiltShadowLines: readonly string[] = [],
 ): PackDiagnosticsContext {
   return {
     packs,
     skipped,
     relativeEntryLines,
+    prebuiltShadowLines,
     cssWarnings,
     invalidRegistrationReasons,
     registrationCollisions,
@@ -103,6 +105,37 @@ describe('formatPackDiagnosticLines', () => {
     expect(lines[4]).toContain('manifest JSON string');
     expect(lines[5]).toContain('gh');
     expect(lines[5]).toContain('namespace');
+  });
+
+  it('splices in prebuilt-shadow lines after relative-entry lines and before CSS warnings', () => {
+    const lines = formatPackDiagnosticLines(
+      context(
+        [pack('ana', 1)],
+        [{ folder: '/packs/broken', reason: 'x' }],
+        ['packs/demo is relative'],
+        ['pack "ana" CSS uses a raw color literal in "color: #fff;"'],
+        [],
+        [],
+        [
+          'Pack "ana" ships a prebuilt webview.js; its component sources on disk are ignored.',
+        ],
+      ),
+    );
+    expect(lines).toHaveLength(5);
+    expect(lines[0]).toContain('ana');
+    expect(lines[1]).toContain('/packs/broken');
+    expect(lines[2]).toContain('packs/demo');
+    expect(lines[3]).toContain('prebuilt webview.js');
+    expect(lines[4]).toContain('raw color literal');
+  });
+
+  it('omitting prebuiltShadowLines entirely contributes nothing', () => {
+    const lines = formatPackDiagnosticLines({
+      packs: [pack('ana', 1)],
+      skipped: [],
+      cssWarnings: [],
+    });
+    expect(lines).toHaveLength(1);
   });
 
   it('an empty cssWarnings/invalidRegistrationReasons/registrationCollisions list contributes nothing', () => {

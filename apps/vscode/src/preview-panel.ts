@@ -300,7 +300,7 @@ function localResourceRootsFor(
  * subdirectory is enough to keep it out of the way of whatever else the
  * extension stores there.
  */
-function packCacheDir(context: vscode.ExtensionContext): string {
+export function packCacheDir(context: vscode.ExtensionContext): string {
   return path.join(context.globalStorageUri.fsPath, 'pack-cache');
 }
 
@@ -314,7 +314,7 @@ function packCacheDir(context: vscode.ExtensionContext): string {
  * pass" posture `./run/worker-entry.ts`'s `resolveWasmUri` already takes
  * for wasmoon's `glue.wasm`.
  */
-function esbuildBrowserModulePath(
+export function esbuildBrowserModulePath(
   context: vscode.ExtensionContext,
 ): string | undefined {
   const candidate = path.join(
@@ -334,7 +334,7 @@ function esbuildBrowserModulePath(
  * esbuild-wasm's in-process build. `undefined` with the same fallback
  * posture as `esbuildBrowserModulePath`.
  */
-function esbuildWasmBinaryPath(
+export function esbuildWasmBinaryPath(
   context: vscode.ExtensionContext,
 ): string | undefined {
   const candidate = path.join(

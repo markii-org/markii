@@ -28,6 +28,16 @@ import {
   type BrowserWorkerSetup,
 } from './run/browser-worker.js';
 import { createNetProvider } from '@markii/host';
+import {
+  NO_PACKS_CONFIGURED_NOTICE,
+  createNodePackDistributionFs,
+  discoverPacksForCommand,
+  runBuildPackForDistribution,
+} from './packs/build-pack-distribution.js';
+import {
+  confirmPackOverwriteModal,
+  pickPackForDistribution,
+} from './pack-modals.js';
 
 /**
  * Imports `obsidian` — deliberately NOT unit-tested (Vitest cannot resolve
@@ -133,6 +143,61 @@ export default class MarkiiPlugin extends Plugin {
         new Notice('Markii: pack diagnostics printed to the console.');
       },
     });
+
+    this.addCommand({
+      id: 'build-markii-pack',
+      name: 'Build Markii pack for distribution',
+      callback: () => {
+        void this.buildPackForDistribution();
+      },
+    });
+  }
+
+  /**
+   * The "Build Markii pack for distribution" command (issue #15, gap 3).
+   * Works with no preview open: it reads the device-local pack-folder
+   * setting and this plugin's own cache/esbuild-wasm paths directly,
+   * rather than going through `MarkiiPreviewView`. No packs configured
+   * gets a `Notice`; exactly one configured pack builds straight away;
+   * several show a picker (`src/pack-modals.ts`). The outcome is reported
+   * on both of AGENTS.md's failure homes: a `Notice`, and the full detail
+   * (paths, sizes, warnings, or the failure reason) to the console, this
+   * host's diagnostics surface.
+   */
+  private async buildPackForDistribution(): Promise<void> {
+    const cacheDir = this.packCacheDir();
+    if (!cacheDir) {
+      new Notice(
+        'Markii: this vault has no writable plugin folder, so a pack cannot be built here.',
+      );
+      return;
+    }
+
+    const { packs } = await discoverPacksForCommand(
+      this.packSettings.packFolders,
+      this.vaultBasePath(),
+    );
+    if (packs.length === 0) {
+      new Notice(NO_PACKS_CONFIGURED_NOTICE);
+      return;
+    }
+
+    const pack = await pickPackForDistribution(this.app, packs);
+    if (!pack) return;
+
+    const result = await runBuildPackForDistribution({
+      pack,
+      cacheDir,
+      esbuildBrowserModulePath: this.esbuildBrowserModulePath(),
+      esbuildWasmBinaryPath: this.esbuildWasmBinaryPath(),
+      fs: createNodePackDistributionFs(),
+      confirmOverwrite: confirmPackOverwriteModal(this.app),
+    });
+
+    new Notice(result.notice);
+    for (const line of result.consoleLines) {
+      console.log(line);
+    }
   }
 
   /**

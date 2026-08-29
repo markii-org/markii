@@ -170,6 +170,14 @@ packages/markii-host    PRIVATE, never published (no npm presence, absent from
                      CSS) with esbuild-wasm's in-process wasm path, cached
                      outside the pack's own folder. See the Stack section for
                      why the in-process path is mandatory, not preferred
+  src/packs/prebuilt.ts    the prebuilt-pack convention (issue #15): the
+                     sibling webview.css next to webview.js, and detection
+                     of a prebuilt script shadowing on-disk sources
+  src/packs/pack-distribute.ts  the compose-and-write half of the hosts'
+                     build-for-distribution command: builds via the normal
+                     cache, then writes webview.js (+ webview.css) into the
+                     pack's own folder behind a path jail. The ONE
+                     sanctioned write inside a pack folder, author-initiated
 packages/markii-lua     Lua sandbox runtime (docs/security.md, L3) — no React, no parsing:
   src/globals.ts     empty-env whitelist: curated string/table/math only
   src/capabilities.ts net/cache/bundle tables; two-tier (manual vs auto) gating
@@ -207,7 +215,8 @@ apps/vscode          the "Markii" VS Code extension (preview + Run + packs) — 
                      (user-scope) against the workspace root; pack-scripts.ts
                      pre-reads each pack's scripts/*.lua; lua-resolver.ts is the
                      pure worker-side PackModuleResolver; pack-context.ts
-                     composes them
+                     composes them; build-pack-distribution.ts backs the
+                     markii.buildPackForDistribution command (issue #15)
   syntaxes/          TextMate injection grammar for the three directive forms
   esbuild.config.mjs two bundles: extension host (node/cjs, vscode external)
                      and webview (browser/iife); @markii/* aliased to src/;
@@ -256,7 +265,11 @@ apps/obsidian        the "Markii" Obsidian plugin (desktop only) — an
                      pack-compilation.ts degrades compile-from-source
                      cleanly when the (deliberately unembedded, ~14 MB)
                      esbuild-wasm runtime isn't beside main.js (zip installs
-                     carry it, 3-file installs don't)
+                     carry it, 3-file installs don't);
+                     build-pack-distribution.ts backs the Build Markii pack
+                     for distribution command (issue #15), with its prompts
+                     in src/pack-modals.ts (obsidian-import allowlisted like
+                     run-modals.ts)
   src/obsidian-theme.css  maps doc.css's 15 Tier 1 tokens onto Obsidian's
                      theme variables; src/theme-coverage.test.ts fails when
                      a token is left unmapped

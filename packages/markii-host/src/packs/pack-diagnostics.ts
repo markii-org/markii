@@ -8,14 +8,17 @@
  * per skipped folder, the CSS-warning lines, and the pack-registration
  * lines (invalid registration reasons and the namespace-collision line) —
  * which is identical across every host. It deliberately does NOT format
- * the relative-entry note: which setting a relative entry
- * belongs to (VS Code's `markii.packs`, this plugin's device-local
- * pack-folder list) and what "relative" means for that host (a different
- * workspace window vs. a different vault) is host-specific knowledge, so
- * each host formats those lines itself and passes them in already-rendered
- * (`relativeEntryLines` below) — see `apps/vscode/src/packs/pack-diagnostics.ts`
- * and `apps/obsidian/src/packs/pack-diagnostics.ts` for each host's own
- * wording and thin wrapper around this function.
+ * the relative-entry note or the prebuilt-shadow note: which setting a
+ * relative entry belongs to (VS Code's `markii.packs`, this plugin's
+ * device-local pack-folder list) and what "relative" means for that host (a
+ * different workspace window vs. a different vault) is host-specific
+ * knowledge, and naming a host's own "build pack for distribution" command
+ * in the shadow note is host-specific the same way, so each host formats
+ * those lines itself and passes them in already-rendered
+ * (`relativeEntryLines`/`prebuiltShadowLines` below) — see
+ * `apps/vscode/src/packs/pack-diagnostics.ts` and
+ * `apps/obsidian/src/packs/pack-diagnostics.ts` for each host's own wording
+ * and thin wrapper around this function.
  */
 
 /** The minimal shape of one loaded pack this module needs — a structural subset of `./discover.ts`'s `DiscoveredPack`. */
@@ -39,6 +42,8 @@ export interface PackDiagnosticsContext {
   readonly skipped: readonly PackDiagnosticsSkippedFolder[];
   /** Already-formatted lines, one per relative pack-folder-setting entry (host-specific wording — see this module's top doc comment). Defaults to none. */
   readonly relativeEntryLines?: readonly string[];
+  /** Already-formatted informational lines, one per pack whose prebuilt webview.js shadows component sources on disk (host-specific wording, since each host names its own build command). Informational, never a failure: shipping both is a supported state. */
+  readonly prebuiltShadowLines?: readonly string[];
   /** Pack CSS authoring warnings against every built pack's emitted stylesheet. Warnings only, developer-facing. */
   readonly cssWarnings: readonly string[];
   /** One line per malformed pack registration, dropped rather than installed (`./pack-render-registry.ts`'s `BuildRenderRegistryResult.invalidReasons`). Omitted (or empty) contributes nothing — a host that never validates registrations on this side (e.g. VS Code's webview validates them separately, in the browser) simply has none to report yet. */
@@ -75,11 +80,11 @@ function collisionLines(context: PackDiagnosticsContext): string[] {
 /**
  * The full set of diagnostic lines for one pack-loading outcome: loaded
  * packs first (the confirmation that the setting is working at all), then
- * every skipped folder with its reason, then relative-entry
- * lines, then pack CSS lint warnings, then any invalid-registration or
- * namespace-collision lines. Empty when nothing is configured at all — the
- * caller decides whether an empty result is worth writing anything to its
- * own diagnostics surface.
+ * every skipped folder with its reason, then relative-entry lines, then
+ * prebuilt-shadow lines, then pack CSS lint warnings, then any
+ * invalid-registration or namespace-collision lines. Empty when nothing is
+ * configured at all — the caller decides whether an empty result is worth
+ * writing anything to its own diagnostics surface.
  */
 export function formatPackDiagnosticLines(
   context: PackDiagnosticsContext,
@@ -88,6 +93,7 @@ export function formatPackDiagnosticLines(
     ...loadedLines(context),
     ...skippedLines(context),
     ...(context.relativeEntryLines ?? []),
+    ...(context.prebuiltShadowLines ?? []),
     ...context.cssWarnings,
     ...(context.invalidRegistrationReasons ?? []),
     ...collisionLines(context),

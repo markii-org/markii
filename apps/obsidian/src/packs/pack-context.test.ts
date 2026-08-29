@@ -252,6 +252,109 @@ describe('loadPackContext — compiling a pack with no prebuilt script', () => {
   });
 });
 
+describe('loadPackContext — prebuilt pack (issue #15)', () => {
+  it('a prebuilt pack with a sibling webview.css contributes a stylesheet keyed by its namespace', async () => {
+    const root = await makeTempDir();
+    const packDir = path.join(root, 'styled');
+    await writePackManifest(packDir, 'styled');
+    await writeFile(
+      path.join(packDir, 'webview.js'),
+      registeringScript('styled'),
+    );
+    await writeFile(
+      path.join(packDir, 'webview.css'),
+      '.mk-styled-widget { color: var(--mk-fg); }',
+    );
+
+    const context = await loadPackContext(['styled'], root, createRegistry());
+
+    expect(context.registry['styled-widget']).toBeDefined();
+    expect(context.stylesheets).toEqual([
+      {
+        namespace: 'styled',
+        cssText: '.mk-styled-widget { color: var(--mk-fg); }',
+      },
+    ]);
+    expect(context.skipped).toEqual([]);
+    expect(context.prebuiltShadowedPacks).toEqual([]);
+  });
+
+  it('a prebuilt pack with no sibling webview.css contributes no stylesheet', async () => {
+    const root = await makeTempDir();
+    const packDir = path.join(root, 'plain');
+    await writePackManifest(packDir, 'plain');
+    await writeFile(
+      path.join(packDir, 'webview.js'),
+      registeringScript('plain'),
+    );
+
+    const context = await loadPackContext(['plain'], root, createRegistry());
+
+    expect(context.registry['plain-widget']).toBeDefined();
+    expect(context.stylesheets).toEqual([]);
+  });
+
+  it('a prebuilt pack whose folder also holds component sources is reported in prebuiltShadowedPacks, and never counted as skipped', async () => {
+    const root = await makeTempDir();
+    const packDir = path.join(root, 'shadowed');
+    await writePackManifest(packDir, 'shadowed');
+    await writeFile(
+      path.join(packDir, 'webview.js'),
+      registeringScript('shadowed'),
+    );
+    await writeFile(
+      path.join(packDir, 'Widget.tsx'),
+      'export default function Widget() { return null; }',
+    );
+
+    const context = await loadPackContext(['shadowed'], root, createRegistry());
+
+    expect(context.registry['shadowed-widget']).toBeDefined();
+    expect(context.prebuiltShadowedPacks).toEqual([
+      { name: 'shadowed', folder: packDir },
+    ]);
+    expect(context.skipped).toEqual([]);
+  });
+
+  it('a prebuilt pack whose sources are not on disk is not reported as shadowed', async () => {
+    const root = await makeTempDir();
+    const packDir = path.join(root, 'clean');
+    await writePackManifest(packDir, 'clean');
+    await writeFile(
+      path.join(packDir, 'webview.js'),
+      registeringScript('clean'),
+    );
+
+    const context = await loadPackContext(['clean'], root, createRegistry());
+
+    expect(context.prebuiltShadowedPacks).toEqual([]);
+  });
+
+  it('the from-source build path is unchanged: no prebuilt script still goes through buildRegistrationScript', async () => {
+    const root = await makeTempDir();
+    const packDir = path.join(root, 'built');
+    await writePackManifest(packDir, 'built');
+    const cacheDir = await makeTempDir();
+    const compiledPath = path.join(cacheDir, 'built-abc123.js');
+    await writeFile(compiledPath, registeringScript('built'));
+
+    let called = false;
+    const buildRegistrationScript: PackCompileBuilder = async () => {
+      called = true;
+      return { kind: 'built', scriptPath: compiledPath, warnings: [] };
+    };
+
+    const context = await loadPackContext(['built'], root, createRegistry(), {
+      cacheDir,
+      buildRegistrationScript,
+    });
+
+    expect(called).toBe(true);
+    expect(context.registry['built-widget']).toBeDefined();
+    expect(context.prebuiltShadowedPacks).toEqual([]);
+  });
+});
+
 describe('loadPackContext — namespace collision', () => {
   it('two packs sharing a namespace: both discovered but neither registers, and the base registry is untouched', async () => {
     const root = await makeTempDir();

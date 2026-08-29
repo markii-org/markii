@@ -35,11 +35,13 @@ import {
   loadPackModules,
   relativePackEntries,
   resolvePackPaths,
+  resolvePrebuiltPack,
 } from '@markii/host';
 import type {
   DiscoveredPack,
   PackBuildOutcome,
   PackModulesMap,
+  PackPathExists,
   SkippedPackFolder,
 } from '@markii/host';
 import {
@@ -75,6 +77,19 @@ export interface PackContext {
   readonly invalidRegistrationReasons: readonly string[];
   /** Namespaces shared by two or more registered packs — when non-empty, `registry` fell back to `defaultRegistry` alone (`installPacks`'s all-or-nothing rule). */
   readonly registrationCollisions: readonly string[];
+  /**
+   * Packs that ship BOTH a prebuilt `webview.js` and component sources on
+   * disk (`@markii/host`'s `resolvePrebuiltPack`, issue #15). Informational
+   * only: the prebuilt script is what actually loads, and the sources next
+   * to it are never compiled or read. This is a supported distribution
+   * shape (a pack author who ships the built artifact alongside its
+   * sources for reference), never a failure — it contributes nothing to
+   * `skipped` and nothing to `../view.tsx`'s `notifyPackFailures`.
+   */
+  readonly prebuiltShadowedPacks: readonly {
+    readonly name: string;
+    readonly folder: string;
+  }[];
 }
 
 /** Reads one file's UTF-8 text, or `undefined` if unreadable — reused for both a compiled script and its sibling stylesheet. */
@@ -106,6 +121,8 @@ export interface LoadPackContextOptions {
   readonly buildRegistrationScript?: PackCompileBuilder;
   /** Reads a compiled script's or stylesheet's text. Defaults to real `node:fs`. Injected for testability. */
   readonly readArtifact?: PackArtifactReader;
+  /** Whether an absolute path exists on disk — used to detect a prebuilt `webview.js`/`webview.css` (`@markii/host`'s `resolvePrebuiltPack`). Defaults to real `node:fs`'s `existsSync`. Injected so this module stays testable without disk, matching `readArtifact`/`buildRegistrationScript` above. */
+  readonly pathExists?: PackPathExists;
 }
 
 /** One compiled pack's script text plus, if it has one, its stylesheet text — read once so evaluation and stylesheet collection do not each hit disk separately. */
@@ -118,9 +135,14 @@ interface CompiledPack {
 /**
  * Resolves the usable compiled script (and stylesheet, if any) for every
  * discovered pack: a prebuilt `webview.js` sibling to `pack.json` if one
- * exists, otherwise a build via `buildRegistrationScript` when `cacheDir`
- * is configured. A pack that fails either step is recorded in `skipped`
- * (mutated in place) and excluded from the returned list — never thrown.
+ * exists (`@markii/host`'s `resolvePrebuiltPack`, whose optional sibling
+ * `webview.css` becomes this pack's `stylesheetPath` when present),
+ * otherwise a build via `buildRegistrationScript` when `cacheDir` is
+ * configured. A pack that fails either step is recorded in `skipped`
+ * (mutated in place) and excluded from the returned list — never thrown. A
+ * pack whose prebuilt script shadows component sources still present on
+ * disk is recorded in `prebuiltShadowedPacks` (mutated in place) —
+ * informational only, never a failure.
  */
 interface ResolveCompiledPacksResult {
   readonly compiled: readonly CompiledPack[];
@@ -130,9 +152,11 @@ interface ResolveCompiledPacksResult {
 async function resolveCompiledPacks(
   packs: readonly DiscoveredPack[],
   skipped: SkippedPackFolder[],
+  prebuiltShadowedPacks: { readonly name: string; readonly folder: string }[],
   cacheDir: string | undefined,
   buildRegistrationScript: PackCompileBuilder,
   readArtifact: PackArtifactReader,
+  pathExists: PackPathExists,
 ): Promise<ResolveCompiledPacksResult> {
   const compiled: CompiledPack[] = [];
   const cssWarnings: string[] = [];
@@ -142,7 +166,17 @@ async function resolveCompiledPacks(
     let stylesheetPath = pack.stylesheetPath;
     let warnings: readonly string[] = [];
 
-    if (!existsSync(scriptPath)) {
+    const prebuilt = await resolvePrebuiltPack(pack, pathExists);
+    if (prebuilt) {
+      scriptPath = prebuilt.scriptPath;
+      stylesheetPath = prebuilt.stylesheetPath;
+      if (prebuilt.shadowedComponentSources.length > 0) {
+        prebuiltShadowedPacks.push({
+          name: pack.manifest.name,
+          folder: pack.folder,
+        });
+      }
+    } else {
       if (cacheDir === undefined) continue;
       const outcome = await buildRegistrationScript(pack, cacheDir);
       if (outcome.kind === 'built') {
@@ -203,6 +237,7 @@ export async function loadPackContext(
     cacheDir,
     buildRegistrationScript = noopBuilder,
     readArtifact = defaultArtifactReader,
+    pathExists = existsSync,
   } = options;
   const homeDir = homedir();
   const folders = resolvePackPaths(configuredFolders, vaultRoot, homeDir);
@@ -212,12 +247,18 @@ export async function loadPackContext(
   const packModules = await loadPackModules(discovery.packs);
 
   const skipped: SkippedPackFolder[] = [...discovery.skipped];
+  const prebuiltShadowedPacks: {
+    readonly name: string;
+    readonly folder: string;
+  }[] = [];
   const { compiled: compiledPacks, cssWarnings } = await resolveCompiledPacks(
     discovery.packs,
     skipped,
+    prebuiltShadowedPacks,
     cacheDir,
     buildRegistrationScript,
     readArtifact,
+    pathExists,
   );
 
   installPackRuntime();
@@ -261,5 +302,6 @@ export async function loadPackContext(
     cssWarnings,
     invalidRegistrationReasons: invalidReasons,
     registrationCollisions: collisions,
+    prebuiltShadowedPacks,
   };
 }

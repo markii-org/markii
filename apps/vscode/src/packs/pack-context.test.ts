@@ -251,3 +251,91 @@ describe('loadPackContext — compiling a pack with no prebuilt webview.js', () 
     );
   });
 });
+
+describe('loadPackContext — prebuilt pack sibling stylesheet and shadowed sources (issue #15)', () => {
+  it('carries a sibling webview.css onto the pushed pack when one exists', async () => {
+    const root = await makeTempDir();
+    const packDir = path.join(root, 'demo');
+    await mkdir(packDir, { recursive: true });
+    await writeFile(
+      path.join(packDir, 'pack.json'),
+      JSON.stringify({
+        name: 'demo',
+        engine: 'react',
+        components: { widget: './Widget.tsx' },
+      }),
+    );
+    await writeFile(path.join(packDir, 'webview.js'), '// prebuilt');
+    await writeFile(path.join(packDir, 'webview.css'), '.demo-widget {}');
+
+    const context = await loadPackContext(['demo'], root);
+
+    expect(context.webviewPacks).toHaveLength(1);
+    expect(context.webviewPacks[0]!.stylesheetPath).toBe(
+      path.join(packDir, 'webview.css'),
+    );
+  });
+
+  it('leaves stylesheetPath undefined when the prebuilt pack ships no webview.css', async () => {
+    const root = await makeTempDir();
+    const packDir = path.join(root, 'demo');
+    await mkdir(packDir, { recursive: true });
+    await writeFile(
+      path.join(packDir, 'pack.json'),
+      JSON.stringify({
+        name: 'demo',
+        engine: 'react',
+        components: { widget: './Widget.tsx' },
+      }),
+    );
+    await writeFile(path.join(packDir, 'webview.js'), '// prebuilt');
+
+    const context = await loadPackContext(['demo'], root);
+
+    expect(context.webviewPacks).toHaveLength(1);
+    expect(context.webviewPacks[0]!.stylesheetPath).toBeUndefined();
+  });
+
+  it('reports a prebuilt pack whose folder also holds component sources in prebuiltShadowedPacks, and never adds it to skipped', async () => {
+    const root = await makeTempDir();
+    const packDir = path.join(root, 'demo');
+    await mkdir(packDir, { recursive: true });
+    await writeFile(
+      path.join(packDir, 'pack.json'),
+      JSON.stringify({
+        name: 'demo',
+        engine: 'react',
+        components: { widget: './Widget.tsx' },
+      }),
+    );
+    await writeFile(path.join(packDir, 'webview.js'), '// prebuilt');
+    await writeFile(path.join(packDir, 'Widget.tsx'), 'export default 1;');
+
+    const context = await loadPackContext(['demo'], root);
+
+    expect(context.prebuiltShadowedPacks).toEqual([
+      { name: 'demo', folder: packDir },
+    ]);
+    expect(context.skipped).toEqual([]);
+    expect(context.webviewPacks).toHaveLength(1);
+  });
+
+  it('does not report a prebuilt pack in prebuiltShadowedPacks when its declared sources are absent from disk', async () => {
+    const root = await makeTempDir();
+    const packDir = path.join(root, 'demo');
+    await mkdir(packDir, { recursive: true });
+    await writeFile(
+      path.join(packDir, 'pack.json'),
+      JSON.stringify({
+        name: 'demo',
+        engine: 'react',
+        components: { widget: './Widget.tsx' },
+      }),
+    );
+    await writeFile(path.join(packDir, 'webview.js'), '// prebuilt');
+
+    const context = await loadPackContext(['demo'], root);
+
+    expect(context.prebuiltShadowedPacks).toEqual([]);
+  });
+});
