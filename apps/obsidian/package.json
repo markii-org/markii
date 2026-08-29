@@ -1,6 +1,6 @@
 {
   "name": "markii-obsidian",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "An Obsidian plugin that renders a .mk.md note with @markii/react in a side panel and can run its scripts (network grants, auto-run, scheduled refresh — all device-local). Not the product — see AGENTS.md.",
   "type": "module",

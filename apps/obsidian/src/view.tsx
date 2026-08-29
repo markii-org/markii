@@ -25,9 +25,12 @@ import { refreshIntervalMsFromSeconds } from './local-settings.js';
 import { loadPackContext } from './packs/pack-context.js';
 import type { PackContext } from './packs/pack-context.js';
 import {
+  PACK_COMPILATION_UNAVAILABLE_NOTICE,
   formatPackDiagnosticLines,
+  hasPackCompilationUnavailable,
   skippedPackCount,
 } from './packs/pack-diagnostics.js';
+import { createPackRegistrationBuilder } from './packs/pack-compilation.js';
 import {
   applyPackStylesheets,
   removePackStylesheets,
@@ -191,14 +194,25 @@ export class MarkiiPreviewView extends ItemView {
       defaultRegistry,
       {
         cacheDir,
+        // Not `buildPackRegistrationScript` directly: on a three-file
+        // install (BRAT, later the community catalogue) the esbuild-wasm
+        // runtime is simply not there, since it is deliberately not
+        // embedded into `main.js` the way the Run path's worker bundle is.
+        // `createPackRegistrationBuilder` turns that into a clean, named
+        // refusal per pack instead of letting the real builder fail with a
+        // raw module-resolution error — see `./packs/pack-compilation.ts`.
         buildRegistrationScript:
           cacheDir === undefined
             ? undefined
-            : (pack, dir) =>
-                buildPackRegistrationScript(pack, dir, {
-                  esbuildBrowserModulePath: browserModulePath,
-                  esbuildWasmBinaryPath: wasmBinaryPath,
-                }),
+            : createPackRegistrationBuilder({
+                esbuildBrowserModulePath: browserModulePath,
+                esbuildWasmBinaryPath: wasmBinaryPath,
+                compile: (pack, dir) =>
+                  buildPackRegistrationScript(pack, dir, {
+                    esbuildBrowserModulePath: browserModulePath,
+                    esbuildWasmBinaryPath: wasmBinaryPath,
+                  }),
+              }),
       },
     );
 
@@ -258,6 +272,15 @@ export class MarkiiPreviewView extends ItemView {
         `Markii: packs share a namespace (${context.registrationCollisions.join(', ')}) — none of them were installed.`,
       );
     }
+    // A pack that needed compiling on an install with no compiler. The
+    // generic "could not be loaded" notice above already fired for it (it
+    // is a skipped folder like any other), but that wording sends a user
+    // hunting for a broken pack when the actual answer is which install
+    // they used, so this names the real cause. Wording lives in
+    // `./packs/pack-diagnostics.ts`, the one home for it.
+    if (hasPackCompilationUnavailable(context)) {
+      new Notice(PACK_COMPILATION_UNAVAILABLE_NOTICE);
+    }
   }
 
   /** The `GrantMemento` for this run's whole session — see this class's top comment on why every key it touches is device-local, never `saveData`. Built once per call so a stale reference is never reused across an `await`. */
@@ -303,7 +326,7 @@ export class MarkiiPreviewView extends ItemView {
 
     if (!this.plugin.browserWorker) {
       console.error(
-        'Markii: runScripts skipped — no bundled worker.browser.js found next to main.js (run `npm run build`).',
+        'Markii: runScripts skipped — this main.js carries no embedded worker bundle (run `npm run build`, which embeds it).',
       );
       if (trigger === 'manual') {
         new Notice(
@@ -334,13 +357,17 @@ export class MarkiiPreviewView extends ItemView {
         promptManyHosts: promptManyHostsModal(this.app),
         // `workerPath` is still passed because `spawnRun` hands it to the
         // isolate as its entry; the Web Worker implementation ignores the
-        // value and starts from the blob URL it minted at load. The
+        // value and starts from the blob URL it minted at load. It is a
+        // label rather than a path on purpose: there is no such FILE any
+        // more, since the worker bundle ships base64-embedded inside
+        // `main.js` (`src/run/embedded-assets.ts`), so naming a real-looking
+        // filename here would only mislead whoever reads it next. The
         // watchdog, the settlement rules, and the never-rejects contract
         // are `spawnRun`'s either way.
         spawnRun: (options: SpawnRunOptions) =>
           spawnRunHost({
             ...options,
-            workerPath: 'worker.browser.js',
+            workerPath: 'markii:embedded-worker',
             spawnIsolate,
           }),
         timeoutMs: RUN_TIMEOUT_MS,

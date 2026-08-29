@@ -48,4 +48,17 @@ describe('mirrorReadme', () => {
     const readme = mirrorReadme('0.2.0');
     expect(readme).not.toContain('—');
   });
+
+  it('documents both the zip and BRAT install routes', () => {
+    const readme = mirrorReadme('0.2.0');
+    expect(readme).toContain('markii-0.2.0.zip');
+    expect(readme).toContain('obsidian42-BRAT');
+    expect(readme).toContain('https://github.com/markii-org/markii-obsidian');
+  });
+
+  it('states the pack-compilation caveat for the BRAT route', () => {
+    const readme = mirrorReadme('0.2.0');
+    expect(readme).toContain('webview.js');
+    expect(readme).toContain('esbuild-wasm');
+  });
 });

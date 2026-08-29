@@ -18,8 +18,11 @@
 #      single-commit snapshot (no history stitching: the mirror is generated
 #      output, not a fork).
 #   5. Create the release on the MIRROR repo and attach the zip plus the
-#      loose manifest.json / main.js / styles.css (groundwork for BRAT — see
-#      that step for what is still missing before BRAT can install this).
+#      loose manifest.json / main.js / styles.css, which now constitute a
+#      working BRAT install on their own: the Run path's worker bundle and
+#      its Lua wasm glue are embedded in main.js (issue #13 step 2), so BRAT
+#      needs nothing beyond these three files. See that step for the one
+#      caveat that install still carries.
 #
 # Prerequisites:
 #   - The mirror repo markii-org/markii-obsidian exists (already created,
@@ -163,9 +166,23 @@ jobs:
             echo
             echo "## Install"
             echo
+            echo "### Zip (recommended)"
+            echo
             echo "Download markii-${VERSION}.zip below and extract it into" \
               "<vault>/.obsidian/plugins/, then enable the plugin in Obsidian's" \
-              "Community plugins settings."
+              "Community plugins settings. This is the only route that" \
+              "includes the esbuild-wasm runtime component packs need to" \
+              "compile from source."
+            echo
+            echo "### BRAT"
+            echo
+            echo "Add https://github.com/markii-org/markii-obsidian as a" \
+              "beta plugin in obsidian42-BRAT. It installs from" \
+              "manifest.json, main.js, and styles.css below and keeps them" \
+              "updated. Note scripts and every built-in component work; a" \
+              "component pack that ships source rather than a prebuilt" \
+              "webview.js cannot be compiled this way, so use the zip if" \
+              "you plan to install one of those."
             echo
             echo "## Issues"
             echo
@@ -175,11 +192,13 @@ jobs:
           echo "----- RELEASE_NOTES.md -----"
           cat RELEASE_NOTES.md
 
-      # Assets beyond the zip are groundwork for BRAT, which fetches
-      # manifest.json, main.js, and styles.css directly from a release. BRAT
-      # cannot actually install this plugin yet: that needs issue #13 step 2
-      # to embed worker.browser.js, glue.wasm, and the esbuild-wasm runtime
-      # into main.js, since BRAT only downloads those three loose files.
+      # The loose manifest.json / main.js / styles.css are what BRAT fetches
+      # directly from a release. They are a complete install on their own
+      # now that the Run path's worker bundle and Lua wasm are embedded in
+      # main.js (issue #13 step 2); the one caveat is that compiling a
+      # component pack from source needs the esbuild-wasm runtime, which
+      # only the zip carries (apps/obsidian/src/packs/pack-compilation.ts
+      # degrades that cleanly rather than failing outright).
       - name: Create or update the release on the mirror
         env:
           GH_TOKEN: ${{ secrets.OBSIDIAN_MIRROR_TOKEN }}

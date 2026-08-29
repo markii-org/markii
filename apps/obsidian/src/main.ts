@@ -56,18 +56,14 @@ export default class MarkiiPlugin extends Plugin {
    */
   packSettings: PackSettings = DEFAULT_PACK_SETTINGS;
   /**
-   * The packaged, bundled worker entry for the Run path's terminatable
-   * isolate (`@markii/host`'s `spawnRun`), or `undefined` in dev before
-   * `npm run build` has produced `worker.js` next to `main.js` — in which
-   * case `spawnRun`'s own dev/Vitest fallback (`defaultWorkerPath`, a
-   * `tsx`-run source file) is not reachable from a packaged plugin either,
-   * so a `markii.runScripts` press simply fails cleanly (see
-   * `src/view.tsx`'s `runScripts`) rather than silently doing nothing.
-   */
-  /**
    * The Web Worker isolate this host runs scripts in, plus the blob URLs it
-   * owns. `undefined` means the worker bundle is missing (a dev tree before
-   * a build), which the run path reports rather than throwing over.
+   * owns. The worker's bytes ship base64-embedded inside `main.js` itself
+   * (`src/run/embedded-assets.ts`, filled in at build time — see
+   * `esbuild.options.mjs`'s `embed-runtime-assets` plugin) rather than as
+   * files next to it, so Obsidian's single-file install channels (BRAT,
+   * later the community catalogue) end up with a working Run path too.
+   * `undefined` means the embed is empty — a dev tree before a build has
+   * run — which the run path reports rather than throwing over.
    *
    * A Web Worker rather than the `node:worker_threads` one `@markii/host`
    * defaults to, because Obsidian's Electron renderer supports neither
@@ -250,17 +246,15 @@ export default class MarkiiPlugin extends Plugin {
 
   /**
    * Frees the blob URLs the Web Worker isolate holds. A blob URL pins its
-   * bytes in memory until revoked, and one of them is the 14 MB wasm
-   * module, so leaking them across a plugin reload is not a rounding
-   * error.
+   * bytes in memory until revoked, and one of them is the worker bundle
+   * decoded from `main.js`'s own embed, so leaking them across a plugin
+   * reload is not a rounding error.
    */
   override onunload(): void {
     this.browserWorker?.dispose();
   }
 
   private createBrowserWorker(): BrowserWorkerSetup | undefined {
-    const dir = this.pluginDir();
-    if (!dir) return undefined;
     // The pinned provider runs HERE, in the renderer, because the isolate
     // is a Web Worker with no `node:dns` to pin with. It is the same
     // provider the VS Code extension runs inside its worker thread, so the
@@ -269,7 +263,7 @@ export default class MarkiiPlugin extends Plugin {
     // all. The plain-Error denial is deliberate: the brand that classifies
     // a refusal is re-applied inside the worker, which is where
     // `@markii/lua` lives (see `@markii/host`'s `net-bridge.ts`).
-    return createBrowserWorkerSetup(dir, (allowlist, maxFetchBytes, policy) =>
+    return createBrowserWorkerSetup((allowlist, maxFetchBytes, policy) =>
       createNetProvider(
         allowlist,
         maxFetchBytes,

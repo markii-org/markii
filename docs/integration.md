@@ -155,7 +155,12 @@ importance:
    supports rather than the one you would prefer: an Electron renderer has
    no worker threads, and a worker thread accepts a heap cap that a Web
    Worker does not. If you land on a Web Worker, record the missing cap
-   where your users can find it.
+   where your users can find it. How the worker's bytes arrive is the
+   host's choice: a sibling file on disk works, and so does embedding the
+   worker bundle inside the host's own bundle and starting it from a blob
+   URL. The reference Obsidian plugin embeds, so an install channel that
+   copies only the plugin's entry file still runs scripts. The isolate
+   requirement is about termination, not delivery.
 2. **The grant store and prompts.** Persist grants keyed by
    `computeGrantKey`'s executable-closure hash, re-prompt when the key
    changes, and word network prompts as "can send data to `<host>`".

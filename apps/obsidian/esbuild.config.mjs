@@ -1,32 +1,34 @@
 /**
  * The build RUNNER: `node esbuild.config.mjs [--production] [--watch]`.
- * Every option object (and the two copy steps) lives in
+ * Every option object (and the copy step) lives in
  * `./esbuild.options.mjs`, imported side-effect-free so the Vitest probe
  * (`src/run/browser-worker-bundle.probe.test.ts`) can build the REAL
  * worker bundle with the REAL options and execute it — the guard that a
  * worker-fatal reference (e.g. a dependency's browser build touching
  * `document` at module top level) can never ship silently again.
+ *
+ * There is only one top-level build target now: `main.js`. The worker
+ * bundle is no longer written to `dist/` on its own — it is built
+ * in-process and base64-embedded into `main.js` by `createMainBuild`'s
+ * `embed-runtime-assets` plugin (see `esbuild.options.mjs`'s top comment),
+ * so watch mode only needs a context for the main build; a worker-source
+ * edit re-embeds automatically because that plugin's own `watchFiles`
+ * cover the worker's transitive inputs.
  */
 import { build, context } from 'esbuild';
-import {
-  copyEsbuildWasm,
-  copyWasmGlue,
-  mainBuild,
-  workerBuild,
-} from './esbuild.options.mjs';
+import { statSync } from 'node:fs';
+import { copyEsbuildWasm, createMainBuild } from './esbuild.options.mjs';
 
 const watch = new Set(process.argv.slice(2)).has('--watch');
 
 if (watch) {
-  const contexts = await Promise.all([
-    context(mainBuild),
-    context(workerBuild),
-  ]);
-  copyWasmGlue();
+  const ctx = await context(createMainBuild());
   copyEsbuildWasm();
-  await Promise.all(contexts.map((ctx) => ctx.watch()));
+  await ctx.watch();
 } else {
-  await Promise.all([build(mainBuild), build(workerBuild)]);
-  copyWasmGlue();
+  const mainBuild = createMainBuild();
+  await build(mainBuild);
   copyEsbuildWasm();
+  const { size } = statSync(mainBuild.outfile);
+  console.log(`markii: dist/main.js is ${(size / 1024).toFixed(1)} KB`);
 }

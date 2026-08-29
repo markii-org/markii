@@ -18,21 +18,26 @@ import { join, relative, sep } from 'node:path';
 
 // Every entry here is load-bearing at runtime, not merely part of the build
 // output:
-//   - main.js is the plugin entry point Obsidian actually loads.
+//   - main.js is the plugin entry point Obsidian actually loads. It now
+//     carries the Run path's isolate too: the worker bundle and its Lua
+//     wasm glue are base64-embedded inside it (GitHub issue #13 step 2), so
+//     worker.browser.js and glue.wasm are no longer emitted as separate
+//     files and are deliberately absent from this list.
 //   - manifest.json and styles.css are read by Obsidian itself (id/version
 //     detection, and the document stylesheet the preview depends on).
-//   - worker.browser.js + glue.wasm are the Run path's isolate: without
-//     them, "Run Markii scripts" has no worker to spawn and no Lua wasm to
-//     load into it.
 //   - esbuild-wasm/lib/browser.js + esbuild-wasm/esbuild.wasm are pack
-//     compilation: without them, installing a component pack fails to
-//     compile its sources.
+//     compilation: without them, installing a component pack that ships
+//     source rather than a prebuilt webview.js fails to compile. These stay
+//     required here because the zip is still the only install channel that
+//     carries them: an installer that only fetches the three loose files
+//     (manifest.json, main.js, styles.css — see mirror-snapshot.ts's BRAT
+//     route) never gets them, and pack compilation degrades cleanly rather
+//     than breaking when they are absent (apps/obsidian/src/packs/
+//     pack-compilation.ts).
 export const REQUIRED_PLUGIN_FILES: readonly string[] = [
   'main.js',
   'manifest.json',
   'styles.css',
-  'worker.browser.js',
-  'glue.wasm',
   'esbuild-wasm/lib/browser.js',
   'esbuild-wasm/esbuild.wasm',
 ];

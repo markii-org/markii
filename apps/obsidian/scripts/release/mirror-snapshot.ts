@@ -43,8 +43,10 @@ merged.
 
 ## Install
 
-Markii is not in the Obsidian community catalogue yet, so installation is
-manual.
+Markii is not in the Obsidian community catalogue yet. Two routes install it
+from this repository's releases.
+
+### Zip (recommended)
 
 1. Download \`markii-${version}.zip\` from the Releases page of this repository.
 2. Extract it into your vault's plugin folder, \`<vault>/.obsidian/plugins/\`.
@@ -55,6 +57,25 @@ manual.
 
 To update, download the newer zip and extract it over the same folder, then
 reload Obsidian.
+
+This is the only route that includes the esbuild-wasm runtime that component
+packs need in order to compile from source, so it is the one to use if you
+install any component pack that does not ship a prebuilt \`webview.js\`.
+
+### BRAT
+
+1. Install the [obsidian42-BRAT](https://github.com/TfTHacker/obsidian42-brat)
+   plugin from the community catalogue.
+2. In BRAT's settings, add a beta plugin using this repository's URL,
+   \`https://github.com/markii-org/markii-obsidian\`.
+3. BRAT fetches \`manifest.json\`, \`main.js\`, and \`styles.css\` from the
+   latest release and keeps them updated automatically.
+
+With the BRAT install, note scripts and every built-in component work the
+same as the zip install. The one thing it cannot do is compile a component
+pack that ships source rather than a prebuilt \`webview.js\`: that needs the
+esbuild-wasm runtime, which only the zip carries. Use the zip if you plan to
+install a pack like that.
 
 Markii is desktop only. It runs note scripts inside a terminatable isolate and
 compiles component packs in process, and Obsidian on mobile supports neither.

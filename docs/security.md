@@ -194,6 +194,19 @@ A refusal made in the host is marked as a policy denial on the wire, so it
 still reaches the script as a capability error rather than as an ordinary
 failure.
 
+The worker's bytes reach the isolate differently in the Obsidian plugin
+than in the worker-thread hosts. Since plugin version 0.3.0, the worker
+bundle and the Lua interpreter's wasm binary are embedded in the plugin's
+own entry file as base64 and decoded at spawn time, instead of being read
+from sibling files on disk. The isolate boundary is unchanged: the same
+bundle runs, in the same kind of worker, under the same watchdog. What
+changes is provenance. There is no longer a partially copied install whose
+Run path silently loads a stale or missing worker file, and the build
+fails outright if the embedding step did not run, so an entry file with
+empty worker bytes cannot ship. Verification: the worker-bundle probe
+builds the real bundle from the real build options, decodes it through the
+same base64 path the plugin uses, and executes it.
+
 One Electron-specific finding qualifies the Web Worker picture further.
 Obsidian creates its workers with Node integration enabled, so `process`,
 `require`, and `Buffer` exist inside the isolate's global scope. This had

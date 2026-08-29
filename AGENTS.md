@@ -242,16 +242,31 @@ apps/obsidian        the "Markii" Obsidian plugin (desktop only) — an
                      full store) and browser-worker (blob-URL Web Worker
                      setup); run-modals.ts carries the grant prompts. Run
                      outcomes surface as Notice + console, not an in-page
-                     marker
+                     marker. embedded-assets.ts is a build-substituted
+                     placeholder: the plugin build base64-embeds the worker
+                     bundle + wasmoon's glue.wasm into main.js (issue #13
+                     step 2) and fails if substitution didn't happen;
+                     decode-base64.ts is the decode half. dist/ is just
+                     main.js + esbuild-wasm/ now, so a 3-file BRAT install
+                     runs scripts
   src/packs/         pack loading against @markii/host's shared discovery:
                      pack-settings (the folder list), pack-context,
                      pack-runtime, pack-styles, pack-diagnostics (the
-                     console + notice surface named in docs/integration.md)
+                     console + notice surface named in docs/integration.md);
+                     pack-compilation.ts degrades compile-from-source
+                     cleanly when the (deliberately unembedded, ~14 MB)
+                     esbuild-wasm runtime isn't beside main.js (zip installs
+                     carry it, 3-file installs don't)
   src/obsidian-theme.css  maps doc.css's 15 Tier 1 tokens onto Obsidian's
                      theme variables; src/theme-coverage.test.ts fails when
                      a token is left unmapped
   scripts/generate-doc-css.ts  concatenates doc.css + the theme layer into
                      the generated, gitignored styles.css Obsidian loads
+  scripts/release/   the release-channel helpers (issue #13 step 1):
+                     version gate (tag == manifest == package.json),
+                     plugin-folder assembly, mirror snapshot for
+                     markii-org/markii-obsidian (.github/workflows/
+                     obsidian-release.yml, fires on obsidian-v* tags)
 ```
 
 Platform renderers live under `packages/platforms/*` (a workspace root alongside

@@ -15,8 +15,6 @@ let outDir: string;
 function writeDistFiles(distDir: string): void {
   mkdirSync(join(distDir, 'esbuild-wasm', 'lib'), { recursive: true });
   writeFileSync(join(distDir, 'main.js'), 'console.log("main");');
-  writeFileSync(join(distDir, 'worker.browser.js'), 'console.log("worker");');
-  writeFileSync(join(distDir, 'glue.wasm'), 'fake-wasm');
   writeFileSync(
     join(distDir, 'esbuild-wasm', 'lib', 'browser.js'),
     'console.log("esbuild");',
@@ -77,10 +75,10 @@ describe('assemblePluginFolder', () => {
 
   it('throws naming the missing required file', () => {
     writeFakeAppDir(appDir);
-    rmSync(join(appDir, 'dist', 'glue.wasm'));
+    rmSync(join(appDir, 'dist', 'esbuild-wasm', 'esbuild.wasm'));
 
     expect(() => assemblePluginFolder({ appDir, outDir })).toThrow(
-      /glue\.wasm/,
+      /esbuild\.wasm/,
     );
   });
 

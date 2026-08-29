@@ -1,10 +1,13 @@
 /**
  * Executed probe of the REAL Web Worker bundle (AGENTS.md: security- and
  * robustness-relevant behavior gets an executed probe, not only unit
- * assertions on mocks). It builds `dist/worker.browser.js` with the exact
- * options the plugin build uses (`../../esbuild.options.mjs`), loads it
- * under a global surface faithful to an Electron renderer's Web Worker,
- * posts one real job, and requires a real Lua result back.
+ * assertions on mocks). It builds the worker bundle with the exact options
+ * the plugin build uses (`../../esbuild.options.mjs`'s `workerBuild` — the
+ * bundle is no longer written to `dist/` as a file, since it now ships
+ * base64-embedded inside `main.js`, so these tests build it to a temporary
+ * directory of their own), loads it under a global surface faithful to an
+ * Electron renderer's Web Worker, posts one real job, and requires a real
+ * Lua result back.
  *
  * The bug that forced this probe: `decode-named-character-reference`
  * (micromark, via remark-parse) ships a browser build that calls
@@ -24,9 +27,9 @@
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
-import { afterAll, expect, it } from 'vitest';
+import { afterAll, expect, it, vi } from 'vitest';
 import { build } from 'esbuild';
-import { workerBuild } from '../../esbuild.options.mjs';
+import { buildEmbeddedAssets, workerBuild } from '../../esbuild.options.mjs';
 import {
   isNetBridgeRequest,
   serveNetRequest,
@@ -256,4 +259,192 @@ it('a net.fetch_json call crosses the net bridge and comes back as a value', asy
   expect(result.failures).toEqual([]);
   expect(result.values.fetched?.status).toBe('fresh');
   expect(result.values.fetched?.value).toBe('https://api.example.com/data');
+}, 60_000);
+
+/**
+ * Executed probe of the REAL embed-to-spawn path: base64 -> bytes -> a
+ * blob URL -> a worker that actually starts and completes a Lua run.
+ *
+ * `main.js` ships the worker bundle and `glue.wasm` as base64
+ * (`src/run/embedded-assets.ts`, filled in by `esbuild.options.mjs`'s
+ * `embed-runtime-assets` plugin at build time), and `browser-worker.ts`
+ * decodes that base64 back into bytes and mints blob URLs from them at
+ * plugin load. Every other test in this file builds and executes the
+ * worker bundle directly; none of them touch the embed itself. This test
+ * calls `buildEmbeddedAssets()` — the exact function the plugin build
+ * uses — to get real, production-shaped base64, mocks it in as
+ * `embedded-assets.ts`'s exports, and drives the real
+ * `createBrowserWorkerSetup()` from `./browser-worker.js` end to end: its
+ * own `decodeBase64` call, its own `Blob`/`URL.createObjectURL` call, and
+ * a worker spawned from the resulting blob URL. A broken embed — empty,
+ * truncated, base64 that doesn't round-trip, or a decode that corrupts a
+ * high byte inside the worker bundle or `glue.wasm` — fails THIS test
+ * rather than shipping a plugin whose Run button silently does nothing.
+ *
+ * The worker stand-in fetches the blob URL's bytes with `fetch()`, which
+ * works for a `blob:` URL minted by `URL.createObjectURL` under Node 22
+ * (verified locally before writing this test), then evaluates the fetched
+ * source under the same worker-faithful global shim (`document`/`window`
+ * withheld, a Node-shaped `process` provided) the other tests in this file
+ * use, and wires `postMessage` in both directions so it behaves like a
+ * real `Worker` as far as `@markii/host`'s `createBrowserIsolate` can
+ * tell. `browser-worker.ts`'s own decode/blob logic is never bypassed —
+ * only the global `Worker` constructor it calls is a stand-in.
+ */
+it('base64 -> bytes -> blob URL -> a worker that actually starts and completes a Lua run', async () => {
+  const embedded = await buildEmbeddedAssets({
+    minify: true,
+    sourcemap: false,
+  });
+  expect(embedded.workerBundleBase64.length).toBeGreaterThan(0);
+  expect(embedded.wasmGlueBase64.length).toBeGreaterThan(0);
+
+  vi.resetModules();
+  vi.doMock('./embedded-assets.js', () => ({
+    EMBEDDED_WORKER_BUNDLE_BASE64: embedded.workerBundleBase64,
+    EMBEDDED_WASM_GLUE_BASE64: embedded.wasmGlueBase64,
+  }));
+
+  type WorkerMessageEvent = { data: unknown };
+
+  /**
+   * A `Worker` stand-in that resolves its `blob:` URL to real bytes via
+   * `fetch`, then evaluates them under the same worker-faithful shim used
+   * elsewhere in this file. `createBrowserIsolate` only calls
+   * `postMessage`/`addEventListener('message'/'error'/'messageerror')`/
+   * `terminate`, so those are all this needs to implement.
+   */
+  class FetchingFakeWorker {
+    private readonly outboundListeners: ((
+      event: WorkerMessageEvent,
+    ) => void)[] = [];
+    private deliverToWorker: ((message: unknown) => void) | undefined;
+    private readonly ready: Promise<void>;
+
+    constructor(url: string) {
+      this.ready = this.load(url);
+    }
+
+    private async load(url: string): Promise<void> {
+      const response = await fetch(url);
+      const source = await response.text();
+      const inboundListeners: ((event: WorkerMessageEvent) => void)[] = [];
+      const workerScope = {
+        postMessage: (message: unknown) => {
+          for (const listener of this.outboundListeners) {
+            listener({ data: message });
+          }
+        },
+        addEventListener: (
+          type: string,
+          listener: (event: WorkerMessageEvent) => void,
+        ) => {
+          if (type === 'message') inboundListeners.push(listener);
+        },
+        location: { href: url },
+        constructor: { name: 'DedicatedWorkerGlobalScope' },
+        importScripts: () => {
+          throw new Error('importScripts is not expected to be called');
+        },
+      };
+      const load = new Function(
+        'self',
+        'location',
+        'importScripts',
+        'document',
+        'window',
+        'process',
+        'Buffer',
+        source,
+      ) as (...args: unknown[]) => void;
+      load(
+        workerScope,
+        workerScope.location,
+        workerScope.importScripts,
+        undefined,
+        undefined,
+        { versions: { node: '22.0.0' }, platform: 'linux' },
+        undefined,
+      );
+      this.deliverToWorker = (message: unknown) => {
+        for (const listener of inboundListeners) listener({ data: message });
+      };
+    }
+
+    addEventListener(
+      type: string,
+      listener: (event: WorkerMessageEvent) => void,
+    ): void {
+      if (type === 'message') this.outboundListeners.push(listener);
+    }
+
+    postMessage(message: unknown): void {
+      void this.ready.then(() => {
+        this.deliverToWorker?.(message);
+      });
+    }
+
+    terminate(): void {}
+  }
+
+  const previousWorker = globalThis.Worker;
+  globalThis.Worker = FetchingFakeWorker as unknown as typeof Worker;
+
+  try {
+    const { createBrowserWorkerSetup } = await import('./browser-worker.js');
+
+    const dummyNetProvider: NetProvider = {
+      get: async () => ({ status: 501, body: '' }),
+    };
+
+    const setup = createBrowserWorkerSetup(() => dummyNetProvider);
+    if (!setup) throw new Error('expected a defined BrowserWorkerSetup');
+
+    const isolate = setup.spawnIsolate({
+      entryPath: 'unused-for-a-blob-worker',
+      maxOldGenerationSizeMb: 64,
+    });
+
+    const text = [
+      '```lua {name=greeting}',
+      'return "hello " .. tostring(1 + 2)',
+      '```',
+      '',
+      ':value[greeting]',
+      '',
+    ].join('\n');
+
+    const resultArrived = new Promise<{
+      values: Record<string, { value?: unknown; status?: string }>;
+      failures: { name: string; message: string }[];
+    }>((resolve) => {
+      isolate.onMessage((message) => {
+        resolve(
+          message as {
+            values: Record<string, { value?: unknown; status?: string }>;
+            failures: { name: string; message: string }[];
+          },
+        );
+      });
+    });
+
+    isolate.send({
+      text,
+      trigger: 'manual',
+      netAllowlist: [],
+      cacheSnapshot: {},
+    });
+
+    const result = await resultArrived;
+    isolate.kill();
+    setup.dispose();
+
+    expect(result.failures).toEqual([]);
+    expect(result.values.greeting?.status).toBe('fresh');
+    expect(result.values.greeting?.value).toBe('hello 3');
+  } finally {
+    globalThis.Worker = previousWorker;
+    vi.doUnmock('./embedded-assets.js');
+    vi.resetModules();
+  }
 }, 60_000);

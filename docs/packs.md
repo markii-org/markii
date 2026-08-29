@@ -135,6 +135,15 @@ files stay untouched, and rebuilds when any file that went into the build
 changes. Reads during a build are confined to the pack's own folder. A pack
 that does ship a prebuilt script is used as-is.
 
+Compiling from source is an optional host capability, because the compiler
+is a sizeable runtime the host may not carry. An install without it (for
+example, an Obsidian install fetched by an automated installer, which
+downloads only the plugin's three core files) cannot build a pack that
+ships source. The host reports that on its diagnostics surface, naming the
+install that would restore the capability, rather than failing silently or
+dumping a compiler error. A pack with a prebuilt script loads either way,
+so a pack meant for wide distribution should consider shipping one.
+
 ## Styling a pack
 
 A pack styles itself with an ordinary CSS import from a component:

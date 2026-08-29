@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { createRegistry } from '@markii/react';
 import {
   formatPackDiagnosticLines,
+  hasPackCompilationUnavailable,
+  packCompilationUnavailableReason,
   skippedPackCount,
 } from './pack-diagnostics.js';
 import type { DiscoveredPack, SkippedPackFolder } from '@markii/host';
@@ -119,5 +121,35 @@ describe('skippedPackCount', () => {
       { folder: '/b', reason: 'y' },
     ];
     expect(skippedPackCount(context([], skipped))).toBe(2);
+  });
+});
+
+describe('packCompilationUnavailableReason', () => {
+  it('names the pack and points at the releases URL', () => {
+    const reason = packCompilationUnavailableReason('ana');
+    expect(reason).toContain('ana');
+    expect(reason).toContain(
+      'https://github.com/markii-org/markii-obsidian/releases',
+    );
+  });
+});
+
+describe('hasPackCompilationUnavailable', () => {
+  it('is true for a context carrying the pack-compilation-unavailable reason', () => {
+    const skipped: SkippedPackFolder[] = [
+      { folder: '/packs/ana', reason: packCompilationUnavailableReason('ana') },
+    ];
+    expect(hasPackCompilationUnavailable(context([], skipped))).toBe(true);
+  });
+
+  it('is false for a context carrying an unrelated skipped reason', () => {
+    const skipped: SkippedPackFolder[] = [
+      { folder: '/packs/broken', reason: 'invalid pack.json (missing name)' },
+    ];
+    expect(hasPackCompilationUnavailable(context([], skipped))).toBe(false);
+  });
+
+  it('is false for an empty context', () => {
+    expect(hasPackCompilationUnavailable(context([], []))).toBe(false);
   });
 });
