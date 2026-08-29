@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   formatPackDiagnosticLines,
+  formatPackRegistrationDiagnosticLines,
   skippedPackCount,
 } from './pack-diagnostics.js';
 import type { DiscoveredPack, SkippedPackFolder } from '@markii/host';
@@ -144,6 +145,84 @@ describe('formatPackDiagnosticLines', () => {
   it('an empty prebuiltShadowedPacks list contributes nothing', () => {
     const lines = formatPackDiagnosticLines(context([pack('ana', 1)], []));
     expect(lines).toHaveLength(1);
+  });
+});
+
+describe('formatPackRegistrationDiagnosticLines', () => {
+  it('is empty when nothing was reported', () => {
+    expect(
+      formatPackRegistrationDiagnosticLines({
+        invalidReasons: [],
+        collisions: [],
+        duplicateComposedNames: [],
+      }),
+    ).toEqual([]);
+  });
+
+  it('reports one line per invalid registration reason', () => {
+    const lines = formatPackRegistrationDiagnosticLines({
+      invalidReasons: [
+        'pack registration #0 did not provide a manifest JSON string; ignored.',
+      ],
+      collisions: [],
+      duplicateComposedNames: [],
+    });
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain('pack registration #0');
+  });
+
+  it('reports one summary line for a namespace collision, naming the shared namespace', () => {
+    const lines = formatPackRegistrationDiagnosticLines({
+      invalidReasons: [],
+      collisions: ['demo'],
+      duplicateComposedNames: [],
+    });
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain('demo');
+    expect(lines[0]).toContain('share a namespace');
+  });
+
+  it('reports one line per duplicate-composed-name skip, naming both packs and the composed directive name, and saying the later component was skipped', () => {
+    const lines = formatPackRegistrationDiagnosticLines({
+      invalidReasons: [],
+      collisions: [],
+      duplicateComposedNames: [
+        { composedName: 'demo_badge', keptPack: 'demo', skippedPack: 'demo2' },
+      ],
+    });
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain('demo_badge');
+    expect(lines[0]).toContain('"demo"');
+    expect(lines[0]).toContain('"demo2"');
+    expect(lines[0]).toContain('skipped');
+  });
+
+  it('the duplicate-composed-name line contains no em dash and no parentheses', () => {
+    const [line] = formatPackRegistrationDiagnosticLines({
+      invalidReasons: [],
+      collisions: [],
+      duplicateComposedNames: [
+        { composedName: 'demo_badge', keptPack: 'demo', skippedPack: 'demo2' },
+      ],
+    });
+    expect(line).toBeDefined();
+    expect(line).not.toContain('—');
+    expect(line).not.toContain('(');
+    expect(line).not.toContain(')');
+  });
+
+  it('lists invalid-reason lines before collision lines before duplicate lines', () => {
+    const lines = formatPackRegistrationDiagnosticLines({
+      invalidReasons: ['pack registration #0 is malformed; ignored.'],
+      collisions: ['demo'],
+      duplicateComposedNames: [
+        { composedName: 'demo_badge', keptPack: 'demo', skippedPack: 'demo2' },
+      ],
+    });
+    expect(lines).toHaveLength(3);
+    expect(lines[0]).toContain('registration #0');
+    expect(lines[1]).toContain('share a namespace');
+    expect(lines[2]).toContain('demo_badge');
   });
 });
 

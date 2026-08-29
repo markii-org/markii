@@ -22,7 +22,11 @@ import type { BundleResolution } from './bundle-resolve.js';
 import { createDebouncer } from './debounce.js';
 import { isPreviewableDocument, previewTitleFor } from './mark-document.js';
 import { isWebviewToHostMessage } from './protocol.js';
-import type { HostToWebviewMessage, ValuesMessage } from './protocol.js';
+import type {
+  HostToWebviewMessage,
+  PackDiagnosticsMessage,
+  ValuesMessage,
+} from './protocol.js';
 import {
   isCoveredByRoots,
   packWebviewRoots,
@@ -57,6 +61,7 @@ import { loadPackContext } from './packs/pack-context.js';
 import type { PackContext } from './packs/pack-context.js';
 import {
   formatPackDiagnosticLines,
+  formatPackRegistrationDiagnosticLines,
   skippedPackCount,
 } from './packs/pack-diagnostics.js';
 
@@ -472,6 +477,23 @@ function logPackDiagnostics(packContext: PackContext): void {
 }
 
 /**
+ * Writes one `PackDiagnosticsMessage` the webview posted (issue #20, see
+ * `webview/pack-registry.ts` and `protocol.ts`) to the "Markii" output
+ * channel. Called on receipt, never proactively; a message with all three
+ * arrays empty is never sent by the webview in the first place, but this
+ * still guards against writing an empty entry either way.
+ */
+function logPackRegistrationDiagnostics(message: PackDiagnosticsMessage): void {
+  if (!diagnosticsChannel) return;
+  const lines = formatPackRegistrationDiagnosticLines(message);
+  if (lines.length === 0) return;
+  diagnosticsChannel.appendLine(
+    `Markii: pack registration at ${new Date().toISOString()}`,
+  );
+  for (const line of lines) diagnosticsChannel.appendLine(`  ${line}`);
+}
+
+/**
  * Sends the panel's current source as a fresh message, bumping `revision`
  * first so every message this extension ever sends is monotonically
  * numbered — `isNewerRevision` (`protocol.ts`) on the webview side relies on
@@ -823,6 +845,8 @@ async function createPreview(
       if (raw.type === 'ready') {
         postUpdate(preview);
         maybeRunOnOpen(context, preview);
+      } else if (raw.type === 'pack-diagnostics') {
+        logPackRegistrationDiagnostics(raw);
       }
     }),
 

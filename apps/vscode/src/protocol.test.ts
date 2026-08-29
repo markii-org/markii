@@ -803,6 +803,188 @@ describe('isWebviewToHostMessage', () => {
   });
 });
 
+const DUPLICATE_COMPOSED_NAME = {
+  composedName: 'demo_badge',
+  keptPack: 'demo',
+  skippedPack: 'demo2',
+};
+
+function packDiagnosticsMessage(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    type: 'pack-diagnostics',
+    invalidReasons: [],
+    collisions: [],
+    duplicateComposedNames: [],
+    ...overrides,
+  };
+}
+
+describe('isWebviewToHostMessage — pack-diagnostics', () => {
+  it('accepts a message with every array empty', () => {
+    expect(isWebviewToHostMessage(packDiagnosticsMessage())).toBe(true);
+  });
+
+  it('accepts a well-formed message carrying all three kinds of entry', () => {
+    expect(
+      isWebviewToHostMessage(
+        packDiagnosticsMessage({
+          invalidReasons: ['pack registration #0 is malformed; ignored.'],
+          collisions: ['demo'],
+          duplicateComposedNames: [DUPLICATE_COMPOSED_NAME],
+        }),
+      ),
+    ).toBe(true);
+  });
+
+  it('rejects a missing invalidReasons field', () => {
+    const message = packDiagnosticsMessage();
+    delete message.invalidReasons;
+    expect(isWebviewToHostMessage(message)).toBe(false);
+  });
+
+  it('rejects a missing collisions field', () => {
+    const message = packDiagnosticsMessage();
+    delete message.collisions;
+    expect(isWebviewToHostMessage(message)).toBe(false);
+  });
+
+  it('rejects a missing duplicateComposedNames field', () => {
+    const message = packDiagnosticsMessage();
+    delete message.duplicateComposedNames;
+    expect(isWebviewToHostMessage(message)).toBe(false);
+  });
+
+  it('rejects invalidReasons that is not an array', () => {
+    expect(
+      isWebviewToHostMessage(
+        packDiagnosticsMessage({ invalidReasons: 'oops' }),
+      ),
+    ).toBe(false);
+  });
+
+  it('rejects a non-string entry in invalidReasons', () => {
+    expect(
+      isWebviewToHostMessage(
+        packDiagnosticsMessage({ invalidReasons: ['ok', 42] }),
+      ),
+    ).toBe(false);
+  });
+
+  it('rejects an empty-string entry in invalidReasons', () => {
+    expect(
+      isWebviewToHostMessage(packDiagnosticsMessage({ invalidReasons: [''] })),
+    ).toBe(false);
+  });
+
+  it('rejects an oversized entry in invalidReasons', () => {
+    expect(
+      isWebviewToHostMessage(
+        packDiagnosticsMessage({ invalidReasons: ['x'.repeat(5000)] }),
+      ),
+    ).toBe(false);
+  });
+
+  it('rejects an oversized invalidReasons array', () => {
+    expect(
+      isWebviewToHostMessage(
+        packDiagnosticsMessage({
+          invalidReasons: Array.from({ length: 257 }, (_, i) => `r${i}`),
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it('rejects a non-string entry in collisions', () => {
+    expect(
+      isWebviewToHostMessage(packDiagnosticsMessage({ collisions: [42] })),
+    ).toBe(false);
+  });
+
+  it('rejects duplicateComposedNames that is not an array', () => {
+    expect(
+      isWebviewToHostMessage(
+        packDiagnosticsMessage({ duplicateComposedNames: {} }),
+      ),
+    ).toBe(false);
+  });
+
+  it('rejects an oversized duplicateComposedNames array', () => {
+    expect(
+      isWebviewToHostMessage(
+        packDiagnosticsMessage({
+          duplicateComposedNames: Array.from({ length: 257 }, () => ({
+            ...DUPLICATE_COMPOSED_NAME,
+          })),
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it('rejects a duplicateComposedNames entry missing a field', () => {
+    const entry: Record<string, unknown> = { ...DUPLICATE_COMPOSED_NAME };
+    delete entry.keptPack;
+    expect(
+      isWebviewToHostMessage(
+        packDiagnosticsMessage({ duplicateComposedNames: [entry] }),
+      ),
+    ).toBe(false);
+  });
+
+  it('rejects a duplicateComposedNames entry with a non-string field', () => {
+    expect(
+      isWebviewToHostMessage(
+        packDiagnosticsMessage({
+          duplicateComposedNames: [
+            { ...DUPLICATE_COMPOSED_NAME, composedName: 42 },
+          ],
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it('rejects a duplicateComposedNames entry with an oversized field', () => {
+    expect(
+      isWebviewToHostMessage(
+        packDiagnosticsMessage({
+          duplicateComposedNames: [
+            { ...DUPLICATE_COMPOSED_NAME, composedName: 'x'.repeat(5000) },
+          ],
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it('rejects a duplicateComposedNames entry that is not an object', () => {
+    expect(
+      isWebviewToHostMessage(
+        packDiagnosticsMessage({ duplicateComposedNames: ['nope'] }),
+      ),
+    ).toBe(false);
+  });
+
+  it('rejects a duplicateComposedNames entry that only inherits its fields from a prototype', () => {
+    const proto = { ...DUPLICATE_COMPOSED_NAME };
+    const hostileEntry: unknown = Object.create(proto);
+    expect(
+      isWebviewToHostMessage(
+        packDiagnosticsMessage({ duplicateComposedNames: [hostileEntry] }),
+      ),
+    ).toBe(false);
+  });
+
+  it('rejects an object that only inherits `type: pack-diagnostics` from its prototype', () => {
+    const proto = { type: 'pack-diagnostics' };
+    const hostile: unknown = Object.assign(Object.create(proto), {
+      invalidReasons: [],
+      collisions: [],
+      duplicateComposedNames: [],
+    });
+    expect(isWebviewToHostMessage(hostile)).toBe(false);
+  });
+});
+
 describe('isNewerRevision', () => {
   it('is true when incoming is strictly greater than lastSeen', () => {
     expect(isNewerRevision(1, 2)).toBe(true);

@@ -62,7 +62,19 @@ function isPackComponentModules(
   return true;
 }
 
-/** One queued entry, validated into a `PackToInstall`, or `undefined` if either half fails validation — the reason is returned rather than logged directly, so the caller can fold it into its own diagnostics the same way every other pack failure is reported. */
+/**
+ * One queued entry, validated into a `PackToInstall`, or `undefined` if
+ * either half fails validation — the reason is returned rather than logged
+ * directly, so the caller can fold it into its own diagnostics the same way
+ * every other pack failure is reported.
+ *
+ * Deliberately NOT exported, including from `../browser.ts`: every caller,
+ * VS Code's webview included, reaches this through `buildRenderRegistry`,
+ * which runs it per queued entry. A host reads its own registration queue
+ * off its own global and hands over the batch; validating that batch is
+ * this module's job, and keeping the per-entry step private means there is
+ * one entry point into it rather than two.
+ */
 function toPackToInstall(
   entry: QueuedPackRegistration,
   index: number,

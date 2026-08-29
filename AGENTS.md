@@ -165,6 +165,14 @@ packages/markii-host    PRIVATE, never published (no npm presence, absent from
   src/run/grant-flow.ts    prompts and grant storage, both injected
   src/run/net-pinning.ts, src/run/ip-address.ts  resolve-then-pin (issue #10)
   src/run/run-trace.ts     last-run outcome, for the host's run marker
+  src/browser.ts     the environment-free subpath entry (@markii/host/browser,
+                     issue #20): registry building/keep-first merge, insert
+                     catalog/skeletons, and the other pure logic a browser
+                     bundle (the VS Code webview) may import. Nothing
+                     reachable from it may import node:* even transitively;
+                     apps/vscode/src/browser-entry.probe.test.ts makes that
+                     executable. Node-dependent run/fs machinery stays behind
+                     the main entry
   src/lua-resolver.ts      the pure worker-side PackModuleResolver
   src/packs/pack-build.ts  compiles a pack's component sources (and imported
                      CSS) with esbuild-wasm's in-process wasm path, cached
@@ -211,8 +219,11 @@ apps/vscode          the "Markii" VS Code extension (preview + Run + packs) — 
                      and theme.css, mapping --vscode-* colors onto doc.css
                      without forking it (theme-coverage.test.ts guards drift);
                      webview/pack-registry.ts is the webview half of pack
-                     loading (validates window.__markiiPackRegistrations,
-                     merges via installPacks, falls back on collision)
+                     loading: normalizes window.__markiiPackRegistrations and
+                     merges via @markii/host/browser's buildRenderRegistry,
+                     sharing one merge + keep-first duplicate guard with the
+                     Obsidian host, and posts diagnostics to the extension
+                     host for the output channel
   src/packs/         pack loading (issue #3 slice 5, docs/packs.md): discover.ts
                      reads/validates pack.json per configured folder;
                      resolve-pack-paths.ts resolves the markii.packs setting
@@ -501,6 +512,9 @@ same commit as the change that triggers them:
   checklist in `docs/integration.md` are the merge gate; grant persistence
   re-validates on read; bundle handling goes through `@markii/bundle`'s
   jailed storage, never a reimplemented jail.
+- **New export from `@markii/host/browser`** → it must stay Node-free
+  transitively; `apps/vscode/src/browser-entry.probe.test.ts` is the gate.
+  A module needing `node:*` stays behind the main entry.
 - **Security probe suites are product code** → colocated `*probe*` suites are
   committed and kept green in CI (the documented hang/deadlock repros are the
   one exception: they are covered by dedicated tests rather than re-executed,

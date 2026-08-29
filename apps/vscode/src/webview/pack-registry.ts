@@ -2,37 +2,46 @@
  * The webview half of the pack registration convention (GitHub issue #3
  * slice 5, docs/packs.md): reads whatever `window.__markiiPackRegistrations`
  * collected (see `../webview-html.ts`'s doc comment for the full convention
- * and load order) and merges every validated entry into the render registry
- * via `@markii/react`'s `installPacks`, on top of `defaultRegistry`.
+ * and load order) and merges every validated entry into the render registry.
  *
- * ARCHITECTURAL NOTE (why this duplicates, rather than imports,
- * `@markii/host`'s `packs/pack-render-registry.ts`): this webview bundle
- * is a genuine browser sandbox — `esbuild.config.mjs`'s `webviewBuild` is
- * `platform: 'browser'`/`format: 'iife'` with NO `external` entries at
- * all, because VS Code's webview CSP forbids `require`/a module graph
- * fetched at runtime (the whole point of a nonce-only `script-src`). It
- * has no Node runtime to satisfy `node:fs`/`node:path`/etc., unlike
- * `apps/obsidian`'s plugin bundle, which runs in Electron's renderer and
- * marks `node:*` external in its OWN `esbuild.config.mjs` (real Node
- * builtins are genuinely available there — see that file's `mainBuild`
- * doc comment). `@markii/host`'s package export is one barrel
- * (`src/index.ts`) that pulls in the whole Node-heavy Run/pack-build
- * module graph, so importing even one pure function from it as a VALUE
- * here breaks this bundle (confirmed empirically — esbuild fails to
- * resolve `node:fs`, `node:worker_threads`, etc. reachable through that
- * barrel). Splitting `@markii/host` into a browser-safe subpath export
- * (the `@markii/bundle`/`./fs` pattern) would fix this properly, but that
- * touches shared root config (`tsconfig.dev.json`'s path map,
- * `scripts/workspace-aliases.config.ts`) outside this file's owning
- * scope — flagged to the orchestrator rather than done here.
+ * ISSUE #20: this used to hand-duplicate `@markii/host`'s per-entry
+ * validation (`isPackComponentModules`/`toPackToInstall`) and its merge
+ * (via `@markii/react`'s `installPacks`, last-wins on a composed-name
+ * collision) because this webview bundle could not import `@markii/host` as
+ * a value at all — `esbuild.config.mjs`'s `webviewBuild` is
+ * `platform: 'browser'`/`format: 'iife'` with NO `external` entries (VS
+ * Code's webview CSP forbids a module graph fetched at runtime), and
+ * `@markii/host`'s package export was one barrel (`src/index.ts`) pulling in
+ * the whole Node-heavy Run/pack-build module graph (`node:fs`,
+ * `node:worker_threads`, ...), which broke this bundle even for a single
+ * pure function.
  *
- * What IS shared safely: the TYPE contract. `QueuedPackRegistration` is
- * imported as a type-only import below (`import type`), which TypeScript
- * erases before this file ever reaches esbuild — zero runtime cost, zero
- * bundling impact — so this file's shape stays provably in sync with
- * `@markii/host`'s (and `apps/obsidian`'s) same convention even though the
- * VALIDATION LOGIC itself (`isPackComponentModules`/`toPackToInstall`)
- * must stay duplicated here.
+ * That is fixed now: `@markii/host/browser` (`packages/markii-host/src/
+ * browser.ts`) is a second, environment-free entry point containing only
+ * pure logic, and this file imports its `buildRenderRegistry` as a VALUE —
+ * which internally runs the shared `toPackToInstall` per queued entry, so
+ * this file no longer needs to call that validation itself, only to hand it
+ * a well-shaped batch. Using the shared merge also closes an asymmetry issue #19
+ * accepted: this webview used to merge via `installPacks`'s ordinary
+ * last-wins semantics, while `@markii/host`'s own merge already had a
+ * keep-first guard against two DIFFERENT packs composing to the same
+ * directive name. Now both hosts run the exact same
+ * `mergePacksKeepingFirstClaim`, so the guard can no longer be present on
+ * one host's path and absent on the other's.
+ *
+ * What STAYS local to this file, and why: reading
+ * `window.__markiiPackRegistrations` itself. `@markii/host` knows nothing
+ * about this global — it is this webview's own bootstrap convention (see
+ * `../webview-html.ts`), not something a host-neutral package could own —
+ * so this module still owns the `declare global` block and the small
+ * shape-normalizing step that turns each raw queue entry into a
+ * `QueuedPackRegistration` before handing the batch to the shared
+ * `buildRenderRegistry`. That normalizing step deliberately does not
+ * pre-filter: a raw entry that isn't even a plain object is normalized into
+ * a `QueuedPackRegistration` with `undefined` fields and left for the
+ * shared `toPackToInstall` to reject structurally (via its existing
+ * `manifestJson`-is-a-string check), so every malformed entry produces the
+ * same kind of recorded reason instead of two different discard paths.
  *
  * Every entry here crossed a JS boundary from a SEPARATELY LOADED script
  * file (a pack's prebuilt `webview.js`, not code this bundle compiled) —
@@ -44,11 +53,12 @@
  * `loadPack` (an empty contribution, never a crash), not bring down the
  * rest of the preview.
  */
-import { parsePackManifest } from '@markii/pack';
-import type { PackManifest } from '@markii/pack';
-import { createRegistry, installPacks, mergeRegistries } from '@markii/react';
-import type { PackToInstall, Registry, RegistryEntry } from '@markii/react';
-import type { QueuedPackRegistration } from '@markii/host';
+import type { Registry } from '@markii/react';
+import { buildRenderRegistry as buildRenderRegistryShared } from '@markii/host/browser';
+import type {
+  BuildRenderRegistryResult,
+  QueuedPackRegistration,
+} from '@markii/host/browser';
 
 declare global {
   interface Window {
@@ -89,94 +99,64 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function hasOwn(value: object, key: string): boolean {
-  return Object.prototype.hasOwnProperty.call(value, key);
-}
-
-/** Structurally validates one `componentModules` object: every OWN entry has a function `component` and an optional boolean `inline`. Read with `Object.hasOwn` only — the same hostile-map discipline `@markii/pack`/`@markii/react` use throughout, so a `componentModules` object with a poisoned `__proto__` can't leak an inherited value in as a registered component. Structurally identical to `@markii/host`'s `packs/pack-render-registry.ts` (this file's top doc comment explains why the logic itself, not just the type, can't be imported here). */
-function isPackComponentModules(
-  value: unknown,
-): value is Record<string, RegistryEntry> {
-  if (!isPlainObject(value)) return false;
-  for (const key of Object.keys(value)) {
-    if (!hasOwn(value, key)) continue;
-    const entry = value[key];
-    if (!isPlainObject(entry)) return false;
-    if (typeof entry.component !== 'function') return false;
-    if (hasOwn(entry, 'inline') && typeof entry.inline !== 'boolean') {
-      return false;
-    }
+/**
+ * Turns one raw queue entry into a `QueuedPackRegistration`, without
+ * filtering: a raw entry that isn't even a plain object becomes a
+ * registration with `undefined` `manifestJson`/`componentModules`, which the
+ * shared `toPackToInstall` (below, via `buildRenderRegistry`) rejects
+ * structurally and records a reason for, the same as any other malformed
+ * entry. This keeps every entry's position in `queued` stable, so the
+ * recorded `pack registration #N` reasons stay accurate.
+ */
+function toQueuedPackRegistration(raw: unknown): QueuedPackRegistration {
+  if (!isPlainObject(raw)) {
+    return { manifestJson: undefined, componentModules: undefined };
   }
-  return true;
-}
-
-/** One queued entry, validated into a `PackToInstall`, or `undefined` if either half fails validation — logged to the console (developer-facing only, never shown on the page) and simply dropped, never thrown. */
-function toPackToInstall(
-  entry: QueuedPackRegistration,
-  index: number,
-): PackToInstall | undefined {
-  if (typeof entry.manifestJson !== 'string') {
-    console.error(
-      `Markii: pack registration #${index} did not provide a manifest JSON string; ignored.`,
-    );
-    return undefined;
-  }
-  const parsed = parsePackManifest(entry.manifestJson);
-  if (!parsed.ok) {
-    console.error(
-      `Markii: pack registration #${index}'s manifest is invalid (${parsed.errors.join('; ')}); ignored.`,
-    );
-    return undefined;
-  }
-  if (!isPackComponentModules(entry.componentModules)) {
-    console.error(
-      `Markii: pack "${parsed.manifest.name}"'s registered components are malformed; ignored.`,
-    );
-    return undefined;
-  }
-  const manifest: PackManifest = parsed.manifest;
-  return { manifest, componentModules: entry.componentModules };
+  return { manifestJson: raw.manifest, componentModules: raw.componentModules };
 }
 
 /**
  * Builds the render registry: `defaultRegistry` merged with every
  * successfully validated, non-colliding pack registration collected in
- * `window.__markiiPackRegistrations`. Never throws:
+ * `window.__markiiPackRegistrations`, via the shared
+ * `@markii/host/browser` `buildRenderRegistry` (keep-first on a
+ * composed-name collision between two different packs, whole-install
+ * rejection on a namespace collision between two registrations of the same
+ * pack — see that function's own doc comment). Never throws.
  *
- * - an individual malformed registration is dropped (logged, not shown);
- * - a namespace collision between two loaded packs rejects the WHOLE
- *   install (`@markii/react`'s `installPacks`, matching docs/packs.md's
- *   install-time rejection rule) and this function falls back to
- *   `defaultRegistry` alone, logging which namespaces collided — every
- *   pack directive then shows the ordinary unknown-component fallback
- *   rather than an arbitrarily-chosen winner silently shadowing the other.
+ * Returns the full `BuildRenderRegistryResult` rather than just the
+ * `Registry`, so `./main.tsx` can forward `invalidReasons`/`collisions`/
+ * `duplicateComposedNames` to the extension host for the Markii output
+ * channel (`../protocol.ts`'s `PackDiagnosticsMessage`) instead of only
+ * logging them to the webview's own (much harder to find) devtools console.
  *
  * Called once, at mount time — `window.__markiiPackRegistrations` is only
  * ever populated by `<script>` tags that already ran before this bundle's
  * own script tag (see `../webview-html.ts`'s load order), so there is
  * nothing to re-read later.
  */
-export function buildRenderRegistry(defaultRegistry: Registry): Registry {
+export function buildRenderRegistry(
+  defaultRegistry: Registry,
+): BuildRenderRegistryResult {
   const queued = window.__markiiPackRegistrations ?? [];
-  const packs: PackToInstall[] = [];
+  const normalized = queued.map(toQueuedPackRegistration);
+  const result = buildRenderRegistryShared(normalized, defaultRegistry);
 
-  queued.forEach((raw, index) => {
-    if (!isPlainObject(raw)) return;
-    const entry: QueuedPackRegistration = {
-      manifestJson: raw.manifest,
-      componentModules: raw.componentModules,
-    };
-    const pack = toPackToInstall(entry, index);
-    if (pack) packs.push(pack);
-  });
+  // Kept for developers with devtools open; the output channel (wired in
+  // `./main.tsx`) is the surface that actually matters per AGENTS.md's
+  // "clean is not silent".
+  for (const reason of result.invalidReasons)
+    console.error(`Markii: ${reason}`);
+  if (result.collisions.length > 0) {
+    console.error(
+      `Markii: installed packs share a namespace (${result.collisions.join(', ')}); none of them were installed.`,
+    );
+  }
+  for (const duplicate of result.duplicateComposedNames) {
+    console.error(
+      `Markii: pack "${duplicate.skippedPack}"'s component composed to the directive name "${duplicate.composedName}", already claimed by pack "${duplicate.keptPack}"; the later component was skipped.`,
+    );
+  }
 
-  if (packs.length === 0) return defaultRegistry;
-
-  const result = installPacks(packs, defaultRegistry);
-  if (result.ok) return result.registry;
-
-  console.error(
-    `Markii: installed packs share a namespace (${result.collisions.join(', ')}); none of them were installed.`,
-  );
-  return mergeRegistries(createRegistry(), defaultRegistry);
+  return result;
 }

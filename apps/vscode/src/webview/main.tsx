@@ -11,7 +11,9 @@ import '@markii/react/doc.css';
 import './theme.css';
 import { defaultRegistry } from '@markii/react/components';
 import { buildRenderRegistry } from './pack-registry.js';
+import { getVsCodeApi } from './vscode-api.js';
 import { Preview } from './preview.js';
+import type { PackDiagnosticsMessage } from '../protocol.js';
 
 /**
  * GitHub issue #3 slice 5 (docs/packs.md): the ONE React instance every
@@ -24,8 +26,32 @@ import { Preview } from './preview.js';
  */
 window.__markiiReact = React;
 
-/** `defaultRegistry` merged with every pack this webview's `<script>` tags registered — see `./pack-registry.ts`. Built once, at mount time. */
-const registry = buildRenderRegistry(defaultRegistry);
+/**
+ * `defaultRegistry` merged with every pack this webview's `<script>` tags
+ * registered — see `./pack-registry.ts`. Built once, at mount time.
+ *
+ * ISSUE #20: any invalid registration, namespace collision, or
+ * duplicate-composed-name skip this merge found is forwarded to the
+ * extension host as a `pack-diagnostics` message, so it reaches the Markii
+ * output channel (AGENTS.md's "clean is not silent") rather than only the
+ * webview's own devtools console, which most users never open.
+ */
+const registrationResult = buildRenderRegistry(defaultRegistry);
+const registry = registrationResult.registry;
+
+if (
+  registrationResult.invalidReasons.length > 0 ||
+  registrationResult.collisions.length > 0 ||
+  registrationResult.duplicateComposedNames.length > 0
+) {
+  const message: PackDiagnosticsMessage = {
+    type: 'pack-diagnostics',
+    invalidReasons: registrationResult.invalidReasons,
+    collisions: registrationResult.collisions,
+    duplicateComposedNames: registrationResult.duplicateComposedNames,
+  };
+  getVsCodeApi().postMessage(message);
+}
 
 const rootElement = document.getElementById('root');
 if (rootElement) {

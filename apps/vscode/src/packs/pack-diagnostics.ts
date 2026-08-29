@@ -16,18 +16,21 @@
  * see `apps/obsidian/src/packs/pack-diagnostics.ts` for that host's own
  * wording of the same warning.
  *
- * VS Code does not currently supply `invalidRegistrationReasons` /
- * `registrationCollisions` (the pack-registration validation happens
- * inside the webview, a separate process — see `../webview/pack-registry.ts`),
- * so those are simply omitted here; `@markii/host`'s formatter already
- * treats them as optional and contributes nothing when absent, so this is
- * not a behavior change.
+ * The pack-registration validation itself (issue #3 slice 5) happens
+ * inside the webview, a separate process, via `@markii/host/browser`'s
+ * `buildRenderRegistry` (`../webview/pack-registry.ts`). Its outcome
+ * (`invalidReasons`/`collisions`/`duplicateComposedNames`) crosses back to
+ * this extension host over `postMessage` as a `PackDiagnosticsMessage`
+ * (`../protocol.ts`, issue #20) and `formatPackRegistrationDiagnosticLines`
+ * below turns it into the same lines this file already produces for
+ * everything else, via the same shared formatter.
  */
 import {
   formatPackDiagnosticLines as formatPackDiagnosticLinesShared,
   skippedPackCount as skippedPackCountShared,
 } from '@markii/host';
 import type { PackContext } from './pack-context.js';
+import type { PackDiagnosticsMessage } from '../protocol.js';
 
 /** ITEM 4's wording, softened to informational (docs/packs.md: "a host notes relative entries in its diagnostics"): naming `markii.packs` as the user-scoped setting the entry sits in. */
 function relativeEntryLine(entry: string): string {
@@ -68,4 +71,27 @@ export function formatPackDiagnosticLines(context: PackContext): string[] {
 /** How many configured folders failed to produce a usable pack — what the preview's quiet marker counts (`webview/preview.tsx`). */
 export function skippedPackCount(context: PackContext): number {
   return skippedPackCountShared(context);
+}
+
+/**
+ * Formats one `PackDiagnosticsMessage` the webview sent (issue #20) as
+ * plain text lines for the Markii output channel, reusing the exact same
+ * shared formatting path as `formatPackDiagnosticLines` above — an empty
+ * `packs`/`skipped`/`cssWarnings` context contributes nothing, so only the
+ * registration-related lines this message actually carries come out.
+ */
+export function formatPackRegistrationDiagnosticLines(
+  message: Pick<
+    PackDiagnosticsMessage,
+    'invalidReasons' | 'collisions' | 'duplicateComposedNames'
+  >,
+): string[] {
+  return formatPackDiagnosticLinesShared({
+    packs: [],
+    skipped: [],
+    cssWarnings: [],
+    invalidRegistrationReasons: message.invalidReasons,
+    registrationCollisions: message.collisions,
+    duplicateComposedNames: message.duplicateComposedNames,
+  });
 }

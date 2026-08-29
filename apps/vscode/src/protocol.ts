@@ -1,9 +1,10 @@
 /**
  * The host (extension host, `preview-panel.ts`) <-> webview (`webview/
  * preview.tsx`) message contract. The host pushes a full document `update`
- * or a script-run `values` result; the webview only ever announces it is
- * ready to receive one — so the type guards below are the entire
- * wire-format validation this extension needs.
+ * or a script-run `values` result; the webview announces it is ready to
+ * receive one and, separately, reports what its pack-registration merge
+ * found (issue #20's `PackDiagnosticsMessage`) — so the type guards below
+ * are the entire wire-format validation this extension needs.
  *
  * Both guards take `unknown` and never throw: a message arriving via
  * `postMessage`/`onDidReceiveMessage` is attacker- or bug-reachable in
@@ -170,9 +171,40 @@ export interface ReadyMessage {
   readonly type: 'ready';
 }
 
+/**
+ * One composed directive name two DIFFERENT packs both claimed, as it
+ * crosses the wire — restated here (matching `WireStoredValue`'s and
+ * `WireRunTrace`'s pattern) rather than imported from `@markii/host/browser`,
+ * so this file's own hostile-shape guard owns the wire validation. Mirrors
+ * `@markii/host/browser`'s `DuplicateComposedName`.
+ */
+export interface WireDuplicateComposedName {
+  readonly composedName: string;
+  readonly keptPack: string;
+  readonly skippedPack: string;
+}
+
+/**
+ * Webview -> host (issue #20): the webview's pack-registration merge
+ * (`webview/pack-registry.ts`, via `@markii/host/browser`'s
+ * `buildRenderRegistry`) found something worth a diagnostic line — a
+ * malformed registration, a namespace collision, or a duplicate-composed-name
+ * skip. Sent once, right after the merge at mount time, only when at least
+ * one of the three arrays is non-empty; `preview-panel.ts` writes the
+ * formatted lines to the Markii output channel (AGENTS.md's "clean is not
+ * silent": a devtools-only console.error is not a diagnostics surface most
+ * users can find).
+ */
+export interface PackDiagnosticsMessage {
+  readonly type: 'pack-diagnostics';
+  readonly invalidReasons: readonly string[];
+  readonly collisions: readonly string[];
+  readonly duplicateComposedNames: readonly WireDuplicateComposedName[];
+}
+
 export type HostToWebviewMessage =
   UpdateMessage | ValuesMessage | BundleErrorMessage;
-export type WebviewToHostMessage = ReadyMessage;
+export type WebviewToHostMessage = ReadyMessage | PackDiagnosticsMessage;
 
 function hasOwn(value: object, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(value, key);
@@ -504,12 +536,103 @@ export function isHostToWebviewMessage(
   );
 }
 
-export function isWebviewToHostMessage(
-  value: unknown,
-): value is WebviewToHostMessage {
+function isReadyMessage(value: unknown): value is ReadyMessage {
   if (!isPlainObject(value)) return false;
   if (!hasOwn(value, 'type') || value.type !== 'ready') return false;
   return true;
+}
+
+/** A sane upper bound on how many diagnostic entries one `pack-diagnostics` message may carry per array — real registration batches are a handful of packs; this only exists to bound a hostile/corrupt message. */
+const MAX_PACK_DIAGNOSTIC_ENTRIES = 256;
+
+/** A sane upper bound on one diagnostic line's length (an `invalidReasons`/`collisions` entry) — real ones are one short sentence, matching `MAX_RUN_REASON_LENGTH`'s bound for the same kind of host-facing text. */
+const MAX_PACK_DIAGNOSTIC_LINE_LENGTH = 4096;
+
+/** A sane upper bound on one pack name or composed directive name in a `WireDuplicateComposedName` — real ones are short kebab-case identifiers. */
+const MAX_PACK_NAME_LENGTH = 256;
+
+/** Every entry of `value` is a non-empty, bounded string, and the array itself is within `MAX_PACK_DIAGNOSTIC_ENTRIES`. */
+function isPackDiagnosticLineArray(value: unknown): value is readonly string[] {
+  return (
+    Array.isArray(value) &&
+    value.length <= MAX_PACK_DIAGNOSTIC_ENTRIES &&
+    value.every(
+      (entry) =>
+        typeof entry === 'string' &&
+        entry.length > 0 &&
+        entry.length <= MAX_PACK_DIAGNOSTIC_LINE_LENGTH,
+    )
+  );
+}
+
+/** A valid, bounded name (pack name or composed directive name) for a `WireDuplicateComposedName` field. */
+function isPackNameString(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    value.length <= MAX_PACK_NAME_LENGTH
+  );
+}
+
+function isWireDuplicateComposedName(
+  value: unknown,
+): value is WireDuplicateComposedName {
+  if (!isPlainObject(value)) return false;
+  if (!hasOwn(value, 'composedName') || !isPackNameString(value.composedName)) {
+    return false;
+  }
+  if (!hasOwn(value, 'keptPack') || !isPackNameString(value.keptPack)) {
+    return false;
+  }
+  if (!hasOwn(value, 'skippedPack') || !isPackNameString(value.skippedPack)) {
+    return false;
+  }
+  return true;
+}
+
+/** Every entry of `value` is a valid `WireDuplicateComposedName`, and the array itself is within `MAX_PACK_DIAGNOSTIC_ENTRIES`. */
+function isWireDuplicateComposedNameArray(
+  value: unknown,
+): value is readonly WireDuplicateComposedName[] {
+  return (
+    Array.isArray(value) &&
+    value.length <= MAX_PACK_DIAGNOSTIC_ENTRIES &&
+    value.every(isWireDuplicateComposedName)
+  );
+}
+
+function isPackDiagnosticsMessage(
+  value: unknown,
+): value is PackDiagnosticsMessage {
+  if (!isPlainObject(value)) return false;
+  if (!hasOwn(value, 'type') || value.type !== 'pack-diagnostics') {
+    return false;
+  }
+  if (
+    !hasOwn(value, 'invalidReasons') ||
+    !isPackDiagnosticLineArray(value.invalidReasons)
+  ) {
+    return false;
+  }
+  if (
+    !hasOwn(value, 'collisions') ||
+    !isPackDiagnosticLineArray(value.collisions)
+  ) {
+    return false;
+  }
+  if (
+    !hasOwn(value, 'duplicateComposedNames') ||
+    !isWireDuplicateComposedNameArray(value.duplicateComposedNames)
+  ) {
+    return false;
+  }
+  return true;
+}
+
+export function isWebviewToHostMessage(
+  value: unknown,
+): value is WebviewToHostMessage {
+  return isReadyMessage(value) || isPackDiagnosticsMessage(value);
 }
 
 /**
