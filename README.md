@@ -63,9 +63,6 @@ Ways to use Markii with no coding:
       <br /><br />
       <a href="https://github.com/markii-org/markii-vault">Open the playground &rarr;</a>
       <br><br>
-      <img src="res/screenshots/playground.png" width="100%" alt="The playground: source on the left, rendered document on the right" />
-      <br>
-      <br>
     </td>
     <td width="33%" valign="top" align="center">
       <br>
@@ -75,9 +72,6 @@ Ways to use Markii with no coding:
       <br /><br />
       <a href="https://marketplace.visualstudio.com/items?itemName=markii.markii-vscode">Get it on the Marketplace &rarr;</a>
       <br><br>
-      <img src="res/screenshots/vscode.png" width="100%" alt="A .mk.md file open in VS Code beside its rendered preview" />
-      <br>
-      <br>
     </td>
     <td width="33%" valign="top" align="center">
       <br>
@@ -87,9 +81,6 @@ Ways to use Markii with no coding:
       <br /><br />
       <a href="https://github.com/markii-org/markii-obsidian/releases/latest">Download for Obsidian &rarr;</a>
       <br><br>
-      <img src="res/screenshots/obsidian.png" width="100%" alt="A Markii note rendered in an Obsidian vault" />
-      <br>
-      <br>
     </td>
   </tr>
 </table>
