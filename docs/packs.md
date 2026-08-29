@@ -128,12 +128,24 @@ the next vault), so a host notes relative entries in its diagnostics. For
 one shared folder across projects, use an absolute path; a leading `~`
 expands to your home directory, which keeps an absolute entry short.
 
-A pack does not need to ship a built artifact. The host compiles the
-component sources its manifest names, along with any relative modules and
-CSS they import, caches the result outside the pack's own folder so your
-files stay untouched, and rebuilds when any file that went into the build
-changes. Reads during a build are confined to the pack's own folder. A pack
-that does ship a prebuilt script is used as-is.
+### Two ways to run a pack: prebuilt and from source
+
+A pack reaches a host in one of two forms, and they serve different people.
+
+**Prebuilt, for distribution.** The pack ships `pack.json` plus a compiled
+`webview.js`, a few kilobytes. The host uses it as-is: no compiler runs, so
+it loads on every install of every host, including thin installs that carry
+no compiler at all. This is the form to ship when other people will use
+your pack.
+
+**From source, for live authoring.** The pack ships its component sources,
+and the host compiles them at load time: the sources the manifest names,
+along with any relative modules and CSS they import. The result is cached
+outside the pack's own folder so your files stay untouched, and rebuilt
+when any file that went into the build changes. Reads during a build are
+confined to the pack's own folder. This is the form for developing a pack:
+edit a component, reopen the preview, see the change, with no toolchain of
+your own.
 
 Compiling from source is an optional host capability, because the compiler
 is a sizeable runtime the host may not carry. An install without it (for
@@ -141,8 +153,11 @@ example, an Obsidian install fetched by an automated installer, which
 downloads only the plugin's three core files) cannot build a pack that
 ships source. The host reports that on its diagnostics surface, naming the
 install that would restore the capability, rather than failing silently or
-dumping a compiler error. A pack with a prebuilt script loads either way,
-so a pack meant for wide distribution should consider shipping one.
+dumping a compiler error. A prebuilt pack loads either way.
+
+When a pack folder holds both a `webview.js` and sources, the prebuilt
+script wins and the sources are ignored, so delete the built file while
+developing and produce a fresh one when you ship.
 
 ## Styling a pack
 
