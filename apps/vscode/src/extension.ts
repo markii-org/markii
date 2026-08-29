@@ -174,19 +174,22 @@ async function exportPackCommand(
     chosen = packs[index]!;
   }
 
+  // When only one pack is configured the quick pick above is skipped, so
+  // these prompts are the first thing the user sees: each names the chosen
+  // pack, or the silent auto-selection reads as "exporting everything".
   const destinationPicked = await vscode.window.showOpenDialog({
     canSelectFolders: true,
     canSelectFiles: false,
     canSelectMany: false,
     openLabel: 'Export Here',
-    title: 'Choose where to export the pack',
+    title: `Choose where to export the ${chosen.manifest.name} pack`,
   });
   const destinationDir = destinationPicked?.[0]?.fsPath;
   if (!destinationDir) return; // cancelled
 
   const exportName = await vscode.window.showInputBox({
-    title: 'Markii: Export Pack',
-    prompt: 'Folder name to create at the chosen destination.',
+    title: `Markii: Export the ${chosen.manifest.name} pack`,
+    prompt: `Folder name to create for the ${chosen.manifest.name} pack at the chosen destination.`,
     value: chosen.manifest.name,
     validateInput: exportNameValidationMessage,
   });

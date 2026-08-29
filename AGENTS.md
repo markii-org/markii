@@ -512,6 +512,13 @@ same commit as the change that triggers them:
   checklist in `docs/integration.md` are the merge gate; grant persistence
   re-validates on read; bundle handling goes through `@markii/bundle`'s
   jailed storage, never a reimplemented jail.
+- **Any change visible in authored Markii content** (directive naming or
+  composition, component names/attributes, script or frontmatter syntax) →
+  sweep ALL demo and doc content in the same pass: `README.md`'s example,
+  `README.mk.md`, `docs/` snippets, both apps' READMEs and the VS Code
+  walkthrough, and the `markii-vault` repo (example notes, example packs,
+  playground `@markii/*` deps — it consumes published npm versions, so it
+  updates after the npm release, not before).
 - **New export from `@markii/host/browser`** → it must stay Node-free
   transitively; `apps/vscode/src/browser-entry.probe.test.ts` is the gate.
   A module needing `node:*` stays behind the main entry.
