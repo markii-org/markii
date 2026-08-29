@@ -85,7 +85,7 @@ Ways to use Markii with no coding:
       <h4>Obsidian plugin</h4>
       Markii components inside an Obsidian vault.
       <br /><br />
-      <em>Planned</em>
+      <a href="https://github.com/markii-org/markii-obsidian/releases/latest">Download for Obsidian &rarr;</a>
       <br><br>
       <img src="res/screenshots/obsidian.png" width="100%" alt="A Markii note rendered in an Obsidian vault" />
       <br>
