@@ -6,6 +6,8 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-08-30
+
 ### Added
 
 - **`@markii/pack`: a component entry can now describe itself** (issue #18) —
