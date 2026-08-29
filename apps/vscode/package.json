@@ -2,7 +2,7 @@
   "name": "markii-vscode",
   "displayName": "Markii",
   "description": "Preview for Markii (.mk.md) documents: CommonMark plus directives that render components.",
-  "version": "0.7.3",
+  "version": "0.8.0",
   "private": true,
   "license": "MIT",
   "publisher": "markii",

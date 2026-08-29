@@ -6,7 +6,7 @@
  * well-formed pack CSS (the companion `tsxpack-badcss` fixture proves they
  * fire).
  */
-.mk-tsxcss-stat {
+.mk-tsxcss_stat {
   display: inline-flex;
   align-items: center;
   gap: 0.25em;
@@ -15,6 +15,6 @@
   border: 1px solid var(--mk-border);
 }
 
-.mk-tsxcss-stat:hover {
+.mk-tsxcss_stat:hover {
   border-color: var(--mk-accent);
 }

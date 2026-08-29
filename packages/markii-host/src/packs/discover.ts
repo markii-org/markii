@@ -30,7 +30,7 @@ import * as path from 'node:path';
 import { readdir, readFile as nodeReadFile } from 'node:fs/promises';
 import { parsePackManifest } from '@markii/pack';
 import type { PackManifest } from '@markii/pack';
-import { detectNamespaceCollisions } from '@markii/pack';
+import { detectNamespaceCollisions, packComponents } from '@markii/pack';
 
 /** Reads a file's UTF-8 text, or resolves `undefined` if it does not exist / cannot be read. Never rejects for an ordinary "not found" — injected so this module needs no real filesystem to test. */
 export type PackFileReader = (
@@ -166,12 +166,13 @@ async function tryLoadPackAt(
     };
   }
 
+  // Read the manifest's components map only through @markii/pack's
+  // packComponents() — the one accessor that normalizes both the string
+  // shorthand and the object form (source/description/kind), so this
+  // module never re-implements that walk or its Object.hasOwn guarding.
   const componentPaths: Record<string, string> = {};
-  for (const localName of Object.keys(result.manifest.components)) {
-    if (!Object.hasOwn(result.manifest.components, localName)) continue;
-    const relativeSource = result.manifest.components[localName];
-    if (relativeSource === undefined) continue;
-    componentPaths[localName] = path.join(folder, relativeSource);
+  for (const listing of packComponents(result.manifest)) {
+    componentPaths[listing.localName] = path.join(folder, listing.source);
   }
 
   return {

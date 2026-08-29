@@ -113,7 +113,7 @@ describe('demo fixture pack — the real build, evaluated the way a preview open
     // Proof the CSS import produced a real sibling stylesheet.
     expect(outcome.stylesheetPath).toBeDefined();
     const css = await readFile(outcome.stylesheetPath!, 'utf8');
-    expect(css).toContain('.mk-demo-badge');
+    expect(css).toContain('.mk-demo_badge');
     expect(outcome.warnings).toEqual([]);
 
     // This is the exact sequence `view.tsx`'s `loadPacks` runs for a
@@ -132,19 +132,19 @@ describe('demo fixture pack — the real build, evaluated the way a preview open
     );
     expect(invalidReasons).toEqual([]);
     expect(collisions).toEqual([]);
-    expect(registry['demo-badge']).toBeDefined();
+    expect(registry['demo_badge']).toBeDefined();
 
     // Render it for real, through the SAME React instance
     // `installPackRuntime` installed as `window.__markiiReact` — proof
     // there is no second React copy involved.
-    const entry = registry['demo-badge']!;
+    const entry = registry['demo_badge']!;
     const html = renderToStaticMarkup(
       createElement(entry.component, {
         attributes: { label: 'hi' },
         children: null,
       }),
     );
-    expect(html).toContain('mk-demo-badge');
+    expect(html).toContain('mk-demo_badge');
     expect(html).toContain('demo-fixture-marker-7c1a:hi');
   }, 30_000);
 });

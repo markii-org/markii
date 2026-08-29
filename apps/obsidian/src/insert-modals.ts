@@ -45,13 +45,17 @@ class ComponentSuggestModal extends SuggestModal<InsertComponentSuggestion> {
     suggestion: InsertComponentSuggestion,
     el: HTMLElement,
   ): void {
-    // Two elements rather than one joined string, matching the pack picker
-    // this modal is modeled on: `small` is already de-emphasized by
+    // Separate elements rather than one joined string, matching the pack
+    // picker this modal is modeled on: `small` is already de-emphasized by
     // Obsidian's own styling, so the row needs no plugin-specific class (and
-    // no separator character) to read as a name above its explanation.
+    // no separator character) to read as a name above its origin tag and
+    // description. The detail element is skipped entirely when there is no
+    // description, rather than creating an empty node.
     el.createDiv({ text: suggestion.label });
-    el.createEl('small', { text: suggestion.description });
-    el.createEl('small', { text: suggestion.detail });
+    el.createEl('small', { text: suggestion.origin });
+    if (suggestion.detail.length > 0) {
+      el.createEl('small', { text: suggestion.detail });
+    }
   }
 
   onChooseSuggestion(suggestion: InsertComponentSuggestion): void {

@@ -20,13 +20,12 @@
  * `apps/obsidian/src/packs/pack-diagnostics.ts` for each host's own wording
  * and thin wrapper around this function.
  */
+import { packComponents } from '@markii/pack';
+import type { PackManifest } from '@markii/pack';
 
 /** The minimal shape of one loaded pack this module needs — a structural subset of `./discover.ts`'s `DiscoveredPack`. */
 export interface PackDiagnosticsPack {
-  readonly manifest: {
-    readonly name: string;
-    readonly components: Readonly<Record<string, unknown>>;
-  };
+  readonly manifest: Pick<PackManifest, 'name' | 'components'>;
 }
 
 /** The minimal shape of one skipped folder this module needs — a structural subset of `./discover.ts`'s `SkippedPackFolder`. */
@@ -50,6 +49,12 @@ export interface PackDiagnosticsContext {
   readonly invalidRegistrationReasons?: readonly string[];
   /** Namespaces shared by two or more registered packs (`./pack-render-registry.ts`'s `BuildRenderRegistryResult.collisions`). When non-empty, contributes one summary line. */
   readonly registrationCollisions?: readonly string[];
+  /** Composed directive names two DIFFERENT packs both claimed (`./pack-render-registry.ts`'s `BuildRenderRegistryResult.duplicateComposedNames`) — the first pack keeps the name, and each entry here names both the pack that kept it and the pack whose component was skipped. Omitted (or empty) contributes nothing; this is expected to stay empty under ordinary pack composition (see that module's doc comment). */
+  readonly duplicateComposedNames?: readonly {
+    readonly composedName: string;
+    readonly keptPack: string;
+    readonly skippedPack: string;
+  }[];
 }
 
 /** One line for each folder `discoverPacks`/a host's `loadPackContext` could not turn into a usable pack. */
@@ -62,7 +67,7 @@ function skippedLines(context: PackDiagnosticsContext): string[] {
 /** One line for each pack that loaded successfully, naming what a user would want to confirm: its name, namespace, and how many components it registered. */
 function loadedLines(context: PackDiagnosticsContext): string[] {
   return context.packs.map((pack) => {
-    const componentCount = Object.keys(pack.manifest.components).length;
+    const componentCount = packComponents(pack.manifest).length;
     const plural = componentCount === 1 ? 'component' : 'components';
     return `Loaded pack "${pack.manifest.name}" (namespace: ${pack.manifest.name}, ${String(componentCount)} ${plural})`;
   });
@@ -77,14 +82,24 @@ function collisionLines(context: PackDiagnosticsContext): string[] {
   ];
 }
 
+/** One line per composed directive name two different packs both claimed, naming the pack that kept it and the pack whose component was skipped — `[]` when there was none (the ordinary case). */
+function duplicateComposedNameLines(context: PackDiagnosticsContext): string[] {
+  const duplicates = context.duplicateComposedNames ?? [];
+  return duplicates.map(
+    (duplicate) =>
+      `Pack "${duplicate.skippedPack}"'s component composed to the directive name "${duplicate.composedName}", already claimed by pack "${duplicate.keptPack}"; the later component was skipped.`,
+  );
+}
+
 /**
  * The full set of diagnostic lines for one pack-loading outcome: loaded
  * packs first (the confirmation that the setting is working at all), then
  * every skipped folder with its reason, then relative-entry lines, then
  * prebuilt-shadow lines, then pack CSS lint warnings, then any
- * invalid-registration or namespace-collision lines. Empty when nothing is
- * configured at all — the caller decides whether an empty result is worth
- * writing anything to its own diagnostics surface.
+ * invalid-registration, namespace-collision, or duplicate-composed-name
+ * lines. Empty when nothing is configured at all — the caller decides
+ * whether an empty result is worth writing anything to its own
+ * diagnostics surface.
  */
 export function formatPackDiagnosticLines(
   context: PackDiagnosticsContext,
@@ -97,6 +112,7 @@ export function formatPackDiagnosticLines(
     ...context.cssWarnings,
     ...(context.invalidRegistrationReasons ?? []),
     ...collisionLines(context),
+    ...duplicateComposedNameLines(context),
   ];
 }
 

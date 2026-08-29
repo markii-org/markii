@@ -34,8 +34,11 @@ import {
 import { isPreviewableDocument } from './mark-document.js';
 import {
   insertComponentQuickPickItems,
+  INSERT_COMPONENT_QUICK_PICK_PLACEHOLDER,
+  INSERT_COMPONENT_QUICK_PICK_TITLE,
   NO_ACTIVE_MARK_EDITOR_MESSAGE,
 } from './insert-component.js';
+import type { InsertComponentQuickPickEntry } from './insert-component.js';
 
 /**
  * The `markii.addPackFolder` command: a folder picker that appends the chosen
@@ -229,6 +232,31 @@ async function exportPackCommand(
 }
 
 /**
+ * A `vscode.QuickPickItem` extended with `catalogIndex`, an extra property
+ * that survives `showQuickPick` (which returns the same object it was
+ * given), so the chosen row's position in the catalog can be recovered
+ * without an `items.indexOf(picked)` lookup, which separators would break.
+ * Present only on component rows: a separator carries no catalog entry.
+ */
+interface InsertComponentQuickPickItem extends vscode.QuickPickItem {
+  readonly catalogIndex?: number;
+}
+
+/** Maps this command's plain picker entries onto `vscode.QuickPickItem`s, separators via `QuickPickItemKind.Separator`. */
+function quickPickItemFromEntry(
+  entry: InsertComponentQuickPickEntry,
+): InsertComponentQuickPickItem {
+  if (entry.kind === 'separator') {
+    return { label: entry.label, kind: vscode.QuickPickItemKind.Separator };
+  }
+  return {
+    label: entry.label,
+    detail: entry.detail,
+    catalogIndex: entry.catalogIndex,
+  };
+}
+
+/**
  * The `markii.insertComponent` command ("Markii: Insert Component…",
  * GitHub issue #17, slice 1): offers every standard component plus every
  * configured pack's components, and inserts the chosen one's directive
@@ -262,17 +290,16 @@ async function insertComponentCommand(): Promise<void> {
   }
 
   const catalog = buildComponentCatalog(packs);
-  const items = insertComponentQuickPickItems(catalog);
+  const entries = insertComponentQuickPickItems(catalog);
+  const items = entries.map(quickPickItemFromEntry);
   const picked = await vscode.window.showQuickPick(items, {
-    title: 'Markii: Insert Component',
-    placeHolder: 'Choose a component to insert',
-    matchOnDescription: true,
+    title: INSERT_COMPONENT_QUICK_PICK_TITLE,
+    placeHolder: INSERT_COMPONENT_QUICK_PICK_PLACEHOLDER,
     matchOnDetail: true,
   });
-  if (!picked) return; // cancelled
+  if (!picked || picked.catalogIndex === undefined) return; // cancelled
 
-  const index = items.indexOf(picked);
-  const chosen = catalog[index];
+  const chosen = catalog[picked.catalogIndex];
   if (!chosen) return;
 
   const skeleton = componentSkeleton(

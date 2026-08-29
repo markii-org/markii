@@ -75,8 +75,14 @@ export interface PackContext {
   readonly cssWarnings: readonly string[];
   /** One line per malformed pack registration, dropped rather than installed (`./pack-render-registry.ts`). */
   readonly invalidRegistrationReasons: readonly string[];
-  /** Namespaces shared by two or more registered packs — when non-empty, `registry` fell back to `defaultRegistry` alone (`installPacks`'s all-or-nothing rule). */
+  /** Namespaces shared by two or more registered packs — when non-empty, `registry` fell back to `defaultRegistry` alone (docs/packs.md's install-time all-or-nothing rejection rule). */
   readonly registrationCollisions: readonly string[];
+  /** Composed directive names two DIFFERENTLY named packs both claimed (`./pack-render-registry.ts`'s `DuplicateComposedName`) — the first pack keeps the name, the later pack's component is skipped. Expected to stay empty under ordinary pack composition; kept as a defense-in-depth invariant. */
+  readonly duplicateComposedNames: readonly {
+    readonly composedName: string;
+    readonly keptPack: string;
+    readonly skippedPack: string;
+  }[];
   /**
    * Packs that ship BOTH a prebuilt `webview.js` and component sources on
    * disk (`@markii/host`'s `resolvePrebuiltPack`, issue #15). Informational
@@ -286,10 +292,8 @@ export async function loadPackContext(
       cssText: entry.cssText!,
     }));
 
-  const { registry, invalidReasons, collisions } = buildRenderRegistry(
-    registrations,
-    defaultRegistry,
-  );
+  const { registry, invalidReasons, collisions, duplicateComposedNames } =
+    buildRenderRegistry(registrations, defaultRegistry);
 
   return {
     packs: discovery.packs,
@@ -302,6 +306,7 @@ export async function loadPackContext(
     cssWarnings,
     invalidRegistrationReasons: invalidReasons,
     registrationCollisions: collisions,
+    duplicateComposedNames,
     prebuiltShadowedPacks,
   };
 }

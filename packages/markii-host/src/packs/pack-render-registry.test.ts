@@ -26,7 +26,7 @@ describe('buildRenderRegistry', () => {
     const result = buildRenderRegistry(queued, createRegistry());
     expect(result.invalidReasons).toEqual([]);
     expect(result.collisions).toEqual([]);
-    expect(result.registry['demo-badge']).toBeDefined();
+    expect(result.registry['demo_badge']).toBeDefined();
   });
 
   it('an empty queue returns the base registry unchanged', () => {
@@ -80,7 +80,7 @@ describe('buildRenderRegistry', () => {
     const base = createRegistry({ callout: { component: fakeComponent } });
     const result = buildRenderRegistry(queued, base);
     expect(result.collisions).toEqual(['demo']);
-    expect(result.registry['demo-badge']).toBeUndefined();
+    expect(result.registry['demo_badge']).toBeUndefined();
     // Falls back to the base registry's own entries, not an empty one.
     expect(result.registry.callout).toBeDefined();
   });
@@ -95,6 +95,6 @@ describe('buildRenderRegistry', () => {
     ];
     const result = buildRenderRegistry(queued, createRegistry());
     expect(result.invalidReasons).toHaveLength(1);
-    expect(result.registry['demo-badge']).toBeUndefined();
+    expect(result.registry['demo_badge']).toBeUndefined();
   });
 });

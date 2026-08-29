@@ -1,20 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import { STANDARD_COMPONENTS } from '@markii/stdlib';
-import { buildComponentCatalog } from './component-catalog.js';
+import type { PackComponentEntry } from '@markii/pack';
+import {
+  LAYOUT_WRAPPER_NAMES,
+  buildComponentCatalog,
+} from './component-catalog.js';
 import type { DiscoveredPack } from '../packs/discover.js';
 
 function pack(
   name: string,
-  components: Record<string, string>,
+  components: Record<string, PackComponentEntry>,
   folder = `/packs/${name}`,
 ): DiscoveredPack {
   return {
     folder,
     manifest: { name, engine: 'react', components },
     componentPaths: Object.fromEntries(
-      Object.entries(components).map(([local, source]) => [
+      Object.entries(components).map(([local, entry]) => [
         local,
-        `${folder}/${source}`,
+        `${folder}/${typeof entry === 'string' ? entry : entry.source}`,
       ]),
     ),
     scriptsDir: `${folder}/scripts`,
@@ -48,7 +52,7 @@ describe('buildComponentCatalog', () => {
     expect(callout?.description).toBe(
       'A colored box for an aside, warning, or danger note.',
     );
-    expect(callout?.description.length).toBeLessThan(
+    expect(callout?.description?.length).toBeLessThan(
       STANDARD_COMPONENTS.callout!.description.length,
     );
   });
@@ -59,15 +63,61 @@ describe('buildComponentCatalog', () => {
     ]);
     const packEntries = catalog.filter((entry) => entry.source === 'pack');
     expect(packEntries.map((entry) => entry.directiveName)).toEqual([
-      'cat-card',
-      'cat-timeline',
+      'cat_card',
+      'cat_timeline',
     ]);
     expect(packEntries[0]).toMatchObject({
       kind: 'container',
+      group: 'pack',
       packName: 'cat',
-      description: 'From pack "cat".',
       requiredAttributes: [],
     });
+    // No manifest-declared description (string-shorthand entry): the
+    // catalog carries no filler text, unlike the old "From pack ..." string.
+    expect(packEntries[0]?.description).toBeUndefined();
+  });
+
+  it('appends the layout wrappers after the standard set and before packs', () => {
+    const catalog = buildComponentCatalog([
+      pack('cat', { card: './Card.tsx' }),
+    ]);
+    const names = catalog.map((entry) => entry.directiveName);
+    const layoutStart = names.indexOf('center');
+    const packStart = names.indexOf('cat_card');
+    expect(layoutStart).toBeGreaterThan(-1);
+    expect(packStart).toBeGreaterThan(layoutStart);
+    for (const layoutName of LAYOUT_WRAPPER_NAMES) {
+      const entry = catalog.find((e) => e.directiveName === layoutName);
+      expect(entry?.group).toBe('layout');
+      expect(entry?.source).toBe('standard');
+    }
+  });
+
+  it('carries a pack component object-form description and kind through', () => {
+    const catalog = buildComponentCatalog([
+      pack('cat', {
+        profile: {
+          source: './Profile.tsx',
+          description: 'A cat profile card.',
+          kind: 'leaf',
+        },
+      }),
+    ]);
+    const entry = catalog.find((e) => e.directiveName === 'cat_profile');
+    expect(entry).toMatchObject({
+      kind: 'leaf',
+      group: 'pack',
+      packName: 'cat',
+      description: 'A cat profile card.',
+    });
+  });
+
+  it('defaults a pack component with no declared kind to container', () => {
+    const catalog = buildComponentCatalog([
+      pack('cat', { card: { source: './Card.tsx' } }),
+    ]);
+    const entry = catalog.find((e) => e.directiveName === 'cat_card');
+    expect(entry?.kind).toBe('container');
   });
 
   it("sorts a pack's own local names alphabetically", () => {
@@ -77,7 +127,7 @@ describe('buildComponentCatalog', () => {
     const names = catalog
       .filter((entry) => entry.source === 'pack')
       .map((entry) => entry.directiveName);
-    expect(names).toEqual(['cat-alpha', 'cat-zeta']);
+    expect(names).toEqual(['cat_alpha', 'cat_zeta']);
   });
 
   it('processes packs in the given order', () => {
@@ -88,7 +138,7 @@ describe('buildComponentCatalog', () => {
     const names = catalog
       .filter((entry) => entry.source === 'pack')
       .map((entry) => entry.directiveName);
-    expect(names).toEqual(['bpack-widget', 'apack-widget']);
+    expect(names).toEqual(['bpack_widget', 'apack_widget']);
   });
 
   it('composes a pack namespace and local name that do not collide with anything', () => {
@@ -97,21 +147,27 @@ describe('buildComponentCatalog', () => {
       catalog
         .filter((entry) => entry.source === 'pack')
         .map((entry) => entry.directiveName),
-    ).toEqual(['kbd-x']);
+    ).toEqual(['kbd_x']);
   });
 
   it('skips a pack component whose composed name collides with an earlier pack (first wins)', () => {
-    // pack "a" + local "b-c" composes (with '-') to "a-b-c"; pack "a-b" +
-    // local "c" also composes to "a-b-c". The second is skipped.
+    // With the underscore join, pack "a" + local "b-c" composes to
+    // "a_b-c" and pack "a-b" + local "c" composes to "a-b_c" — these are
+    // now DIFFERENT names, so composition itself can no longer produce
+    // this collision. This test instead forces a collision by giving two
+    // packs the exact same declared pack name (which composeDirectiveName
+    // treats identically regardless of local-name shape), to prove the
+    // first-wins skip logic in `packCatalogEntries`/`buildComponentCatalog`
+    // still works now that natural ambiguity is gone.
     const catalog = buildComponentCatalog([
-      pack('a', { 'b-c': './One.tsx' }),
-      pack('a-b', { c: './Two.tsx' }),
+      pack('a', { widget: './One.tsx' }, '/packs/a-1'),
+      pack('a', { widget: './Two.tsx' }, '/packs/a-2'),
     ]);
     const names = catalog
       .filter((entry) => entry.source === 'pack')
       .map((entry) => entry.directiveName);
-    expect(names).toEqual(['a-b-c']);
-    const first = catalog.find((entry) => entry.directiveName === 'a-b-c');
+    expect(names).toEqual(['a_widget']);
+    const first = catalog.find((entry) => entry.directiveName === 'a_widget');
     expect(first?.packName).toBe('a');
   });
 
@@ -144,6 +200,29 @@ describe('buildComponentCatalog', () => {
     malformed.manifest.components = undefined;
     expect(() => buildComponentCatalog([malformed])).not.toThrow();
   });
+
+  it('marks every non-layout standard entry group as "standard"', () => {
+    const catalog = buildComponentCatalog([]);
+    for (const entry of catalog.filter((e) => e.source === 'standard')) {
+      if (LAYOUT_WRAPPER_NAMES.includes(entry.directiveName)) continue;
+      expect(entry.group).toBe('standard');
+    }
+  });
+});
+
+describe('LAYOUT_WRAPPER_NAMES', () => {
+  it('names exactly six wrappers, each a real container-kind, attribute-free standard component', () => {
+    expect(LAYOUT_WRAPPER_NAMES).toHaveLength(6);
+    for (const name of LAYOUT_WRAPPER_NAMES) {
+      const contract = STANDARD_COMPONENTS[name];
+      expect(
+        contract,
+        `expected "${name}" in STANDARD_COMPONENTS`,
+      ).toBeDefined();
+      expect(contract?.kind).toBe('container');
+      expect(Object.keys(contract?.attributes ?? {})).toEqual([]);
+    }
+  });
 });
 
 /**
@@ -168,7 +247,7 @@ describe('buildComponentCatalog — description truncation against real contract
 
   it('never ends a description at an abbreviation such as "e.g."', () => {
     const offenders = standard
-      .filter((entry) => /\b(e\.g|i\.e|etc)\.$/.test(entry.description))
+      .filter((entry) => /\b(e\.g|i\.e|etc)\.$/.test(entry.description ?? ''))
       .map((entry) => `${entry.directiveName}: ${entry.description}`);
     expect(offenders).toEqual([]);
   });
@@ -181,7 +260,7 @@ describe('buildComponentCatalog — description truncation against real contract
         if (!contract.description.includes('e.g. ')) return false;
         // The example is written as inline code right after "e.g. ", so a
         // surviving example always carries at least one backtick.
-        return !entry.description.includes('`');
+        return !(entry.description ?? '').includes('`');
       })
       .map((entry) => `${entry.directiveName}: ${entry.description}`);
     expect(missingExample).toEqual([]);

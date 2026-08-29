@@ -27,7 +27,7 @@ describe('loadPack', () => {
     const timeline = entry();
     const modules: PackComponentModules = { timeline };
     const registry = loadPack(anaManifest(), modules);
-    expect(registry['ana-timeline']).toBe(timeline);
+    expect(registry['ana_timeline']).toBe(timeline);
     // The bare local name must never be auto-registered (docs/packs.md:
     // "Nothing is auto-registered under a bare name").
     expect(Object.hasOwn(registry, 'timeline')).toBe(false);
@@ -42,7 +42,7 @@ describe('loadPack', () => {
     const manifest = anaManifest({ engine: 'vue' });
     const registry = loadPack(manifest, { timeline: entry() });
     expect(Object.keys(registry)).toHaveLength(0);
-    expect(Object.hasOwn(registry, 'ana-timeline')).toBe(false);
+    expect(Object.hasOwn(registry, 'ana_timeline')).toBe(false);
   });
 
   it('skips a manifest component with no matching module instead of throwing', () => {
@@ -50,8 +50,8 @@ describe('loadPack', () => {
       components: { timeline: './Timeline.tsx', map: './Map.tsx' },
     });
     const registry = loadPack(manifest, { timeline: entry() });
-    expect(Object.hasOwn(registry, 'ana-timeline')).toBe(true);
-    expect(Object.hasOwn(registry, 'ana-map')).toBe(false);
+    expect(Object.hasOwn(registry, 'ana_timeline')).toBe(true);
+    expect(Object.hasOwn(registry, 'ana_map')).toBe(false);
   });
 
   it('ignores a componentModules entry with no matching manifest component', () => {
@@ -59,8 +59,8 @@ describe('loadPack', () => {
       timeline: entry(),
       stray: entry(),
     });
-    expect(Object.hasOwn(registry, 'ana-timeline')).toBe(true);
-    expect(Object.hasOwn(registry, 'ana-stray')).toBe(false);
+    expect(Object.hasOwn(registry, 'ana_timeline')).toBe(true);
+    expect(Object.hasOwn(registry, 'ana_stray')).toBe(false);
   });
 
   it('never throws and registers nothing for a fully empty module map', () => {
@@ -80,7 +80,7 @@ describe('loadPack', () => {
       timeline: entry(),
     }) as PackComponentModules;
     const registry = loadPack(anaManifest(), hostile);
-    expect(Object.hasOwn(registry, 'ana-timeline')).toBe(false);
+    expect(Object.hasOwn(registry, 'ana_timeline')).toBe(false);
   });
 });
 
@@ -91,7 +91,7 @@ describe('installPacks', () => {
     ]);
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(Object.hasOwn(result.registry, 'ana-timeline')).toBe(true);
+      expect(Object.hasOwn(result.registry, 'ana_timeline')).toBe(true);
     }
   });
 
@@ -104,7 +104,7 @@ describe('installPacks', () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(Object.hasOwn(result.registry, 'callout')).toBe(true);
-      expect(Object.hasOwn(result.registry, 'ana-timeline')).toBe(true);
+      expect(Object.hasOwn(result.registry, 'ana_timeline')).toBe(true);
     }
   });
 
@@ -150,8 +150,8 @@ describe('installPacks', () => {
     const result = installPacks([reactPack, vuePack]);
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(Object.hasOwn(result.registry, 'ana-timeline')).toBe(true);
-      expect(Object.hasOwn(result.registry, 'vega-chart')).toBe(false);
+      expect(Object.hasOwn(result.registry, 'ana_timeline')).toBe(true);
+      expect(Object.hasOwn(result.registry, 'vega_chart')).toBe(false);
     }
   });
 });

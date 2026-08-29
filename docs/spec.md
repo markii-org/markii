@@ -40,7 +40,8 @@ and treating an unreadable `uses` as absent is conforming. Reading
 frontmatter MUST NOT require a YAML parser.
 
 Directive names SHOULD be lowercase-kebab. A name MUST NOT contain `:`.
-Namespaced names from packs join the namespace and name with `-` or `_`.
+Namespaced names from packs join the namespace and name with `_`; the
+parser itself accepts any legal directive name.
 The first path segments `scripts`, `assets`, and `.cache` are reserved for
 bundle structure and MUST NOT be pack or library namespaces; the same
 reservation applies to component name prefixes.

@@ -25,14 +25,14 @@ export type PackComponentModules = Record<string, RegistryEntry>;
 /**
  * Loads one pack's components into a `Registry`, namespaced under the
  * pack's name via `composeDirectiveName` (docs/packs.md: an author opts in
- * to a pack component by typing the prefixed name, e.g. `:::ana-timeline`).
+ * to a pack component by typing the prefixed name, e.g. `:::ana_timeline`).
  *
  * Engine gating: `manifest.engine` names the renderer framework the pack's
  * components are WRITTEN for (docs/packs.md). If it is not `"react"`
  * (`REACT_ENGINE_ID`), this renderer cannot run the pack's components at
  * all, so `loadPack` returns an EMPTY registry rather than registering
  * anything. That is deliberate: with nothing registered under the pack's
- * namespace, a note's `:::ana-timeline` falls through to `@markii/react`'s
+ * namespace, a note's `:::ana_timeline` falls through to `@markii/react`'s
  * existing unknown-component fallback (dashed box, inner markdown still
  * shown) instead of throwing or silently running the wrong framework's
  * component. This never throws — an unsupported engine is exactly the

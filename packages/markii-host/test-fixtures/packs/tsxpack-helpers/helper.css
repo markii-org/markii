@@ -6,6 +6,6 @@
  * component itself. Clean, correctly prefixed, token-based content, same
  * discipline as `../tsxpack-css/Stat.css`.
  */
-.mk-tsxhelpers-marker {
+.mk-tsxhelpers_marker {
   color: var(--mk-fg);
 }

@@ -303,7 +303,7 @@ describe('buildPackRegistrationScript', () => {
       const cssPath = path.join('/packs/fakepack', 'x.css');
       const { build } = fakeBuildWithCss(
         '(function(){})();',
-        '.mk-fakepack-row { color: var(--mk-fg); }',
+        '.mk-fakepack_row { color: var(--mk-fg); }',
       );
 
       const outcome = await buildPackRegistrationScript(pack, cacheDir, {
@@ -311,7 +311,7 @@ describe('buildPackRegistrationScript', () => {
         readComponentSource: readerFor({
           [pack.componentPaths.stat!]:
             "import './x.css';\nexport function Stat(){}",
-          [cssPath]: '.mk-fakepack-row { color: var(--mk-fg); }',
+          [cssPath]: '.mk-fakepack_row { color: var(--mk-fg); }',
         }),
       });
 
@@ -321,7 +321,7 @@ describe('buildPackRegistrationScript', () => {
         const base = outcome.scriptPath.replace(/\.js$/, '');
         expect(outcome.stylesheetPath).toBe(`${base}.css`);
         const written = await readFile(outcome.stylesheetPath!, 'utf8');
-        expect(written).toBe('.mk-fakepack-row { color: var(--mk-fg); }');
+        expect(written).toBe('.mk-fakepack_row { color: var(--mk-fg); }');
         expect(outcome.warnings).toEqual([]);
       }
     });
@@ -363,14 +363,14 @@ describe('buildPackRegistrationScript', () => {
       const componentSource = "import './x.css';\nexport function Stat(){}";
       const { build, callCount } = fakeBuildWithCss(
         '(function(){})();',
-        '.mk-fakepack-row { color: var(--mk-fg); }',
+        '.mk-fakepack_row { color: var(--mk-fg); }',
       );
 
       const first = await buildPackRegistrationScript(pack, cacheDir, {
         build,
         readComponentSource: readerFor({
           [pack.componentPaths.stat!]: componentSource,
-          [cssPath]: '.mk-fakepack-row { color: var(--mk-fg); }',
+          [cssPath]: '.mk-fakepack_row { color: var(--mk-fg); }',
         }),
       });
       expect(callCount()).toBe(1);
@@ -379,7 +379,7 @@ describe('buildPackRegistrationScript', () => {
         build,
         readComponentSource: readerFor({
           [pack.componentPaths.stat!]: componentSource,
-          [cssPath]: '.mk-fakepack-row { color: var(--mk-fg); padding: 4px; }',
+          [cssPath]: '.mk-fakepack_row { color: var(--mk-fg); padding: 4px; }',
         }),
       });
       expect(callCount()).toBe(2); // CSS-only change still busts the cache

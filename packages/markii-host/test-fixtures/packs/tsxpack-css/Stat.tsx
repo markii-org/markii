@@ -13,7 +13,7 @@ export function Stat({ attributes, children }: MarkComponentProps) {
   const [count] = useState(0);
   return (
     <>
-      <span className="mk-tsxcss-stat" data-label={attributes.label ?? 'stat'}>
+      <span className="mk-tsxcss_stat" data-label={attributes.label ?? 'stat'}>
         {count}
       </span>
       {children}

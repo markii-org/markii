@@ -131,8 +131,9 @@ export function packCollisionNotice(namespaces: readonly string[]): string {
  * The full set of diagnostic lines for one `loadPackContext` result, loaded
  * packs first (the confirmation that the setting is working at all), then
  * every skipped folder, then relative-entry notes, then any pack CSS
- * lint warnings, then any invalid-registration or namespace-collision lines
- * the render-registry step recorded (`@markii/host`'s `buildRenderRegistry`).
+ * lint warnings, then any invalid-registration, namespace-collision, or
+ * duplicate-composed-name lines the render-registry step recorded
+ * (`@markii/host`'s `buildRenderRegistry`).
  */
 export function formatPackDiagnosticLines(context: PackContext): string[] {
   return formatPackDiagnosticLinesShared({
@@ -143,6 +144,7 @@ export function formatPackDiagnosticLines(context: PackContext): string[] {
     cssWarnings: context.cssWarnings,
     invalidRegistrationReasons: context.invalidRegistrationReasons,
     registrationCollisions: context.registrationCollisions,
+    duplicateComposedNames: context.duplicateComposedNames,
   });
 }
 

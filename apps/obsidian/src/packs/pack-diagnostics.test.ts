@@ -37,6 +37,11 @@ function context(
     readonly name: string;
     readonly folder: string;
   }[] = [],
+  duplicateComposedNames: readonly {
+    readonly composedName: string;
+    readonly keptPack: string;
+    readonly skippedPack: string;
+  }[] = [],
 ): PackContext {
   return {
     packs,
@@ -50,6 +55,7 @@ function context(
     invalidRegistrationReasons,
     registrationCollisions,
     prebuiltShadowedPacks,
+    duplicateComposedNames,
   };
 }
 
@@ -111,6 +117,25 @@ describe('formatPackDiagnosticLines', () => {
     expect(lines[4]).toContain('manifest JSON string');
     expect(lines[5]).toContain('gh');
     expect(lines[5]).toContain('namespace');
+  });
+
+  it('reports one line per duplicate composed name, naming both packs, after the collision line', () => {
+    const lines = formatPackDiagnosticLines(
+      context(
+        [pack('ana', 1)],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [{ composedName: 'a_widget', keptPack: 'a', skippedPack: 'a-2' }],
+      ),
+    );
+    expect(lines).toHaveLength(2);
+    expect(lines[1]).toContain('a_widget');
+    expect(lines[1]).toContain('"a-2"');
+    expect(lines[1]).toContain('"a"');
   });
 
   it('an empty cssWarnings/invalidRegistrationReasons/registrationCollisions list contributes nothing', () => {

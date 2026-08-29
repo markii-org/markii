@@ -4,7 +4,7 @@
  * proves the CSS lint rules (`@markii/host`'s `packs/pack-css-lint.ts`) stay
  * silent on well-formed pack CSS.
  */
-.mk-demo-badge {
+.mk-demo_badge {
   display: inline-flex;
   align-items: center;
   gap: 0.25em;

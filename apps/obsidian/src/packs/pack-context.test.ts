@@ -62,7 +62,7 @@ describe('loadPackContext', () => {
     expect(context.packs).toHaveLength(1);
     expect(context.packModules.demo).toEqual({ 'util.lua': 'return 1' });
     expect(context.skipped).toEqual([]);
-    expect(context.registry['demo-widget']).toBeDefined();
+    expect(context.registry['demo_widget']).toBeDefined();
     expect(context.invalidRegistrationReasons).toEqual([]);
     expect(context.registrationCollisions).toEqual([]);
   });
@@ -111,7 +111,7 @@ describe('loadPackContext', () => {
     expect(context.packs).toHaveLength(1); // still discovered
     expect(context.skipped).toHaveLength(1);
     expect(context.skipped[0]!.reason).toContain('boom');
-    expect(Object.keys(context.registry)).not.toContain('broken-widget');
+    expect(Object.keys(context.registry)).not.toContain('broken_widget');
   });
 });
 
@@ -159,7 +159,7 @@ describe('loadPackContext — compiling a pack with no prebuilt script', () => {
       buildRegistrationScript,
     });
 
-    expect(context.registry['built-widget']).toBeDefined();
+    expect(context.registry['built_widget']).toBeDefined();
     expect(context.skipped).toEqual([]);
     expect(context.cssWarnings).toEqual([]);
   });
@@ -223,7 +223,7 @@ describe('loadPackContext — compiling a pack with no prebuilt script', () => {
     expect(context.skipped[0]!.reason).toContain(
       'Unexpected token in Widget.tsx',
     );
-    expect(Object.keys(context.registry)).not.toContain('broken-widget');
+    expect(Object.keys(context.registry)).not.toContain('broken_widget');
   });
 
   it('prefers a prebuilt script over compiling, and never calls buildRegistrationScript for it', async () => {
@@ -248,7 +248,7 @@ describe('loadPackContext — compiling a pack with no prebuilt script', () => {
     });
 
     expect(called).toBe(false);
-    expect(context.registry['demo-widget']).toBeDefined();
+    expect(context.registry['demo_widget']).toBeDefined();
   });
 });
 
@@ -268,7 +268,7 @@ describe('loadPackContext — prebuilt pack (issue #15)', () => {
 
     const context = await loadPackContext(['styled'], root, createRegistry());
 
-    expect(context.registry['styled-widget']).toBeDefined();
+    expect(context.registry['styled_widget']).toBeDefined();
     expect(context.stylesheets).toEqual([
       {
         namespace: 'styled',
@@ -290,7 +290,7 @@ describe('loadPackContext — prebuilt pack (issue #15)', () => {
 
     const context = await loadPackContext(['plain'], root, createRegistry());
 
-    expect(context.registry['plain-widget']).toBeDefined();
+    expect(context.registry['plain_widget']).toBeDefined();
     expect(context.stylesheets).toEqual([]);
   });
 
@@ -309,7 +309,7 @@ describe('loadPackContext — prebuilt pack (issue #15)', () => {
 
     const context = await loadPackContext(['shadowed'], root, createRegistry());
 
-    expect(context.registry['shadowed-widget']).toBeDefined();
+    expect(context.registry['shadowed_widget']).toBeDefined();
     expect(context.prebuiltShadowedPacks).toEqual([
       { name: 'shadowed', folder: packDir },
     ]);
@@ -350,7 +350,7 @@ describe('loadPackContext — prebuilt pack (issue #15)', () => {
     });
 
     expect(called).toBe(true);
-    expect(context.registry['built-widget']).toBeDefined();
+    expect(context.registry['built_widget']).toBeDefined();
     expect(context.prebuiltShadowedPacks).toEqual([]);
   });
 });

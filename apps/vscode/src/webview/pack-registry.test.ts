@@ -66,8 +66,8 @@ describe('buildRenderRegistry', () => {
     const base = createRegistry();
     const registry = buildRenderRegistry(base);
 
-    expect(registry['demo-badge']).toBeDefined();
-    expect(typeof registry['demo-badge']?.component).toBe('function');
+    expect(registry['demo_badge']).toBeDefined();
+    expect(typeof registry['demo_badge']?.component).toBe('function');
   });
 
   it('drops a registration with a malformed manifest and logs instead of throwing', () => {
@@ -110,7 +110,7 @@ describe('buildRenderRegistry', () => {
     const base = createRegistry({ callout: { component: () => null } });
     const registry = buildRenderRegistry(base);
 
-    expect(registry['demo-badge']).toBeUndefined();
+    expect(registry['demo_badge']).toBeUndefined();
     expect(registry.callout).toBeDefined();
   });
 });

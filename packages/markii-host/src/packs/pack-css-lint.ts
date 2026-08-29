@@ -201,9 +201,19 @@ export function lintPackCssColors(
   return warnings;
 }
 
-/** The required class prefix for `packName`'s selectors — mirrors the directive-namespace join (`docs/packs.md`: pack name + component name), so a pack that avoids namespace collisions in its directives avoids them in its classes too. */
+/**
+ * The required class prefix for `packName`'s selectors — mirrors the
+ * directive-namespace join (`docs/packs.md`: pack name + component name,
+ * joined with `_`), so a pack that avoids namespace collisions in its
+ * directives avoids them in its classes too. Because a pack name (a
+ * `SEGMENT_RE`-validated lowercase-kebab segment) can never itself contain
+ * an underscore, the underscore here always marks exactly the same
+ * boundary the directive-name join does — so, just like two packs'
+ * composed directive names can never collide, two packs' class namespaces
+ * can never overlap either.
+ */
 function requiredPrefix(packName: string): string {
-  return `.mk-${packName}-`;
+  return `.mk-${packName}_`;
 }
 
 /**
@@ -228,7 +238,7 @@ function selectorPartsMissingPrefix(
 
 /**
  * Rule B: warn when a pack CSS selector leads with a class token that does
- * not carry the pack's `.mk-<packname>-` prefix — the class-uniqueness
+ * not carry the pack's `.mk-<packname>_` prefix — the class-uniqueness
  * mirror of the directive-namespace rule `@markii/pack`'s
  * `detectNamespaceCollisions` already enforces at install time (two packs
  * can never share a namespace, so two packs correctly prefixing their

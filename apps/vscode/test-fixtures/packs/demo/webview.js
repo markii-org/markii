@@ -29,7 +29,7 @@
     var label = attributes.label || 'demo';
     return react.createElement(
       'span',
-      { className: 'mk-demo-badge', 'data-label': label },
+      { className: 'mk-demo_badge', 'data-label': label },
       props ? props.children : undefined,
     );
   }

@@ -27,30 +27,66 @@ written for. A host that cannot run that engine shows the standard
 unknown-component fallback for the pack's directives, so a note using an
 unavailable pack stays fully readable.
 
+### Describing a component
+
+A `components` entry can be the string shorthand shown above, a source
+path, or an object that adds metadata:
+
+```json
+"components": {
+  "timeline": {
+    "source": "./Timeline.tsx",
+    "description": "A dated event timeline.",
+    "kind": "leaf"
+  }
+}
+```
+
+`description` is one short line a host shows wherever it lists components,
+such as the insert picker. `kind` names the directive form the component
+renders as: `container` for `:::ana_timeline ... :::`, `leaf` for
+`::ana_timeline{}`, `inline` for `:ana_timeline[]`. A host assumes
+`container` when `kind` is absent, so a leaf or inline component should
+declare it. Both forms may mix in one manifest, and older string-only
+manifests are unaffected.
+
+The failure posture matches the rest of the manifest: a bad `kind`, an
+empty `description`, or a missing `source` fails validation for the whole
+`pack.json`, and the host reports the pack as skipped with the reason. An
+unrecognized key inside a component object is only a warning, so a field
+added in a future version cannot break the pack on an older host.
+
 ## Names and namespaces
 
 An author references a pack component by typing the prefixed name
-themselves: `:::ana-timeline`. Nothing is auto-registered under a bare name;
+themselves: `:::ana_timeline`. Nothing is auto-registered under a bare name;
 like a language import, the author opts in by typing the prefix. Directive
 names cannot contain `:` (it is reserved syntax), so the namespace separator
-is `-` or `_`.
+is `_`. Underscore is deliberate: pack and component names are
+lowercase-kebab and cannot themselves contain an underscore, so the one
+underscore in a composed name is always the boundary between pack and
+component, and two different packs can never compose the same directive
+name. Prefer a single short word for a pack name; `cat_card` reads at a
+glance, `long-pack-name_some-component` is legal but noisy.
 
 The prefix is added by the host, not written in the manifest. A manifest key
 names the component *inside* its pack, and the directive an author types is
 the pack name joined to that key:
 
 ```
-pack "ana" + component "timeline"  ->  :::ana-timeline
+pack "ana" + component "timeline"  ->  :::ana_timeline
 ```
 
 This is the one place pack authors reliably go wrong. Naming the manifest
 key `ana-timeline` inside a pack already called `ana` produces the directive
-`ana-ana-timeline`, which no note types, so every use of it falls back to
+`ana_ana-timeline`, which no note types, so every use of it falls back to
 the unknown-component box. Keep manifest keys bare.
 
 Your own components stay unprefixed; prefixes exist for other people's
-packs. On a literal collision the registry resolves last-wins by merge
-order, but prefixes make collisions a non-issue in practice. The bundle's
+packs. Composed names cannot collide across packs (the underscore boundary
+above makes that structural), and a duplicate produced some other way, such
+as a hand-written registration script, is skipped with a diagnostics line
+naming both claimants. The bundle's
 reserved directory names (`scripts`, `assets`, `.cache`) can never be a pack
 namespace, so pack names can never shadow bundle paths, in `require` or in
 directive names.
@@ -190,7 +226,7 @@ documented in [integration.md](integration.md), or derive one from it, and
 reserve a literal for a genuinely theme-invariant brand color:
 
 ```css
-.mk-ana-timeline__rule {
+.mk-ana_timeline__rule {
   border-color: var(--mk-border);
   background: color-mix(in srgb, var(--mk-accent) 14%, var(--mk-bg));
 }
@@ -201,7 +237,7 @@ the moment someone opens the note in a dark theme. This is the single most
 common way a pack breaks for other people.
 
 The second is naming. Every selector starts with `.mk-` followed by the pack
-name and a hyphen, so `.mk-ana-timeline__rule` for the pack `ana`. Because
+name and an underscore, so `.mk-ana_timeline__rule` for the pack `ana`. Because
 two installed packs can never share a namespace, prefixed class names can
 never collide either.
 

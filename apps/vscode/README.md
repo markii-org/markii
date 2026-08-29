@@ -83,7 +83,7 @@ Enable Scheduled Refresh…** prompts for a number of seconds and writes
   never prompt on a timer, and never add network access.
 - **Component packs.** Point the `markii.packs` setting, or the **Markii: Add
   Pack Folder…** command, at folders you trust as installed packs. Their
-  prefixed components (for example `:::ana-timeline`) render in the preview,
+  prefixed components (for example `:::ana_timeline`) render in the preview,
   and their shared Lua is reachable from `require "ana/..."` in a note's
   scripts. A note that uses a pack you have not installed stays readable: the
   unknown component shows a labeled fallback. The setting is user-scope only,

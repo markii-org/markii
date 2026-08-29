@@ -15,7 +15,7 @@ import type { MarkComponentProps } from '@markii/react';
 export function Badge({ attributes, children }: MarkComponentProps) {
   const label = attributes.label ?? 'demo';
   return (
-    <span className="mk-demo-badge" data-label={label}>
+    <span className="mk-demo_badge" data-label={label}>
       {children}
     </span>
   );

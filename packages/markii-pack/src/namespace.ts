@@ -3,7 +3,10 @@
  *
  * - Directive names MUST NOT contain `:` (reserved syntax).
  * - A namespaced directive name joins the pack's namespace and the
- *   component's local name with `-` or `_`.
+ *   component's local name with `_`, and only `_` (issue #19). The spec
+ *   permits `-` or `_` for a directive name generally; this package composes
+ *   exactly one of them, so the boundary between the two parts is always
+ *   unambiguous. See `composeDirectiveName` for why.
  * - The bundle's reserved first-path-segment names (`scripts`, `assets`,
  *   `.cache`) can never be a pack namespace, so a pack can never shadow
  *   bundle structure in `require` or in directive names.
@@ -20,11 +23,11 @@
  * hyphens as separators (no leading/trailing hyphen, no doubled hyphen).
  * This is deliberately conservative — it's stricter than the spec's bare
  * "MUST NOT contain `:`" requirement — because a namespace also has to
- * compose cleanly with a local name using `-` or `_` without producing an
- * ambiguous or surprising directive name. Underscore is accepted as the
- * separator when composing (`ana_timeline`) but is not accepted as a
- * character inside the namespace or local-name segments themselves, so the
- * composed name's own separator choice stays unambiguous.
+ * compose cleanly with a local name without producing an ambiguous or
+ * surprising directive name. Underscore is the composition separator
+ * (`ana_timeline`) and is deliberately NOT accepted inside the namespace or
+ * local-name segments themselves, which is exactly what makes the composed
+ * name's single underscore mark the boundary unambiguously.
  */
 
 /** The reserved bundle directory names a pack namespace must never collide with (spec.md §1, §8). */
@@ -132,19 +135,33 @@ export type ComposeDirectiveNameResult =
 
 /**
  * Composes the directive name an author types to reference a pack's
- * component, e.g. `composeDirectiveName('ana', 'timeline')` -> `ana-timeline`
+ * component, e.g. `composeDirectiveName('ana', 'timeline')` -> `ana_timeline`
  * (docs/packs.md). Validates both inputs first, then the composed result
  * (defense in depth: the composed string must still contain no `:` and must
  * still be a legal directive-name shape).
  *
- * `separator` defaults to `-`; `_` is also accepted per spec.md §1's "joins
- * the namespace and name with `-` or `_`".
+ * The separator is `_`, and there is deliberately no way to ask for another
+ * one (issue #19, user-settled 2026-08-30). It used to be `-`, which is also
+ * the separator INSIDE a lowercase-kebab pack or local name, so two
+ * different packs could compose the same directive name: pack `long` plus
+ * component `pack-name-some-component` and pack `long-pack-name` plus
+ * component `some-component` both produced `long-pack-name-some-component`,
+ * and one silently shadowed the other. `SEGMENT_RE` bans `_` inside either
+ * segment, so an underscore join gives every composed name exactly one
+ * underscore, at the pack/component boundary. That makes the split
+ * bijective and this whole collision class impossible to construct rather
+ * than merely detected.
+ *
+ * Accepting both forms would have kept the ambiguity alive, so only this one
+ * exists. Notes and packs written against the old `-` composition stop
+ * resolving and render the labeled unknown-component fallback; that breakage
+ * was weighed and accepted pre-1.0 rather than carrying a migration shim.
  */
 export function composeDirectiveName(
   packName: string,
   localName: string,
-  separator: '-' | '_' = '-',
 ): ComposeDirectiveNameResult {
+  const separator = '_';
   const packResult = validatePackName(packName);
   if (!packResult.ok) return packResult;
 

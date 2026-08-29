@@ -7,6 +7,19 @@ export type { PackManifest, PackManifestParseResult } from './manifest.js';
 export { parsePackManifest } from './manifest.js';
 
 export type {
+  PackComponentDefinition,
+  PackComponentEntry,
+  PackComponentKind,
+  PackComponentListing,
+  ResolvedPackComponent,
+} from './components.js';
+export {
+  PACK_COMPONENT_KINDS,
+  packComponents,
+  resolvePackComponent,
+} from './components.js';
+
+export type {
   ComposeDirectiveNameResult,
   NamespaceCollision,
   NamespaceValidationResult,

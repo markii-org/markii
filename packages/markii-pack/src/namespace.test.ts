@@ -103,15 +103,8 @@ describe('validateLocalComponentName', () => {
 });
 
 describe('composeDirectiveName', () => {
-  it('composes with the default "-" separator', () => {
+  it('composes with the "_" separator', () => {
     expect(composeDirectiveName('ana', 'timeline')).toEqual({
-      ok: true,
-      name: 'ana-timeline',
-    });
-  });
-
-  it('composes with an explicit "_" separator', () => {
-    expect(composeDirectiveName('ana', 'timeline', '_')).toEqual({
       ok: true,
       name: 'ana_timeline',
     });
@@ -138,6 +131,53 @@ describe('composeDirectiveName', () => {
       expect(result.name.includes(':')).toBe(false);
     } else {
       throw new Error('expected a valid composition');
+    }
+  });
+
+  it('produces exactly one "_" even when both segments are multi-word kebab', () => {
+    const result = composeDirectiveName('long-pack-name', 'some-component');
+    expect(result).toEqual({
+      ok: true,
+      name: 'long-pack-name_some-component',
+    });
+    if (result.ok) {
+      expect(result.name.split('_')).toHaveLength(2);
+    } else {
+      throw new Error('expected a valid composition');
+    }
+  });
+
+  it('regression (issue #19): the previously-colliding pair now composes to two different names', () => {
+    // Under the old "-" join, pack `long` + component `pack-name-some-component`
+    // and pack `long-pack-name` + component `some-component` both produced
+    // `long-pack-name-some-component`. The "_" join must keep them distinct.
+    const first = composeDirectiveName('long', 'pack-name-some-component');
+    const second = composeDirectiveName('long-pack-name', 'some-component');
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+    if (first.ok && second.ok) {
+      expect(first.name).toBe('long_pack-name-some-component');
+      expect(second.name).toBe('long-pack-name_some-component');
+      expect(first.name).not.toBe(second.name);
+    }
+  });
+
+  it('splitting a composed name on its single "_" recovers the original pack and local names', () => {
+    const cases: Array<[string, string]> = [
+      ['ana', 'timeline'],
+      ['long-pack-name', 'some-component'],
+      ['long', 'pack-name-some-component'],
+      ['ana-charts', 'bar-graph-widget'],
+    ];
+    for (const [packName, localName] of cases) {
+      const result = composeDirectiveName(packName, localName);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        const parts = result.name.split('_');
+        expect(parts).toHaveLength(2);
+        expect(parts[0]).toBe(packName);
+        expect(parts[1]).toBe(localName);
+      }
     }
   });
 });

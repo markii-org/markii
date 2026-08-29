@@ -17,7 +17,7 @@ import type { ValueStore } from '@markii/runtime';
  * `registry` defaults to `defaultRegistry` (no packs installed). Once
  * component packs are loaded (`src/packs/pack-context.ts`), `view.tsx`
  * passes the merged registry it built instead, so a note's namespaced
- * directives (`:::ana-timeline`) resolve to the installed pack's
+ * directives (`:::ana_timeline`) resolve to the installed pack's
  * components; an unmerged `defaultRegistry` still falls back cleanly for
  * any directive it does not know, per architecture rule 3.
  *

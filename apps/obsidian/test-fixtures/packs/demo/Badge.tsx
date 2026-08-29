@@ -19,7 +19,7 @@ export function Badge({ attributes, children }: MarkComponentProps) {
   const [count] = useState(0);
   return (
     <>
-      <span className="mk-demo-badge" data-count={count}>
+      <span className="mk-demo_badge" data-count={count}>
         {formatLabel(attributes.label ?? 'badge')}
       </span>
       {children}

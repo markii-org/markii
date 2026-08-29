@@ -6,6 +6,105 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **`@markii/pack`: a component entry can now describe itself** (issue #18) —
+  a `components` value stays a pack-relative source path string, or becomes an
+  object carrying that source plus optional metadata:
+
+  ```json
+  "components": {
+    "card": "./cat-card.tsx",
+    "profile": {
+      "source": "./profile.tsx",
+      "description": "A cat profile card.",
+      "kind": "container"
+    }
+  }
+  ```
+
+  `kind` is one of `inline`/`leaf`/`container` and fixes a real wart: a host
+  inserting a pack component previously had no way to know its directive form
+  and assumed the container spelling, so a pack's leaf or inline component was
+  inserted as a fenced block that could never render. `description` gives a
+  picker something to show other than the pack's own name. Both are optional,
+  and the string shorthand keeps its exact meaning, so every existing
+  `pack.json` parses unchanged.
+
+  New exports: `PackComponentEntry`, `PackComponentDefinition`,
+  `PackComponentKind`, `ResolvedPackComponent`, `PackComponentListing`,
+  `PACK_COMPONENT_KINDS`, `resolvePackComponent`, and `packComponents`.
+  `PackManifest.components` widens from `Record<string, string>` to
+  `Record<string, PackComponentEntry>`. Code that WRITES a manifest is
+  unaffected; TypeScript code that READS an entry as a `string` must now go
+  through `resolvePackComponent` (one entry) or `packComponents` (the whole
+  map, `Object.hasOwn`-guarded, in declaration order). That pair is the only
+  sanctioned way to read the map: both forms are normalized in exactly one
+  place, so a consumer cannot handle one form and quietly drop the other.
+  Both tolerate unvalidated, hostile input rather than assuming
+  `parsePackManifest` has already run.
+
+  Validation stays hand-rolled and keeps this package's existing posture: a
+  malformed entry (a bad `kind`, an empty or non-string `description` or
+  `source`, a value that is neither form) is an error that rejects the whole
+  manifest, while an unrecognized key inside a component object is a
+  forward-compatible warning, exactly as an unrecognized top-level key
+  already is. Only validated fields are copied into the parsed manifest; the
+  raw parsed object is never retained.
+
+  `PackComponentKind` is declared inside `@markii/pack` rather than imported,
+  because that package is published with zero dependencies and
+  `@markii/stdlib` is a sibling rather than a dependency. The two unions must
+  name the same three values; `@markii/host` depends on both and carries an
+  executable check that they still do.
+
+### Changed
+
+- **`@markii/pack`: a pack directive name now joins with `_`, not `-`**
+  (issue #19) — `composeDirectiveName('cat', 'card')` returns `cat_card`
+  where it used to return `cat-card`, and the separator is no longer
+  selectable: the parameter is gone and there is no dual recognition
+  anywhere.
+
+  This closes a collision that had no other clean fix. Pack names and local
+  component names are both lowercase-kebab, so while the join was also `-`,
+  two different packs could compose one identical directive name: pack `long`
+  with component `pack-name-some-component`, and pack `long-pack-name` with
+  component `some-component`, both produced `long-pack-name-some-component`.
+  One then silently shadowed the other, which is exactly the mute failure the
+  cleanliness rule forbids. Because `_` is banned inside a pack name and
+  inside a local name, an underscore join puts exactly one underscore in
+  every composed name, at the boundary. The split is bijective and the
+  collision is now impossible to construct rather than merely detected.
+
+  This is breaking in flavor, and it is released as a minor: the project is
+  pre-1.0, the change is host-level only, and the parser never sees a
+  composed name, so there is no conformance impact. A note or pack written
+  against the old `-` spelling stops resolving and renders the labeled
+  unknown-component fallback. That breakage was weighed and accepted instead
+  of carrying a migration shim or accepting both spellings, either of which
+  would have kept the ambiguity alive.
+
+  The pack CSS class convention follows the same join, so a pack's required
+  selector prefix becomes `.mk-<packname>_` and the documented example
+  becomes `.mk-ana_timeline__rule`. It has to move together with the
+  directive name: the prefix rule exists to mirror the namespace join, and a
+  class named after a composed directive would otherwise fail the pack's own
+  lint on every selector.
+
+- **The insert-component picker says where a component came from and what it
+  is** (issue #18) — rows keep the exact directive name as their label, since
+  that is what gets inserted, and the second line now carries origin plus the
+  component's own description. A pack row for a pack named `cat` reads
+  `cat pack - A cat profile card.`, falling back to `cat pack` alone when
+  the pack declares no description, and a standard row keeps its contract
+  description. The VS Code quick pick
+  groups rows into native separator sections, Standard then Layout then one
+  per pack. The Obsidian picker stays a flat fuzzy list by design, since
+  faked section headers fight its filter, and each row carries a small origin
+  tag instead. A pack component is now inserted in the directive form its
+  manifest declares rather than always as a container.
+
 ## [0.7.3] - 2026-08-26
 
 ### Fixed

@@ -147,6 +147,7 @@ import {
 } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import type { PackManifest } from '@markii/pack';
+import { packComponents } from '@markii/pack';
 import type {
   Loader,
   OnLoadArgs,
@@ -634,16 +635,15 @@ const REACT_SHIM_BANNER = [
   '};',
 ].join('\n');
 
-/** One component's declared local name and the absolute path to its source, in `manifest.components` iteration order (`Object.hasOwn`-guarded, matching a host's own hostile-map discipline). */
+/** One component's declared local name and the absolute path to its source, in `manifest.components` declaration order. Reads the manifest through `@markii/pack`'s `packComponents()` (the one accessor that normalizes both the string shorthand and the object form) rather than walking `pack.manifest.components` directly. */
 function orderedComponents(
   pack: PackBuildSource,
 ): Array<{ localName: string; sourcePath: string }> {
   const result: Array<{ localName: string; sourcePath: string }> = [];
-  for (const localName of Object.keys(pack.manifest.components)) {
-    if (!Object.hasOwn(pack.manifest.components, localName)) continue;
-    const sourcePath = pack.componentPaths[localName];
+  for (const listing of packComponents(pack.manifest)) {
+    const sourcePath = pack.componentPaths[listing.localName];
     if (sourcePath === undefined) continue;
-    result.push({ localName, sourcePath });
+    result.push({ localName: listing.localName, sourcePath });
   }
   return result;
 }

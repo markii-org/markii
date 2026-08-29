@@ -343,7 +343,7 @@ describe('buildPackRegistrationScript — real esbuild-wasm against the tsxpack 
       );
 
       const css = await readFile(stylesheetPath, 'utf8');
-      expect(css).toContain('.mk-tsxcss-stat');
+      expect(css).toContain('.mk-tsxcss_stat');
       expect(css).toContain('--mk-fg');
 
       expect(outcome.warnings).toEqual([]);
@@ -397,7 +397,7 @@ describe('buildPackRegistrationScript — real esbuild-wasm against the tsxpack 
       const original = await readFile(cssPath, 'utf8');
       await writeFile(
         cssPath,
-        `${original}\n.mk-tsxcss-stat { padding: 4px; }\n`,
+        `${original}\n.mk-tsxcss_stat { padding: 4px; }\n`,
         'utf8',
       );
 
@@ -439,7 +439,7 @@ describe('buildPackRegistrationScript — real esbuild-wasm against the tsxpack 
         // produces the sibling stylesheet, same as a direct import would.
         expect(outcome.stylesheetPath).toBeDefined();
         const css = await readFile(outcome.stylesheetPath!, 'utf8');
-        expect(css).toContain('.mk-tsxhelpers-marker');
+        expect(css).toContain('.mk-tsxhelpers_marker');
         expect(outcome.warnings).toEqual([]);
       } finally {
         await cleanupTempDirs();

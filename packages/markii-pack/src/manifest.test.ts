@@ -236,4 +236,220 @@ describe('parsePackManifest', () => {
       expect(result.errors.length).toBeGreaterThan(1);
     }
   });
+
+  describe('object-form components', () => {
+    it('accepts a component with source, description, and kind', () => {
+      const result = parsePackManifest(
+        JSON.stringify({
+          name: 'cat',
+          engine: 'react',
+          components: {
+            profile: {
+              source: './profile.tsx',
+              description: 'A cat profile card.',
+              kind: 'container',
+            },
+          },
+        }),
+      );
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.manifest.components.profile).toEqual({
+          source: './profile.tsx',
+          description: 'A cat profile card.',
+          kind: 'container',
+        });
+      }
+    });
+
+    it('accepts an object entry with only source', () => {
+      const result = parsePackManifest(
+        JSON.stringify({
+          name: 'cat',
+          engine: 'react',
+          components: { profile: { source: './profile.tsx' } },
+        }),
+      );
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.manifest.components.profile).toEqual({
+          source: './profile.tsx',
+        });
+      }
+    });
+
+    it('mixes string and object forms in one manifest', () => {
+      const result = parsePackManifest(
+        JSON.stringify({
+          name: 'cat',
+          engine: 'react',
+          components: {
+            card: './cat-card.tsx',
+            profile: { source: './profile.tsx', kind: 'leaf' },
+          },
+        }),
+      );
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.manifest.components.card).toBe('./cat-card.tsx');
+        expect(result.manifest.components.profile).toEqual({
+          source: './profile.tsx',
+          kind: 'leaf',
+        });
+      }
+    });
+
+    it('round-trips each valid kind value', () => {
+      for (const kind of ['inline', 'leaf', 'container']) {
+        const result = parsePackManifest(
+          JSON.stringify({
+            name: 'cat',
+            engine: 'react',
+            components: { profile: { source: './profile.tsx', kind } },
+          }),
+        );
+        expect(result.ok, `expected kind "${kind}" to be accepted`).toBe(true);
+        if (result.ok) {
+          expect(
+            (result.manifest.components.profile as { kind?: string }).kind,
+          ).toBe(kind);
+        }
+      }
+    });
+
+    it('rejects an invalid kind and names the allowed values', () => {
+      const result = parsePackManifest(
+        JSON.stringify({
+          name: 'cat',
+          engine: 'react',
+          components: { profile: { source: './profile.tsx', kind: 'widget' } },
+        }),
+      );
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(
+          result.errors.some(
+            (e) =>
+              e.includes('components.profile.kind') &&
+              e.includes('inline') &&
+              e.includes('leaf') &&
+              e.includes('container'),
+          ),
+        ).toBe(true);
+      }
+    });
+
+    it('rejects a non-string description', () => {
+      const result = parsePackManifest(
+        JSON.stringify({
+          name: 'cat',
+          engine: 'react',
+          components: { profile: { source: './profile.tsx', description: 42 } },
+        }),
+      );
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(
+          result.errors.some((e) =>
+            e.includes('components.profile.description'),
+          ),
+        ).toBe(true);
+      }
+    });
+
+    it('rejects an empty-string description', () => {
+      const result = parsePackManifest(
+        JSON.stringify({
+          name: 'cat',
+          engine: 'react',
+          components: { profile: { source: './profile.tsx', description: '' } },
+        }),
+      );
+      expect(result.ok).toBe(false);
+    });
+
+    it('rejects an object entry missing source', () => {
+      const result = parsePackManifest(
+        JSON.stringify({
+          name: 'cat',
+          engine: 'react',
+          components: { profile: { description: 'no source' } },
+        }),
+      );
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(
+          result.errors.some((e) => e.includes('components.profile.source')),
+        ).toBe(true);
+      }
+    });
+
+    it('rejects an object entry with an empty-string source', () => {
+      const result = parsePackManifest(
+        JSON.stringify({
+          name: 'cat',
+          engine: 'react',
+          components: { profile: { source: '' } },
+        }),
+      );
+      expect(result.ok).toBe(false);
+    });
+
+    it('rejects an array value for a component entry', () => {
+      const result = parsePackManifest(
+        JSON.stringify({
+          name: 'cat',
+          engine: 'react',
+          components: { profile: ['./profile.tsx'] },
+        }),
+      );
+      expect(result.ok).toBe(false);
+    });
+
+    it('warns on an unknown key inside a component object but still parses', () => {
+      const result = parsePackManifest(
+        JSON.stringify({
+          name: 'cat',
+          engine: 'react',
+          components: { card: { source: './cat-card.tsx', colour: 'orange' } },
+        }),
+      );
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(
+          result.warnings.some((w) => w.includes('components.card.colour')),
+        ).toBe(true);
+        expect(result.manifest.components.card).toEqual({
+          source: './cat-card.tsx',
+        });
+      }
+    });
+
+    it('does not let __proto__ or inherited keys inject a component field', () => {
+      const evilProto = { source: './injected.tsx' };
+      const entry = Object.create(evilProto) as Record<string, unknown>;
+      entry.description = 'legit';
+
+      const result = parsePackManifest(
+        JSON.stringify({
+          name: 'cat',
+          engine: 'react',
+          // JSON.stringify/JSON.parse round-trip already strips
+          // inherited-only properties, so this proves the shape rather
+          // than smuggling anything through JSON itself; it exercises the
+          // same Object.hasOwn discipline as the top-level reader.
+          components: { profile: JSON.parse(JSON.stringify(entry)) },
+        }),
+      );
+      // Round-tripped through JSON, `entry` has no own `source`, so this
+      // must reject with a missing-source error, never silently accept an
+      // inherited one.
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(
+          result.errors.some((e) => e.includes('components.profile.source')),
+        ).toBe(true);
+      }
+    });
+  });
 });

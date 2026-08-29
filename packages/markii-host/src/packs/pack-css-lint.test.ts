@@ -13,7 +13,7 @@ describe('lintPackCssColors', () => {
     expect(
       lintPackCssColors(
         'cat',
-        '.mk-cat-badge { background: var(--mk-shadow-sm, rgba(0, 0, 0, 0.05)); }',
+        '.mk-cat_badge { background: var(--mk-shadow-sm, rgba(0, 0, 0, 0.05)); }',
       ),
     ).toEqual([]);
   });
@@ -21,7 +21,7 @@ describe('lintPackCssColors', () => {
   it('still warns on a real literal alongside a function-call fallback', () => {
     const warnings = lintPackCssColors(
       'cat',
-      '.mk-cat-badge { box-shadow: 0 0 0 1px var(--mk-border, rgba(0,0,0,.1)), 0 1px 0 #ff0000; }',
+      '.mk-cat_badge { box-shadow: 0 0 0 1px var(--mk-border, rgba(0,0,0,.1)), 0 1px 0 #ff0000; }',
     );
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain('#ff0000');
@@ -35,7 +35,7 @@ describe('lintPackCssColors', () => {
     expect(
       lintPackCssColors(
         'hn',
-        '.mk-hn-row { border-color: var(--mk-border, #e4e4e7); }',
+        '.mk-hn_row { border-color: var(--mk-border, #e4e4e7); }',
       ),
     ).toEqual([]);
   });
@@ -45,7 +45,7 @@ describe('lintPackCssColors', () => {
     // color in the same declaration must still be caught.
     const warnings = lintPackCssColors(
       'hn',
-      '.mk-hn-row { box-shadow: 0 0 0 1px var(--mk-border, #e4e4e7), 0 1px 0 #ff0000; }',
+      '.mk-hn_row { box-shadow: 0 0 0 1px var(--mk-border, #e4e4e7), 0 1px 0 #ff0000; }',
     );
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain('#ff0000');
@@ -54,7 +54,7 @@ describe('lintPackCssColors', () => {
   it('warns on a hex color literal', () => {
     const warnings = lintPackCssColors(
       'hn',
-      '.mk-hn-row { background: #fef08a; }',
+      '.mk-hn_row { background: #fef08a; }',
     );
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain('pack "hn"');
@@ -63,37 +63,37 @@ describe('lintPackCssColors', () => {
 
   it('warns on rgb(), rgba(), hsl(), and hsla() literals', () => {
     const css = `
-      .mk-hn-a { color: rgb(255, 0, 0); }
-      .mk-hn-b { color: rgba(255, 0, 0, 0.5); }
-      .mk-hn-c { color: hsl(10, 50%, 50%); }
-      .mk-hn-d { color: hsla(10, 50%, 50%, 0.5); }
+      .mk-hn_a { color: rgb(255, 0, 0); }
+      .mk-hn_b { color: rgba(255, 0, 0, 0.5); }
+      .mk-hn_c { color: hsl(10, 50%, 50%); }
+      .mk-hn_d { color: hsla(10, 50%, 50%, 0.5); }
     `;
     expect(lintPackCssColors('hn', css)).toHaveLength(4);
   });
 
   it('does not warn on transparent, currentColor, or inherit', () => {
     const css = `
-      .mk-hn-a { border-color: transparent; }
-      .mk-hn-b { color: currentColor; }
-      .mk-hn-c { color: inherit; }
+      .mk-hn_a { border-color: transparent; }
+      .mk-hn_b { color: currentColor; }
+      .mk-hn_c { color: inherit; }
     `;
     expect(lintPackCssColors('hn', css)).toEqual([]);
   });
 
   it('does not warn on a declaration using an --mk-* token', () => {
     const css =
-      '.mk-hn-row { color: var(--mk-fg); background: var(--mk-surface); }';
+      '.mk-hn_row { color: var(--mk-fg); background: var(--mk-surface); }';
     expect(lintPackCssColors('hn', css)).toEqual([]);
   });
 
   it('does not warn on a non-color declaration', () => {
-    const css = '.mk-hn-row { display: flex; padding: 4px 8px; }';
+    const css = '.mk-hn_row { display: flex; padding: 4px 8px; }';
     expect(lintPackCssColors('hn', css)).toEqual([]);
   });
 
   it('names the pack and the exact offending declaration for multiple hits', () => {
     const css =
-      '.mk-hn-a { background: #111; } .mk-hn-b { border: 1px solid #222; }';
+      '.mk-hn_a { background: #111; } .mk-hn_b { border: 1px solid #222; }';
     const warnings = lintPackCssColors('hn', css);
     expect(warnings).toHaveLength(2);
     expect(warnings[0]).toContain('background: #111;');
@@ -104,7 +104,7 @@ describe('lintPackCssColors', () => {
 describe('lintPackCssPrefix', () => {
   it('does not warn when every class selector carries the pack prefix', () => {
     const css =
-      '.mk-hn-row { display: flex; } .mk-hn-row:hover { opacity: 0.8; }';
+      '.mk-hn_row { display: flex; } .mk-hn_row:hover { opacity: 0.8; }';
     expect(lintPackCssPrefix('hn', css)).toEqual([]);
   });
 
@@ -113,22 +113,22 @@ describe('lintPackCssPrefix', () => {
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain('pack "hn"');
     expect(warnings[0]).toContain('.row');
-    expect(warnings[0]).toContain('.mk-hn-');
+    expect(warnings[0]).toContain('.mk-hn_');
   });
 
   it('warns on a selector prefixed for a DIFFERENT pack', () => {
     const warnings = lintPackCssPrefix(
       'hn',
-      '.mk-other-row { display: flex; }',
+      '.mk-other_row { display: flex; }',
     );
     expect(warnings).toHaveLength(1);
-    expect(warnings[0]).toContain('.mk-other-row');
+    expect(warnings[0]).toContain('.mk-other_row');
   });
 
   it('checks every comma-separated selector in a list independently', () => {
     const warnings = lintPackCssPrefix(
       'hn',
-      '.mk-hn-row, .row, .mk-hn-cell { color: red; }',
+      '.mk-hn_row, .row, .mk-hn_cell { color: red; }',
     );
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain('".row"');
@@ -144,7 +144,7 @@ describe('lintPackCssPrefix', () => {
   });
 
   it('does not warn on a correctly prefixed selector inside @media', () => {
-    const css = '@media (max-width: 600px) { .mk-hn-row { display: block; } }';
+    const css = '@media (max-width: 600px) { .mk-hn_row { display: block; } }';
     expect(lintPackCssPrefix('hn', css)).toEqual([]);
   });
 
@@ -177,7 +177,7 @@ describe('esbuild source-banner comments', () => {
 
   it('a banner comment does not hide a color literal inside a comment being mistaken for real, nor swallow real content', () => {
     const css =
-      '/* some/path.css */\n.mk-hn-row { color: var(--mk-fg); }\n/* another/path.css */\n.row { color: #fff; }\n';
+      '/* some/path.css */\n.mk-hn_row { color: var(--mk-fg); }\n/* another/path.css */\n.row { color: #fff; }\n';
     const warnings = lintPackCssPrefix('hn', css);
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain('.row');
@@ -194,7 +194,7 @@ describe('lintPackCss', () => {
 
   it('is empty for clean, correctly prefixed, token-based CSS', () => {
     const css =
-      '.mk-hn-row { color: var(--mk-fg); background: var(--mk-surface); }';
+      '.mk-hn_row { color: var(--mk-fg); background: var(--mk-surface); }';
     expect(lintPackCss('hn', css)).toEqual([]);
   });
 });

@@ -1,7 +1,10 @@
 /**
  * Validates a batch of `QueuedPackRegistration`s and merges them into a
- * render `Registry` via `@markii/react`'s `installPacks`, on top of a base
- * registry.
+ * render `Registry` on top of a base registry, using `@markii/react`'s
+ * `loadPack` per pack (namespace-collision rejection reimplemented here so
+ * this module can also guard against a same-composed-name collision
+ * between two differently named packs — see `DuplicateComposedName` and
+ * `mergePacksKeepingFirstClaim`).
  *
  * Every entry here crossed a boundary from a SEPARATELY EVALUATED script (a
  * pack's compiled artifact, not code a host's own bundle compiled) — same
@@ -23,9 +26,9 @@
  * diagnostics. Reading a host-specific global and deciding where to log a
  * diagnostic line both stay in that host's own app code.
  */
-import { parsePackManifest } from '@markii/pack';
+import { detectNamespaceCollisions, parsePackManifest } from '@markii/pack';
 import type { PackManifest } from '@markii/pack';
-import { createRegistry, installPacks, mergeRegistries } from '@markii/react';
+import { createRegistry, loadPack, mergeRegistries } from '@markii/react';
 import type { PackToInstall, Registry, RegistryEntry } from '@markii/react';
 
 /** One registration a compiled pack script queued by calling `window.__markiiRegisterPack(manifestJson, componentModules)` (see `./pack-build.ts`'s top doc comment for the full registration convention). Structurally identical across every host that satisfies the convention. */
@@ -84,13 +87,75 @@ function toPackToInstall(
   return { pack: { manifest, componentModules: entry.componentModules } };
 }
 
+/**
+ * One composed directive name two DIFFERENT packs both claimed. Under
+ * `@markii/pack`'s current underscore join (issue #19) this cannot arise
+ * from two packs' names and local names composing to the same string — the
+ * join is bijective (see `namespace.ts`'s `composeDirectiveName` doc
+ * comment) — so this is a defense-in-depth invariant, not a reachable case
+ * of ordinary pack composition. It stays because a hand-written pack
+ * registration script (or a future regression in the composition rule)
+ * could still hand `buildRenderRegistry` two registrations that carry the
+ * identical composed name; when that happens the FIRST claimant keeps the
+ * name and the later one is dropped, exactly like a malformed registration.
+ */
+export interface DuplicateComposedName {
+  readonly composedName: string;
+  /** The pack whose component kept the name. */
+  readonly keptPack: string;
+  /** The pack whose component was skipped because the name was already taken. */
+  readonly skippedPack: string;
+}
+
 /** What `buildRenderRegistry` reports alongside the merged registry — developer-facing diagnostics for a caller to fold into its own surface, never shown as page content. */
 export interface BuildRenderRegistryResult {
   readonly registry: Registry;
   /** One line per malformed registration, dropped rather than installed. */
   readonly invalidReasons: readonly string[];
-  /** Non-empty only when two or more validated registrations shared a namespace — the WHOLE install was then rejected (`installPacks`'s all-or-nothing rule) and `registry` falls back to `defaultRegistry` alone. */
+  /** Non-empty only when two or more validated registrations shared a namespace — the WHOLE install was then rejected (docs/packs.md's install-time rejection rule) and `registry` falls back to `defaultRegistry` alone. */
   readonly collisions: readonly string[];
+  /** One entry per composed directive name claimed by two different packs — see `DuplicateComposedName`. Always empty for registrations that went through ordinary composition; kept as an executable invariant, not dead code (see `./pack-render-registry.test.ts`'s constructed-collision test). */
+  readonly duplicateComposedNames: readonly DuplicateComposedName[];
+}
+
+/**
+ * Loads every pack's own registry (`@markii/react`'s `loadPack`, which
+ * already gates on engine and skips an unsatisfied component) and merges
+ * them onto `base` left to right, but — unlike `@markii/react`'s ordinary
+ * `mergeRegistries` last-wins semantics — keeps the FIRST pack to claim a
+ * given composed directive name and skips any later pack that claims the
+ * same name, recording the skip as a `DuplicateComposedName`. `base`'s own
+ * entries are not part of this check: a pack's composed name overriding an
+ * unrelated `base` entry is ordinary last-wins behavior, the same as
+ * `installPacks` already gives it.
+ */
+function mergePacksKeepingFirstClaim(
+  packs: readonly PackToInstall[],
+  base: Registry,
+): { registry: Registry; duplicateComposedNames: DuplicateComposedName[] } {
+  const merged: Record<string, RegistryEntry> = { ...base };
+  const owner = new Map<string, string>();
+  const duplicateComposedNames: DuplicateComposedName[] = [];
+
+  for (const pack of packs) {
+    const loaded = loadPack(pack.manifest, pack.componentModules);
+    for (const composedName of Object.keys(loaded)) {
+      if (!Object.hasOwn(loaded, composedName)) continue;
+      const existingOwner = owner.get(composedName);
+      if (existingOwner !== undefined) {
+        duplicateComposedNames.push({
+          composedName,
+          keptPack: existingOwner,
+          skippedPack: pack.manifest.name,
+        });
+        continue;
+      }
+      owner.set(composedName, pack.manifest.name);
+      merged[composedName] = loaded[composedName]!;
+    }
+  }
+
+  return { registry: createRegistry(merged), duplicateComposedNames };
 }
 
 /**
@@ -100,9 +165,13 @@ export interface BuildRenderRegistryResult {
  *
  * - an individual malformed registration is dropped (reason recorded, never
  *   shown on the page);
- * - a namespace collision between two loaded packs rejects the WHOLE
- *   install (matching docs/packs.md's install-time rejection rule) and this
- *   function falls back to `defaultRegistry` alone.
+ * - a namespace collision between two loaded packs (the same pack name
+ *   registered twice) rejects the WHOLE install (matching docs/packs.md's
+ *   install-time rejection rule) and this function falls back to
+ *   `defaultRegistry` alone;
+ * - a composed-directive-name collision between two DIFFERENTLY named packs
+ *   (see `DuplicateComposedName`) drops only the later claimant's
+ *   component, not the whole pack.
  */
 export function buildRenderRegistry(
   queued: readonly QueuedPackRegistration[],
@@ -118,17 +187,29 @@ export function buildRenderRegistry(
   });
 
   if (packs.length === 0) {
-    return { registry: defaultRegistry, invalidReasons, collisions: [] };
+    return {
+      registry: defaultRegistry,
+      invalidReasons,
+      collisions: [],
+      duplicateComposedNames: [],
+    };
   }
 
-  const result = installPacks(packs, defaultRegistry);
-  if (result.ok) {
-    return { registry: result.registry, invalidReasons, collisions: [] };
+  const namespaces = packs.map((pack) => pack.manifest.name);
+  const namespaceCollisions = detectNamespaceCollisions(namespaces);
+  if (namespaceCollisions.length > 0) {
+    return {
+      registry: mergeRegistries(createRegistry(), defaultRegistry),
+      invalidReasons,
+      collisions: namespaceCollisions.map((collision) => collision.namespace),
+      duplicateComposedNames: [],
+    };
   }
 
-  return {
-    registry: mergeRegistries(createRegistry(), defaultRegistry),
-    invalidReasons,
-    collisions: result.collisions,
-  };
+  const { registry, duplicateComposedNames } = mergePacksKeepingFirstClaim(
+    packs,
+    defaultRegistry,
+  );
+
+  return { registry, invalidReasons, collisions: [], duplicateComposedNames };
 }
