@@ -26,8 +26,10 @@ import { loadPackContext } from './packs/pack-context.js';
 import type { PackContext } from './packs/pack-context.js';
 import {
   PACK_COMPILATION_UNAVAILABLE_NOTICE,
+  compilationUnavailableSkipCount,
   formatPackDiagnosticLines,
-  hasPackCompilationUnavailable,
+  packCollisionNotice,
+  packLoadFailureNotice,
   skippedPackCount,
 } from './packs/pack-diagnostics.js';
 import { createPackRegistrationBuilder } from './packs/pack-compilation.js';
@@ -258,28 +260,18 @@ export class MarkiiPreviewView extends ItemView {
     }
   }
 
-  /** A `Notice` for pack failures a user must act on — a skipped folder, or two packs sharing a namespace — never for the routine "nothing configured" case. */
+  /** A `Notice` for pack failures a user must act on — a skipped folder, or two packs sharing a namespace — never for the routine "nothing configured" case. All wording lives in `./packs/pack-diagnostics.ts`; each failure gets exactly ONE notice (a no-compiler skip gets the notice naming that cause, never additionally the generic one). */
   private notifyPackFailures(context: PackContext): void {
-    const skipped = skippedPackCount(context);
-    if (skipped > 0) {
-      const plural = skipped === 1 ? 'folder' : 'folders';
-      new Notice(
-        `Markii: ${String(skipped)} pack ${plural} could not be loaded — see the developer console ("Show Markii diagnostics") for why.`,
-      );
+    const noCompiler = compilationUnavailableSkipCount(context);
+    const otherSkips = skippedPackCount(context) - noCompiler;
+    if (noCompiler > 0) {
+      new Notice(PACK_COMPILATION_UNAVAILABLE_NOTICE);
+    }
+    if (otherSkips > 0) {
+      new Notice(packLoadFailureNotice(otherSkips));
     }
     if (context.registrationCollisions.length > 0) {
-      new Notice(
-        `Markii: packs share a namespace (${context.registrationCollisions.join(', ')}) — none of them were installed.`,
-      );
-    }
-    // A pack that needed compiling on an install with no compiler. The
-    // generic "could not be loaded" notice above already fired for it (it
-    // is a skipped folder like any other), but that wording sends a user
-    // hunting for a broken pack when the actual answer is which install
-    // they used, so this names the real cause. Wording lives in
-    // `./packs/pack-diagnostics.ts`, the one home for it.
-    if (hasPackCompilationUnavailable(context)) {
-      new Notice(PACK_COMPILATION_UNAVAILABLE_NOTICE);
+      new Notice(packCollisionNotice(context.registrationCollisions));
     }
   }
 
@@ -296,7 +288,7 @@ export class MarkiiPreviewView extends ItemView {
         // reported and not surfaced as a failed run.
         console.error(`[markii] could not persist "${key}"`, error);
         new Notice(
-          'Markii: this run could not be saved for next time (device storage is full). The results above are still current.',
+          'Markii: device storage is full, so this run was not saved for next time. The results above are still current.',
         );
       },
     );
@@ -330,7 +322,7 @@ export class MarkiiPreviewView extends ItemView {
       );
       if (trigger === 'manual') {
         new Notice(
-          "Markii: this note's scripts can't run — the plugin was not built with its worker bundle.",
+          "Markii: this note's scripts cannot run. The plugin build is missing its worker bundle, so reinstall the plugin.",
         );
       }
       return;
@@ -430,9 +422,7 @@ export class MarkiiPreviewView extends ItemView {
         failures.length === 1
           ? 'a script failed'
           : `${String(failures.length)} scripts failed`;
-      new Notice(
-        `Markii: ${what} — open the developer console ("Show Markii diagnostics") for details.`,
-      );
+      new Notice(`Markii: ${what}. Open the Markii diagnostics for details.`);
     }
   }
 

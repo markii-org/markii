@@ -77,6 +77,12 @@ pack that ships source rather than a prebuilt \`webview.js\`: that needs the
 esbuild-wasm runtime, which only the zip carries. Use the zip if you plan to
 install a pack like that.
 
+To add pack compilation to a BRAT install without reinstalling, download the
+zip, copy its \`esbuild-wasm\` folder into your plugin folder next to
+\`main.js\`, and reload Obsidian. The plugin looks for that folder at load
+time, so this one copy enables compiling every pack. BRAT updates leave the
+folder in place.
+
 Markii is desktop only. It runs note scripts inside a terminatable isolate and
 compiles component packs in process, and Obsidian on mobile supports neither.
 

@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { createRegistry } from '@markii/react';
 import {
+  PACK_COMPILATION_UNAVAILABLE_NOTICE,
+  compilationUnavailableSkipCount,
   formatPackDiagnosticLines,
   hasPackCompilationUnavailable,
+  packCollisionNotice,
   packCompilationUnavailableReason,
+  packLoadFailureNotice,
   skippedPackCount,
 } from './pack-diagnostics.js';
 import type { DiscoveredPack, SkippedPackFolder } from '@markii/host';
@@ -151,5 +155,44 @@ describe('hasPackCompilationUnavailable', () => {
 
   it('is false for an empty context', () => {
     expect(hasPackCompilationUnavailable(context([], []))).toBe(false);
+  });
+});
+
+describe('compilationUnavailableSkipCount', () => {
+  it('counts only the no-compiler skips, not other failures', () => {
+    const skipped: SkippedPackFolder[] = [
+      { folder: '/packs/ana', reason: packCompilationUnavailableReason('ana') },
+      { folder: '/packs/bob', reason: packCompilationUnavailableReason('bob') },
+      { folder: '/packs/broken', reason: 'invalid pack.json (missing name)' },
+    ];
+    expect(compilationUnavailableSkipCount(context([], skipped))).toBe(2);
+  });
+});
+
+describe('notice wording', () => {
+  const notices = [
+    PACK_COMPILATION_UNAVAILABLE_NOTICE,
+    packLoadFailureNotice(1),
+    packLoadFailureNotice(3),
+    packCollisionNotice(['ana', 'bob']),
+  ];
+
+  it('pluralizes the load-failure notice', () => {
+    expect(packLoadFailureNotice(1)).toContain('a pack failed');
+    expect(packLoadFailureNotice(3)).toContain('3 packs failed');
+  });
+
+  it('names the colliding namespaces', () => {
+    expect(packCollisionNotice(['ana', 'bob'])).toContain('ana, bob');
+  });
+
+  // Notice style (user-set 2026-08-29): short, plain sentences. What went
+  // wrong, then what to do. No em dashes, no parentheses, no quoted command
+  // names; detail belongs in the console diagnostics, not the notice.
+  it('keeps every notice short and free of em dashes, parentheses, and quotes', () => {
+    for (const notice of notices) {
+      expect(notice).not.toMatch(/[—()"]/);
+      expect(notice.length).toBeLessThan(120);
+    }
   });
 });

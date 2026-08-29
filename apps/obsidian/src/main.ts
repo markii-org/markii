@@ -125,7 +125,7 @@ export default class MarkiiPlugin extends Plugin {
         const view = this.activePreviewView();
         if (!view) {
           new Notice(
-            'Markii: open a preview first — diagnostics are per-preview.',
+            'Markii: diagnostics are per preview, so open a preview first.',
           );
           return;
         }

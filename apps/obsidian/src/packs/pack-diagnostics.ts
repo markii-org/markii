@@ -65,27 +65,40 @@ export function packCompilationUnavailableReason(packName: string): string {
  * `packCompilationUnavailableReason` above), shown once per preview open
  * from `view.tsx`'s `notifyPackFailures` alongside its other pack-failure
  * notices. Kept here, not inline, for the same single-home-for-wording
- * reason: the full explanation lives in the console via
- * `packCompilationUnavailableReason`, and this is only the pointer to it.
+ * reason. Notice style (user-set 2026-08-29): a notice is at most two
+ * short sentences, first what went wrong, then what to do about it. No
+ * em dashes, no parentheses, no quoted command names; the full detail
+ * lives in the console via the diagnostic lines, not in the notice.
  */
 export const PACK_COMPILATION_UNAVAILABLE_NOTICE =
-  'Markii: a component pack needs compiling but this install has no ' +
-  'compiler (only the zip install does) — see the developer console ' +
-  '("Show Markii diagnostics") for details.';
+  'Markii: a pack needs building, but this install cannot build packs. ' +
+  'Install the full zip release to use it.';
 
-/**
- * Whether `context.skipped` carries the "no compiler installed" reason
- * above, for `view.tsx`'s `notifyPackFailures` to decide whether to show
- * `PACK_COMPILATION_UNAVAILABLE_NOTICE`. Matches on the stable marker
- * substring rather than the full sentence so a wording change to
- * `packCompilationUnavailableReason` can never silently break this check.
- */
+/** How many skipped entries carry the "no compiler installed" reason, so `view.tsx`'s `notifyPackFailures` can report those with `PACK_COMPILATION_UNAVAILABLE_NOTICE` and only the remainder with the generic failure notice, instead of double-reporting the same pack. Matches the stable marker substring rather than the full sentence so a wording change to `packCompilationUnavailableReason` can never silently break this check. */
+export function compilationUnavailableSkipCount(context: {
+  readonly skipped: readonly { readonly reason: string }[];
+}): number {
+  return context.skipped.filter((entry) =>
+    entry.reason.includes(PACK_COMPILATION_UNAVAILABLE_MARKER),
+  ).length;
+}
+
+/** Backwards-compatible predicate over `compilationUnavailableSkipCount`. */
 export function hasPackCompilationUnavailable(context: {
   readonly skipped: readonly { readonly reason: string }[];
 }): boolean {
-  return context.skipped.some((entry) =>
-    entry.reason.includes(PACK_COMPILATION_UNAVAILABLE_MARKER),
-  );
+  return compilationUnavailableSkipCount(context) > 0;
+}
+
+/** The generic pack-failure `Notice` for `count` skips that are NOT the no-compiler case above. Same notice style: what went wrong, where the detail is. */
+export function packLoadFailureNotice(count: number): string {
+  const packs = count === 1 ? 'a pack' : `${String(count)} packs`;
+  return `Markii: ${packs} failed to load. Open the Markii diagnostics for details.`;
+}
+
+/** The namespace-collision `Notice`. Same notice style. */
+export function packCollisionNotice(namespaces: readonly string[]): string {
+  return `Markii: packs share the name ${namespaces.join(', ')}. None of them were loaded.`;
 }
 
 /**
