@@ -77,8 +77,13 @@
         "category": "Markii"
       },
       {
-        "command": "markii.buildPackForDistribution",
-        "title": "Build Pack for Distribution",
+        "command": "markii.exportPack",
+        "title": "Export Pack…",
+        "category": "Markii"
+      },
+      {
+        "command": "markii.insertComponent",
+        "title": "Insert Component…",
         "category": "Markii"
       }
     ],
@@ -125,7 +130,11 @@
           "command": "markii.toggleRunOnOpen"
         },
         {
-          "command": "markii.buildPackForDistribution"
+          "command": "markii.exportPack"
+        },
+        {
+          "command": "markii.insertComponent",
+          "when": "editorLangId == markii || editorLangId == markdown"
         }
       ]
     },

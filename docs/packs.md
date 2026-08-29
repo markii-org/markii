@@ -224,25 +224,25 @@ Do not inject a stylesheet from inside the component script. It works, but
 the host can no longer remove it or order it against the theme, so the pack
 leaks style into notes that are no longer using it.
 
-## Building a pack for distribution
+## Exporting a pack for distribution
 
-Once a pack works from source, one command turns it into the prebuilt form.
-In VS Code it is "Markii: Build Pack for Distribution"; in Obsidian it is
-"Build Markii pack for distribution". Both ask which pack when more than
-one is configured, compile it, and write `webview.js`, plus `webview.css`
-when the pack has styles, into the pack's own folder. If those files are
-already there, the command asks before replacing them, and it reports where
-it wrote and how large the result is.
+Once a pack works from source, VS Code's "Markii: Export Pack" command
+turns it into the prebuilt form and writes it somewhere else. It asks which
+pack when more than one is configured, then where to export it and what to
+name the folder there, prefilled with the pack's own name. It compiles the
+pack and writes `pack.json`, `webview.js`, `webview.css` when the pack has
+styles, and any `scripts/*.lua` into that new folder. If the destination
+already holds files from an earlier export, the command asks before
+replacing them, and it reports where it wrote and how large the result is.
 
-This is the one time a host writes inside a pack folder, and it happens
-only because the author asked for it by name. Loading a pack never writes
-there: the build cache for the from-source path lives outside the pack, so
-an ordinary preview leaves the folder untouched.
+The pack's own source folder is never touched. Obsidian has no export
+command: VS Code is the authoring host and owns pack packaging, while
+Obsidian loads a pack another host produced, either from source or as an
+exported prebuilt folder.
 
 The command needs the compiler, so an install that does not carry one
 cannot run it. It says so plainly and names the install that would restore
-it. Ship the resulting files with `pack.json`, and the pack loads on every
-install of every host.
+it.
 
 ## What the reference project provides, and what it doesn't
 

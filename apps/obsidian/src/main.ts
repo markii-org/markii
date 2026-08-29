@@ -27,17 +27,14 @@ import {
   createBrowserWorkerSetup,
   type BrowserWorkerSetup,
 } from './run/browser-worker.js';
-import { createNetProvider } from '@markii/host';
 import {
-  NO_PACKS_CONFIGURED_NOTICE,
-  createNodePackDistributionFs,
-  discoverPacksForCommand,
-  runBuildPackForDistribution,
-} from './packs/build-pack-distribution.js';
-import {
-  confirmPackOverwriteModal,
-  pickPackForDistribution,
-} from './pack-modals.js';
+  buildComponentCatalog,
+  componentSkeleton,
+  createNetProvider,
+  offsetToLineColumn,
+} from '@markii/host';
+import { discoverConfiguredPacks } from './packs/discover-configured-packs.js';
+import { pickInsertableComponent } from './insert-modals.js';
 
 /**
  * Imports `obsidian` — deliberately NOT unit-tested (Vitest cannot resolve
@@ -129,6 +126,17 @@ export default class MarkiiPlugin extends Plugin {
     this.addHeaderActions();
 
     this.addCommand({
+      id: 'insert-markii-component',
+      name: 'Insert Markii component',
+      checkCallback: (checking) => {
+        const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+        if (!view) return false;
+        if (!checking) void this.insertComponent(view);
+        return true;
+      },
+    });
+
+    this.addCommand({
       id: 'show-markii-diagnostics',
       name: 'Show Markii diagnostics',
       callback: () => {
@@ -143,61 +151,6 @@ export default class MarkiiPlugin extends Plugin {
         new Notice('Markii: pack diagnostics printed to the console.');
       },
     });
-
-    this.addCommand({
-      id: 'build-markii-pack',
-      name: 'Build Markii pack for distribution',
-      callback: () => {
-        void this.buildPackForDistribution();
-      },
-    });
-  }
-
-  /**
-   * The "Build Markii pack for distribution" command (issue #15, gap 3).
-   * Works with no preview open: it reads the device-local pack-folder
-   * setting and this plugin's own cache/esbuild-wasm paths directly,
-   * rather than going through `MarkiiPreviewView`. No packs configured
-   * gets a `Notice`; exactly one configured pack builds straight away;
-   * several show a picker (`src/pack-modals.ts`). The outcome is reported
-   * on both of AGENTS.md's failure homes: a `Notice`, and the full detail
-   * (paths, sizes, warnings, or the failure reason) to the console, this
-   * host's diagnostics surface.
-   */
-  private async buildPackForDistribution(): Promise<void> {
-    const cacheDir = this.packCacheDir();
-    if (!cacheDir) {
-      new Notice(
-        'Markii: this vault has no writable plugin folder, so a pack cannot be built here.',
-      );
-      return;
-    }
-
-    const { packs } = await discoverPacksForCommand(
-      this.packSettings.packFolders,
-      this.vaultBasePath(),
-    );
-    if (packs.length === 0) {
-      new Notice(NO_PACKS_CONFIGURED_NOTICE);
-      return;
-    }
-
-    const pack = await pickPackForDistribution(this.app, packs);
-    if (!pack) return;
-
-    const result = await runBuildPackForDistribution({
-      pack,
-      cacheDir,
-      esbuildBrowserModulePath: this.esbuildBrowserModulePath(),
-      esbuildWasmBinaryPath: this.esbuildWasmBinaryPath(),
-      fs: createNodePackDistributionFs(),
-      confirmOverwrite: confirmPackOverwriteModal(this.app),
-    });
-
-    new Notice(result.notice);
-    for (const line of result.consoleLines) {
-      console.log(line);
-    }
   }
 
   /**
@@ -240,6 +193,60 @@ export default class MarkiiPlugin extends Plugin {
     const leaves = this.app.workspace.getLeavesOfType(MARKII_PREVIEW_VIEW_TYPE);
     const first = leaves[0]?.view;
     return first instanceof MarkiiPreviewView ? first : undefined;
+  }
+
+  /**
+   * The "Insert Markii component" command (`insert-markii-component`,
+   * GitHub issue #17, slice 1): offers every standard component plus every
+   * configured pack's components, and inserts the chosen one's directive
+   * skeleton at the cursor. Every testable piece (the suggestion shape,
+   * every user-facing string) lives in `./insert-component.ts`; the
+   * catalog and skeleton builders are `@markii/host`'s (shared with the VS
+   * Code extension). This method is wiring only — the command's
+   * `checkCallback` in `onload` already guarded that an active
+   * `MarkdownView` with an editor exists.
+   *
+   * A pack-discovery failure never blocks the command:
+   * `discoverConfiguredPacks` already degrades quietly (a bad folder is
+   * simply skipped, never thrown), so a caught error here still falls back
+   * to the standard set alone rather than failing the whole command.
+   */
+  private async insertComponent(view: MarkdownView): Promise<void> {
+    const editor = view.editor;
+
+    let packs: Awaited<ReturnType<typeof discoverConfiguredPacks>> = [];
+    try {
+      packs = await discoverConfiguredPacks(
+        this.packSettings.packFolders,
+        this.vaultBasePath(),
+      );
+    } catch {
+      packs = [];
+    }
+
+    const catalog = buildComponentCatalog(packs);
+    const chosen = await pickInsertableComponent(this.app, catalog);
+    if (!chosen) return; // dismissed
+
+    const skeleton = componentSkeleton(
+      chosen.directiveName,
+      chosen.kind,
+      chosen.requiredAttributes,
+    );
+    // `'from'`, not the default head: `replaceSelection` writes starting at
+    // the selection's START, so anchoring the cursor math anywhere else is
+    // wrong whenever text is selected (and for a selection made backwards,
+    // the head IS the earlier position). Mirrors the VS Code command.
+    const insertPosition = editor.getCursor('from');
+
+    editor.replaceSelection(skeleton.text);
+
+    const cursor = offsetToLineColumn(skeleton.text, skeleton.cursorOffset);
+    const cursorPosition =
+      cursor.line === 0
+        ? { line: insertPosition.line, ch: insertPosition.ch + cursor.column }
+        : { line: insertPosition.line + cursor.line, ch: cursor.column };
+    editor.setCursor(cursorPosition);
   }
 
   /**

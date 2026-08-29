@@ -35,16 +35,17 @@ function relativeEntryLine(entry: string): string {
 }
 
 /**
- * Issue #15, gap 2's wording: informs, never warns, that a pack's prebuilt
- * `webview.js` is what actually loaded and its sibling component sources
- * were not compiled. Names this host's own build command
- * (`markii.buildPackForDistribution`) so the note is actionable. Output
- * channel only — never a window notification, and never counted toward
- * `skippedPackCount` (see `PackContext.prebuiltShadowedPacks`'s doc
- * comment): shipping both is a supported state, not a failure.
+ * Issue #15, gap 2's wording (reworded for issue #16's Export Pack
+ * command): informs, never warns, that a pack's prebuilt `webview.js` is
+ * what actually loaded and its sibling component sources were not
+ * compiled. Names this host's own export command (`markii.exportPack`) so
+ * the note is actionable. Output channel only — never a window
+ * notification, and never counted toward `skippedPackCount` (see
+ * `PackContext.prebuiltShadowedPacks`'s doc comment): shipping both is a
+ * supported state, not a failure.
  */
 function prebuiltShadowLine(pack: { name: string; folder: string }): string {
-  return `Pack "${pack.name}" is using its prebuilt webview.js, so the component sources in that folder are not compiled. Edits to them take effect only after you delete webview.js or rebuild it with Markii: Build Pack for Distribution.`;
+  return `Pack "${pack.name}" is using its prebuilt webview.js, so the component sources in that folder are not compiled. Edits to them take effect only after you delete webview.js or export the pack again with Markii: Export Pack.`;
 }
 
 /**

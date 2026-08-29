@@ -166,18 +166,22 @@ packages/markii-host    PRIVATE, never published (no npm presence, absent from
   src/run/net-pinning.ts, src/run/ip-address.ts  resolve-then-pin (issue #10)
   src/run/run-trace.ts     last-run outcome, for the host's run marker
   src/lua-resolver.ts      the pure worker-side PackModuleResolver
-  src/pack-build.ts        compiles a pack's component sources (and imported
+  src/packs/pack-build.ts  compiles a pack's component sources (and imported
                      CSS) with esbuild-wasm's in-process wasm path, cached
                      outside the pack's own folder. See the Stack section for
                      why the in-process path is mandatory, not preferred
   src/packs/prebuilt.ts    the prebuilt-pack convention (issue #15): the
                      sibling webview.css next to webview.js, and detection
                      of a prebuilt script shadowing on-disk sources
-  src/packs/pack-distribute.ts  the compose-and-write half of the hosts'
-                     build-for-distribution command: builds via the normal
-                     cache, then writes webview.js (+ webview.css) into the
-                     pack's own folder behind a path jail. The ONE
-                     sanctioned write inside a pack folder, author-initiated
+  src/packs/pack-export.ts  the compose half of VS Code's Export Pack
+                     command (issue #16): builds via the normal cache, then
+                     writes the distributable (pack.json, webview.js,
+                     webview.css, scripts/) into a caller-chosen destination
+                     behind resolveExportTarget's path jail. A pack's SOURCE
+                     folder is never written to
+  src/insert/        the insert-component seam (issue #17): skeleton builder
+                     (container/leaf/inline forms per @markii/stdlib kind)
+                     + catalog (stdlib + installed packs) both hosts consume
 packages/markii-lua     Lua sandbox runtime (docs/security.md, L3) — no React, no parsing:
   src/globals.ts     empty-env whitelist: curated string/table/math only
   src/capabilities.ts net/cache/bundle tables; two-tier (manual vs auto) gating
@@ -215,8 +219,10 @@ apps/vscode          the "Markii" VS Code extension (preview + Run + packs) — 
                      (user-scope) against the workspace root; pack-scripts.ts
                      pre-reads each pack's scripts/*.lua; lua-resolver.ts is the
                      pure worker-side PackModuleResolver; pack-context.ts
-                     composes them; build-pack-distribution.ts backs the
-                     markii.buildPackForDistribution command (issue #15)
+                     composes them; export-pack.ts + discover-configured-packs.ts
+                     back the markii.exportPack command (issue #16);
+                     src/insert-component.ts backs markii.insertComponent
+                     (issue #17)
   syntaxes/          TextMate injection grammar for the three directive forms
   esbuild.config.mjs two bundles: extension host (node/cjs, vscode external)
                      and webview (browser/iife); @markii/* aliased to src/;
@@ -266,10 +272,11 @@ apps/obsidian        the "Markii" Obsidian plugin (desktop only) — an
                      cleanly when the (deliberately unembedded, ~14 MB)
                      esbuild-wasm runtime isn't beside main.js (zip installs
                      carry it, 3-file installs don't);
-                     build-pack-distribution.ts backs the Build Markii pack
-                     for distribution command (issue #15), with its prompts
-                     in src/pack-modals.ts (obsidian-import allowlisted like
-                     run-modals.ts)
+                     discover-configured-packs.ts feeds the insert command's
+                     catalog. No export/build command here by design (see
+                     Host positioning below): src/insert-component.ts +
+                     src/insert-modals.ts back Insert Markii component
+                     (issue #17)
   src/obsidian-theme.css  maps doc.css's 15 Tier 1 tokens onto Obsidian's
                      theme variables; src/theme-coverage.test.ts fails when
                      a token is left unmapped
@@ -307,6 +314,17 @@ with no same-day core change needed. Until an app meets that bar, do not
 propose splitting it out, and do not build mirror-repo PR-sync machinery
 (one-way, CI-generated release mirrors are fine when distribution needs
 them).
+
+## Host positioning (user-set 2026-08-30)
+
+VS Code is the AUTHORING host: pack development, live preview of source
+packs, and pack packaging (the Export Pack command) live there, and future
+authoring features land there first. Obsidian is a CONSUMING host: prebuilt
+packs are its normal path, source live-compile stays as a consumption
+convenience (shared-folder workflows), and it grows no pack-development or
+export features. Note-authoring features (like Insert Component) are not
+development features and belong in BOTH hosts. A future engine/host may
+join the authoring side; nothing is built for that in advance.
 
 ## Stack (fixed — do not add alternatives)
 
@@ -463,7 +481,9 @@ same commit as the change that triggers them:
   in `@markii/react`, `doc.css` for its internals (never outer margins), and
   the component list in this file's repo layout. Its colors come from
   `doc.css`'s Tier 1 tokens or the three named derivations, never a raw
-  literal: `doc-css-tokens.test.ts` fails on one.
+  literal: `doc-css-tokens.test.ts` fails on one. Add its attribute-read
+  source to `contract-drift.test.ts`'s `ATTRIBUTE_READ_SOURCES`; that suite
+  fails closed for any standard component missing an entry.
 - **New Tier 1 token in `doc.css`** → it is part of the public theming
   contract (`docs/integration.md`), so it needs that page updated, every
   host theme layer mapping it (each host's coverage test fails until they

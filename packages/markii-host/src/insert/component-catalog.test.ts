@@ -1,0 +1,206 @@
+import { describe, expect, it } from 'vitest';
+import { STANDARD_COMPONENTS } from '@markii/stdlib';
+import { buildComponentCatalog } from './component-catalog.js';
+import type { DiscoveredPack } from '../packs/discover.js';
+
+function pack(
+  name: string,
+  components: Record<string, string>,
+  folder = `/packs/${name}`,
+): DiscoveredPack {
+  return {
+    folder,
+    manifest: { name, engine: 'react', components },
+    componentPaths: Object.fromEntries(
+      Object.entries(components).map(([local, source]) => [
+        local,
+        `${folder}/${source}`,
+      ]),
+    ),
+    scriptsDir: `${folder}/scripts`,
+    scriptPath: `${folder}/webview.js`,
+  };
+}
+
+describe('buildComponentCatalog', () => {
+  it('lists every standard component first, in declaration order', () => {
+    const catalog = buildComponentCatalog([]);
+    const standardNames = catalog
+      .filter((entry) => entry.source === 'standard')
+      .map((entry) => entry.directiveName);
+    expect(standardNames).toEqual(Object.keys(STANDARD_COMPONENTS));
+  });
+
+  it('carries each standard component contract kind and required attributes through', () => {
+    const catalog = buildComponentCatalog([]);
+    const figure = catalog.find((entry) => entry.directiveName === 'figure');
+    expect(figure?.kind).toBe('container');
+    expect(figure?.requiredAttributes).toEqual(['src']);
+
+    const kbd = catalog.find((entry) => entry.directiveName === 'kbd');
+    expect(kbd?.kind).toBe('inline');
+    expect(kbd?.requiredAttributes).toEqual([]);
+  });
+
+  it('truncates a standard description to its first sentence', () => {
+    const catalog = buildComponentCatalog([]);
+    const callout = catalog.find((entry) => entry.directiveName === 'callout');
+    expect(callout?.description).toBe(
+      'A colored box for an aside, warning, or danger note.',
+    );
+    expect(callout?.description.length).toBeLessThan(
+      STANDARD_COMPONENTS.callout!.description.length,
+    );
+  });
+
+  it('appends pack components after the standard set, namespaced', () => {
+    const catalog = buildComponentCatalog([
+      pack('cat', { card: './Card.tsx', timeline: './Timeline.tsx' }),
+    ]);
+    const packEntries = catalog.filter((entry) => entry.source === 'pack');
+    expect(packEntries.map((entry) => entry.directiveName)).toEqual([
+      'cat-card',
+      'cat-timeline',
+    ]);
+    expect(packEntries[0]).toMatchObject({
+      kind: 'container',
+      packName: 'cat',
+      description: 'From pack "cat".',
+      requiredAttributes: [],
+    });
+  });
+
+  it("sorts a pack's own local names alphabetically", () => {
+    const catalog = buildComponentCatalog([
+      pack('cat', { zeta: './Z.tsx', alpha: './A.tsx' }),
+    ]);
+    const names = catalog
+      .filter((entry) => entry.source === 'pack')
+      .map((entry) => entry.directiveName);
+    expect(names).toEqual(['cat-alpha', 'cat-zeta']);
+  });
+
+  it('processes packs in the given order', () => {
+    const catalog = buildComponentCatalog([
+      pack('bpack', { widget: './W.tsx' }),
+      pack('apack', { widget: './W.tsx' }),
+    ]);
+    const names = catalog
+      .filter((entry) => entry.source === 'pack')
+      .map((entry) => entry.directiveName);
+    expect(names).toEqual(['bpack-widget', 'apack-widget']);
+  });
+
+  it('composes a pack namespace and local name that do not collide with anything', () => {
+    const catalog = buildComponentCatalog([pack('kbd', { x: './X.tsx' })]);
+    expect(
+      catalog
+        .filter((entry) => entry.source === 'pack')
+        .map((entry) => entry.directiveName),
+    ).toEqual(['kbd-x']);
+  });
+
+  it('skips a pack component whose composed name collides with an earlier pack (first wins)', () => {
+    // pack "a" + local "b-c" composes (with '-') to "a-b-c"; pack "a-b" +
+    // local "c" also composes to "a-b-c". The second is skipped.
+    const catalog = buildComponentCatalog([
+      pack('a', { 'b-c': './One.tsx' }),
+      pack('a-b', { c: './Two.tsx' }),
+    ]);
+    const names = catalog
+      .filter((entry) => entry.source === 'pack')
+      .map((entry) => entry.directiveName);
+    expect(names).toEqual(['a-b-c']);
+    const first = catalog.find((entry) => entry.directiveName === 'a-b-c');
+    expect(first?.packName).toBe('a');
+  });
+
+  it('keeps the standard entry untouched when a pack namespace equals a standard directive name', () => {
+    const catalog = buildComponentCatalog([
+      pack('callout', { extra: './E.tsx' }),
+    ]);
+    const calloutEntries = catalog.filter(
+      (entry) => entry.directiveName === 'callout',
+    );
+    expect(calloutEntries).toHaveLength(1);
+    expect(calloutEntries[0]?.source).toBe('standard');
+  });
+
+  it('skips a pack with an empty components map', () => {
+    const catalog = buildComponentCatalog([pack('empty', {})]);
+    expect(catalog.filter((entry) => entry.source === 'pack')).toEqual([]);
+  });
+
+  it('skips a pack component whose local name fails namespace validation', () => {
+    const catalog = buildComponentCatalog([
+      pack('cat', { Invalid_Name: './X.tsx' }),
+    ]);
+    expect(catalog.filter((entry) => entry.source === 'pack')).toEqual([]);
+  });
+
+  it('never throws for a malformed pack manifest', () => {
+    const malformed = pack('bad', {});
+    // @ts-expect-error -- deliberately hostile shape to prove this never throws
+    malformed.manifest.components = undefined;
+    expect(() => buildComponentCatalog([malformed])).not.toThrow();
+  });
+});
+
+/**
+ * Regression guard for the first-sentence truncation, run against the REAL
+ * `STANDARD_COMPONENTS` prose rather than synthetic strings.
+ *
+ * The original implementation split on the first ". " and so cut 19 of the
+ * 20 standard components at the period inside "e.g.", leaving picker rows
+ * reading "A titled panel, e.g." — the example, the half that actually
+ * tells an author how to write the directive, was the part discarded.
+ * Synthetic-description tests all passed while every real row was broken,
+ * which is exactly why these assertions bind to the shipped contracts.
+ */
+describe('buildComponentCatalog — description truncation against real contracts', () => {
+  const standard = buildComponentCatalog([]).filter(
+    (entry) => entry.source === 'standard',
+  );
+
+  it('covers every standard component', () => {
+    expect(standard).toHaveLength(Object.keys(STANDARD_COMPONENTS).length);
+  });
+
+  it('never ends a description at an abbreviation such as "e.g."', () => {
+    const offenders = standard
+      .filter((entry) => /\b(e\.g|i\.e|etc)\.$/.test(entry.description))
+      .map((entry) => `${entry.directiveName}: ${entry.description}`);
+    expect(offenders).toEqual([]);
+  });
+
+  it('keeps the example clause for every component whose prose has one', () => {
+    const missingExample = standard
+      .filter((entry) => {
+        const contract = STANDARD_COMPONENTS[entry.directiveName];
+        if (contract === undefined) return false;
+        if (!contract.description.includes('e.g. ')) return false;
+        // The example is written as inline code right after "e.g. ", so a
+        // surviving example always carries at least one backtick.
+        return !entry.description.includes('`');
+      })
+      .map((entry) => `${entry.directiveName}: ${entry.description}`);
+    expect(missingExample).toEqual([]);
+  });
+
+  it('still truncates: no row carries the contract prose whole', () => {
+    const untruncated = standard
+      .filter((entry) => {
+        const contract = STANDARD_COMPONENTS[entry.directiveName];
+        if (contract === undefined) return false;
+        // `callout` and any other genuinely one-sentence description are
+        // legitimately returned unchanged; only flag prose that HAS a
+        // later sentence and kept it anyway.
+        return (
+          /\.\s+[A-Z]/.test(contract.description) &&
+          entry.description === contract.description
+        );
+      })
+      .map((entry) => entry.directiveName);
+    expect(untruncated).toEqual([]);
+  });
+});

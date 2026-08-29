@@ -23,18 +23,19 @@ import { describe, expect, it } from 'vitest';
  * kept separate from `view.tsx` (which uses it) purely to keep that file
  * from growing into a do-everything module.
  *
- * `pack-modals.ts` was added the same way for the "Build Markii pack for
- * distribution" command (issue #15, gap 3): its pack picker and overwrite
- * confirmation are Obsidian `SuggestModal`/`Modal` subclasses, equally
- * untestable regardless of file, and kept separate from `main.ts` for the
- * same do-everything-module reason.
+ * `insert-modals.ts` was added to this allowlist deliberately when the
+ * Insert Component command landed (GitHub issue #17, slice 1): its
+ * component picker is a real Obsidian `SuggestModal` subclass, which
+ * cannot exist without importing `obsidian`, and is untestable regardless
+ * of which file it lives in — kept separate from `main.ts` for the same
+ * reason `run-modals.ts` is kept separate from `view.tsx`.
  */
 const ALLOWED_FILES = new Set([
   'main.ts',
   'view.tsx',
   'settings-tab.ts',
   'run-modals.ts',
-  'pack-modals.ts',
+  'insert-modals.ts',
 ]);
 
 const IMPORT_PATTERN =

@@ -107,7 +107,7 @@ describe('formatPackDiagnosticLines', () => {
     expect(lines).toHaveLength(1);
   });
 
-  it("reports one informational line per prebuilt-shadowed pack, naming the pack and this host's build command", () => {
+  it("reports one informational line per prebuilt-shadowed pack, naming the pack and this host's export command", () => {
     const lines = formatPackDiagnosticLines(
       context(
         [pack('ana', 1)],
@@ -120,7 +120,7 @@ describe('formatPackDiagnosticLines', () => {
     expect(lines).toHaveLength(2);
     expect(lines[1]).toContain('ana');
     expect(lines[1]).toContain('webview.js');
-    expect(lines[1]).toContain('Build Pack for Distribution');
+    expect(lines[1]).toContain('Export Pack');
   });
 
   it('lists prebuilt-shadow lines after relative-entry lines and before CSS warnings', () => {

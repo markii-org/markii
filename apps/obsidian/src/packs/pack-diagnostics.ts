@@ -19,11 +19,12 @@
  * the per-vault consequence. (VS Code's own wording names its user-scoped
  * `markii.packs` setting — see `apps/vscode/src/packs/pack-diagnostics.ts`.)
  *
- * The prebuilt-shadow note is also INFORMATIONAL (issue #15): a pack
- * folder that holds both a prebuilt `webview.js` and its component sources
- * is a supported shape, never a failure, so this note names this plugin's
- * own "Build Markii pack for distribution" command rather than treating
- * the situation as something to fix.
+ * The prebuilt-shadow note is also INFORMATIONAL (issue #15, reworded for
+ * issue #16): a pack folder that holds both a prebuilt `webview.js` and its
+ * component sources is a supported shape, never a failure. This plugin no
+ * longer builds packs itself (VS Code is the authoring host and owns pack
+ * packaging), so the note points at the VS Code Export Pack command rather
+ * than treating the situation as something to fix here.
  */
 import {
   formatPackDiagnosticLines as formatPackDiagnosticLinesShared,
@@ -41,15 +42,16 @@ function relativeEntryLine(entry: string): string {
  * component sources still present in the same folder (`@markii/host`'s
  * `resolvePrebuiltPack`, issue #15). Never a failure: shipping both the
  * built artifact and its sources is a supported distribution shape. This
- * line names the plugin's own "Build Markii pack for distribution" command
- * (`./build-pack-distribution.ts`, wired in `../main.ts`) since that is how
- * a user would refresh the prebuilt script after editing the sources.
+ * plugin has no build command of its own (issue #16: VS Code is the
+ * authoring host and owns pack packaging), so this line points at VS
+ * Code's Export Pack command since that is how a user would refresh the
+ * prebuilt script after editing the sources.
  */
 function prebuiltShadowLine(pack: {
   readonly name: string;
   readonly folder: string;
 }): string {
-  return `Pack "${pack.name}" is using its prebuilt webview.js, so the component sources in that folder are not compiled. Edits to them take effect only after you delete webview.js or rebuild it with the Build Markii pack for distribution command.`;
+  return `Pack "${pack.name}" is using its prebuilt webview.js, so the component sources in that folder are not compiled. Edits to them take effect only after you delete webview.js, or rebuild it with the VS Code Export Pack command.`;
 }
 
 /**

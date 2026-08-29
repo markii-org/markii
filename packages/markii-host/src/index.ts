@@ -204,23 +204,36 @@ export {
   resolvePrebuiltPack,
 } from './packs/prebuilt.js';
 
-// "Build pack for distribution" (issue #15, gap 3): compiles a pack and
-// writes its prebuilt artifacts into the pack's OWN folder, the one
-// documented exception to never writing inside a pack folder.
+// "Export pack" (issue #16): compiles a pack and writes a clean,
+// distributable folder at a caller-chosen destination — never inside the
+// pack's own source folder. Supersedes issue #15's in-pack-folder
+// "build for distribution" behavior, which this replaces entirely.
 export type {
-  BuildPackForDistributionOptions,
   ConfirmPackOverwrite,
-  PackDistributionBuilder,
-  PackDistributionFs,
-  PackDistributionOutcome,
-} from './packs/pack-distribute.js';
-export {
-  buildPackForDistribution,
-  resolveDistributionTarget,
-} from './packs/pack-distribute.js';
+  ExportPackOptions,
+  PackExportBuilder,
+  PackExportFs,
+  PackExportOutcome,
+} from './packs/pack-export.js';
+export { exportPack, resolveExportTarget } from './packs/pack-export.js';
 
 export type {
   BuildRenderRegistryResult,
   QueuedPackRegistration,
 } from './packs/pack-render-registry.js';
 export { buildRenderRegistry } from './packs/pack-render-registry.js';
+
+// "Insert Component" (issue #17, slice 1): the shared skeleton-building and
+// catalog logic both hosts' insert commands use — pure, host-neutral, no
+// `vscode`/`obsidian`. See `./insert/component-skeleton.ts` and
+// `./insert/component-catalog.ts`.
+export type {
+  ComponentSkeleton,
+  LineColumn,
+} from './insert/component-skeleton.js';
+export {
+  componentSkeleton,
+  offsetToLineColumn,
+} from './insert/component-skeleton.js';
+export type { InsertableComponent } from './insert/component-catalog.js';
+export { buildComponentCatalog } from './insert/component-catalog.js';

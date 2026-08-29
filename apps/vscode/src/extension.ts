@@ -10,23 +10,32 @@ import {
 } from './preview-panel.js';
 import { appendPackFolder } from './packs/add-pack-folder.js';
 import {
-  createNodePackDistributionFs,
-  discoverConfiguredPacksForDistribution,
+  createNodePackExportFs,
+  exportNameValidationMessage,
   NO_PACKS_CONFIGURED_MESSAGE,
-  packDistributionDiagnosticLines,
-  packDistributionQuickPickItem,
-  packDistributionResultMessage,
-  packOverwriteConfirmMessage,
-} from './packs/build-pack-distribution.js';
+  packExportDiagnosticLines,
+  packExportOverwriteConfirmMessage,
+  packExportQuickPickItem,
+  packExportResultMessage,
+} from './packs/export-pack.js';
+import { discoverConfiguredPacks } from './packs/discover-configured-packs.js';
 import {
-  buildPackForDistribution,
   buildPackRegistrationScript,
+  buildComponentCatalog,
+  componentSkeleton,
+  exportPack,
+  offsetToLineColumn,
 } from '@markii/host';
 import type { DiscoveredPack } from '@markii/host';
 import {
   parseRefreshIntervalSeconds,
   refreshIntervalValidationMessage,
 } from './refresh-interval.js';
+import { isPreviewableDocument } from './mark-document.js';
+import {
+  insertComponentQuickPickItems,
+  NO_ACTIVE_MARK_EDITOR_MESSAGE,
+} from './insert-component.js';
 
 /**
  * The `markii.addPackFolder` command: a folder picker that appends the chosen
@@ -117,20 +126,23 @@ async function toggleRunOnOpen(): Promise<void> {
 }
 
 /**
- * The `markii.buildPackForDistribution` command (GitHub issue #15, gap 3):
- * compiles a configured pack and writes its prebuilt `webview.js`/
- * `webview.css` into the pack's own folder — the one, deliberate exception
- * to never writing inside a pack folder (see `@markii/host`'s
- * `packs/pack-distribute.ts`). All the testable pieces (pack discovery, the
- * `PackDistributionFs`, the quick-pick item shape, every user-facing
- * string) live in `./packs/build-pack-distribution.ts`; this function is
- * `vscode` wiring only: reads `markii.packs`/the workspace root, offers a
- * quick pick when more than one pack is configured, and shows the
- * resulting message. The build's warnings and any failure reason are also
- * written to `diagnosticsChannel`, this extension's one diagnostics
- * surface, so the full detail is never only in a transient popup.
+ * The `markii.exportPack` command ("Markii: Export Pack", GitHub issue
+ * #16): compiles a configured pack and writes a clean, distributable
+ * folder — `pack.json`, `webview.js`, `webview.css` when the build emits
+ * one, and any `scripts/*.lua` — at a location the user picks. VS Code is
+ * the AUTHORING host and owns pack packaging; the pack's own source folder
+ * is never written to (see `@markii/host`'s `packs/pack-export.ts`). All
+ * the testable pieces (pack discovery, the `PackExportFs`, the quick-pick
+ * item shape, the folder-name validator, every user-facing string) live in
+ * `./packs/export-pack.ts`; this function is `vscode` wiring only: reads
+ * `markii.packs`/the workspace root, offers a quick pick when more than one
+ * pack is configured, asks where to export and what to name the folder,
+ * and shows the resulting message. The build's warnings and any failure
+ * reason are also written to `diagnosticsChannel`, this extension's one
+ * diagnostics surface, so the full detail is never only in a transient
+ * popup.
  */
-async function buildPackForDistributionCommand(
+async function exportPackCommand(
   context: vscode.ExtensionContext,
   diagnosticsChannel: vscode.OutputChannel,
 ): Promise<void> {
@@ -139,10 +151,7 @@ async function buildPackForDistributionCommand(
     .get<string[]>('packs', []);
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 
-  const packs = await discoverConfiguredPacksForDistribution(
-    configuredPacks,
-    workspaceRoot,
-  );
+  const packs = await discoverConfiguredPacks(configuredPacks, workspaceRoot);
   if (packs.length === 0) {
     void vscode.window.showInformationMessage(NO_PACKS_CONFIGURED_MESSAGE);
     return;
@@ -152,32 +161,52 @@ async function buildPackForDistributionCommand(
   if (packs.length === 1) {
     chosen = packs[0]!;
   } else {
-    const items = packs.map(packDistributionQuickPickItem);
+    const items = packs.map(packExportQuickPickItem);
     const picked = await vscode.window.showQuickPick(items, {
-      title: 'Markii: Build Pack for Distribution',
-      placeHolder: 'Choose a pack to build',
+      title: 'Markii: Export Pack',
+      placeHolder: 'Choose a pack to export',
     });
     if (!picked) return; // cancelled
     const index = items.indexOf(picked);
     chosen = packs[index]!;
   }
 
+  const destinationPicked = await vscode.window.showOpenDialog({
+    canSelectFolders: true,
+    canSelectFiles: false,
+    canSelectMany: false,
+    openLabel: 'Export Here',
+    title: 'Choose where to export the pack',
+  });
+  const destinationDir = destinationPicked?.[0]?.fsPath;
+  if (!destinationDir) return; // cancelled
+
+  const exportName = await vscode.window.showInputBox({
+    title: 'Markii: Export Pack',
+    prompt: 'Folder name to create at the chosen destination.',
+    value: chosen.manifest.name,
+    validateInput: exportNameValidationMessage,
+  });
+  if (exportName === undefined) return; // cancelled
+
   const cacheDir = packCacheDir(context);
   const browserModulePath = esbuildBrowserModulePath(context);
   const wasmBinaryPath = esbuildWasmBinaryPath(context);
 
-  const outcome = await buildPackForDistribution({
+  const outcome = await exportPack({
     pack: chosen,
     cacheDir,
+    destinationDir,
+    exportName,
     build: (pack, dir) =>
       buildPackRegistrationScript(pack, dir, {
         esbuildBrowserModulePath: browserModulePath,
         esbuildWasmBinaryPath: wasmBinaryPath,
       }),
-    fs: createNodePackDistributionFs(),
+    fs: createNodePackExportFs(),
     confirmOverwrite: async (request) => {
       const choice = await vscode.window.showWarningMessage(
-        packOverwriteConfirmMessage(request),
+        packExportOverwriteConfirmMessage(request),
         { modal: true },
         'Overwrite',
       );
@@ -188,8 +217,8 @@ async function buildPackForDistributionCommand(
   // Both homes of the outcome, always: the short popup, and the full
   // detail (a failure's verbatim reason, the written paths and byte sizes,
   // any pack-CSS lint warnings) on the diagnostics surface.
-  const message = packDistributionResultMessage(outcome);
-  for (const line of packDistributionDiagnosticLines(outcome)) {
+  const message = packExportResultMessage(outcome);
+  for (const line of packExportDiagnosticLines(outcome)) {
     diagnosticsChannel.appendLine(line);
   }
   if (outcome.kind === 'failed') {
@@ -200,12 +229,87 @@ async function buildPackForDistributionCommand(
 }
 
 /**
+ * The `markii.insertComponent` command ("Markii: Insert Component…",
+ * GitHub issue #17, slice 1): offers every standard component plus every
+ * configured pack's components, and inserts the chosen one's directive
+ * skeleton at the cursor. Every testable piece (the quick-pick item shape,
+ * every user-facing string) lives in `./insert-component.ts`; the catalog
+ * and skeleton builders are `@markii/host`'s (shared with the Obsidian
+ * plugin). This function is `vscode` wiring only.
+ *
+ * A pack-discovery failure never blocks the command: `discoverConfiguredPacks`
+ * already degrades quietly (a bad folder is simply skipped, never thrown),
+ * so a caught error here still falls back to the standard set alone rather
+ * than failing the whole command.
+ */
+async function insertComponentCommand(): Promise<void> {
+  const editor = vscode.window.activeTextEditor;
+  if (!editor || !isPreviewableDocument(editor.document)) {
+    void vscode.window.showInformationMessage(NO_ACTIVE_MARK_EDITOR_MESSAGE);
+    return;
+  }
+
+  const configuredPacks = vscode.workspace
+    .getConfiguration('markii')
+    .get<string[]>('packs', []);
+  const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+
+  let packs: Awaited<ReturnType<typeof discoverConfiguredPacks>> = [];
+  try {
+    packs = await discoverConfiguredPacks(configuredPacks, workspaceRoot);
+  } catch {
+    packs = [];
+  }
+
+  const catalog = buildComponentCatalog(packs);
+  const items = insertComponentQuickPickItems(catalog);
+  const picked = await vscode.window.showQuickPick(items, {
+    title: 'Markii: Insert Component',
+    placeHolder: 'Choose a component to insert',
+    matchOnDescription: true,
+    matchOnDetail: true,
+  });
+  if (!picked) return; // cancelled
+
+  const index = items.indexOf(picked);
+  const chosen = catalog[index];
+  if (!chosen) return;
+
+  const skeleton = componentSkeleton(
+    chosen.directiveName,
+    chosen.kind,
+    chosen.requiredAttributes,
+  );
+  // `replace` over the whole selection, anchored at its START, rather than
+  // `insert` at the active end: with text selected those differ, and the
+  // Obsidian plugin's `replaceSelection` already replaces. Anchoring at
+  // `start` also keeps the cursor math right for a selection made
+  // backwards, where `active` is the earlier position.
+  const insertPosition = editor.selection.start;
+
+  await editor.edit((editBuilder) => {
+    editBuilder.replace(editor.selection, skeleton.text);
+  });
+
+  const cursor = offsetToLineColumn(skeleton.text, skeleton.cursorOffset);
+  const cursorPosition =
+    cursor.line === 0
+      ? new vscode.Position(
+          insertPosition.line,
+          insertPosition.character + cursor.column,
+        )
+      : new vscode.Position(insertPosition.line + cursor.line, cursor.column);
+  editor.selection = new vscode.Selection(cursorPosition, cursorPosition);
+}
+
+/**
  * Extension entry point. Imports `vscode` — deliberately NOT unit-tested
  * (vitest cannot resolve `vscode`); this file is wiring only, registering
  * the commands `package.json`'s `contributes.commands` declares
  * (`markii.openPreview`, `markii.runScripts`, `markii.resetScriptGrants`,
  * `markii.addPackFolder`, `markii.enableScheduledRefresh`,
- * `markii.toggleRunOnOpen`, `markii.showDiagnostics`) and delegating all
+ * `markii.toggleRunOnOpen`, `markii.showDiagnostics`,
+ * `markii.exportPack`, `markii.insertComponent`) and delegating all
  * actual behavior to `preview-panel.ts` and small plain helpers.
  */
 export function activate(context: vscode.ExtensionContext): void {
@@ -261,10 +365,16 @@ export function activate(context: vscode.ExtensionContext): void {
       void toggleRunOnOpen();
     },
   );
-  const buildPackForDistributionCommandHandle = vscode.commands.registerCommand(
-    'markii.buildPackForDistribution',
+  const exportPackCommandHandle = vscode.commands.registerCommand(
+    'markii.exportPack',
     () => {
-      void buildPackForDistributionCommand(context, diagnosticsChannel);
+      void exportPackCommand(context, diagnosticsChannel);
+    },
+  );
+  const insertComponentCommandHandle = vscode.commands.registerCommand(
+    'markii.insertComponent',
+    () => {
+      void insertComponentCommand();
     },
   );
   context.subscriptions.push(
@@ -276,7 +386,8 @@ export function activate(context: vscode.ExtensionContext): void {
     addPackFolderCommand,
     enableScheduledRefreshCommand,
     toggleRunOnOpenCommand,
-    buildPackForDistributionCommandHandle,
+    exportPackCommandHandle,
+    insertComponentCommandHandle,
   );
 }
 

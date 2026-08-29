@@ -27,6 +27,7 @@
     "@markii/pack": "*",
     "@markii/react": "*",
     "@markii/runtime": "*",
+    "@markii/stdlib": "*",
     "esbuild-wasm": "^0.28.2"
   }
 }
