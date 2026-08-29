@@ -1,0 +1,202 @@
+# Fires on a pushed `obsidian-v*` tag (or a manual dispatch naming one) and
+# ships the Obsidian plugin through a one-way mirror repo,
+# markii-org/markii-obsidian. This main repo stays the source of truth; the
+# mirror exists only so users can install the plugin (by hand, or later via
+# BRAT) without cloning the whole monorepo or building it themselves.
+#
+# What it does, in order:
+#   1. Test and build the plugin from this repo's workspace (the plugin
+#      bundles @markii/* from source through esbuild aliases — see the build
+#      step below — so no npm publish or dist build of the libraries is
+#      needed here).
+#   2. Run apps/obsidian/scripts/build-release.ts, which gates the release on
+#      the tag matching apps/obsidian/manifest.json and package.json (see the
+#      "Assemble the release" step for why), then writes the installable
+#      plugin folder and a source snapshot for the mirror.
+#   3. Zip the plugin folder.
+#   4. Force-push the source snapshot to the mirror's main branch as a fresh,
+#      single-commit snapshot (no history stitching: the mirror is generated
+#      output, not a fork).
+#   5. Create the release on the MIRROR repo and attach the zip plus the
+#      loose manifest.json / main.js / styles.css (groundwork for BRAT — see
+#      that step for what is still missing before BRAT can install this).
+#
+# Prerequisites:
+#   - The mirror repo markii-org/markii-obsidian exists (already created,
+#     currently empty).
+#   - The OBSIDIAN_MIRROR_TOKEN secret is set on this repo: a personal access
+#     token with contents:write (push + release) on markii-org/markii-obsidian.
+#     This workflow never touches this repo's own releases, so it asks for no
+#     write permission here.
+
+name: Obsidian release
+
+on:
+  push:
+    tags:
+      - 'obsidian-v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release, e.g. obsidian-v0.2.0'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      # On a manual dispatch, check out the tag being released rather than the
+      # default branch: otherwise a re-run would build whatever main happens
+      # to be at, which is not what the tag names. On a tag push, github.ref
+      # already is that tag.
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      # The tag reaches the shell through env vars rather than being
+      # interpolated into the command text, so a tag name can never be read as
+      # shell syntax. The version gate itself stays in build-release.ts.
+      - name: Resolve the release tag
+        id: tag
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_TAG: ${{ inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            TAG="$DISPATCH_TAG"
+          else
+            TAG="$REF_NAME"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "resolved tag: $TAG"
+
+      - run: npm ci
+
+      - name: Test the plugin
+        run: npm test -w markii-obsidian
+
+      # The plugin bundles @markii/* from source (esbuild aliases), so this
+      # does not depend on any npm publish; it only needs the workspace.
+      - name: Build the plugin
+        run: npm run build -w markii-obsidian
+
+      # The plugin folder written below is named after manifest.json's `id`
+      # (currently "markii"), which is also what Obsidian uses as the
+      # install directory name under <vault>/.obsidian/plugins/.
+      #
+      # The version gate: build-release.ts fails unless the tag
+      # (obsidian-v<version>), apps/obsidian/manifest.json's version, and
+      # apps/obsidian/package.json's version all agree. Obsidian's update
+      # detection compares manifest.json's version against what a user has
+      # installed, so a release built from a mismatched bump would ship an
+      # invisible or broken update. That check is deliberately left to the
+      # script rather than reimplemented in shell here.
+      - name: Assemble the release
+        id: assemble
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          node apps/obsidian/scripts/build-release.ts --tag "$TAG" --out release-stage
+
+      - name: Zip the plugin folder
+        env:
+          VERSION: ${{ steps.assemble.outputs.version }}
+        run: |
+          set -euo pipefail
+          cd release-stage/plugin
+          # Zipped with the top-level markii/ folder intact so it extracts
+          # straight into <vault>/.obsidian/plugins/.
+          zip -qr "../markii-${VERSION}.zip" markii -X
+
+      - name: Check OBSIDIAN_MIRROR_TOKEN is set
+        run: |
+          set -euo pipefail
+          if [ -z "${OBSIDIAN_MIRROR_TOKEN:-}" ]; then
+            echo "::error::OBSIDIAN_MIRROR_TOKEN is empty. This workflow needs a" \
+              "personal access token with contents:write on" \
+              "markii-org/markii-obsidian, set as the OBSIDIAN_MIRROR_TOKEN secret" \
+              "on this repo." >&2
+            exit 1
+          fi
+        env:
+          OBSIDIAN_MIRROR_TOKEN: ${{ secrets.OBSIDIAN_MIRROR_TOKEN }}
+
+      # A fresh, single-commit snapshot force-pushed to the mirror's main
+      # branch: no history stitching, because the mirror is generated output,
+      # not a fork. This must happen before the release is created below,
+      # since the release tag is created at the mirror's default branch head.
+      - name: Push the source snapshot to the mirror
+        env:
+          OBSIDIAN_MIRROR_TOKEN: ${{ secrets.OBSIDIAN_MIRROR_TOKEN }}
+          VERSION: ${{ steps.assemble.outputs.version }}
+        run: |
+          set -euo pipefail
+          cd release-stage/mirror
+          SHORT_SHA="${GITHUB_SHA:0:7}"
+          git init -b main
+          git add -A
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -m "snapshot: markii-obsidian ${VERSION} from markii-org/markii@${SHORT_SHA}"
+          git push --force \
+            "https://x-access-token:${OBSIDIAN_MIRROR_TOKEN}@github.com/markii-org/markii-obsidian.git" \
+            main
+
+      - name: Assemble release notes
+        env:
+          VERSION: ${{ steps.assemble.outputs.version }}
+        run: |
+          set -euo pipefail
+          {
+            echo "Markii for Obsidian ${VERSION}."
+            echo
+            echo "## Install"
+            echo
+            echo "Download markii-${VERSION}.zip below and extract it into" \
+              "<vault>/.obsidian/plugins/, then enable the plugin in Obsidian's" \
+              "Community plugins settings."
+            echo
+            echo "## Issues"
+            echo
+            echo "Report problems on the main repo:" \
+              "https://github.com/markii-org/markii/issues"
+          } > RELEASE_NOTES.md
+          echo "----- RELEASE_NOTES.md -----"
+          cat RELEASE_NOTES.md
+
+      # Assets beyond the zip are groundwork for BRAT, which fetches
+      # manifest.json, main.js, and styles.css directly from a release. BRAT
+      # cannot actually install this plugin yet: that needs issue #13 step 2
+      # to embed worker.browser.js, glue.wasm, and the esbuild-wasm runtime
+      # into main.js, since BRAT only downloads those three loose files.
+      - name: Create or update the release on the mirror
+        env:
+          GH_TOKEN: ${{ secrets.OBSIDIAN_MIRROR_TOKEN }}
+          VERSION: ${{ steps.assemble.outputs.version }}
+        run: |
+          set -euo pipefail
+          ZIP="release-stage/markii-${VERSION}.zip"
+          MANIFEST="release-stage/plugin/markii/manifest.json"
+          MAIN_JS="release-stage/plugin/markii/main.js"
+          STYLES="release-stage/plugin/markii/styles.css"
+          if gh release view "$VERSION" --repo markii-org/markii-obsidian >/dev/null 2>&1; then
+            gh release edit "$VERSION" --repo markii-org/markii-obsidian \
+              --title "$VERSION" --notes-file RELEASE_NOTES.md
+            gh release upload "$VERSION" --repo markii-org/markii-obsidian \
+              "$ZIP" "$MANIFEST" "$MAIN_JS" "$STYLES" --clobber
+          else
+            gh release create "$VERSION" --repo markii-org/markii-obsidian \
+              --title "$VERSION" --notes-file RELEASE_NOTES.md \
+              "$ZIP" "$MANIFEST" "$MAIN_JS" "$STYLES"
+          fi

@@ -9,3 +9,6 @@ packages/platforms/markii-html/src/doc-css.generated.ts
 
 # local working queue (2026-08-18): pending-only, untracked; public roadmap = GitHub issues
 TODO.md
+
+# local scratch/audit output; never committed
+tmp/

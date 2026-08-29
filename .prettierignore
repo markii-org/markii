@@ -22,3 +22,6 @@ conformance/
 # Mark documents: Prettier's markdown formatter breaks directive fences
 # (a `:::` line becomes a table cell), corrupting the document
 **/*.mk.md
+
+# local scratch/audit output (untracked; see .gitignore)
+tmp/
