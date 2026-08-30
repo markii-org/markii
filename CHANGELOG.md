@@ -6,6 +6,19 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`@markii/react`: `loadPack` now derives a registry entry's `inline` flag
+  from the manifest's declared `kind`** — a `kind: "inline"` pack component
+  previously rendered as the spec §4 rule 8 form-mismatch fallback when
+  written in its own declared form, because the compiled registration script
+  stamped every entry `inline: false`. The manifest's `kind` now overrides
+  the module's flag (`inline` for `kind: "inline"`, block for `leaf` and
+  `container`); an entry whose manifest declares no `kind` keeps the
+  module's own flag and renders unchanged, exactly as before. The generated
+  registration script (`@markii/host`, private) also bakes the truthful
+  per-component flag into the artifact.
+
 ## [0.8.0] - 2026-08-30
 
 ### Added

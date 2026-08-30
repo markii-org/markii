@@ -180,6 +180,60 @@ describe('buildPackRegistrationScript', () => {
     }
   });
 
+  it('bakes manifest-declared inline kinds into the registration entry, defaulting others to block form', async () => {
+    // Regression for the hardcoded `inline: false` that made every
+    // `kind: "inline"` pack component render as the form-mismatch
+    // fallback: the synthetic entry must carry a truthful per-component
+    // inline map derived from the manifest.
+    const cacheDir = await makeTempDir();
+    const folder = '/packs/kinds';
+    const pack: PackBuildSource = {
+      folder,
+      manifest: {
+        name: 'kinds',
+        engine: 'react',
+        components: {
+          badge: { source: './Badge.tsx', kind: 'inline' },
+          stat: { source: './Stat.tsx', kind: 'leaf' },
+          plain: './Plain.tsx',
+        },
+      },
+      componentPaths: {
+        badge: path.join(folder, 'Badge.tsx'),
+        stat: path.join(folder, 'Stat.tsx'),
+        plain: path.join(folder, 'Plain.tsx'),
+      },
+    };
+
+    let entryContents: string | undefined;
+    const build: NonNullable<PackBuildOptions['build']> = async (options) => {
+      entryContents = (options as { stdin?: { contents?: string } }).stdin
+        ?.contents;
+      const { build: inner } = fakeBuild();
+      return inner(options);
+    };
+
+    const outcome = await buildPackRegistrationScript(pack, cacheDir, {
+      build,
+      readComponentSource: readerFor({
+        [pack.componentPaths.badge!]: 'export function Badge(){}',
+        [pack.componentPaths.stat!]: 'export function Stat(){}',
+        [pack.componentPaths.plain!]: 'export function Plain(){}',
+      }),
+    });
+
+    expect(outcome.kind).toBe('built');
+    expect(entryContents).toBeDefined();
+    expect(entryContents).toContain('var __markiiInline = {"badge":true};');
+    expect(entryContents).toContain(
+      'inline: __markiiInline[__markiiLocalName] === true',
+    );
+    // Only the declared-inline component appears in the map: leaf and
+    // kind-less entries fall through to `=== true` being false.
+    expect(entryContents).not.toContain('"stat":true');
+    expect(entryContents).not.toContain('"plain":true');
+  });
+
   it('a second build with identical sources is a cache hit and never calls build() again', async () => {
     const cacheDir = await makeTempDir();
     const pack = packFor('/packs/fakepack');

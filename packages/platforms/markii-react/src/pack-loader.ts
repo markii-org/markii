@@ -1,5 +1,9 @@
 import type { PackManifest } from '@markii/pack';
-import { composeDirectiveName, detectNamespaceCollisions } from '@markii/pack';
+import {
+  composeDirectiveName,
+  detectNamespaceCollisions,
+  resolvePackComponent,
+} from '@markii/pack';
 import type { Registry, RegistryEntry } from './registry.js';
 import { createRegistry, mergeRegistries } from './registry.js';
 
@@ -81,7 +85,19 @@ export function loadPack(
     const composed = composeDirectiveName(manifest.name, localName);
     if (!composed.ok) continue;
 
-    entries[composed.name] = module;
+    // The manifest's declared `kind` is the authoritative form information
+    // for a pack component (docs/packs.md: `kind` names the directive form
+    // the component renders as). When it is present it decides the
+    // registry entry's `inline` flag, overriding whatever the module
+    // carried: a compiled registration script has no reliable way to know
+    // the form (pack-build historically stamped every entry
+    // `inline: false`, which made every `kind: "inline"` pack component
+    // render as spec §4 rule 8's form-mismatch fallback). A manifest entry
+    // with no `kind` keeps the module's own flag, preserving "a
+    // registration that carries no kind information renders unchanged".
+    const kind = resolvePackComponent(manifest.components[localName])?.kind;
+    entries[composed.name] =
+      kind === undefined ? module : { ...module, inline: kind === 'inline' };
   }
 
   return createRegistry(entries);

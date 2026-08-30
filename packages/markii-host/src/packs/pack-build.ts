@@ -675,6 +675,17 @@ function entrySource(
     )
     .join('\n');
   const manifestJsonLiteral = JSON.stringify(JSON.stringify(pack.manifest));
+  // Which local names the manifest declares `kind: "inline"` for, baked
+  // into the artifact so a standalone consumer of the registration
+  // convention sees a truthful `inline` flag (loadPack re-derives it from
+  // the manifest anyway; this keeps the generated script honest on its
+  // own). Every other kind, and an absent kind, is a block form.
+  const inlineNames = packComponents(pack.manifest)
+    .filter((listing) => listing.kind === 'inline')
+    .map((listing) => listing.localName);
+  const inlineMapLiteral = JSON.stringify(
+    Object.fromEntries(inlineNames.map((name) => [name, true])),
+  );
 
   return [
     imports,
@@ -693,10 +704,11 @@ function entrySource(
     '',
     "if (typeof window !== 'undefined' && typeof window.__markiiRegisterPack === 'function') {",
     '  var __markiiEntries = {};',
+    `  var __markiiInline = ${inlineMapLiteral};`,
     '  for (var __markiiLocalName in __markiiComponents) {',
     '    if (!Object.prototype.hasOwnProperty.call(__markiiComponents, __markiiLocalName)) continue;',
     "    if (typeof __markiiComponents[__markiiLocalName] !== 'function') continue;",
-    '    __markiiEntries[__markiiLocalName] = { component: __markiiComponents[__markiiLocalName], inline: false };',
+    '    __markiiEntries[__markiiLocalName] = { component: __markiiComponents[__markiiLocalName], inline: __markiiInline[__markiiLocalName] === true };',
     '  }',
     `  window.__markiiRegisterPack(${manifestJsonLiteral}, __markiiEntries);`,
     '}',

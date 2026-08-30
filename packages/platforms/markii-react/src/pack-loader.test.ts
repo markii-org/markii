@@ -54,6 +54,46 @@ describe('loadPack', () => {
     expect(Object.hasOwn(registry, 'ana_map')).toBe(false);
   });
 
+  it('derives the entry inline flag from a declared kind: "inline"', () => {
+    // Regression: pack-build's generated registration script used to stamp
+    // every entry `inline: false`, which made a `kind: "inline"` pack
+    // component render as the form-mismatch fallback when written in its
+    // own declared form. The manifest's kind is authoritative here.
+    const manifest = anaManifest({
+      components: {
+        badge: { source: './Badge.tsx', kind: 'inline' },
+      },
+    });
+    const registry = loadPack(manifest, {
+      badge: { component: stubComponent, inline: false },
+    });
+    expect(registry['ana_badge']?.inline).toBe(true);
+    expect(registry['ana_badge']?.component).toBe(stubComponent);
+  });
+
+  it('derives inline: false from a declared block kind over the module flag', () => {
+    const manifest = anaManifest({
+      components: {
+        timeline: { source: './Timeline.tsx', kind: 'container' },
+      },
+    });
+    const registry = loadPack(manifest, {
+      timeline: { component: stubComponent, inline: true },
+    });
+    expect(registry['ana_timeline']?.inline).toBe(false);
+  });
+
+  it('keeps the module inline flag when the manifest declares no kind', () => {
+    const inlineModule: RegistryEntry = {
+      component: stubComponent,
+      inline: true,
+    };
+    const registry = loadPack(anaManifest(), { timeline: inlineModule });
+    // No kind information: the registration renders unchanged (spec §4
+    // rule 8), so the module keeps its own flag and its identity.
+    expect(registry['ana_timeline']).toBe(inlineModule);
+  });
+
   it('ignores a componentModules entry with no matching manifest component', () => {
     const registry = loadPack(anaManifest(), {
       timeline: entry(),
