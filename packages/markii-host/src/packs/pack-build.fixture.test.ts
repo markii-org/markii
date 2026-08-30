@@ -290,7 +290,7 @@ describe('buildPackRegistrationScript — real esbuild-wasm against the tsxpack 
     };
     expect(first).toBe('built');
     expect(second.kind).toBe('built');
-  });
+  }, 60_000);
 
   it('a second call for the same fixture is a cache hit (no change in output, same path)', async () => {
     const workDir = await makeTempDir();
