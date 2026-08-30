@@ -6,6 +6,8 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-08-30
+
 ### Fixed
 
 - **`@markii/react`: `loadPack` now derives a registry entry's `inline` flag

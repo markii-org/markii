@@ -1,7 +1,7 @@
 {
   "id": "markii",
   "name": "Markii",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "minAppVersion": "1.5.0",
   "description": "Preview Markii (.mk.md) notes in a panel or tab, run their sandboxed Lua scripts, and load component packs. Desktop only.",
   "author": "sadigaxund",
