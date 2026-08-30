@@ -1,10 +1,14 @@
 import { App, SuggestModal } from 'obsidian';
 import type { InsertableComponent } from '@markii/host';
 import {
+  createChoiceSettlement,
   filterInsertComponentSuggestions,
   insertComponentSuggestions,
 } from './insert-component.js';
-import type { InsertComponentSuggestion } from './insert-component.js';
+import type {
+  ChoiceSettlement,
+  InsertComponentSuggestion,
+} from './insert-component.js';
 
 /**
  * Imports `obsidian` — added deliberately to
@@ -27,9 +31,8 @@ import type { InsertComponentSuggestion } from './insert-component.js';
  */
 class ComponentSuggestModal extends SuggestModal<InsertComponentSuggestion> {
   private readonly suggestions: readonly InsertComponentSuggestion[];
-  private choice: InsertableComponent | undefined;
-  private resolveChoice: (component: InsertableComponent | undefined) => void =
-    () => {};
+  private readonly settlement: ChoiceSettlement<InsertableComponent> =
+    createChoiceSettlement();
 
   constructor(app: App, catalog: readonly InsertableComponent[]) {
     super(app);
@@ -59,24 +62,24 @@ class ComponentSuggestModal extends SuggestModal<InsertComponentSuggestion> {
   }
 
   onChooseSuggestion(suggestion: InsertComponentSuggestion): void {
-    this.choice = suggestion.component;
-    this.resolveChoice(this.choice);
+    this.settlement.choose(suggestion.component);
   }
 
   override onClose(): void {
-    // Dismissed without a choice (Escape, click-outside): resolve
-    // `undefined`, never leave the caller's promise hanging.
-    if (this.choice === undefined) {
-      this.resolveChoice(undefined);
-    }
+    // `SuggestModal.selectSuggestion` closes the modal BEFORE calling
+    // `onChooseSuggestion`, so this fires on every selection too, not only
+    // on a dismissal (Escape, click-outside). The settlement defers the
+    // `undefined` resolution one task so the same-tick choice wins; a real
+    // dismissal has no following choice and resolves `undefined`, never
+    // leaving the caller's promise hanging. (Issue #23: the previous
+    // synchronous resolve here reported every selection as dismissed.)
+    this.settlement.dismiss();
   }
 
   /** Resolves the chosen `InsertableComponent`, or `undefined` when the modal was dismissed. */
   pick(): Promise<InsertableComponent | undefined> {
-    return new Promise((resolve) => {
-      this.resolveChoice = resolve;
-      this.open();
-    });
+    this.open();
+    return this.settlement.promise;
   }
 }
 

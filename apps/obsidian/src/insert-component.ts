@@ -74,6 +74,55 @@ export function insertComponentSuggestions(
 }
 
 /**
+ * Settles a modal's outcome exactly once, with the dismissal path DEFERRED
+ * so a choice made in the same tick wins.
+ *
+ * Why this exists (the issue #23 regression): Obsidian's
+ * `SuggestModal.selectSuggestion` calls `close()` BEFORE
+ * `onChooseSuggestion()`, so `onClose` fires while no choice has been
+ * recorded yet. A wrapper that resolves `undefined` synchronously from
+ * `onClose` therefore reports every selection as a dismissal: the picker
+ * closes and the caller inserts nothing. Deferring the dismissal by one
+ * task lets the `onChooseSuggestion` that follows in the same tick settle
+ * the promise first; a real dismissal (Escape, click-outside) has no
+ * following choice, so the deferred `undefined` stands.
+ *
+ * `defer` is injectable for tests; the default is a zero-delay timeout.
+ */
+export interface ChoiceSettlement<T> {
+  readonly promise: Promise<T | undefined>;
+  /** Records the chosen value and settles immediately. First settle wins. */
+  choose(value: T): void;
+  /** Settles as `undefined` after `defer`, unless a choice landed first. */
+  dismiss(): void;
+}
+
+export function createChoiceSettlement<T>(
+  defer: (task: () => void) => void = (task) => setTimeout(task, 0),
+): ChoiceSettlement<T> {
+  let settled = false;
+  let resolvePromise: (value: T | undefined) => void = () => {};
+  const promise = new Promise<T | undefined>((resolve) => {
+    resolvePromise = resolve;
+  });
+  return {
+    promise,
+    choose(value: T): void {
+      if (settled) return;
+      settled = true;
+      resolvePromise(value);
+    },
+    dismiss(): void {
+      defer(() => {
+        if (settled) return;
+        settled = true;
+        resolvePromise(undefined);
+      });
+    },
+  };
+}
+
+/**
  * Filters suggestions by `query` against the directive name only (matching
  * `./insert-modals.ts`'s `SuggestModal.getSuggestions` role) — case
  * insensitive substring match. An empty query matches everything.

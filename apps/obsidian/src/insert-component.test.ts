@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { InsertableComponent } from '@markii/host';
 import {
+  createChoiceSettlement,
   filterInsertComponentSuggestions,
   insertComponentSuggestions,
   LAYOUT_ORIGIN,
@@ -158,5 +159,64 @@ describe('user-visible strings', () => {
 describe('NO_ACTIVE_MARK_EDITOR_MESSAGE', () => {
   it('mentions Markii', () => {
     expect(NO_ACTIVE_MARK_EDITOR_MESSAGE).toContain('Markii');
+  });
+});
+
+describe('createChoiceSettlement', () => {
+  /** A manual defer queue standing in for the zero-delay timeout. */
+  function manualDefer(): {
+    defer: (task: () => void) => void;
+    run: () => void;
+  } {
+    const tasks: Array<() => void> = [];
+    return {
+      defer: (task) => tasks.push(task),
+      run: () => {
+        for (const task of tasks.splice(0)) task();
+      },
+    };
+  }
+
+  it('resolves the chosen value when dismiss fires before choose in the same tick', async () => {
+    // The issue #23 order: SuggestModal.selectSuggestion closes the modal
+    // (onClose -> dismiss) BEFORE onChooseSuggestion (-> choose). The
+    // deferred dismissal must lose to the same-tick choice.
+    const { defer, run } = manualDefer();
+    const settlement = createChoiceSettlement<string>(defer);
+    settlement.dismiss();
+    settlement.choose('callout');
+    run();
+    await expect(settlement.promise).resolves.toBe('callout');
+  });
+
+  it('resolves undefined for a dismissal with no following choice', async () => {
+    const { defer, run } = manualDefer();
+    const settlement = createChoiceSettlement<string>(defer);
+    settlement.dismiss();
+    run();
+    await expect(settlement.promise).resolves.toBeUndefined();
+  });
+
+  it('keeps the first choice when choose fires twice', async () => {
+    const settlement = createChoiceSettlement<string>(() => {});
+    settlement.choose('first');
+    settlement.choose('second');
+    await expect(settlement.promise).resolves.toBe('first');
+  });
+
+  it('ignores a dismissal that runs after a choice already settled', async () => {
+    const { defer, run } = manualDefer();
+    const settlement = createChoiceSettlement<string>(defer);
+    settlement.choose('kept');
+    settlement.dismiss();
+    run();
+    await expect(settlement.promise).resolves.toBe('kept');
+  });
+
+  it('uses a real zero-delay timeout by default', async () => {
+    const settlement = createChoiceSettlement<string>();
+    settlement.dismiss();
+    settlement.choose('same-tick');
+    await expect(settlement.promise).resolves.toBe('same-tick');
   });
 });
