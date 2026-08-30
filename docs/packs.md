@@ -4,8 +4,9 @@ A pack is how components and shared Lua modules travel between people. The
 contract, the namespace rules, the registry merging, and the sandboxed
 `require` are implemented, and both reference hosts (the VS Code extension
 and the Obsidian plugin) load packs. This page describes that shipped
-contract. There is no pack registry or marketplace, and none is planned
-here; the last section says why.
+contract. Ready-made packs live in a separate repository,
+[markii-packs](https://github.com/markii-org/markii-packs); the last
+section says why they are not here.
 
 ## What a pack is
 
@@ -285,7 +286,11 @@ it.
 This repository owns the contract: the `pack.json` format, the namespace and
 engine rules, the registry merging, validation, and an authoring guide, with
 `@markii/stdlib` as the exemplar component set. It deliberately does not own
-an ecosystem. There is no pack registry, no marketplace, no scaffolding
-tool, and none is planned here; if such things ever exist, they will be
-separate projects, so that the reference implementation stays small enough
-to trust.
+an ecosystem: keeping the reference implementation free of one is what keeps
+it small enough to trust.
+
+The ecosystem lives in
+[markii-packs](https://github.com/markii-org/markii-packs), a separate
+repository holding a reviewed collection of packs, a starter template, and
+the submission rules. Packs there are consumers of the contract on this
+page, exactly like a pack you write yourself.

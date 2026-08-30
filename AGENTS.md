@@ -516,9 +516,12 @@ same commit as the change that triggers them:
   composition, component names/attributes, script or frontmatter syntax) →
   sweep ALL demo and doc content in the same pass: `README.md`'s example,
   `README.mk.md`, `docs/` snippets, both apps' READMEs and the VS Code
-  walkthrough, and the `markii-vault` repo (example notes, example packs,
+  walkthrough, the `markii-vault` repo (example notes, example packs,
   playground `@markii/*` deps — it consumes published npm versions, so it
-  updates after the npm release, not before).
+  updates after the npm release, not before), and the `markii-packs` repo
+  (every pack's components, README, and example note; its CI consumes
+  published `@markii/pack`/`@markii/react`, so like the vault it updates
+  after the npm release).
 - **New export from `@markii/host/browser`** → it must stay Node-free
   transitively; `apps/vscode/src/browser-entry.probe.test.ts` is the gate.
   A module needing `node:*` stays behind the main entry.
