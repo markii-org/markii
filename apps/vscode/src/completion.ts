@@ -46,18 +46,17 @@ export function completionOriginTag(item: CompletionItem): string {
 }
 
 /**
- * The completion row's secondary line. A component item gets its origin
- * tag, plus the catalog `detail` when there is one (`standard - A colored
- * box for an aside, warning, or danger note.`), or the tag alone when
- * there is no detail. An attribute or value item's `detail` passes through
- * unchanged: slice 1 already wrote that wording (a required marker, an
- * attribute's first sentence).
+ * The completion row's secondary text, shown inline beside the label in a
+ * narrow column. A component item gets its origin tag ONLY (`standard`,
+ * `layout`, or the pack name): the description already lives in the
+ * documentation panel, and a sentence beside the label is truncated to a
+ * useless stub. An attribute or value item's `detail` passes through
+ * unchanged: slice 1 already wrote that wording short (a required marker,
+ * an attribute's first sentence).
  */
 export function completionItemDetail(item: CompletionItem): string {
   if (item.kind !== 'component') return item.detail;
-  const tag = completionOriginTag(item);
-  if (item.detail.length === 0) return tag;
-  return `${tag} - ${item.detail}`;
+  return completionOriginTag(item);
 }
 
 /**

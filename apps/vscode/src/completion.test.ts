@@ -86,13 +86,11 @@ describe('completionOriginTag', () => {
 });
 
 describe('completionItemDetail', () => {
-  it('joins the origin tag and detail for a component with a detail', () => {
-    expect(completionItemDetail(componentItem())).toBe(
-      'standard - A colored box for an aside, warning, or danger note.',
-    );
+  it('shows the origin tag only for a component, never its description', () => {
+    expect(completionItemDetail(componentItem())).toBe('standard');
   });
 
-  it('falls back to the origin tag alone when a component has no detail', () => {
+  it('shows the origin tag when a component has no detail', () => {
     expect(completionItemDetail(componentItem({ detail: '' }))).toBe(
       'standard',
     );
@@ -107,7 +105,7 @@ describe('completionItemDetail', () => {
           detail: 'A cat profile card.',
         }),
       ),
-    ).toBe('cat - A cat profile card.');
+    ).toBe('cat');
   });
 
   it('passes an attribute item detail through unchanged', () => {
