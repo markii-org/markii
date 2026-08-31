@@ -270,7 +270,14 @@ export async function exportNoteAsPdf(
   try {
     const pdf = await request.htmlToPdf({ html, baseDir: request.baseDir });
     await request.fs.writeBinary(pdfPath, pdf);
-    return { kind: 'pdf', path: pdfPath, valueCount, hasScripts, render, images };
+    return {
+      kind: 'pdf',
+      path: pdfPath,
+      valueCount,
+      hasScripts,
+      render,
+      images,
+    };
   } catch (error) {
     const kind = isPdfUnavailable(error) ? 'pdf-unavailable' : 'pdf-failed';
     const reason = reasonOf(error);
