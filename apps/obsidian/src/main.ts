@@ -4,6 +4,7 @@ import {
   MarkdownView,
   Notice,
   Plugin,
+  TFile,
   WorkspaceLeaf,
 } from 'obsidian';
 import * as path from 'node:path';
@@ -31,12 +32,24 @@ import {
   buildComponentCatalog,
   componentSkeleton,
   createNetProvider,
+  MARK_EXTENSION,
   offsetToLineColumn,
+  readPersistedValues,
 } from '@markii/host';
 import type { InsertableComponent } from '@markii/host';
 import { discoverConfiguredPacks } from './packs/discover-configured-packs.js';
 import { pickInsertableComponent } from './insert-modals.js';
 import { MarkiiCompletionSuggest } from './complete-suggest.js';
+import {
+  NO_ACTIVE_NOTE_NOTICE,
+  exportDiagnosticLines,
+  exportNoteAsHtml,
+  exportNoteAsPdf,
+  exportNoticeText,
+} from './export-note.js';
+import type { NoteExportFs, NoteExportOutcome } from './export-note.js';
+import { createElectronHtmlToPdf } from './export/html-to-pdf.js';
+import { createLocalStorageMemento } from './run/local-storage-memento.js';
 
 /**
  * Imports `obsidian` — deliberately NOT unit-tested (Vitest cannot resolve
@@ -161,6 +174,25 @@ export default class MarkiiPlugin extends Plugin {
       new MarkiiCompletionSuggest(this.app, () => this.completionCatalog),
     );
 
+    // A plain `callback`, not a `checkCallback`: an export command that
+    // simply vanishes when the wrong file is focused is the mute failure
+    // AGENTS.md warns about. These stay visible and say what to open.
+    this.addCommand({
+      id: 'export-markii-note-html',
+      name: 'Export Markii note as HTML',
+      callback: () => {
+        void this.exportActiveNote('html');
+      },
+    });
+
+    this.addCommand({
+      id: 'export-markii-note-pdf',
+      name: 'Export Markii note as PDF',
+      callback: () => {
+        void this.exportActiveNote('pdf');
+      },
+    });
+
     this.addCommand({
       id: 'show-markii-diagnostics',
       name: 'Show Markii diagnostics',
@@ -176,6 +208,116 @@ export default class MarkiiPlugin extends Plugin {
         new Notice('Markii: pack diagnostics printed to the console.');
       },
     });
+  }
+
+  /** The active `.mk.md` file, or `undefined` — what both export commands act on. */
+  private activeMarkFile(): TFile | undefined {
+    const file = this.app.workspace.getActiveFile();
+    return file && file.path.endsWith(MARK_EXTENSION) ? file : undefined;
+  }
+
+  /** The vault writes an export needs, backed by the vault adapter so Obsidian indexes what is written and it lands inside the vault, never outside it. */
+  private exportFs(): NoteExportFs {
+    const adapter = this.app.vault.adapter;
+    return {
+      writeText: (path, contents) => adapter.write(path, contents),
+      writeBinary: (path, data) =>
+        adapter.writeBinary(
+          path,
+          data.buffer.slice(
+            data.byteOffset,
+            data.byteOffset + data.byteLength,
+          ) as ArrayBuffer,
+        ),
+    };
+  }
+
+  /**
+   * The note's own folder as an absolute filesystem path, for the PDF
+   * printer: the printed page has to resolve the note's relative image
+   * sources exactly as the exported HTML does, so it is printed from the
+   * note's folder. `undefined` when the vault has no filesystem path, which
+   * the printer reports as PDF being unavailable rather than printing a
+   * page with broken images.
+   */
+  private noteFolderPath(file: TFile): string | undefined {
+    const base = this.vaultBasePath();
+    if (base === undefined) return undefined;
+    const separator = file.path.lastIndexOf('/');
+    const folder = separator === -1 ? '' : file.path.slice(0, separator);
+    return folder ? path.join(base, ...folder.split('/')) : base;
+  }
+
+  /**
+   * The two export commands (GitHub issue #28 slice 1). Wiring only: every
+   * decision, and every user-facing string, lives in `./export-note.ts`,
+   * and the one Electron-touching piece lives in
+   * `./export/html-to-pdf.ts`.
+   *
+   * VALUES. The note's last run is baked into the file, read from the same
+   * device-local store the preview rehydrates from. Deliberately not marked
+   * stale the way a reopened preview is: a static file has no re-run to be
+   * stale against, and a page of stale markers would misreport a snapshot
+   * as a live view that has fallen behind. A note that has never been run
+   * exports with its standard empty states, and the notice says so.
+   *
+   * PACK COMPONENTS. An export is rendered by `@markii/html`, the static
+   * string engine, which only knows the standard component set. A pack
+   * directive comes out as that engine's ordinary unknown-component
+   * fallback: a labeled box with the author's own inner markdown still
+   * rendered inside it. That is this slice's documented behavior, not a
+   * failure, so it is not reported as one.
+   *
+   * Both surfaces, always (AGENTS.md's "clean is not silent"): a short
+   * `Notice`, and the full detail on the console, which is this host's
+   * designated diagnostics surface.
+   */
+  private async exportActiveNote(format: 'html' | 'pdf'): Promise<void> {
+    const file = this.activeMarkFile();
+    if (!file) {
+      new Notice(NO_ACTIVE_NOTE_NOTICE);
+      return;
+    }
+
+    let outcome: NoteExportOutcome;
+    try {
+      const text = await this.app.vault.cachedRead(file);
+      const memento = createLocalStorageMemento(
+        (key) => this.app.loadLocalStorage(key),
+        (key, value) => {
+          this.app.saveLocalStorage(key, value);
+        },
+      );
+      const values = readPersistedValues(memento, file.path);
+      const request = {
+        notePath: file.path,
+        text,
+        values,
+        fs: this.exportFs(),
+      };
+      outcome =
+        format === 'html'
+          ? await exportNoteAsHtml(request)
+          : await exportNoteAsPdf({
+              ...request,
+              htmlToPdf: createElectronHtmlToPdf(),
+              baseDir: this.noteFolderPath(file),
+            });
+    } catch (error) {
+      outcome = {
+        kind: 'failed',
+        reason: error instanceof Error ? error.message : String(error),
+      };
+    }
+
+    for (const line of exportDiagnosticLines(outcome)) {
+      if (outcome.kind === 'html' || outcome.kind === 'pdf') {
+        console.info(`[markii] ${line}`);
+      } else {
+        console.error(`[markii] ${line}`);
+      }
+    }
+    new Notice(exportNoticeText(outcome));
   }
 
   /**

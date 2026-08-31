@@ -21,13 +21,16 @@
     }
   },
   "scripts": {
+    "pretest": "npm run generate:doc-css --workspace @markii/html",
     "test": "vitest run",
+    "prebuild": "npm run generate:doc-css --workspace @markii/html",
     "build": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint ."
   },
   "dependencies": {
     "@markii/bundle": "*",
     "@markii/core": "*",
+    "@markii/html": "*",
     "@markii/lua": "*",
     "@markii/pack": "*",
     "@markii/react": "*",

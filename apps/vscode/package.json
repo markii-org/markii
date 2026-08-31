@@ -85,6 +85,11 @@
         "command": "markii.insertComponent",
         "title": "Insert Component…",
         "category": "Markii"
+      },
+      {
+        "command": "markii.exportHtml",
+        "title": "Export as HTML…",
+        "category": "Markii"
       }
     ],
     "menus": {
@@ -135,6 +140,10 @@
         {
           "command": "markii.insertComponent",
           "when": "editorLangId == markii || editorLangId == markdown"
+        },
+        {
+          "command": "markii.exportHtml",
+          "when": "editorLangId == markii || markii.previewActive"
         }
       ]
     },
@@ -263,8 +272,10 @@
     ]
   },
   "scripts": {
+    "prebuild": "npm run generate:doc-css --workspace @markii/html",
     "build": "tsc --noEmit -p tsconfig.json && node esbuild.config.mjs --production",
     "watch": "node esbuild.config.mjs --watch",
+    "pretest": "npm run generate:doc-css --workspace @markii/html",
     "test": "vitest run",
     "lint": "eslint .",
     "package": "npm run build && vsce package --no-dependencies"

@@ -66,4 +66,23 @@ describe('mirrorReadme', () => {
     const readme = mirrorReadme('0.2.0');
     expect(readme).toContain('esbuild-wasm.zip');
   });
+
+  it('lists every command the plugin registers, exports included', () => {
+    const readme = mirrorReadme('0.2.0');
+    for (const command of [
+      'Open Markii Preview',
+      'Run Markii scripts',
+      'Insert Markii component',
+      'Export Markii note as HTML',
+      'Export Markii note as PDF',
+      'Show Markii diagnostics',
+    ]) {
+      expect(readme).toContain(command);
+    }
+  });
+
+  it('states the PDF command degrades to writing HTML rather than failing', () => {
+    const readme = mirrorReadme('0.2.0');
+    expect(readme).toContain('writes the HTML file instead');
+  });
 });

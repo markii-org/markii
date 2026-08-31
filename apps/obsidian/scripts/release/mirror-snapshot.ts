@@ -86,6 +86,24 @@ updates leave the folder in place.
 Markii is desktop only. It runs note scripts inside a terminatable isolate and
 compiles component packs in process, and Obsidian on mobile supports neither.
 
+## Commands
+
+All of these are in the command palette.
+
+- **Open Markii Preview** renders the active \`.mk.md\` note in its own pane.
+- **Run Markii scripts** runs the note's named Lua script blocks and feeds the
+  data-bound components.
+- **Insert Markii component** inserts a chosen component's skeleton at the
+  cursor.
+- **Export Markii note as HTML** writes the note as one self-contained
+  \`.html\` file beside it in the vault, with the last run's values baked in.
+  The file carries its own styles, so it opens anywhere.
+- **Export Markii note as PDF** prints that same file to a \`.pdf\` beside the
+  note. If this device cannot print, the command writes the HTML file instead
+  and says so.
+- **Show Markii diagnostics** prints the current preview's pack diagnostics to
+  the developer console.
+
 ## About the source in this repository
 
 The files beside this README are the plugin's TypeScript sources, copied from

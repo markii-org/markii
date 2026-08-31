@@ -193,6 +193,12 @@ packages/markii-host    PRIVATE, never published (no npm presence, absent from
   src/insert/        the insert-component seam (issue #17): skeleton builder
                      (container/leaf/inline forms per @markii/stdlib kind)
                      + catalog (stdlib + installed packs) both hosts consume
+  src/export/        note export (issue #28): buildNoteHtmlExport renders a
+                     note through @markii/html into a self-contained HTML
+                     document (doc.css embedded, last-run values baked in,
+                     pack directives as the unknown-component fallback) plus
+                     the shared file-naming rules; main entry only, since it
+                     pulls the HTML engine
   src/complete/      directive completion + hover (issue #27): the pure
                      line/column context parser (directive name, attribute
                      name, attribute value), completionAt/hoverAt over the
@@ -247,6 +253,8 @@ apps/vscode          the "Markii" VS Code extension (preview + Run + packs) — 
                      discovery) back the completion and hover providers
                      registered in extension.ts for the markii language
                      only (issue #27)
+  src/export-html.ts wording + outcome shape behind markii.exportHtml
+                     (issue #28); preview-panel.ts holds the handler
   syntaxes/          TextMate injection grammar for the three directive forms
   esbuild.config.mjs two bundles: extension host (node/cjs, vscode external)
                      and webview (browser/iife); @markii/* aliased to src/;
@@ -304,6 +312,13 @@ apps/obsidian        the "Markii" Obsidian plugin (desktop only) — an
                      (issue #17); src/complete-component.ts +
                      src/complete-suggest.ts (an EditorSuggest, .mk.md
                      notes only) back directive completion (issue #27)
+  src/export-note.ts + src/export/html-to-pdf.ts  the two export commands
+                     (issue #28): export-note.ts is the obsidian-free flow,
+                     wording, and failure classification behind Export as
+                     HTML and Export as PDF; export/html-to-pdf.ts is the
+                     ONE Electron-touching module (hidden BrowserWindow,
+                     javascript disabled, webContents.printToPDF), feature-
+                     detected at call time and degrading to the HTML file
   src/obsidian-theme.css  maps doc.css's 15 Tier 1 tokens onto Obsidian's
                      theme variables; src/theme-coverage.test.ts fails when
                      a token is left unmapped

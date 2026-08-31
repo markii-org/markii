@@ -245,6 +245,49 @@ a standard one does in the editor. A pack that declares nothing keeps the
 earlier behavior: its name completes, and its description is all the
 documentation there is.
 
+## Exporting a note
+
+A host can hand the reader a file rather than a view. Both reference hosts do:
+VS Code writes an HTML file at a path the user picks, and Obsidian writes one
+beside the note in the vault, or prints it straight to PDF.
+
+An export is not a screenshot of the preview. It is a second render, through
+`@markii/html`, the static string engine. The exported file carries the shared
+`doc.css` inside it and loads nothing at runtime, so it opens in any browser,
+attaches to an email, or goes into an archive unchanged. A host builds one
+with `@markii/host`'s `buildNoteHtmlExport`, which is where file naming and
+the page-level CSS live, so two hosts cannot drift on what an exported file
+contains or what it is called.
+
+Three things follow from using the static engine, and a host should say them
+rather than let a reader discover them.
+
+The last run is baked in. A host passes the same persisted value store the
+preview rehydrates from, so a monitoring note exports with the figures it was
+showing. Those values are not demoted to stale the way a reopened preview
+demotes them: a file has no re-run to be stale against. A note that has never
+been run exports with its ordinary empty states, and the host says so in its
+confirmation.
+
+Pack components do not render. Packs are framework-bound component modules,
+and the string engine loads none of them, so a pack directive exports as the
+engine's ordinary unknown-component fallback: a labeled box with the author's
+own inner content still rendered inside it. That is the documented result, not
+a failure, and a host must not report it as one.
+
+Relative images stay relative. The exported markup keeps the note's own image
+sources, so a file written beside its note resolves them exactly as the note
+does. Moving the file elsewhere breaks those links; remote images are
+unaffected.
+
+PDF is a host capability, not a format feature. Where a host runs inside a
+browser engine it can print the exported document directly, and Obsidian does
+so through Electron. Where it cannot, the documented path is to export the
+HTML and print it from a browser. A host that offers PDF must degrade to
+writing the HTML file when printing is unavailable, and must say which of the
+two happened on both of its surfaces: the short notice, and the diagnostics
+surface named in the host checklist above.
+
 ## Where frameworks live
 
 The format is framework-free, but component implementations are bound to a

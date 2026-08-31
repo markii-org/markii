@@ -95,6 +95,13 @@ Enable Scheduled Refresh…** prompts for a number of seconds and writes
   documentation. The **Markii: Insert Component…** command inserts a
   chosen component's skeleton at the cursor, with every standard component
   and any configured pack's components on offer.
+- **Export.** **Markii: Export as HTML…** writes the note as one
+  self-contained `.html` file, styles embedded and the last run's values
+  baked in, at a path you pick. Saving it beside the note keeps its relative
+  images working. The static renderer knows the standard component set, so a
+  pack component exports as the same labeled fallback box an uninstalled
+  pack shows, with your own content still inside it. For a PDF, open the
+  exported file in a browser and print it.
 - **Images.** Local images resolve relative to the note (`nice.png` beside
   it, `img/nice.png` in a subfolder) and remote images load over https.
   Anything outside the note's folder and your workspace is not loaded, the

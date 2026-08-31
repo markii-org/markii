@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import {
   esbuildBrowserModulePath,
   esbuildWasmBinaryPath,
+  exportHtml,
   openPreview,
   packCacheDir,
   resetScriptGrants,
@@ -516,8 +517,9 @@ function loadConfiguredPacksForCompletion(): Promise<
  * (`markii.openPreview`, `markii.runScripts`, `markii.resetScriptGrants`,
  * `markii.addPackFolder`, `markii.enableScheduledRefresh`,
  * `markii.toggleRunOnOpen`, `markii.showDiagnostics`,
- * `markii.exportPack`, `markii.insertComponent`) and delegating all
- * actual behavior to `preview-panel.ts` and small plain helpers.
+ * `markii.exportPack`, `markii.insertComponent`, `markii.exportHtml`) and
+ * delegating all actual behavior to `preview-panel.ts` and small plain
+ * helpers.
  */
 export function activate(context: vscode.ExtensionContext): void {
   // The extension's one diagnostics surface (AGENTS.md's "clean is not
@@ -584,6 +586,12 @@ export function activate(context: vscode.ExtensionContext): void {
       void insertComponentCommand();
     },
   );
+  const exportHtmlCommandHandle = vscode.commands.registerCommand(
+    'markii.exportHtml',
+    () => {
+      void exportHtml(context);
+    },
+  );
 
   // Directive autocompletion and hover (GitHub issue #27, slice 2). The
   // cache avoids re-discovering packs from disk on every keystroke; it is
@@ -624,6 +632,7 @@ export function activate(context: vscode.ExtensionContext): void {
     toggleRunOnOpenCommand,
     exportPackCommandHandle,
     insertComponentCommandHandle,
+    exportHtmlCommandHandle,
     completionProviderHandle,
     hoverProviderHandle,
     packsConfigChangeListener,

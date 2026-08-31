@@ -8,6 +8,26 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Export a note as static HTML** (VS Code extension, Obsidian plugin).
+  **Markii: Export as HTML…** in VS Code asks where to save and writes one
+  self-contained `.html` file; **Export Markii note as HTML** in Obsidian
+  writes it beside the note in the vault. Both render through `@markii/html`,
+  the static string engine, so the file carries the shared `doc.css` inside
+  it and needs nothing beside it. The note's last run is baked in, so a
+  monitoring note exports with the figures it was showing; a note that has
+  never been run exports with its usual empty states, and both hosts say so.
+  A pack component exports as the static engine's ordinary
+  unknown-component fallback, a labeled box with the author's own content
+  still rendered inside it, because packs are React modules the string
+  engine cannot load. Relative image sources are preserved, so a file
+  written beside its note resolves them the same way the note does.
+- **Export a note straight to PDF** (Obsidian plugin). **Export Markii note
+  as PDF** prints exactly the document the HTML export would have written,
+  through Electron's `printToPDF` in a hidden window, and writes the `.pdf`
+  beside the note. Where that is unavailable, on a device with no reachable
+  Electron window or a vault with no filesystem path, the command writes the
+  HTML file instead and says which of the two happened. The reason goes to
+  the console, this host's diagnostics surface, never into the notice.
 - **`@markii/pack`: a component can declare its attributes in `pack.json`.**
   The object form of a `components` entry takes an optional `attributes`
   list, each entry carrying a `name` plus an optional `description`,

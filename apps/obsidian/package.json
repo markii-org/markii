@@ -6,9 +6,9 @@
   "type": "module",
   "scripts": {
     "generate:doc-css": "node scripts/generate-doc-css.ts",
-    "pretest": "npm run generate:doc-css",
+    "pretest": "npm run generate:doc-css --workspace @markii/html && npm run generate:doc-css",
     "test": "vitest run",
-    "prebuild": "npm run generate:doc-css",
+    "prebuild": "npm run generate:doc-css --workspace @markii/html && npm run generate:doc-css",
     "build": "tsc --noEmit -p tsconfig.json && node esbuild.config.mjs --production",
     "watch": "node esbuild.config.mjs --watch",
     "lint": "eslint ."

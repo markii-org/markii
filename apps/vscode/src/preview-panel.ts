@@ -21,6 +21,17 @@ import {
 import type { BundleResolution } from './bundle-resolve.js';
 import { createDebouncer } from './debounce.js';
 import { isPreviewableDocument, previewTitleFor } from './mark-document.js';
+import {
+  EXPORT_HTML_FILTERS,
+  EXPORT_HTML_NO_DOCUMENT_MESSAGE,
+  EXPORT_HTML_REVEAL_LABEL,
+  EXPORT_HTML_SAVE_DIALOG_TITLE,
+  EXPORT_HTML_SAVE_LABEL,
+  exportHtmlDefaultFileName,
+  exportHtmlDiagnosticLines,
+  exportHtmlResultMessage,
+} from './export-html.js';
+import type { HtmlExportOutcome } from './export-html.js';
 import { isWebviewToHostMessage } from './protocol.js';
 import type {
   HostToWebviewMessage,
@@ -52,6 +63,7 @@ import {
   encodeBundleCacheForStorage,
   withPersistedCache,
   buildPackRegistrationScript,
+  buildNoteHtmlExport,
 } from '@markii/host';
 import type { RunResult, SpawnRunOptions } from '@markii/host';
 import { resolveWorkerPath } from './worker-path.js';
@@ -1421,6 +1433,117 @@ async function runWithTrigger(
   } finally {
     preview.running = false;
   }
+}
+
+/**
+ * Writes one export outcome to the "Markii" output channel — the other of a
+ * failure's two homes (AGENTS.md's "clean is not silent"). The popup carries
+ * the short sentence; the verbatim reason only ever lands here.
+ */
+function logExportDiagnostics(outcome: HtmlExportOutcome): void {
+  if (!diagnosticsChannel) return;
+  diagnosticsChannel.appendLine(
+    `Markii: HTML export at ${new Date().toISOString()}`,
+  );
+  for (const line of exportHtmlDiagnosticLines(outcome)) {
+    diagnosticsChannel.appendLine(`  ${line}`);
+  }
+}
+
+/**
+ * The `markii.exportHtml` command handler ("Markii: Export as HTML", GitHub
+ * issue #28 slice 1): writes the active note as ONE self-contained `.html`
+ * file, at a path the user picks, defaulting to the note's own name beside
+ * it.
+ *
+ * The file is rendered by `@markii/html`, the static string engine, through
+ * `@markii/host`'s `buildNoteHtmlExport` — the same builder the Obsidian
+ * plugin's export commands use, so the two hosts cannot drift on what an
+ * exported file contains or what it is called. Nothing is rendered here.
+ *
+ * VALUES. The note's last run is baked in: `readPersistedValues` reads the
+ * same `workspaceState` entry the preview rehydrates from, keyed by the
+ * document URI, so an export made after a run carries the figures that run
+ * produced. Deliberately NOT marked stale the way a rehydrated preview is
+ * (`postStalePersistedValues`): a static file has no "re-run" to be stale
+ * against, and a page full of stale markers would misreport a snapshot as a
+ * live view that has fallen behind. A note that has never been run exports
+ * with the standard empty states, and the confirmation message says so.
+ *
+ * PACK COMPONENTS. The static engine only knows the standard set: packs are
+ * React modules it cannot load. A pack directive therefore comes out as the
+ * engine's ordinary unknown-component fallback, a labeled box with the
+ * author's inner markdown still rendered inside it. That is the documented
+ * behavior of this slice, not a failure, so it is not reported as one.
+ *
+ * IMAGES. The exported HTML keeps the note's own relative image sources, so
+ * a file written beside the note resolves them exactly as the note does.
+ * Saving it somewhere else breaks those links; remote images are unaffected.
+ */
+export async function exportHtml(
+  context: vscode.ExtensionContext,
+): Promise<void> {
+  const document =
+    activePreviewableDocument() ??
+    (active?.source.kind === 'document' ? active.source.document : undefined);
+  if (!document) {
+    void vscode.window.showInformationMessage(EXPORT_HTML_NO_DOCUMENT_MESSAGE);
+    return;
+  }
+
+  const defaultName = exportHtmlDefaultFileName(document.uri.path);
+  const defaultUri =
+    document.uri.scheme === 'untitled'
+      ? undefined
+      : vscode.Uri.joinPath(document.uri, '..', defaultName);
+  const target = await vscode.window.showSaveDialog({
+    title: EXPORT_HTML_SAVE_DIALOG_TITLE,
+    saveLabel: EXPORT_HTML_SAVE_LABEL,
+    filters: EXPORT_HTML_FILTERS as Record<string, string[]>,
+    ...(defaultUri ? { defaultUri } : {}),
+  });
+  if (!target) return; // cancelled
+
+  const values = readPersistedValues(
+    context.workspaceState,
+    document.uri.toString(),
+  );
+  let outcome: HtmlExportOutcome;
+  try {
+    const html = buildNoteHtmlExport({
+      text: document.getText(),
+      fileName: defaultName,
+      values,
+    });
+    const bytes = new TextEncoder().encode(html);
+    await vscode.workspace.fs.writeFile(target, bytes);
+    outcome = {
+      kind: 'written',
+      path: target.fsPath,
+      bytes: bytes.byteLength,
+      valueCount: Object.keys(values).length,
+    };
+  } catch (error) {
+    outcome = {
+      kind: 'failed',
+      path: target.fsPath,
+      reason: error instanceof Error ? error.message : String(error),
+    };
+  }
+
+  logExportDiagnostics(outcome);
+  const message = exportHtmlResultMessage(outcome);
+  if (outcome.kind === 'failed') {
+    void vscode.window.showWarningMessage(message);
+    return;
+  }
+  void vscode.window
+    .showInformationMessage(message, EXPORT_HTML_REVEAL_LABEL)
+    .then((choice) => {
+      if (choice === EXPORT_HTML_REVEAL_LABEL) {
+        void vscode.commands.executeCommand('revealFileInOS', target);
+      }
+    });
 }
 
 /**

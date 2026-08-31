@@ -114,6 +114,24 @@ export { createSnapshotStorage } from './run/snapshot-storage.js';
 
 export { staleValuesForRehydration } from './run/stale-values.js';
 
+// Static export (issue #28): one note's text plus its last-run values ->
+// a self-contained HTML document, via `@markii/html`. Host-neutral: both
+// apps build the same file and name it the same way.
+export type {
+  ExportExtension,
+  NoteHtmlExportOptions,
+} from './export/note-export.js';
+export {
+  EXPORT_PAGE_CSS,
+  FALLBACK_EXPORT_BASE_NAME,
+  MARK_EXTENSION,
+  buildNoteHtmlExport,
+  exportBaseName,
+  exportDocumentTitle,
+  exportedFileName,
+  exportedSiblingPath,
+} from './export/note-export.js';
+
 export type {
   HostLookup,
   PinnedAddress,
