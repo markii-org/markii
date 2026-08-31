@@ -3,7 +3,13 @@ import { createElement } from 'react';
 import type { StoredValue } from '@markii/runtime';
 import { createRegistry } from '@markii/react';
 import { defaultRegistry } from '@markii/react/components';
-import type { ExportBodyRenderer, ExportRenderInfo } from '@markii/host';
+import { EMPTY_IMAGE_REPORT, MAX_EMBEDDED_IMAGE_BYTES } from '@markii/host';
+import type {
+  EmbeddedImageReport,
+  ExportBodyRenderer,
+  ExportImageReader,
+  ExportRenderInfo,
+} from '@markii/host';
 import {
   HtmlToPdfUnavailableError,
   NO_ACTIVE_NOTE_NOTICE,
@@ -259,18 +265,21 @@ const OUTCOMES: NoteExportOutcome[] = [
     path: 'reports/week.html',
     valueCount: 0,
     render: RENDER_STATIC_NO_PACKS,
+    images: EMPTY_IMAGE_REPORT,
   },
   {
     kind: 'html',
     path: 'reports/week.html',
     valueCount: 3,
     render: RENDER_STATIC_NO_PACKS,
+    images: EMPTY_IMAGE_REPORT,
   },
   {
     kind: 'pdf',
     path: 'reports/week.pdf',
     valueCount: 3,
     render: { engine: 'react', packCount: 1, stylesheetCount: 1 },
+    images: EMPTY_IMAGE_REPORT,
   },
   {
     kind: 'pdf-unavailable',
@@ -278,6 +287,7 @@ const OUTCOMES: NoteExportOutcome[] = [
     valueCount: 0,
     reason: 'no BrowserWindow here',
     render: RENDER_STATIC_NO_PACKS,
+    images: EMPTY_IMAGE_REPORT,
   },
   {
     kind: 'pdf-failed',
@@ -289,6 +299,7 @@ const OUTCOMES: NoteExportOutcome[] = [
       reason: 'render-failed',
       detail: 'component exploded',
     },
+    images: EMPTY_IMAGE_REPORT,
   },
   { kind: 'failed', reason: 'disk is full' },
 ];
@@ -301,6 +312,7 @@ describe('exportNoticeText', () => {
         path: 'reports/week.html',
         valueCount: 2,
         render: RENDER_STATIC_NO_PACKS,
+        images: EMPTY_IMAGE_REPORT,
       }),
     ).toContain('week.html');
     expect(
@@ -309,6 +321,7 @@ describe('exportNoticeText', () => {
         path: 'reports/week.html',
         valueCount: 2,
         render: RENDER_STATIC_NO_PACKS,
+        images: EMPTY_IMAGE_REPORT,
       }),
     ).not.toContain('reports/');
   });
@@ -320,6 +333,7 @@ describe('exportNoticeText', () => {
       valueCount: 0,
       reason: 'no BrowserWindow here',
       render: RENDER_STATIC_NO_PACKS,
+      images: EMPTY_IMAGE_REPORT,
     });
     expect(text).toContain('not available on this device');
     expect(text).toContain('week.html');
@@ -333,6 +347,7 @@ describe('exportNoticeText', () => {
       valueCount: 0,
       reason: 'printToPDF timed out',
       render: RENDER_STATIC_NO_PACKS,
+      images: EMPTY_IMAGE_REPORT,
     });
     expect(text).toContain('PDF export failed');
     expect(text).toContain('week.html');
@@ -346,6 +361,7 @@ describe('exportNoticeText', () => {
         path: 'week.html',
         valueCount: 0,
         render: RENDER_STATIC_NO_PACKS,
+        images: EMPTY_IMAGE_REPORT,
       }),
     ).toContain('Run the note first');
   });
@@ -394,6 +410,7 @@ describe('exportDiagnosticLines', () => {
       valueCount: 0,
       reason: 'printToPDF timed out',
       render: RENDER_STATIC_NO_PACKS,
+      images: EMPTY_IMAGE_REPORT,
     });
     expect(lines.join('\n')).toContain('printToPDF timed out');
     expect(lines.join('\n')).toContain('reports/week.html');
@@ -406,6 +423,7 @@ describe('exportDiagnosticLines', () => {
       valueCount: 0,
       reason: 'no BrowserWindow here',
       render: RENDER_STATIC_NO_PACKS,
+      images: EMPTY_IMAGE_REPORT,
     });
     expect(lines.join('\n')).toContain('print from there');
   });
@@ -422,6 +440,7 @@ describe('exportDiagnosticLines', () => {
       path: 'reports/week.html',
       valueCount: 0,
       render: { engine: 'react', packCount: 1, stylesheetCount: 1 },
+      images: EMPTY_IMAGE_REPORT,
     });
     expect(lines.join('\n')).toContain("preview's React engine");
     expect(lines.join('\n')).toContain('1 pack component');
@@ -432,6 +451,7 @@ describe('exportDiagnosticLines', () => {
       path: 'reports/week.html',
       valueCount: 0,
       render: { engine: 'react', packCount: 2, stylesheetCount: 3 },
+      images: EMPTY_IMAGE_REPORT,
     });
     expect(pluralLines.join('\n')).toContain('2 pack components');
     expect(pluralLines.join('\n')).toContain('3 pack stylesheets');
@@ -443,6 +463,7 @@ describe('exportDiagnosticLines', () => {
       path: 'reports/week.html',
       valueCount: 0,
       render: RENDER_STATIC_NO_PACKS,
+      images: EMPTY_IMAGE_REPORT,
     });
     expect(lines.join('\n')).toContain('no pack components are loaded');
     expect(lines.join('\n')).toContain('matches the preview');
@@ -458,6 +479,7 @@ describe('exportDiagnosticLines', () => {
         reason: 'render-failed',
         detail: 'component exploded',
       },
+      images: EMPTY_IMAGE_REPORT,
     });
     expect(lines.join('\n')).toContain('React render failed');
     expect(lines.join('\n')).toContain('exported as labeled boxes');
@@ -477,6 +499,7 @@ describe('exportDiagnosticLines', () => {
         path: 'reports/week.html',
         valueCount: 0,
         render,
+        images: EMPTY_IMAGE_REPORT,
       });
       expect(lines.length).toBeGreaterThan(0);
     }
@@ -496,10 +519,133 @@ describe('exportDiagnosticLines', () => {
         path: 'reports/week.html',
         valueCount: 0,
         render,
+        images: EMPTY_IMAGE_REPORT,
       });
       const renderLine = lines[lines.length - 1]!;
       expect(renderLine).not.toContain('—');
       expect(renderLine).not.toMatch(/[()]/);
+    }
+  });
+
+  it('adds an embedded-images line with the count and bytes added', () => {
+    const images: EmbeddedImageReport = {
+      embedded: ['pic.png', 'chart.png'],
+      embeddedBytes: 51200,
+      skipped: [],
+      remote: 0,
+    };
+    const lines = exportDiagnosticLines({
+      kind: 'html',
+      path: 'reports/week.html',
+      valueCount: 0,
+      render: RENDER_STATIC_NO_PACKS,
+      images,
+    });
+    expect(lines.join('\n')).toContain('Embedded 2 images');
+    expect(lines.join('\n')).toContain('50 KB');
+  });
+
+  it('names a too-large skip with its size', () => {
+    const images: EmbeddedImageReport = {
+      embedded: [],
+      embeddedBytes: 0,
+      skipped: [
+        {
+          src: 'assets/huge.png',
+          reason: 'too-large',
+          byteLength: 3 * 1024 * 1024,
+        },
+      ],
+      remote: 0,
+    };
+    const lines = exportDiagnosticLines({
+      kind: 'html',
+      path: 'reports/week.html',
+      valueCount: 0,
+      render: RENDER_STATIC_NO_PACKS,
+      images,
+    });
+    expect(lines.join('\n')).toContain('huge.png');
+    expect(lines.join('\n')).toContain('3.0 MB');
+    // The embed limit itself, named in the same line.
+    expect(MAX_EMBEDDED_IMAGE_BYTES).toBe(2 * 1024 * 1024);
+    expect(lines.join('\n')).toContain('2.0 MB');
+  });
+
+  it('names an unsupported-type skip', () => {
+    const images: EmbeddedImageReport = {
+      embedded: [],
+      embeddedBytes: 0,
+      skipped: [{ src: 'assets/scan.tiff', reason: 'unsupported-type' }],
+      remote: 0,
+    };
+    const lines = exportDiagnosticLines({
+      kind: 'html',
+      path: 'reports/week.html',
+      valueCount: 0,
+      render: RENDER_STATIC_NO_PACKS,
+      images,
+    });
+    expect(lines.join('\n')).toContain('scan.tiff');
+    expect(lines.join('\n')).toContain('not embedded');
+  });
+
+  it('carries the verbatim detail for an unreadable skip', () => {
+    const images: EmbeddedImageReport = {
+      embedded: [],
+      embeddedBytes: 0,
+      skipped: [
+        {
+          src: 'assets/gone.png',
+          reason: 'unreadable',
+          detail: 'ENOENT no such file',
+        },
+      ],
+      remote: 0,
+    };
+    const lines = exportDiagnosticLines({
+      kind: 'html',
+      path: 'reports/week.html',
+      valueCount: 0,
+      render: RENDER_STATIC_NO_PACKS,
+      images,
+    });
+    expect(lines.join('\n')).toContain('ENOENT no such file');
+  });
+
+  it('adds no image lines at all when a note has no local images', () => {
+    const before = exportDiagnosticLines({
+      kind: 'html',
+      path: 'reports/week.html',
+      valueCount: 0,
+      render: RENDER_STATIC_NO_PACKS,
+      images: EMPTY_IMAGE_REPORT,
+    });
+    // Exactly the export line and the render line, nothing about images.
+    expect(before.length).toBe(2);
+  });
+
+  it('every new image diagnostics line contains no em dash and no parentheses', () => {
+    const images: EmbeddedImageReport = {
+      embedded: ['pic.png'],
+      embeddedBytes: 2048,
+      skipped: [
+        { src: 'huge.png', reason: 'too-large', byteLength: 3 * 1024 * 1024 },
+        { src: 'scan.tiff', reason: 'unsupported-type' },
+        { src: 'gone.png', reason: 'unreadable', detail: 'not found' },
+      ],
+      remote: 1,
+    };
+    const lines = exportDiagnosticLines({
+      kind: 'html',
+      path: 'reports/week.html',
+      valueCount: 0,
+      render: RENDER_STATIC_NO_PACKS,
+      images,
+    });
+    for (const line of lines) {
+      expect(line).not.toContain('—');
+      expect(line).not.toMatch(/[()]/);
     }
   });
 });
@@ -567,5 +713,25 @@ describe('export-note.ts wiring against a fake pack registry', () => {
     expect(written).toContain('timeline component markup');
     expect(written).toContain('.mk-ana_timeline { color: red; }');
     expect(written).not.toContain('unknown component');
+  });
+
+  it('threads an embedImages reader through to a data: URI and the outcome report', async () => {
+    const { fs, text } = createFs();
+    const embedImages: ExportImageReader = (src) => {
+      if (src !== 'pic.png') {
+        return { kind: 'unreadable', detail: 'not the expected source' };
+      }
+      return { kind: 'bytes', bytes: new Uint8Array([1, 2, 3]) };
+    };
+    const outcome = await exportNoteAsHtml({
+      notePath: 'reports/pic.mk.md',
+      text: '# Report\n\n![a picture](pic.png)\n',
+      fs,
+      embedImages,
+    });
+    expect(outcome.kind).toBe('html');
+    if (outcome.kind !== 'html') throw new Error('unreachable');
+    expect(outcome.images.embedded).toEqual(['pic.png']);
+    expect(text.get('reports/pic.html')).toContain('data:image/png;base64,');
   });
 });

@@ -26,11 +26,18 @@
  * Electron surface at all" to "printing threw", degrades to writing the
  * HTML file instead — the user always ends up with an exported note.
  */
-import { buildNoteExport, exportedSiblingPath } from '@markii/host';
+import {
+  MAX_EMBEDDED_IMAGE_BYTES,
+  buildNoteExport,
+  exportedSiblingPath,
+} from '@markii/host';
 import type {
+  EmbeddedImageReport,
   ExportBodyRenderer,
+  ExportImageReader,
   ExportPackStylesheet,
   ExportRenderInfo,
+  SkippedImage,
   StaticExportReason,
 } from '@markii/host';
 import type { StoredValue } from '@markii/runtime';
@@ -102,12 +109,15 @@ export type NoteExportOutcome =
       readonly valueCount: number;
       /** Which engine rendered the body, and why when it was the static one. */
       readonly render: ExportRenderInfo;
+      /** What image embedding did, for the diagnostics surface. */
+      readonly images: EmbeddedImageReport;
     }
   | {
       readonly kind: 'pdf';
       readonly path: string;
       readonly valueCount: number;
       readonly render: ExportRenderInfo;
+      readonly images: EmbeddedImageReport;
     }
   | {
       /** This device cannot print at all; the HTML file was written instead. */
@@ -116,6 +126,7 @@ export type NoteExportOutcome =
       readonly valueCount: number;
       readonly reason: string;
       readonly render: ExportRenderInfo;
+      readonly images: EmbeddedImageReport;
     }
   | {
       /** Printing was possible but failed this time; the HTML file was written instead. */
@@ -124,6 +135,7 @@ export type NoteExportOutcome =
       readonly valueCount: number;
       readonly reason: string;
       readonly render: ExportRenderInfo;
+      readonly images: EmbeddedImageReport;
     }
   | {
       /** Nothing was written. */
@@ -154,6 +166,13 @@ export interface NoteExportRequest {
   readonly packStylesheets?: readonly ExportPackStylesheet[];
   /** How many loaded packs contributed components to the registry that rendered this file. Diagnostics only. */
   readonly packCount?: number;
+  /**
+   * Reads one of the note's local images, so the export embeds it as a
+   * `data:` URI instead of a vault-relative path (`./export/export-images.ts`,
+   * GitHub issue #28 slice 3). Omitted leaves every image source exactly
+   * as the author wrote it.
+   */
+  readonly embedImages?: ExportImageReader;
 }
 
 /** `exportNoteAsPdf`'s extra inputs: the printer, and the folder it may print from. */
@@ -168,6 +187,7 @@ async function buildDocument(request: NoteExportRequest): Promise<{
   html: string;
   valueCount: number;
   render: ExportRenderInfo;
+  images: EmbeddedImageReport;
 }> {
   const values = request.values ?? {};
   const document = await buildNoteExport({
@@ -186,11 +206,15 @@ async function buildDocument(request: NoteExportRequest): Promise<{
     ...(request.packCount !== undefined
       ? { packCount: request.packCount }
       : {}),
+    ...(request.embedImages !== undefined
+      ? { embedImages: request.embedImages }
+      : {}),
   });
   return {
     html: document.html,
     valueCount: document.valueCount,
     render: document.render,
+    images: document.images,
   };
 }
 
@@ -204,9 +228,9 @@ export async function exportNoteAsHtml(
 ): Promise<NoteExportOutcome> {
   const path = exportedSiblingPath(request.notePath, '.html');
   try {
-    const { html, valueCount, render } = await buildDocument(request);
+    const { html, valueCount, render, images } = await buildDocument(request);
     await request.fs.writeText(path, html);
-    return { kind: 'html', path, valueCount, render };
+    return { kind: 'html', path, valueCount, render, images };
   } catch (error) {
     return { kind: 'failed', reason: reasonOf(error) };
   }
@@ -230,8 +254,9 @@ export async function exportNoteAsPdf(
   let html: string;
   let valueCount: number;
   let render: ExportRenderInfo;
+  let images: EmbeddedImageReport;
   try {
-    ({ html, valueCount, render } = await buildDocument(request));
+    ({ html, valueCount, render, images } = await buildDocument(request));
   } catch (error) {
     return { kind: 'failed', reason: reasonOf(error) };
   }
@@ -239,7 +264,7 @@ export async function exportNoteAsPdf(
   try {
     const pdf = await request.htmlToPdf({ html, baseDir: request.baseDir });
     await request.fs.writeBinary(pdfPath, pdf);
-    return { kind: 'pdf', path: pdfPath, valueCount, render };
+    return { kind: 'pdf', path: pdfPath, valueCount, render, images };
   } catch (error) {
     const kind = isPdfUnavailable(error) ? 'pdf-unavailable' : 'pdf-failed';
     const reason = reasonOf(error);
@@ -252,7 +277,7 @@ export async function exportNoteAsPdf(
         reason: `${reason}; the HTML fallback also failed: ${reasonOf(fallbackError)}`,
       };
     }
-    return { kind, path: htmlPath, valueCount, reason, render };
+    return { kind, path: htmlPath, valueCount, reason, render, images };
   }
 }
 
@@ -289,9 +314,72 @@ export function exportNoticeText(outcome: NoteExportOutcome): string {
   }
 }
 
-/** `count` plus `noun`, pluralized with a trailing `s`. Every noun this module uses is regular. */
-function countedNoun(count: number, noun: string): string {
+/**
+ * `count` plus `noun`, pluralized with a trailing `s`. Every noun this
+ * module uses is regular. Exported so `./export/cascade-export.ts` shares
+ * the exact wording rather than growing a second copy.
+ */
+export function countedNoun(count: number, noun: string): string {
   return `${String(count)} ${noun}${count === 1 ? '' : 's'}`;
+}
+
+/**
+ * A byte count in the largest whole unit that keeps at least one
+ * significant digit, matching how a file manager sizes a file: `900 B`,
+ * `48 KB`, `2.3 MB`. Used only in diagnostics lines, never a notice.
+ */
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${String(bytes)} B`;
+  const kilobytes = bytes / 1024;
+  if (kilobytes < 1024) {
+    return `${kilobytes < 10 ? kilobytes.toFixed(1) : String(Math.round(kilobytes))} KB`;
+  }
+  const megabytes = kilobytes / 1024;
+  return `${megabytes < 10 ? megabytes.toFixed(1) : String(Math.round(megabytes))} MB`;
+}
+
+/**
+ * The last path segment of an image source as the note wrote it, for
+ * naming a skipped image without printing its whole relative path.
+ */
+function imageFileNameOf(src: string): string {
+  const separator = src.lastIndexOf('/');
+  return separator === -1 ? src : src.slice(separator + 1);
+}
+
+/** One skipped image's diagnostics line, per `SkippedImage.reason`. */
+function skippedImageLine(skipped: SkippedImage): string {
+  const name = imageFileNameOf(skipped.src);
+  switch (skipped.reason) {
+    case 'too-large':
+      return `Skipped ${name}, its size is ${formatBytes(skipped.byteLength ?? 0)}, over the ${formatBytes(MAX_EMBEDDED_IMAGE_BYTES)} embed limit.`;
+    case 'unsupported-type':
+      return `Skipped ${name}, its file type is not embedded.`;
+    case 'unreadable':
+      return skipped.detail
+        ? `Skipped ${name}: ${skipped.detail}`
+        : `Skipped ${name}, it could not be read.`;
+  }
+}
+
+/**
+ * The diagnostics lines for one export's image embedding: how many images
+ * were embedded and the bytes that added, then one line per skipped
+ * image. Nothing at all when the note has no local images, per
+ * AGENTS.md's rule that a quiet outcome is still a fact to record, not a
+ * line to invent.
+ */
+function imageDiagnosticLines(images: EmbeddedImageReport): string[] {
+  const lines: string[] = [];
+  if (images.embedded.length > 0) {
+    lines.push(
+      `Embedded ${countedNoun(images.embedded.length, 'image')}, adding ${formatBytes(images.embeddedBytes)}.`,
+    );
+  }
+  for (const skipped of images.skipped) {
+    lines.push(skippedImageLine(skipped));
+  }
+  return lines;
 }
 
 /**
@@ -335,23 +423,27 @@ export function exportDiagnosticLines(outcome: NoteExportOutcome): string[] {
       return [
         `Exported ${outcome.path} as HTML with ${String(outcome.valueCount)} stored values baked in.`,
         renderDiagnosticLine(outcome.render),
+        ...imageDiagnosticLines(outcome.images),
       ];
     case 'pdf':
       return [
         `Exported ${outcome.path} as PDF with ${String(outcome.valueCount)} stored values baked in.`,
         renderDiagnosticLine(outcome.render),
+        ...imageDiagnosticLines(outcome.images),
       ];
     case 'pdf-unavailable':
       return [
         `PDF export is unavailable on this device: ${outcome.reason}`,
         `Wrote ${outcome.path} as HTML instead. Open it in a browser and print from there to get a PDF.`,
         renderDiagnosticLine(outcome.render),
+        ...imageDiagnosticLines(outcome.images),
       ];
     case 'pdf-failed':
       return [
         `PDF export failed: ${outcome.reason}`,
         `Wrote ${outcome.path} as HTML instead. Open it in a browser and print from there to get a PDF.`,
         renderDiagnosticLine(outcome.render),
+        ...imageDiagnosticLines(outcome.images),
       ];
     case 'failed':
       return [`Export failed: ${outcome.reason}`];

@@ -10,7 +10,16 @@ import {
   exportHtmlResultMessage,
 } from './export-html.js';
 import type { HtmlExportOutcome } from './export-html.js';
-import type { ExportRenderInfo } from '@markii/host';
+import type {
+  EmbeddedImageReport,
+  ExportImageReader,
+  ExportRenderInfo,
+} from '@markii/host';
+import {
+  EMPTY_IMAGE_REPORT,
+  composeNoteHtmlExport,
+  embedImagesInHtml,
+} from '@markii/host';
 
 const STATIC_NO_PACKS: ExportRenderInfo = {
   engine: 'static',
@@ -20,6 +29,42 @@ const REACT_RENDER: ExportRenderInfo = {
   engine: 'react',
   packCount: 2,
   stylesheetCount: 1,
+};
+
+const EMBEDDED_ONE_IMAGE: EmbeddedImageReport = {
+  embedded: ['nice.png'],
+  embeddedBytes: 2048,
+  skipped: [],
+  remote: 0,
+};
+
+const EMBEDDED_TWO_IMAGES: EmbeddedImageReport = {
+  embedded: ['a.png', 'b.png'],
+  embeddedBytes: 3 * 1024 * 1024,
+  skipped: [],
+  remote: 0,
+};
+
+const IMAGES_WITH_SKIPS: EmbeddedImageReport = {
+  embedded: ['nice.png'],
+  embeddedBytes: 2048,
+  skipped: [
+    { src: 'huge.png', reason: 'too-large', byteLength: 5 * 1024 * 1024 },
+    { src: 'weird.tiff', reason: 'unsupported-type' },
+    {
+      src: '../../../.ssh/id_rsa.png',
+      reason: 'unreadable',
+      detail: '../../../.ssh/id_rsa.png resolved outside the workspace',
+    },
+  ],
+  remote: 2,
+};
+
+const IMAGES_ONE_REMOTE: EmbeddedImageReport = {
+  embedded: [],
+  embeddedBytes: 0,
+  skipped: [],
+  remote: 1,
 };
 
 describe('exportHtmlDefaultFileName', () => {
@@ -44,6 +89,7 @@ describe('exportHtmlResultMessage', () => {
       bytes: 1234,
       valueCount: 3,
       render: STATIC_NO_PACKS,
+      images: EMPTY_IMAGE_REPORT,
     });
     expect(message).toContain('week.html');
     expect(message).toContain('3 script values');
@@ -58,6 +104,7 @@ describe('exportHtmlResultMessage', () => {
         bytes: 10,
         valueCount: 1,
         render: STATIC_NO_PACKS,
+        images: EMPTY_IMAGE_REPORT,
       }),
     ).toContain('with 1 script value from');
   });
@@ -69,6 +116,7 @@ describe('exportHtmlResultMessage', () => {
       bytes: 10,
       valueCount: 0,
       render: STATIC_NO_PACKS,
+      images: EMPTY_IMAGE_REPORT,
     });
     expect(message).toContain('no stored script values');
   });
@@ -92,6 +140,7 @@ describe('exportHtmlDiagnosticLines', () => {
       bytes: 4096,
       valueCount: 2,
       render: STATIC_NO_PACKS,
+      images: EMPTY_IMAGE_REPORT,
     });
     expect(lines).toHaveLength(2);
     expect(lines[0]).toContain('/w/notes/week.html');
@@ -124,6 +173,7 @@ describe('exportHtmlDiagnosticLines', () => {
       bytes: 10,
       valueCount: 0,
       render: REACT_RENDER,
+      images: EMPTY_IMAGE_REPORT,
     });
     expect(lines[1]).toContain("preview's React engine");
     expect(lines[1]).toContain('2 packs');
@@ -137,6 +187,7 @@ describe('exportHtmlDiagnosticLines', () => {
       bytes: 10,
       valueCount: 0,
       render: { engine: 'react', packCount: 1, stylesheetCount: 1 },
+      images: EMPTY_IMAGE_REPORT,
     });
     expect(lines[1]).toContain('1 pack');
     expect(lines[1]).toContain('1 stylesheet');
@@ -150,6 +201,7 @@ describe('exportHtmlDiagnosticLines', () => {
       bytes: 10,
       valueCount: 0,
       render: STATIC_NO_PACKS,
+      images: EMPTY_IMAGE_REPORT,
     });
     expect(lines[1]).toContain('no pack components are loaded');
     expect(lines[1]).toContain('matches what the preview shows');
@@ -162,6 +214,7 @@ describe('exportHtmlDiagnosticLines', () => {
       bytes: 10,
       valueCount: 0,
       render: { engine: 'static', reason: 'no-renderer' },
+      images: EMPTY_IMAGE_REPORT,
     });
     expect(lines[1]).toContain('no preview panel was open');
     expect(lines[1]).toContain('labeled boxes');
@@ -179,6 +232,7 @@ describe('exportHtmlDiagnosticLines', () => {
         reason: 'timeout',
         detail: 'no reply within 4000ms',
       },
+      images: EMPTY_IMAGE_REPORT,
     });
     expect(lines[1]).toContain('did not answer in time');
     expect(lines[1]).toContain('no reply within 4000ms');
@@ -195,9 +249,87 @@ describe('exportHtmlDiagnosticLines', () => {
         reason: 'render-failed',
         detail: 'component threw',
       },
+      images: EMPTY_IMAGE_REPORT,
     });
     expect(lines[1]).toContain('could not render the note');
     expect(lines[1]).toContain('component threw');
+  });
+
+  it('says nothing about images when the note has none', () => {
+    const lines = exportHtmlDiagnosticLines({
+      kind: 'written',
+      path: '/w/week.html',
+      bytes: 10,
+      valueCount: 0,
+      render: STATIC_NO_PACKS,
+      images: EMPTY_IMAGE_REPORT,
+    });
+    expect(lines).toHaveLength(2);
+  });
+
+  it('reports one embedded image and its added size', () => {
+    const lines = exportHtmlDiagnosticLines({
+      kind: 'written',
+      path: '/w/week.html',
+      bytes: 10,
+      valueCount: 0,
+      render: STATIC_NO_PACKS,
+      images: EMBEDDED_ONE_IMAGE,
+    });
+    expect(lines[2]).toContain('Embedded 1 image');
+    expect(lines[2]).toContain('2 KB');
+  });
+
+  it('uses the plural for more than one embedded image', () => {
+    const lines = exportHtmlDiagnosticLines({
+      kind: 'written',
+      path: '/w/week.html',
+      bytes: 10,
+      valueCount: 0,
+      render: STATIC_NO_PACKS,
+      images: EMBEDDED_TWO_IMAGES,
+    });
+    expect(lines[2]).toContain('Embedded 2 images');
+    expect(lines[2]).toContain('3 MB');
+  });
+
+  it('names each skipped image and its reason, and mentions remote sources', () => {
+    const lines = exportHtmlDiagnosticLines({
+      kind: 'written',
+      path: '/w/week.html',
+      bytes: 10,
+      valueCount: 0,
+      render: STATIC_NO_PACKS,
+      images: IMAGES_WITH_SKIPS,
+    });
+    const tooLarge = lines.find((line) => line.includes('huge.png'));
+    expect(tooLarge).toContain('5 MB');
+    expect(tooLarge).toContain('2 MB embed limit');
+
+    const unsupported = lines.find((line) => line.includes('weird.tiff'));
+    expect(unsupported).toContain('not supported for embedding');
+
+    const unreadable = lines.find((line) =>
+      line.includes('../../../.ssh/id_rsa.png'),
+    );
+    expect(unreadable).toContain('resolved outside the workspace');
+
+    const remote = lines.find((line) => line.includes('remote'));
+    expect(remote).toContain('2 image sources');
+  });
+
+  it('uses the singular for exactly one remote source', () => {
+    const lines = exportHtmlDiagnosticLines({
+      kind: 'written',
+      path: '/w/week.html',
+      bytes: 10,
+      valueCount: 0,
+      render: STATIC_NO_PACKS,
+      images: IMAGES_ONE_REMOTE,
+    });
+    const remote = lines.find((line) => line.includes('remote'));
+    expect(remote).toContain('1 image source');
+    expect(remote).not.toContain('1 image sources');
   });
 });
 
@@ -209,6 +341,7 @@ describe('export wording', () => {
       bytes: 10,
       valueCount: 0,
       render: STATIC_NO_PACKS,
+      images: EMPTY_IMAGE_REPORT,
     },
     {
       kind: 'written',
@@ -216,6 +349,7 @@ describe('export wording', () => {
       bytes: 10,
       valueCount: 1,
       render: REACT_RENDER,
+      images: EMPTY_IMAGE_REPORT,
     },
     {
       kind: 'written',
@@ -223,6 +357,7 @@ describe('export wording', () => {
       bytes: 10,
       valueCount: 5,
       render: { engine: 'react', packCount: 1, stylesheetCount: 1 },
+      images: EMPTY_IMAGE_REPORT,
     },
     {
       kind: 'written',
@@ -230,6 +365,7 @@ describe('export wording', () => {
       bytes: 10,
       valueCount: 0,
       render: { engine: 'static', reason: 'no-renderer' },
+      images: EMPTY_IMAGE_REPORT,
     },
     {
       kind: 'written',
@@ -237,6 +373,7 @@ describe('export wording', () => {
       bytes: 10,
       valueCount: 0,
       render: { engine: 'static', reason: 'timeout', detail: 'no reply' },
+      images: EMPTY_IMAGE_REPORT,
     },
     {
       kind: 'written',
@@ -248,6 +385,39 @@ describe('export wording', () => {
         reason: 'render-failed',
         detail: 'threw an error',
       },
+      images: EMPTY_IMAGE_REPORT,
+    },
+    {
+      kind: 'written',
+      path: '/w/week.html',
+      bytes: 10,
+      valueCount: 0,
+      render: STATIC_NO_PACKS,
+      images: EMBEDDED_ONE_IMAGE,
+    },
+    {
+      kind: 'written',
+      path: '/w/week.html',
+      bytes: 10,
+      valueCount: 0,
+      render: STATIC_NO_PACKS,
+      images: EMBEDDED_TWO_IMAGES,
+    },
+    {
+      kind: 'written',
+      path: '/w/week.html',
+      bytes: 10,
+      valueCount: 0,
+      render: STATIC_NO_PACKS,
+      images: IMAGES_WITH_SKIPS,
+    },
+    {
+      kind: 'written',
+      path: '/w/week.html',
+      bytes: 10,
+      valueCount: 0,
+      render: STATIC_NO_PACKS,
+      images: IMAGES_ONE_REMOTE,
     },
     { kind: 'failed', path: '/w/week.html', reason: 'nope' },
     { kind: 'failed', reason: 'nope' },
@@ -286,5 +456,29 @@ describe('export wording', () => {
 describe('EXPORT_HTML_FILTERS', () => {
   it('defaults the picker to HTML files', () => {
     expect(EXPORT_HTML_FILTERS.HTML).toEqual(['html', 'htm']);
+  });
+});
+
+describe('image embedding pipeline', () => {
+  it('lands a local image as a data URI in the finished export document', async () => {
+    const PIXEL = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+    const reader: ExportImageReader = (src) =>
+      src === 'nice.png'
+        ? { kind: 'bytes', bytes: PIXEL }
+        : { kind: 'unreadable', detail: 'not stubbed' };
+
+    const body = '<p>note</p><img src="nice.png" alt="">';
+    const { html: embeddedBody, report } = await embedImagesInHtml(
+      body,
+      reader,
+    );
+    expect(report.embedded).toEqual(['nice.png']);
+
+    const document = composeNoteHtmlExport({
+      bodyHtml: embeddedBody,
+      fileName: 'week.mk.md',
+    });
+    expect(document).toContain('src="data:image/png;base64,');
+    expect(document).not.toContain('src="nice.png"');
   });
 });

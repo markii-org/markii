@@ -29,6 +29,30 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
   content still rendered inside it. Neither outcome is treated as a
   failure, and the two are distinguishable on each host's diagnostics
   surface without changing what the notice says.
+- **Exported files carry their own images.** A local image a note
+  references is embedded in the exported HTML as a `data:` URI, so the file
+  is self-contained: it opens with its pictures intact on a machine that has
+  never seen the vault or the workspace. Remote `http` and `https` sources
+  stay live URLs, since embedding them would change what the page fetches.
+  Each host resolves an image the way its own preview does and reads it
+  under its own jail, so an export can never pull in a file the preview
+  itself could not show. An image above 2 MiB keeps its original path rather
+  than inflating the file, and so does one whose extension the embedder does
+  not recognize, or one that could not be read. Every such case is named on
+  the host's diagnostics surface with its file and size. None of them is a
+  failure and none of them reaches the notice. The Obsidian PDF export
+  benefits automatically, since it prints exactly this document.
+- **Export a linked set of notes as one archive** (Obsidian plugin).
+  **Export Markii note as HTML cascade** follows the links out of the active
+  note, both wikilinks and markdown links that resolve to notes in the
+  vault, exports every note it reaches as its own HTML file with images
+  embedded, and writes the whole set as one zip beside the root note. Links
+  between exported notes are rewritten to point at the sibling files, so the
+  archive is navigable offline; a link to a note outside the exported set,
+  or to something that is not a note, is left exactly as written. The walk
+  detects cycles and stops at a depth and a note-count bound, and says on
+  the diagnostics surface which bound stopped it. Cascade to PDF is not part
+  of this release.
 - **Export a note straight to PDF** (Obsidian plugin). **Export Markii note
   as PDF** prints exactly the document the HTML export would have written,
   through Electron's `printToPDF` in a hidden window, and writes the `.pdf`

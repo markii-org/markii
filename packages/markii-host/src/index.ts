@@ -143,6 +143,55 @@ export {
   packStylesheetsCss,
 } from './export/note-export.js';
 
+// Image embedding (issue #28 slice 3, part 1): a note's local images become
+// `data:` URIs so an exported file stands on its own. The reading is a host
+// seam; the cap, the MIME rules, and the reporting live here.
+export type {
+  EmbeddedImageReport,
+  ExportImageReader,
+  ExportImageResult,
+  ImageSkipReason,
+  SkippedImage,
+} from './export/image-embed.js';
+export {
+  EMBEDDABLE_IMAGE_EXTENSIONS,
+  EMPTY_IMAGE_REPORT,
+  MAX_EMBEDDED_IMAGE_BYTES,
+  embedImagesInHtml,
+  encodeBase64,
+  isEmbeddableImageSrc,
+  mimeTypeForImageSrc,
+  toImageDataUri,
+} from './export/image-embed.js';
+
+// Cascade export (issue #28 slice 3, part 2): walking a note's links,
+// naming each exported file, and rewriting the links between them. Pure
+// and host-neutral, so a second host can adopt the command later.
+export type { NoteLink, NoteLinkTargetResolver } from './export/note-links.js';
+export {
+  extractNoteLinks,
+  isLocalNoteTarget,
+  maskCodeRegions,
+  rewriteNoteLinks,
+} from './export/note-links.js';
+export type {
+  CascadeLinkResolver,
+  CascadeNote,
+  CascadeNoteReader,
+  CascadeTruncation,
+  CascadeWalkOptions,
+  CascadeWalkResult,
+} from './export/cascade.js';
+export {
+  DEFAULT_CASCADE_MAX_DEPTH,
+  DEFAULT_CASCADE_MAX_NOTES,
+  assignCascadeFileNames,
+  rewriteCascadeLinks,
+  walkNoteCascade,
+} from './export/cascade.js';
+export type { ExportArchiveEntry } from './export/export-zip.js';
+export { zipExportArchive } from './export/export-zip.js';
+
 export type {
   HostLookup,
   PinnedAddress,

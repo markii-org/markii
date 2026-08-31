@@ -36,7 +36,11 @@ import {
   offsetToLineColumn,
   readPersistedValues,
 } from '@markii/host';
-import type { InsertableComponent } from '@markii/host';
+import type {
+  CascadeLinkResolver,
+  ExportImageReader,
+  InsertableComponent,
+} from '@markii/host';
 import { discoverConfiguredPacks } from './packs/discover-configured-packs.js';
 import { pickInsertableComponent } from './insert-modals.js';
 import { fenceEditorChanges } from './fence-edits.js';
@@ -51,6 +55,14 @@ import {
 import type { NoteExportFs, NoteExportOutcome } from './export-note.js';
 import { createElectronHtmlToPdf } from './export/html-to-pdf.js';
 import { renderNoteBodyForExport } from './export/render-body.js';
+import { createVaultImageReader } from './export/export-images.js';
+import type { VaultImageReaderDeps } from './export/export-images.js';
+import {
+  exportCascadeDiagnosticLines,
+  exportCascadeNoticeText,
+  exportNoteCascade,
+} from './export/cascade-export.js';
+import type { CascadeExportOutcome } from './export/cascade-export.js';
 import { createLocalStorageMemento } from './run/local-storage-memento.js';
 import { buildPackRegistrationScript } from '@markii/host';
 import type { Registry } from '@markii/react';
@@ -203,6 +215,14 @@ export default class MarkiiPlugin extends Plugin {
     });
 
     this.addCommand({
+      id: 'export-markii-note-html-cascade',
+      name: 'Export Markii note as HTML cascade',
+      callback: () => {
+        void this.exportActiveCascade();
+      },
+    });
+
+    this.addCommand({
       id: 'show-markii-diagnostics',
       name: 'Show Markii diagnostics',
       callback: () => {
@@ -239,6 +259,32 @@ export default class MarkiiPlugin extends Plugin {
           ) as ArrayBuffer,
         ),
     };
+  }
+
+  /**
+   * The `ExportImageReader` for one note (GitHub issue #28 slice 3, part
+   * 1): resolves an `<img src>` the way Obsidian's own preview resolves
+   * one, `app.metadataCache.getFirstLinkpathDest` first and a plain
+   * vault-relative path second, then reads it through the vault adapter.
+   * Every decision beyond these four one-line calls lives in
+   * `./export/export-images.ts`, which is what `src/export/
+   * export-images.test.ts` exercises against a fake vault.
+   *
+   * THE JAIL. The vault adapter Obsidian hands this plugin is jailed to
+   * the vault by construction, so a resolved path can never read outside
+   * it; there is no separate jail to add here.
+   */
+  private exportImageReader(notePath: string): ExportImageReader {
+    const adapter = this.app.vault.adapter;
+    const deps: VaultImageReaderDeps = {
+      linkpathDest: (src, from) =>
+        this.app.metadataCache.getFirstLinkpathDest(src, from)?.path,
+      pathExists: (path) => adapter.exists(path),
+      statSize: async (path) => (await adapter.stat(path))?.size,
+      readBinary: async (path) =>
+        new Uint8Array(await adapter.readBinary(path)),
+    };
+    return createVaultImageReader(notePath, deps);
   }
 
   /**
@@ -378,6 +424,7 @@ export default class MarkiiPlugin extends Plugin {
         text,
         values,
         fs: this.exportFs(),
+        embedImages: this.exportImageReader(file.path),
         ...(packContext
           ? {
               renderBody: renderNoteBodyForExport(packContext.registry),
@@ -409,6 +456,97 @@ export default class MarkiiPlugin extends Plugin {
       }
     }
     new Notice(exportNoticeText(outcome));
+  }
+
+  /**
+   * Reads one note's text by its vault-relative path, for
+   * `exportActiveCascade`'s `CascadeNoteReader`. `walkNoteCascade`
+   * (`@markii/host`) treats a path that does not resolve to a real note
+   * file the same as one it could not read, so returning `undefined` for
+   * anything that is not a `TFile` is enough; no separate check is needed
+   * here.
+   */
+  private readNoteText = async (path: string): Promise<string | undefined> => {
+    const file = this.app.vault.getAbstractFileByPath(path);
+    if (!(file instanceof TFile)) return undefined;
+    return this.app.vault.cachedRead(file);
+  };
+
+  /**
+   * The cascade command's link resolver (GitHub issue #28 slice 3, part
+   * 2): `app.metadataCache.getFirstLinkpathDest`, the same resolution
+   * Obsidian's own preview uses, accepting only a result that names a
+   * note file this host can export, `.mk.md` or `.md`. Anything else, a
+   * link to a PDF, an image, or a note outside the vault, resolves to
+   * `undefined` so the walk leaves it exactly as written.
+   */
+  private cascadeLinkResolver(): CascadeLinkResolver {
+    return (link, fromNotePath) => {
+      const file = this.app.metadataCache.getFirstLinkpathDest(
+        link.path,
+        fromNotePath,
+      );
+      if (!file) return undefined;
+      return file.path.toLowerCase().endsWith('.md') ? file.path : undefined;
+    };
+  }
+
+  /**
+   * The "Export Markii note as HTML cascade" command (GitHub issue #28
+   * slice 3, part 2). Wiring only: the walk, the archive, and every
+   * user-facing string live in `./export/cascade-export.ts`; this method
+   * supplies the vault-touching seams that module cannot import for
+   * itself, `readNoteText`, `cascadeLinkResolver`, the persisted-values
+   * reader, and one `exportImageReader` per note reached.
+   *
+   * PDF is deliberately not offered here; a cascade PDF is issue #29.
+   */
+  private async exportActiveCascade(): Promise<void> {
+    const file = this.activeMarkFile();
+    if (!file) {
+      new Notice(NO_ACTIVE_NOTE_NOTICE);
+      return;
+    }
+
+    let outcome: CascadeExportOutcome;
+    try {
+      const memento = createLocalStorageMemento(
+        (key) => this.app.loadLocalStorage(key),
+        (key, value) => {
+          this.app.saveLocalStorage(key, value);
+        },
+      );
+      const packContext = await this.exportRegistryContext();
+      outcome = await exportNoteCascade({
+        rootPath: file.path,
+        readNote: this.readNoteText,
+        resolveLink: this.cascadeLinkResolver(),
+        readValues: (path) => readPersistedValues(memento, path),
+        fs: this.exportFs(),
+        embedImagesFor: (path) => this.exportImageReader(path),
+        ...(packContext
+          ? {
+              renderBody: renderNoteBodyForExport(packContext.registry),
+              packStylesheets: packContext.stylesheets,
+              packCount: packContext.packCount,
+            }
+          : { staticReason: 'no-packs' as const }),
+      });
+    } catch (error) {
+      outcome = {
+        kind: 'failed',
+        reason: error instanceof Error ? error.message : String(error),
+      };
+    }
+
+    for (const line of exportCascadeDiagnosticLines(outcome)) {
+      if (outcome.kind === 'cascade') {
+        console.info(`[markii] ${line}`);
+      } else {
+        console.error(`[markii] ${line}`);
+      }
+    }
+    new Notice(exportCascadeNoticeText(outcome));
   }
 
   /**

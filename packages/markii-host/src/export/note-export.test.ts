@@ -379,3 +379,60 @@ describe('buildNoteExport', () => {
     );
   });
 });
+
+describe('buildNoteExport image embedding', () => {
+  const PIXEL = new Uint8Array([137, 80, 78, 71]);
+
+  it('embeds through the React path', async () => {
+    const result = await buildNoteExport({
+      text: 'ignored, the renderer supplies the body',
+      fileName: 'week.mk.md',
+      renderBody: () => ({ ok: true, html: '<img src="nice.png">' }),
+      embedImages: () => ({ kind: 'bytes', bytes: PIXEL }),
+    });
+    expect(result.html).toContain('data:image/png;base64,');
+    expect(result.html).not.toContain('src="nice.png"');
+    expect(result.images.embedded).toEqual(['nice.png']);
+  });
+
+  it('embeds through the static path too', async () => {
+    const result = await buildNoteExport({
+      text: '![a](nice.png)\n',
+      fileName: 'week.mk.md',
+      embedImages: () => ({ kind: 'bytes', bytes: PIXEL }),
+    });
+    expect(result.html).toContain('data:image/png;base64,');
+    expect(result.images.embedded).toEqual(['nice.png']);
+  });
+
+  it('reports an empty image report when no reader is offered', async () => {
+    const result = await buildNoteExport({
+      text: '![a](nice.png)\n',
+      fileName: 'week.mk.md',
+    });
+    expect(result.html).toContain('src="nice.png"');
+    expect(result.images).toEqual({
+      embedded: [],
+      embeddedBytes: 0,
+      skipped: [],
+      remote: 0,
+    });
+  });
+
+  it('still embeds when the React render failed and the static engine took over', async () => {
+    const result = await buildNoteExport({
+      text: '![a](nice.png)\n',
+      fileName: 'week.mk.md',
+      renderBody: () => {
+        throw new Error('boom');
+      },
+      embedImages: () => ({ kind: 'bytes', bytes: PIXEL }),
+    });
+    expect(result.render).toEqual({
+      engine: 'static',
+      reason: 'render-failed',
+      detail: 'boom',
+    });
+    expect(result.images.embedded).toEqual(['nice.png']);
+  });
+});

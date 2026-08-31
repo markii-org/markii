@@ -16,8 +16,13 @@
  * The rendering itself is `@markii/html`'s, reached through `@markii/host`.
  * Nothing here renders anything.
  */
-import { exportedFileName } from '@markii/host';
-import type { ExportRenderInfo } from '@markii/host';
+import { MAX_EMBEDDED_IMAGE_BYTES, exportedFileName } from '@markii/host';
+import type {
+  EmbeddedImageReport,
+  ExportRenderInfo,
+  SkippedImage,
+} from '@markii/host';
+import { formatByteSize } from './export-images.js';
 
 /** Shown when the command runs with no Markii document to export. */
 export const EXPORT_HTML_NO_DOCUMENT_MESSAGE =
@@ -57,6 +62,8 @@ export type HtmlExportOutcome =
       readonly valueCount: number;
       /** Which engine rendered the body, and why when it was the static one (GitHub issue #28 slice 2). Diagnostics-facing only; see `exportHtmlDiagnosticLines`. */
       readonly render: ExportRenderInfo;
+      /** What image embedding did, for the diagnostics surface only (GitHub issue #28 slice 3). The empty report when the note has no images or none was offered a reader. */
+      readonly images: EmbeddedImageReport;
     }
   | {
       readonly kind: 'failed';
@@ -125,6 +132,55 @@ function renderDiagnosticLine(render: ExportRenderInfo): string {
 }
 
 /**
+ * One skipped image's diagnostics line: which file, and why it kept its
+ * original source instead of being embedded.
+ */
+function skippedImageLine(skipped: SkippedImage): string {
+  if (skipped.reason === 'too-large') {
+    const size =
+      skipped.byteLength !== undefined
+        ? formatByteSize(skipped.byteLength)
+        : 'an unknown size';
+    return `Skipped ${skipped.src}: ${size}, over the ${formatByteSize(MAX_EMBEDDED_IMAGE_BYTES)} embed limit.`;
+  }
+  if (skipped.reason === 'unsupported-type') {
+    return `Skipped ${skipped.src}: this file type is not supported for embedding.`;
+  }
+  return `Skipped ${skipped.src}: ${skipped.detail ?? 'the file could not be read'}.`;
+}
+
+/**
+ * The image lines for `exportHtmlDiagnosticLines`: how many images were
+ * embedded and how many bytes they added, one line per skipped image, and a
+ * remote-source count when any sources still reach the network. Empty when
+ * a note has no images at all, so an export with nothing to say about
+ * images adds nothing to the diagnostics.
+ */
+function imageDiagnosticLines(images: EmbeddedImageReport): string[] {
+  const lines: string[] = [];
+  if (images.embedded.length > 0) {
+    const count =
+      images.embedded.length === 1
+        ? '1 image'
+        : `${String(images.embedded.length)} images`;
+    lines.push(
+      `Embedded ${count}, adding ${formatByteSize(images.embeddedBytes)} to the exported file.`,
+    );
+  }
+  for (const skipped of images.skipped) {
+    lines.push(skippedImageLine(skipped));
+  }
+  if (images.remote > 0) {
+    const line =
+      images.remote === 1
+        ? '1 image source still points at a remote URL and needs network access to load.'
+        : `${String(images.remote)} image sources still point at remote URLs and need network access to load.`;
+    lines.push(line);
+  }
+  return lines;
+}
+
+/**
  * The lines written to the "Markii" output channel for one export — this
  * extension's designated diagnostics surface. Every failure reaches here in
  * full, including the reason the popup deliberately omits.
@@ -139,5 +195,6 @@ export function exportHtmlDiagnosticLines(
   return [
     `HTML export wrote ${outcome.path}: ${String(outcome.bytes)} bytes, ${String(outcome.valueCount)} stored values baked in.`,
     renderDiagnosticLine(outcome.render),
+    ...imageDiagnosticLines(outcome.images),
   ];
 }

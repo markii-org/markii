@@ -33,6 +33,11 @@ import {
   exportHtmlResultMessage,
 } from './export-html.js';
 import type { HtmlExportOutcome } from './export-html.js';
+import {
+  IMAGE_NO_DOCUMENT_FOLDER_DETAIL,
+  imageOutsideWorkspaceDetail,
+  imageReadErrorDetail,
+} from './export-images.js';
 import { isWebviewToHostMessage } from './protocol.js';
 import type {
   ExportRequestMessage,
@@ -67,9 +72,11 @@ import {
   withPersistedCache,
   buildPackRegistrationScript,
   buildNoteExport,
+  MAX_EMBEDDED_IMAGE_BYTES,
 } from '@markii/host';
 import type {
   ExportBodyResult,
+  ExportImageReader,
   RunResult,
   SpawnRunOptions,
 } from '@markii/host';
@@ -246,6 +253,73 @@ function rootKey(uri: vscode.Uri): string {
 function documentFolder(document: vscode.TextDocument): vscode.Uri | undefined {
   if (document.uri.scheme === 'untitled') return undefined;
   return vscode.Uri.joinPath(document.uri, '..');
+}
+
+/**
+ * The roots an exported image is allowed to resolve into: the note's own
+ * folder, and every open workspace folder. Matches
+ * `localResourceRootsFor`'s jail for the same reason the preview draws it
+ * there: an explicit, user-trusted boundary, never anything wider.
+ */
+function imageJailRoots(documentFolderUri: vscode.Uri): string[] {
+  const roots = [rootKey(documentFolderUri)];
+  for (const folder of vscode.workspace.workspaceFolders ?? []) {
+    roots.push(rootKey(folder.uri));
+  }
+  return [...new Set(roots)];
+}
+
+/**
+ * The `markii.exportHtml` command's image reader (GitHub issue #28 slice
+ * 3, part 2): resolves a note's relative `<img src>` the same way the
+ * preview resolves one (`documentFolder`), reads it with
+ * `vscode.workspace.fs` so this keeps working on remote and virtual file
+ * systems, and reports what it could not do rather than throwing.
+ *
+ * SIZE FIRST. `stat` runs before any `readFile`, so a huge local image is
+ * never pulled into memory just to find out it is over the cap.
+ *
+ * THE JAIL. A resolved source outside the note's own folder and every open
+ * workspace folder is refused and reported `unreadable`, never read. A
+ * traversal source such as `../../../.ssh/id_rsa.png` must come back
+ * refused with a reason, not silently embedded into a file the user may
+ * then share.
+ *
+ * An untitled document has no folder at all, so every relative source in
+ * one reads `unreadable` without an attempt at resolution.
+ */
+function createExportImageReader(
+  document: vscode.TextDocument,
+): ExportImageReader {
+  const folder = documentFolder(document);
+  if (!folder) {
+    return () => ({
+      kind: 'unreadable',
+      detail: IMAGE_NO_DOCUMENT_FOLDER_DETAIL,
+    });
+  }
+  const roots = imageJailRoots(folder);
+  return async (src) => {
+    let resolved: vscode.Uri;
+    try {
+      resolved = vscode.Uri.joinPath(folder, src);
+    } catch (error) {
+      return { kind: 'unreadable', detail: imageReadErrorDetail(error) };
+    }
+    if (!isCoveredByRoots(roots, rootKey(resolved))) {
+      return { kind: 'unreadable', detail: imageOutsideWorkspaceDetail(src) };
+    }
+    try {
+      const stat = await vscode.workspace.fs.stat(resolved);
+      if (stat.size > MAX_EMBEDDED_IMAGE_BYTES) {
+        return { kind: 'oversize', byteLength: stat.size };
+      }
+      const bytes = await vscode.workspace.fs.readFile(resolved);
+      return { kind: 'bytes', bytes };
+    } catch (error) {
+      return { kind: 'unreadable', detail: imageReadErrorDetail(error) };
+    }
+  };
 }
 
 /** The last path segment of a URI's path, or `''` for one with none. */
@@ -1596,9 +1670,13 @@ function panelHasWebviewPacks(preview: ActivePreview): boolean {
  * live view that has fallen behind. A note that has never been run exports
  * with the standard empty states, and the confirmation message says so.
  *
- * IMAGES. The exported HTML keeps the note's own relative image sources, so
- * a file written beside the note resolves them exactly as the note does.
- * Saving it somewhere else breaks those links; remote images are unaffected.
+ * IMAGES. `createExportImageReader` embeds every local image it can reach
+ * as a `data:` URI (GitHub issue #28 slice 3), so the written file is
+ * self-contained wherever it is saved. An image outside the note's own
+ * folder and every open workspace folder, one over `MAX_EMBEDDED_IMAGE_BYTES`,
+ * or an unsupported file type keeps its original source instead; a remote
+ * image is untouched either way. See `exportHtmlDiagnosticLines` for how
+ * each of those is worded on the diagnostics surface.
  */
 export async function exportHtml(
   context: vscode.ExtensionContext,
@@ -1632,6 +1710,7 @@ export async function exportHtml(
   try {
     const preview = active;
     const useReact = preview !== undefined && panelHasWebviewPacks(preview);
+    const embedImages = createExportImageReader(document);
 
     let exportRequest: Parameters<typeof buildNoteExport>[0];
     if (useReact && preview) {
@@ -1646,6 +1725,7 @@ export async function exportHtml(
         renderBody: (text, vals) => requestExportBody(preview, text, vals),
         packStylesheets,
         packCount: preview.packContext.webviewPacks.length,
+        embedImages,
       };
     } else {
       // No panel open at all -> 'no-renderer' when at least one pack folder
@@ -1662,6 +1742,7 @@ export async function exportHtml(
         fileName: defaultName,
         values,
         staticReason,
+        embedImages,
       };
     }
 
@@ -1675,6 +1756,7 @@ export async function exportHtml(
       bytes: bytes.byteLength,
       valueCount: exportDocument.valueCount,
       render: exportDocument.render,
+      images: exportDocument.images,
     };
   } catch (error) {
     outcome = {

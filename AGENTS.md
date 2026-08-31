@@ -197,8 +197,10 @@ packages/markii-host    PRIVATE, never published (no npm presence, absent from
                      note through @markii/html into a self-contained HTML
                      document (doc.css embedded, last-run values baked in,
                      pack directives as the unknown-component fallback) plus
-                     the shared file-naming rules; main entry only, since it
-                     pulls the HTML engine
+                     the shared file-naming rules, the data-URI image
+                     embedder behind an injected reader seam, and the
+                     cascade walk/link-rewrite/zip logic both hosts can
+                     adopt; main entry only, since it pulls the HTML engine
   src/complete/      directive completion + hover (issue #27): the pure
                      line/column context parser (directive name, attribute
                      name, attribute value), completionAt/hoverAt over the
@@ -377,7 +379,8 @@ join the authoring side; nothing is built for that in advance.
   `unist-util-visit`. No YAML library — the `uses:` accessor is hand-rolled
   for the simple list forms only, same philosophy as manifest validation.
 - Playground editor: CodeMirror 6 (playground only)
-- Bundles: `fflate` (zip form; @markii/bundle only)
+- Bundles: `fflate` (zip form; @markii/bundle, plus the private
+  @markii/host for the cascade-export zip)
 - Lua sandbox: `wasmoon` (Lua 5.4 in WASM; @markii/lua only)
 - Package manager: npm (workspaces). No pnpm/yarn/bun.
 - VS Code extension only (`apps/vscode`, orchestrator-approved 2026-08-17;

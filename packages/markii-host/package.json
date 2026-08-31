@@ -1,7 +1,7 @@
 {
   "name": "@markii/host",
   "version": "0.1.0",
-  "description": "Shared, host-neutral script-running layer for Markii hosts (apps/vscode, and any future host): tier gating, the grant model, DNS/address pinning, and the terminatable-isolate watchdog around the worker_thread Run path. PRIVATE — never published, exists only to be shared between apps in this repo.",
+  "description": "Shared, host-neutral script-running layer for Markii hosts (apps/vscode, and any future host): tier gating, the grant model, DNS/address pinning, and the terminatable-isolate watchdog around the worker_thread Run path. PRIVATE \u2014 never published, exists only to be shared between apps in this repo.",
   "license": "MIT",
   "author": "sadigaxund",
   "private": true,
@@ -36,6 +36,7 @@
     "@markii/react": "*",
     "@markii/runtime": "*",
     "@markii/stdlib": "*",
-    "esbuild-wasm": "^0.28.2"
+    "esbuild-wasm": "^0.28.2",
+    "fflate": "^0.8.3"
   }
 }

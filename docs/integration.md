@@ -275,7 +275,7 @@ renders through a surface it does not own, the way VS Code asks its webview,
 must bound the wait and fall back to the static engine rather than leave the
 command hanging.
 
-Four things follow from how an export is rendered, and a host should say
+Five things follow from how an export is rendered, and a host should say
 them rather than let a reader discover them.
 
 The last run is baked in. A host passes the same persisted value store the
@@ -297,10 +297,18 @@ one. The two must be distinguishable on the host's diagnostics surface, so a
 reader who expected a component and got a box can find out why; the short
 notice stays the same either way.
 
-Relative images stay relative. The exported markup keeps the note's own image
-sources, so a file written beside its note resolves them exactly as the note
-does. Moving the file elsewhere breaks those links; remote images are
-unaffected.
+Local images travel with the file. A host hands the exporter a reader for its
+own storage, and every local image a note references is embedded as a `data:`
+URI, so the exported file opens with its pictures intact anywhere. Remote
+`http` and `https` sources stay live URLs, because embedding them would change
+what the page fetches. Each host resolves an image the way its own preview
+resolves one and reads it under its own jail, so an export can never reach a
+file the preview itself could not show. An image above two megabytes keeps its
+original source rather than inflating the file, and so does one whose
+extension the embedder does not recognize, or one that could not be read. Each
+of those is named on the host's diagnostics surface, with its size where that
+is the reason. None of them is a failure, and none of them belongs in the
+notice.
 
 PDF is a host capability, not a format feature. Where a host runs inside a
 browser engine it can print the exported document directly, and Obsidian does
@@ -309,6 +317,24 @@ HTML and print it from a browser. A host that offers PDF must degrade to
 writing the HTML file when printing is unavailable, and must say which of the
 two happened on both of its surfaces: the short notice, and the diagnostics
 surface named in the host checklist above.
+
+### Exporting a linked set
+
+One note rarely stands alone. The Obsidian plugin can follow the links out of
+a note, export every note it reaches, and write the whole set as one zip
+beside the root note. The walk follows both wikilinks and markdown links that
+resolve to notes in the vault, detects cycles, and stops at a depth bound and
+a note-count bound, saying on the diagnostics surface which bound stopped it.
+
+Links between exported notes are rewritten to point at the sibling files, so
+the archive is navigable with no vault and no network. A link to a note
+outside the exported set, or to something that is not a note, is left exactly
+as written. A wikilink that does point into the set becomes a markdown link,
+because Markii renders CommonMark, where a wikilink is ordinary text rather
+than a link; without that conversion the exported pages could not reach each
+other. The walk, the naming, and the rewriting are host-neutral logic in
+`@markii/host`, so a second host can adopt the command without reimplementing
+any of it. Exporting a linked set to PDF is not offered.
 
 ## Where frameworks live
 

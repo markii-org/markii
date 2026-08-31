@@ -26,6 +26,8 @@
 import { exportHtmlDocument, renderMarkToHtml } from '@markii/html';
 import { defaultHtmlRegistry } from '@markii/html/components';
 import { createValueStore } from '@markii/runtime';
+import { EMPTY_IMAGE_REPORT, embedImagesInHtml } from './image-embed.js';
+import type { EmbeddedImageReport, ExportImageReader } from './image-embed.js';
 import type { StoredValue } from '@markii/runtime';
 
 /** The last path segment of a `/`-separated path, or the string itself when it has no separator. */
@@ -370,6 +372,13 @@ export interface NoteExportBuildRequest {
   readonly packCount?: number;
   /** Extra host CSS appended after `EXPORT_PAGE_CSS`. Trusted, inserted verbatim. */
   readonly extraCss?: string;
+  /**
+   * Reads one of the note's local images, so the export can embed it as a
+   * `data:` URI and stand on its own (`./image-embed.ts`, issue #28 slice
+   * 3). Omitted leaves every image source exactly as the author wrote it,
+   * which is slice 2's behavior.
+   */
+  readonly embedImages?: ExportImageReader;
 }
 
 /** One built export: the complete document, how it was rendered, and how many values it baked in. */
@@ -380,6 +389,8 @@ export interface NoteExportDocument {
   readonly render: ExportRenderInfo;
   /** How many last-run values were baked in. */
   readonly valueCount: number;
+  /** What image embedding did, for the host's diagnostics surface. Empty when no `embedImages` reader was offered. */
+  readonly images: EmbeddedImageReport;
 }
 
 /** The verbatim reason for a thrown value. Diagnostics only, never a notice. */
@@ -402,15 +413,40 @@ export async function buildNoteExport(
   const values = request.values ?? {};
   const valueCount = Object.keys(values).length;
 
-  const staticDocument = (render: ExportRenderInfo): NoteExportDocument => ({
-    html: composeNoteHtmlExport({
-      bodyHtml: renderStaticBody(request.text, values),
-      fileName: request.fileName,
-      ...(request.extraCss !== undefined ? { extraCss: request.extraCss } : {}),
-    }),
-    render,
-    valueCount,
-  });
+  /**
+   * The one place a body becomes a finished document, so image embedding
+   * and page composition cannot end up applied on one path and not the
+   * other. Images are embedded BEFORE composition, since the page shell is
+   * not a place an `<img>` can appear.
+   */
+  const finish = async (
+    bodyHtml: string,
+    render: ExportRenderInfo,
+    packStylesheets: readonly ExportPackStylesheet[],
+  ): Promise<NoteExportDocument> => {
+    const embedded = request.embedImages
+      ? await embedImagesInHtml(bodyHtml, request.embedImages)
+      : { html: bodyHtml, report: EMPTY_IMAGE_REPORT };
+    return {
+      html: composeNoteHtmlExport({
+        bodyHtml: embedded.html,
+        fileName: request.fileName,
+        packStylesheets,
+        ...(request.extraCss !== undefined
+          ? { extraCss: request.extraCss }
+          : {}),
+      }),
+      render,
+      valueCount,
+      images: embedded.report,
+    };
+  };
+
+  /** The static engine's document. Pack stylesheets are never embedded here: the static body has nothing that would use them. */
+  const staticDocument = (
+    render: ExportRenderInfo,
+  ): Promise<NoteExportDocument> =>
+    finish(renderStaticBody(request.text, values), render, []);
 
   if (!request.renderBody) {
     return staticDocument({
@@ -439,18 +475,13 @@ export async function buildNoteExport(
   }
 
   const packStylesheets = request.packStylesheets ?? [];
-  return {
-    html: composeNoteHtmlExport({
-      bodyHtml: result.html,
-      fileName: request.fileName,
-      packStylesheets,
-      ...(request.extraCss !== undefined ? { extraCss: request.extraCss } : {}),
-    }),
-    render: {
+  return finish(
+    result.html,
+    {
       engine: 'react',
       packCount: request.packCount ?? packStylesheets.length,
       stylesheetCount: packStylesheets.length,
     },
-    valueCount,
-  };
+    packStylesheets,
+  );
 }
