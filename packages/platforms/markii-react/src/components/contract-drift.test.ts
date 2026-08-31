@@ -55,6 +55,18 @@ const CHILD_DIRECTIVE_ATTRIBUTE_READ =
 const OWN_ATTRIBUTE_HAS_OWN_READ =
   /\bObject\.hasOwn\(attributes,\s*['"]([A-Za-z_$][\w$]*)['"]\)/g;
 
+/**
+ * Matches `attributes['some-key']` (or double-quoted) — the bracket-access
+ * form a component is forced to use for a HYPHENATED attribute key, since
+ * `attributes.label-align` is not a valid property access. `divider.tsx`
+ * reads `label-align` this way; `OWN_ATTRIBUTE_READ`'s `\w` character class
+ * cannot match a hyphen at all, so without this pattern that read would be
+ * invisible to `actualAttributeReads` and the drift check below would
+ * falsely report the contract's `label-align` entry as unread.
+ */
+const OWN_ATTRIBUTE_BRACKET_READ =
+  /(?<!\.)\battributes\[\s*['"]([A-Za-z_$][\w$-]*)['"]\s*\]/g;
+
 function extractMatches(source: string, pattern: RegExp): Set<string> {
   const names = new Set<string>();
   for (const match of source.matchAll(pattern)) {
@@ -125,6 +137,9 @@ function actualAttributeReads(name: string): Set<string> {
       reads.add(key);
     }
     for (const key of extractMatches(source, OWN_ATTRIBUTE_HAS_OWN_READ)) {
+      reads.add(key);
+    }
+    for (const key of extractMatches(source, OWN_ATTRIBUTE_BRACKET_READ)) {
       reads.add(key);
     }
   }
@@ -279,6 +294,17 @@ describe('STANDARD_COMPONENTS vs component implementations — attribute-name dr
     const reads = actualAttributeReads('details');
     expect(reads.has('open')).toBe(true);
     expect(reads.has('title')).toBe(true);
+  });
+
+  it('self-test: divider picks up its hyphenated `label-align` attribute via the bracket-read pattern', () => {
+    // `divider.tsx` reads `label-align` as `attributes['label-align']`, not
+    // `attributes.label-align` (which is not valid syntax) — proves
+    // OWN_ATTRIBUTE_BRACKET_READ is doing real work, not just
+    // OWN_ATTRIBUTE_READ.
+    const reads = actualAttributeReads('divider');
+    expect(reads.has('label-align')).toBe(true);
+    expect(reads.has('label')).toBe(true);
+    expect(reads.has('variant')).toBe(true);
   });
 
   it('self-test: the own-attribute regex does not misattribute a child directive read (tabs vs tab)', () => {

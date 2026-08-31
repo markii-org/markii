@@ -152,7 +152,7 @@ export const STANDARD_COMPONENTS: Record<string, ComponentContract> = {
         type: 'string',
         required: false,
         description:
-          'Optional short text shown centered in the line. Absent or empty means an unlabeled divider.',
+          'Optional short text shown in the break, centered unless `label-align` says otherwise. Absent or empty means an unlabeled divider.',
       },
       variant: {
         type: 'string',
@@ -161,9 +161,16 @@ export const STANDARD_COMPONENTS: Record<string, ComponentContract> = {
         description:
           'Which break to draw: a solid hairline, a dotted hairline, or a centered ornament with no hairline. Defaults to `line` when absent or not one of the allowed values.',
       },
+      'label-align': {
+        type: 'string',
+        required: false,
+        enum: ['left', 'center', 'right'],
+        description:
+          'Where the label sits along the rule. Defaults to `center` when absent or not one of the allowed values.',
+      },
     },
     description:
-      'A leaf directive drawing a section break, e.g. `::divider{label="Part 2" variant="dots"}`. Has no body, and both attributes are optional. A plain `---` thematic break keeps its own CommonMark meaning; this directive is for a break that carries a label or a chosen look.',
+      'A leaf directive drawing a section break, e.g. `::divider{label="Part 2" variant="dots"}`. Has no body, and every attribute is optional. A plain `---` thematic break keeps its own CommonMark meaning; this directive is for a break that carries a label or a chosen look.',
   },
   details: {
     name: 'details',

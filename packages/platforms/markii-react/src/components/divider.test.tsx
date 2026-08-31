@@ -82,6 +82,63 @@ describe('Divider', () => {
   });
 });
 
+describe('Divider — label-align', () => {
+  it('adds no modifier class for label-align=center (the default value written explicitly)', () => {
+    const container = html('::divider{label="Part 2" label-align="center"}');
+    expect(container.querySelector('.mk-divider')?.className).toBe(
+      'mk-divider mk-divider--line',
+    );
+  });
+
+  it('adds no modifier class when label-align is absent', () => {
+    const container = html('::divider{label="Part 2"}');
+    expect(container.querySelector('.mk-divider')?.className).toBe(
+      'mk-divider mk-divider--line',
+    );
+  });
+
+  it('adds mk-divider--label-left for label-align=left', () => {
+    const container = html('::divider{label="Part 2" label-align="left"}');
+    expect(container.querySelector('.mk-divider')?.className).toBe(
+      'mk-divider mk-divider--line mk-divider--label-left',
+    );
+  });
+
+  it('adds mk-divider--label-right for label-align=right', () => {
+    const container = html('::divider{label="Part 2" label-align="right"}');
+    expect(container.querySelector('.mk-divider')?.className).toBe(
+      'mk-divider mk-divider--line mk-divider--label-right',
+    );
+  });
+
+  it('combines with a non-default variant, in variant-then-label-align order', () => {
+    const container = html(
+      '::divider{label="Part 2" variant="dots" label-align="right"}',
+    );
+    expect(container.querySelector('.mk-divider')?.className).toBe(
+      'mk-divider mk-divider--dots mk-divider--label-right',
+    );
+  });
+
+  it('falls back to center for an unrecognized label-align value, never throwing', () => {
+    expect(() =>
+      html('::divider{label="Part 2" label-align="sideways"}'),
+    ).not.toThrow();
+    const container = html('::divider{label="Part 2" label-align="sideways"}');
+    expect(container.querySelector('.mk-divider')?.className).toBe(
+      'mk-divider mk-divider--line',
+    );
+  });
+
+  it('falls back to center for a bare {label-align} attribute (null value), never throwing', () => {
+    expect(() => html('::divider{label="Part 2" label-align}')).not.toThrow();
+    const container = html('::divider{label="Part 2" label-align}');
+    expect(container.querySelector('.mk-divider')?.className).toBe(
+      'mk-divider mk-divider--line',
+    );
+  });
+});
+
 describe('Divider — form/kind mismatch', () => {
   it('degrades to the inline fallback instead of rendering when written inline', () => {
     const container = html(':divider[x]');

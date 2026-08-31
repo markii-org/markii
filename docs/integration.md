@@ -226,6 +226,15 @@ is a small, shared authoring layer: a rendered preview, a grammar for
 highlighting (VS Code), an Insert Component command, and directive
 completion with hover documentation.
 
+The same layer keeps container fences legal for the author. Nesting a
+container inside a container needs the outer fence pair to carry more colons
+than the inner one, so when a host inserts a container, either through Insert
+Component or by accepting one from the completion popup, it lengthens the
+enclosing fences in the same undoable edit. It happens in those two places
+only, never while typing, and it stays quiet: `@markii/host`'s scanner acts
+only on a document whose fences pair cleanly from the top of the file, and
+leaves anything ambiguous alone rather than guessing.
+
 Completion and hover are note-authoring features, so both hosts carry them,
 the same way both carry Insert Component. A host implements them against
 `@markii/host`'s `completionAt` and `hoverAt`, which read the line around

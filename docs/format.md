@@ -135,6 +135,12 @@ particular look:
 `variant` accepts `line`, `dots`, or `ornament`. Any other value quietly
 falls back to `line`.
 
+The label sits centered by default. An optional `label-align` attribute moves
+it: `left` or `right` pins it near that end of the rule, and `center` is the
+default that any other value falls back to. This is the divider's own
+attribute, separate from the reserved `width` and `align` that the layout
+system owns.
+
 A registry may also carry aliases: a second name for a component it already
 holds, optionally with preset attributes, so `warn` can stand for
 `callout{type=warning}`. Three rules make aliases predictable. They resolve

@@ -42,6 +42,29 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
   reading a manifest that never went through validation, dropping what it
   cannot make sense of. New exports: the `PackComponentAttribute` type,
   `PACK_ATTRIBUTE_NAME_PATTERN`, and `isPackAttributeName`.
+- **`divider` takes a `label-align` attribute** (`@markii/stdlib`,
+  `@markii/react`, `@markii/html`). `::divider{label="Part 2" label-align=left}`
+  positions the label along the rule instead of centering it. The value is
+  one of `left`, `center`, or `right`, and an absent or unrecognized value
+  falls back to `center`, so every existing divider renders exactly as it
+  did. It is a component-scoped attribute, distinct from the reserved
+  `width` and `align` layout attributes, which are unchanged. Both
+  renderers emit the same `mk-divider--label-left` / `mk-divider--label-right`
+  modifier class, and only for the non-default values, so `doc.css` still
+  covers both.
+- **Inserting a container inside a container lengthens the enclosing fences**
+  (VS Code extension, Obsidian plugin). Nesting needs the outer fence pair
+  to carry more colons than the inner one, which until now the author had
+  to widen by hand. Both hosts now do it in two places only: the Insert
+  Component command, and accepting a container from the completion popup.
+  Never while typing. The rewrite lands in the same undoable edit as the
+  insertion, and cascades outward only as far as it has to, leaving an
+  outer pair alone once it is already long enough. It is quiet either way:
+  a document whose fences do not pair cleanly from the top, or that has a
+  `:::` line inside a code block or an unterminated fence, is left
+  untouched and the insertion proceeds as before. The shared scan and the
+  edit computation live in the private host package, so both hosts run the
+  same logic.
 
 ### Changed
 

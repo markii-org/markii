@@ -55,6 +55,12 @@ import {
   NO_ACTIVE_MARK_EDITOR_MESSAGE,
 } from './insert-component.js';
 import type { InsertComponentQuickPickEntry } from './insert-component.js';
+import {
+  completionFenceTextEdits,
+  fenceTextEdits,
+  isContainerInsertText,
+} from './fence-edits.js';
+import type { FenceTextEdit } from './fence-edits.js';
 
 /**
  * The `markii.addPackFolder` command: a folder picker that appends the chosen
@@ -333,8 +339,28 @@ async function insertComponentCommand(): Promise<void> {
   // backwards, where `active` is the earlier position.
   const insertPosition = editor.selection.start;
 
+  // Fence auto-extension: nesting a container inside a container needs the
+  // OUTER pair to carry more colons, so the enclosing fences grow in the
+  // SAME `editor.edit` as the insertion, making the pair one undo step.
+  // Quiet by contract: an ambiguous or unpaired document simply yields no
+  // edits and the insertion proceeds exactly as it did before.
+  const fenceEdits = fenceTextEdits(
+    editor.document.getText(),
+    insertPosition.line,
+    skeleton.text,
+  );
+
   await editor.edit((editBuilder) => {
     editBuilder.replace(editor.selection, skeleton.text);
+    for (const edit of fenceEdits) {
+      editBuilder.replace(
+        new vscode.Range(
+          new vscode.Position(edit.line, edit.startColumn),
+          new vscode.Position(edit.line, edit.endColumn),
+        ),
+        edit.newText,
+      );
+    }
   });
 
   const cursor = offsetToLineColumn(skeleton.text, skeleton.cursorOffset);
@@ -401,6 +427,7 @@ function toVscodeCompletionItem(
   line: number,
   replaceStart: number,
   replaceEnd: number,
+  fenceEdits: readonly FenceTextEdit[],
 ): vscode.CompletionItem {
   const completion = new vscode.CompletionItem(
     item.label,
@@ -432,6 +459,25 @@ function toVscodeCompletionItem(
   if (item.kind === 'attribute') {
     completion.command = { command: 'editor.action.triggerSuggest', title: '' };
   }
+  // Fence auto-extension, the completion half: accepting a CONTAINER item
+  // inside an existing container needs the enclosing pair to grow. VS Code
+  // applies `additionalTextEdits` in the same undo step as the accepted
+  // item, which is exactly the "one undoable edit" this needs. They may
+  // not overlap the item's own range: `completionFenceTextEdits` never
+  // returns an edit on the insertion line, and the range above is on that
+  // line. Only container items carry them; a leaf or inline item accepts
+  // without touching anything else in the document.
+  if (fenceEdits.length > 0 && isContainerInsertText(item.insertText)) {
+    completion.additionalTextEdits = fenceEdits.map((edit) =>
+      vscode.TextEdit.replace(
+        new vscode.Range(
+          new vscode.Position(edit.line, edit.startColumn),
+          new vscode.Position(edit.line, edit.endColumn),
+        ),
+        edit.newText,
+      ),
+    );
+  }
   return completion;
 }
 
@@ -454,6 +500,13 @@ function createCompletionAndHoverProviders(catalogCache: CatalogCache): {
         const catalog = await catalogCache.get();
         const ctx = completionAt(lineText, position.character, catalog);
         if (ctx.kind === 'none' || ctx.items.length === 0) return undefined;
+        // Computed once for the whole response, not per row: every
+        // container item in one context inserts the same fence shape.
+        const fenceEdits = completionFenceTextEdits(
+          () => document.getText(),
+          position.line,
+          ctx.items,
+        );
         return ctx.items.map((item, index) =>
           toVscodeCompletionItem(
             item,
@@ -462,6 +515,7 @@ function createCompletionAndHoverProviders(catalogCache: CatalogCache): {
             position.line,
             ctx.replaceStart,
             ctx.replaceEnd,
+            fenceEdits,
           ),
         );
       } catch {

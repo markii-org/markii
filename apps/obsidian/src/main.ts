@@ -39,6 +39,7 @@ import {
 import type { InsertableComponent } from '@markii/host';
 import { discoverConfiguredPacks } from './packs/discover-configured-packs.js';
 import { pickInsertableComponent } from './insert-modals.js';
+import { fenceEditorChanges } from './fence-edits.js';
 import { MarkiiCompletionSuggest } from './complete-suggest.js';
 import {
   NO_ACTIVE_NOTE_NOTICE,
@@ -406,7 +407,35 @@ export default class MarkiiPlugin extends Plugin {
     // the head IS the earlier position). Mirrors the VS Code command.
     const insertPosition = editor.getCursor('from');
 
-    editor.replaceSelection(skeleton.text);
+    // Fence auto-extension: nesting a container inside a container needs
+    // the OUTER pair to carry more colons. The enclosing fences grow in
+    // the SAME transaction as the insertion, so the whole thing is one
+    // undo step. Quiet by contract: an ambiguous or unpaired document
+    // yields no changes and the insertion proceeds as it did before.
+    const fenceChanges = fenceEditorChanges(
+      editor.getValue(),
+      insertPosition.line,
+      skeleton.text,
+    );
+
+    if (fenceChanges.length === 0) {
+      editor.replaceSelection(skeleton.text);
+    } else {
+      editor.transaction({
+        changes: [
+          ...fenceChanges.map((change) => ({
+            from: { ...change.from },
+            to: { ...change.to },
+            text: change.text,
+          })),
+          {
+            from: insertPosition,
+            to: editor.getCursor('to'),
+            text: skeleton.text,
+          },
+        ],
+      });
+    }
 
     const cursor = offsetToLineColumn(skeleton.text, skeleton.cursorOffset);
     const cursorPosition =

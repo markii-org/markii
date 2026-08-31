@@ -12,3 +12,4 @@ TODO.md
 
 # local scratch/audit output; never committed
 tmp/
+apps/obsidian/*.tgz

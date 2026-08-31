@@ -98,3 +98,65 @@ describe('Divider', () => {
     );
   });
 });
+
+describe('Divider — label-align', () => {
+  it('adds no modifier class for label-align=center (the default value written explicitly)', () => {
+    expect(Divider({ label: 'Part 2', 'label-align': 'center' }, '', ctx)).toBe(
+      '<div class="mk-divider mk-divider--line" role="separator" aria-label="Part 2">' +
+        '<span class="mk-divider__label">Part 2</span></div>',
+    );
+  });
+
+  it('adds no modifier class when label-align is absent', () => {
+    expect(Divider({ label: 'Part 2' }, '', ctx)).toBe(
+      '<div class="mk-divider mk-divider--line" role="separator" aria-label="Part 2">' +
+        '<span class="mk-divider__label">Part 2</span></div>',
+    );
+  });
+
+  it('adds mk-divider--label-left for label-align=left', () => {
+    expect(Divider({ label: 'Part 2', 'label-align': 'left' }, '', ctx)).toBe(
+      '<div class="mk-divider mk-divider--line mk-divider--label-left" role="separator" aria-label="Part 2">' +
+        '<span class="mk-divider__label">Part 2</span></div>',
+    );
+  });
+
+  it('adds mk-divider--label-right for label-align=right', () => {
+    expect(Divider({ label: 'Part 2', 'label-align': 'right' }, '', ctx)).toBe(
+      '<div class="mk-divider mk-divider--line mk-divider--label-right" role="separator" aria-label="Part 2">' +
+        '<span class="mk-divider__label">Part 2</span></div>',
+    );
+  });
+
+  it('combines with a non-default variant, in variant-then-label-align order', () => {
+    expect(
+      Divider(
+        { label: 'Part 2', variant: 'dots', 'label-align': 'right' },
+        '',
+        ctx,
+      ),
+    ).toBe(
+      '<div class="mk-divider mk-divider--dots mk-divider--label-right" role="separator" aria-label="Part 2">' +
+        '<span class="mk-divider__label">Part 2</span></div>',
+    );
+  });
+
+  it('falls back to center for an unrecognized label-align value, never throwing', () => {
+    expect(() =>
+      Divider({ label: 'Part 2', 'label-align': 'sideways' }, '', ctx),
+    ).not.toThrow();
+    expect(
+      Divider({ label: 'Part 2', 'label-align': 'sideways' }, '', ctx),
+    ).toBe(
+      '<div class="mk-divider mk-divider--line" role="separator" aria-label="Part 2">' +
+        '<span class="mk-divider__label">Part 2</span></div>',
+    );
+  });
+
+  it('falls back to center for a bare {label-align} (null value)', () => {
+    expect(Divider({ label: 'Part 2', 'label-align': null }, '', ctx)).toBe(
+      '<div class="mk-divider mk-divider--line" role="separator" aria-label="Part 2">' +
+        '<span class="mk-divider__label">Part 2</span></div>',
+    );
+  });
+});

@@ -78,6 +78,21 @@ export {
   hoverAt,
 } from './complete/index.js';
 
+// Fence auto-extension on insert: the pure scan that finds the container
+// fence pairs enclosing an insertion point, and the minimal set of fence
+// lines to lengthen so a newly inserted container still nests legally.
+// Both hosts apply the returned edits in ONE undoable edit together with
+// the insertion. See `./fences/container-fences.ts`.
+export type {
+  EnclosingContainerFence,
+  FenceLineEdit,
+} from './fences/container-fences.js';
+export {
+  enclosingContainerFences,
+  fenceExtensionEdits,
+  insertedContainerColonCount,
+} from './fences/container-fences.js';
+
 // Pack CSS lint rules: plain string analysis, no filesystem of its own (a
 // caller hands it the stylesheet text).
 export {

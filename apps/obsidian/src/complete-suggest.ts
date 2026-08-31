@@ -15,6 +15,7 @@ import {
   filterCompletionSuggestions,
 } from './complete-component.js';
 import type { CompletionSuggestion } from './complete-component.js';
+import { fenceEditorChanges } from './fence-edits.js';
 
 /**
  * Imports `obsidian` — added deliberately to
@@ -98,7 +99,33 @@ export class MarkiiCompletionSuggest extends EditorSuggest<CompletionSuggestion>
     if (!context) return;
 
     const { item } = suggestion;
-    context.editor.replaceRange(item.insertText, context.start, context.end);
+
+    // Fence auto-extension: accepting a CONTAINER item inside an existing
+    // container needs the enclosing pair to carry more colons. The fence
+    // changes go into the SAME transaction as the accepted text, so the
+    // whole acceptance is one undo step, and they never touch the line
+    // being replaced. A non-container item, or a document whose fences do
+    // not pair cleanly, yields none and this stays a plain range replace.
+    const fenceChanges = fenceEditorChanges(
+      context.editor.getValue(),
+      context.start.line,
+      item.insertText,
+    );
+
+    if (fenceChanges.length === 0) {
+      context.editor.replaceRange(item.insertText, context.start, context.end);
+    } else {
+      context.editor.transaction({
+        changes: [
+          ...fenceChanges.map((change) => ({
+            from: { ...change.from },
+            to: { ...change.to },
+            text: change.text,
+          })),
+          { from: context.start, to: context.end, text: item.insertText },
+        ],
+      });
+    }
 
     const cursor = offsetToLineColumn(item.insertText, item.insertCursorOffset);
     const cursorPosition =
