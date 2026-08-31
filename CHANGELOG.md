@@ -8,19 +8,27 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- **Export a note as static HTML** (VS Code extension, Obsidian plugin).
-  **Markii: Export as HTML…** in VS Code asks where to save and writes one
-  self-contained `.html` file; **Export Markii note as HTML** in Obsidian
-  writes it beside the note in the vault. Both render through `@markii/html`,
-  the static string engine, so the file carries the shared `doc.css` inside
-  it and needs nothing beside it. The note's last run is baked in, so a
-  monitoring note exports with the figures it was showing; a note that has
-  never been run exports with its usual empty states, and both hosts say so.
-  A pack component exports as the static engine's ordinary
-  unknown-component fallback, a labeled box with the author's own content
-  still rendered inside it, because packs are React modules the string
-  engine cannot load. Relative image sources are preserved, so a file
-  written beside its note resolves them the same way the note does.
+- **Export a note as a self-contained HTML file** (VS Code extension,
+  Obsidian plugin). **Markii: Export as HTML…** in VS Code asks where to
+  save and writes one `.html` file; **Export Markii note as HTML** in
+  Obsidian writes it beside the note in the vault. The file carries the
+  shared `doc.css` inside it and needs nothing beside it. The note's last
+  run is baked in, so a monitoring note exports with the figures it was
+  showing; a note that has never been run exports with its usual empty
+  states, and both hosts say so. Relative image sources are preserved, so a
+  file written beside its note resolves them the same way the note does.
+- **Pack components render in an exported file.** When the exporting host
+  has packs loaded, the export is rendered with the same merged registry
+  and value store the preview uses, and each loaded pack's stylesheet is
+  embedded after `doc.css` in the order the host injects it, so the file
+  matches the preview. Obsidian renders directly; VS Code asks its preview
+  webview and waits a bounded moment for the answer. With no packs loaded,
+  or with no renderer to reach, the export falls back to `@markii/html`,
+  the static string engine, where a pack directive comes out as the
+  ordinary unknown-component fallback: a labeled box with the author's own
+  content still rendered inside it. Neither outcome is treated as a
+  failure, and the two are distinguishable on each host's diagnostics
+  surface without changing what the notice says.
 - **Export a note straight to PDF** (Obsidian plugin). **Export Markii note
   as PDF** prints exactly the document the HTML export would have written,
   through Electron's `printToPDF` in a hidden window, and writes the `.pdf`

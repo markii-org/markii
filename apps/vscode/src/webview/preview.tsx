@@ -231,6 +231,10 @@ export function Preview({ registry }: PreviewProps): ReactElement {
             bundleError: data.message,
           };
         }
+        // `export-request` (GitHub issue #28 slice 2) is `./main.tsx`'s own
+        // listener's concern, not this component's — it carries no
+        // `revision` and is never state this preview renders from.
+        if (data.type === 'export-request') return previous;
         // A `values` result for anything other than the CURRENT text
         // revision is stale — e.g. the document kept changing while the
         // run was in flight — and is dropped rather than applied.

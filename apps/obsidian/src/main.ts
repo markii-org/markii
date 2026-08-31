@@ -50,7 +50,15 @@ import {
 } from './export-note.js';
 import type { NoteExportFs, NoteExportOutcome } from './export-note.js';
 import { createElectronHtmlToPdf } from './export/html-to-pdf.js';
+import { renderNoteBodyForExport } from './export/render-body.js';
 import { createLocalStorageMemento } from './run/local-storage-memento.js';
+import { buildPackRegistrationScript } from '@markii/host';
+import type { Registry } from '@markii/react';
+import { defaultRegistry } from '@markii/react/components';
+import { loadPackContext } from './packs/pack-context.js';
+import type { PackContext } from './packs/pack-context.js';
+import { createPackRegistrationBuilder } from './packs/pack-compilation.js';
+import { formatPackDiagnosticLines } from './packs/pack-diagnostics.js';
 
 /**
  * Imports `obsidian` — deliberately NOT unit-tested (Vitest cannot resolve
@@ -250,10 +258,81 @@ export default class MarkiiPlugin extends Plugin {
   }
 
   /**
-   * The two export commands (GitHub issue #28 slice 1). Wiring only: every
+   * The engine an export renders through (GitHub issue #28 slice 2): this
+   * open preview's already-loaded pack registry when one is open, or a
+   * pack context loaded on demand when none is, so an export is
+   * pack-complete without requiring a preview to be open first. Returns
+   * `undefined` for "render statically": no preview is open and either no
+   * pack folders are configured or the on-demand load ended up with zero
+   * loaded packs, in which case the exported file is byte-identical to
+   * slice 1's, which is deliberate.
+   *
+   * The on-demand path never injects its stylesheets into `document.head`
+   * and never shows a pack `Notice` — an export only needs the registry
+   * and the stylesheet text to embed, not a live preview's styling. Its
+   * diagnostics still go to the console, this host's diagnostics surface,
+   * and a load failure degrades to "no packs" rather than failing the
+   * export command.
+   */
+  private async exportRegistryContext(): Promise<
+    | {
+        registry: Registry;
+        stylesheets: PackContext['stylesheets'];
+        packCount: number;
+      }
+    | undefined
+  > {
+    const preview = this.activePreviewView();
+    const fromPreview = preview?.exportPackContext();
+    if (fromPreview) return fromPreview;
+    if (preview || this.packSettings.packFolders.length === 0) {
+      return undefined;
+    }
+
+    try {
+      const cacheDir = this.packCacheDir();
+      const browserModulePath = this.esbuildBrowserModulePath();
+      const wasmBinaryPath = this.esbuildWasmBinaryPath();
+      const context = await loadPackContext(
+        this.packSettings.packFolders,
+        this.vaultBasePath(),
+        defaultRegistry,
+        {
+          cacheDir,
+          buildRegistrationScript:
+            cacheDir === undefined
+              ? undefined
+              : createPackRegistrationBuilder({
+                  esbuildBrowserModulePath: browserModulePath,
+                  esbuildWasmBinaryPath: wasmBinaryPath,
+                  compile: (pack, dir) =>
+                    buildPackRegistrationScript(pack, dir, {
+                      esbuildBrowserModulePath: browserModulePath,
+                      esbuildWasmBinaryPath: wasmBinaryPath,
+                    }),
+                }),
+        },
+      );
+      for (const line of formatPackDiagnosticLines(context)) {
+        console.log(`[markii] export: ${line}`);
+      }
+      if (context.packs.length === 0) return undefined;
+      return {
+        registry: context.registry,
+        stylesheets: context.stylesheets,
+        packCount: context.packs.length,
+      };
+    } catch (error) {
+      console.error('[markii] export: on-demand pack load failed', error);
+      return undefined;
+    }
+  }
+
+  /**
+   * The two export commands (GitHub issue #28). Wiring only: every
    * decision, and every user-facing string, lives in `./export-note.ts`,
-   * and the one Electron-touching piece lives in
-   * `./export/html-to-pdf.ts`.
+   * the one Electron-touching piece lives in `./export/html-to-pdf.ts`,
+   * and the React render itself lives in `./export/render-body.ts`.
    *
    * VALUES. The note's last run is baked into the file, read from the same
    * device-local store the preview rehydrates from. Deliberately not marked
@@ -262,12 +341,15 @@ export default class MarkiiPlugin extends Plugin {
    * as a live view that has fallen behind. A note that has never been run
    * exports with its standard empty states, and the notice says so.
    *
-   * PACK COMPONENTS. An export is rendered by `@markii/html`, the static
-   * string engine, which only knows the standard component set. A pack
-   * directive comes out as that engine's ordinary unknown-component
-   * fallback: a labeled box with the author's own inner markdown still
-   * rendered inside it. That is this slice's documented behavior, not a
-   * failure, so it is not reported as one.
+   * PACK COMPONENTS (slice 2). When `exportRegistryContext` finds a loaded
+   * pack registry, the export renders through this host's own React
+   * renderer with that merged registry, so a pack directive comes out as
+   * the real component, with the loaded packs' stylesheets embedded in the
+   * file. With no packs loaded, the export renders through `@markii/html`,
+   * the static string engine, and a pack directive would come out as that
+   * engine's ordinary unknown-component fallback — moot here, since a
+   * pack-free note has no pack directive to fall back on, and this is the
+   * documented, non-degraded case, so it is never reported as a failure.
    *
    * Both surfaces, always (AGENTS.md's "clean is not silent"): a short
    * `Notice`, and the full detail on the console, which is this host's
@@ -290,11 +372,19 @@ export default class MarkiiPlugin extends Plugin {
         },
       );
       const values = readPersistedValues(memento, file.path);
+      const packContext = await this.exportRegistryContext();
       const request = {
         notePath: file.path,
         text,
         values,
         fs: this.exportFs(),
+        ...(packContext
+          ? {
+              renderBody: renderNoteBodyForExport(packContext.registry),
+              packStylesheets: packContext.stylesheets,
+              packCount: packContext.packCount,
+            }
+          : { staticReason: 'no-packs' as const }),
       };
       outcome =
         format === 'html'

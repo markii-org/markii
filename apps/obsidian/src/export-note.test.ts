@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { createElement } from 'react';
 import type { StoredValue } from '@markii/runtime';
+import { createRegistry } from '@markii/react';
+import { defaultRegistry } from '@markii/react/components';
+import type { ExportBodyRenderer, ExportRenderInfo } from '@markii/host';
 import {
   HtmlToPdfUnavailableError,
   NO_ACTIVE_NOTE_NOTICE,
@@ -13,7 +17,15 @@ import type {
   HtmlToPdf,
   NoteExportFs,
   NoteExportOutcome,
+  NoteExportRequest,
 } from './export-note.js';
+import { renderNoteBodyForExport } from './export/render-body.js';
+
+/** The static-engine render info a request with no `renderBody` produces, for fixtures that don't care about it. */
+const RENDER_STATIC_NO_PACKS: ExportRenderInfo = {
+  engine: 'static',
+  reason: 'no-packs',
+};
 
 /** An in-memory `NoteExportFs` that records every write, and can be told to fail. */
 function createFs(options: { failText?: boolean; failBinary?: boolean } = {}): {
@@ -242,20 +254,41 @@ describe('isPdfUnavailable', () => {
 });
 
 const OUTCOMES: NoteExportOutcome[] = [
-  { kind: 'html', path: 'reports/week.html', valueCount: 0 },
-  { kind: 'html', path: 'reports/week.html', valueCount: 3 },
-  { kind: 'pdf', path: 'reports/week.pdf', valueCount: 3 },
+  {
+    kind: 'html',
+    path: 'reports/week.html',
+    valueCount: 0,
+    render: RENDER_STATIC_NO_PACKS,
+  },
+  {
+    kind: 'html',
+    path: 'reports/week.html',
+    valueCount: 3,
+    render: RENDER_STATIC_NO_PACKS,
+  },
+  {
+    kind: 'pdf',
+    path: 'reports/week.pdf',
+    valueCount: 3,
+    render: { engine: 'react', packCount: 1, stylesheetCount: 1 },
+  },
   {
     kind: 'pdf-unavailable',
     path: 'reports/week.html',
     valueCount: 0,
     reason: 'no BrowserWindow here',
+    render: RENDER_STATIC_NO_PACKS,
   },
   {
     kind: 'pdf-failed',
     path: 'reports/week.html',
     valueCount: 0,
     reason: 'printToPDF timed out',
+    render: {
+      engine: 'static',
+      reason: 'render-failed',
+      detail: 'component exploded',
+    },
   },
   { kind: 'failed', reason: 'disk is full' },
 ];
@@ -267,6 +300,7 @@ describe('exportNoticeText', () => {
         kind: 'html',
         path: 'reports/week.html',
         valueCount: 2,
+        render: RENDER_STATIC_NO_PACKS,
       }),
     ).toContain('week.html');
     expect(
@@ -274,6 +308,7 @@ describe('exportNoticeText', () => {
         kind: 'html',
         path: 'reports/week.html',
         valueCount: 2,
+        render: RENDER_STATIC_NO_PACKS,
       }),
     ).not.toContain('reports/');
   });
@@ -284,6 +319,7 @@ describe('exportNoticeText', () => {
       path: 'reports/week.html',
       valueCount: 0,
       reason: 'no BrowserWindow here',
+      render: RENDER_STATIC_NO_PACKS,
     });
     expect(text).toContain('not available on this device');
     expect(text).toContain('week.html');
@@ -296,6 +332,7 @@ describe('exportNoticeText', () => {
       path: 'reports/week.html',
       valueCount: 0,
       reason: 'printToPDF timed out',
+      render: RENDER_STATIC_NO_PACKS,
     });
     expect(text).toContain('PDF export failed');
     expect(text).toContain('week.html');
@@ -304,7 +341,12 @@ describe('exportNoticeText', () => {
 
   it('tells a user who has not run the note why the figures are missing', () => {
     expect(
-      exportNoticeText({ kind: 'html', path: 'week.html', valueCount: 0 }),
+      exportNoticeText({
+        kind: 'html',
+        path: 'week.html',
+        valueCount: 0,
+        render: RENDER_STATIC_NO_PACKS,
+      }),
     ).toContain('Run the note first');
   });
 
@@ -351,6 +393,7 @@ describe('exportDiagnosticLines', () => {
       path: 'reports/week.html',
       valueCount: 0,
       reason: 'printToPDF timed out',
+      render: RENDER_STATIC_NO_PACKS,
     });
     expect(lines.join('\n')).toContain('printToPDF timed out');
     expect(lines.join('\n')).toContain('reports/week.html');
@@ -362,6 +405,7 @@ describe('exportDiagnosticLines', () => {
       path: 'reports/week.html',
       valueCount: 0,
       reason: 'no BrowserWindow here',
+      render: RENDER_STATIC_NO_PACKS,
     });
     expect(lines.join('\n')).toContain('print from there');
   });
@@ -370,5 +414,158 @@ describe('exportDiagnosticLines', () => {
     for (const outcome of OUTCOMES) {
       expect(exportDiagnosticLines(outcome).length).toBeGreaterThan(0);
     }
+  });
+
+  it('describes a React render with the pack and stylesheet counts, pluralized', () => {
+    const lines = exportDiagnosticLines({
+      kind: 'html',
+      path: 'reports/week.html',
+      valueCount: 0,
+      render: { engine: 'react', packCount: 1, stylesheetCount: 1 },
+    });
+    expect(lines.join('\n')).toContain("preview's React engine");
+    expect(lines.join('\n')).toContain('1 pack component');
+    expect(lines.join('\n')).toContain('1 pack stylesheet');
+
+    const pluralLines = exportDiagnosticLines({
+      kind: 'html',
+      path: 'reports/week.html',
+      valueCount: 0,
+      render: { engine: 'react', packCount: 2, stylesheetCount: 3 },
+    });
+    expect(pluralLines.join('\n')).toContain('2 pack components');
+    expect(pluralLines.join('\n')).toContain('3 pack stylesheets');
+  });
+
+  it('says a static render matches the preview when no packs are loaded', () => {
+    const lines = exportDiagnosticLines({
+      kind: 'html',
+      path: 'reports/week.html',
+      valueCount: 0,
+      render: RENDER_STATIC_NO_PACKS,
+    });
+    expect(lines.join('\n')).toContain('no pack components are loaded');
+    expect(lines.join('\n')).toContain('matches the preview');
+  });
+
+  it('says a failed React render fell back and carries the verbatim detail', () => {
+    const lines = exportDiagnosticLines({
+      kind: 'html',
+      path: 'reports/week.html',
+      valueCount: 0,
+      render: {
+        engine: 'static',
+        reason: 'render-failed',
+        detail: 'component exploded',
+      },
+    });
+    expect(lines.join('\n')).toContain('React render failed');
+    expect(lines.join('\n')).toContain('exported as labeled boxes');
+    expect(lines.join('\n')).toContain('component exploded');
+  });
+
+  it('handles every StaticExportReason without throwing, including the unreachable ones', () => {
+    const reasons: readonly ExportRenderInfo[] = [
+      { engine: 'static', reason: 'no-packs' },
+      { engine: 'static', reason: 'no-renderer' },
+      { engine: 'static', reason: 'timeout' },
+      { engine: 'static', reason: 'render-failed' },
+    ];
+    for (const render of reasons) {
+      const lines = exportDiagnosticLines({
+        kind: 'html',
+        path: 'reports/week.html',
+        valueCount: 0,
+        render,
+      });
+      expect(lines.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('the new render line contains no em dash and no parentheses', () => {
+    const renders: readonly ExportRenderInfo[] = [
+      { engine: 'react', packCount: 2, stylesheetCount: 1 },
+      { engine: 'static', reason: 'no-packs' },
+      { engine: 'static', reason: 'no-renderer' },
+      { engine: 'static', reason: 'timeout', detail: 'worker did not answer' },
+      { engine: 'static', reason: 'render-failed', detail: 'boom' },
+    ];
+    for (const render of renders) {
+      const lines = exportDiagnosticLines({
+        kind: 'html',
+        path: 'reports/week.html',
+        valueCount: 0,
+        render,
+      });
+      const renderLine = lines[lines.length - 1]!;
+      expect(renderLine).not.toContain('—');
+      expect(renderLine).not.toMatch(/[()]/);
+    }
+  });
+});
+
+describe('export-note.ts wiring against a fake pack registry', () => {
+  it('classifies a request with no renderBody as the static engine', async () => {
+    const { fs, text } = createFs();
+    const outcome = await exportNoteAsHtml({ ...NOTE, fs });
+    expect(outcome.kind).toBe('html');
+    if (outcome.kind !== 'html') throw new Error('unreachable');
+    expect(outcome.render).toEqual({ engine: 'static', reason: 'no-packs' });
+    expect(text.has('reports/week 32.html')).toBe(true);
+  });
+
+  it('classifies a throwing renderBody as render-failed and still writes the static file', async () => {
+    const { fs, text } = createFs();
+    const renderBody: ExportBodyRenderer = () => {
+      throw new Error('the renderer blew up');
+    };
+    const outcome = await exportNoteAsHtml({ ...NOTE, fs, renderBody });
+    expect(outcome.kind).toBe('html');
+    if (outcome.kind !== 'html') throw new Error('unreachable');
+    expect(outcome.render).toMatchObject({
+      engine: 'static',
+      reason: 'render-failed',
+      detail: 'the renderer blew up',
+    });
+    expect(text.get('reports/week 32.html')).toContain('<h1>Week 32</h1>');
+  });
+
+  it('renders through React with a fake pack component and embeds its CSS, not the unknown-component fallback', async () => {
+    const { fs, text } = createFs();
+    const registry = createRegistry({
+      ...defaultRegistry,
+      'ana-timeline': {
+        component: () =>
+          createElement(
+            'div',
+            { className: 'mk-ana_timeline' },
+            'timeline component markup',
+          ),
+      },
+    });
+    const request: NoteExportRequest = {
+      notePath: 'reports/timeline.mk.md',
+      text: ':::ana-timeline\n:::\n',
+      fs,
+      renderBody: renderNoteBodyForExport(registry),
+      packStylesheets: [
+        { namespace: 'ana', cssText: '.mk-ana_timeline { color: red; }' },
+      ],
+      packCount: 1,
+    };
+    const outcome = await exportNoteAsHtml(request);
+    expect(outcome.kind).toBe('html');
+    if (outcome.kind !== 'html') throw new Error('unreachable');
+    expect(outcome.render).toEqual({
+      engine: 'react',
+      packCount: 1,
+      stylesheetCount: 1,
+    });
+
+    const written = text.get('reports/timeline.html') ?? '';
+    expect(written).toContain('mk-ana_timeline');
+    expect(written).toContain('timeline component markup');
+    expect(written).toContain('.mk-ana_timeline { color: red; }');
+    expect(written).not.toContain('unknown component');
   });
 });

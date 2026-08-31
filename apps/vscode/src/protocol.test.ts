@@ -985,6 +985,269 @@ describe('isWebviewToHostMessage — pack-diagnostics', () => {
   });
 });
 
+describe('isHostToWebviewMessage — export-request', () => {
+  it('accepts a well-formed export-request with no values', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'export-request',
+        requestId: 'abc-123',
+        text: 'hi',
+        values: {},
+      }),
+    ).toBe(true);
+  });
+
+  it('accepts a well-formed export-request carrying values', () => {
+    const values: Record<string, WireStoredValue> = {
+      count: { value: 3, status: 'fresh' },
+    };
+    expect(
+      isHostToWebviewMessage({
+        type: 'export-request',
+        requestId: 'abc-123',
+        text: 'hi',
+        values,
+      }),
+    ).toBe(true);
+  });
+
+  it('rejects the wrong type value', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'export-requestx',
+        requestId: 'abc-123',
+        text: 'hi',
+        values: {},
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects a missing requestId', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'export-request',
+        text: 'hi',
+        values: {},
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects a non-string requestId', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'export-request',
+        requestId: 42,
+        text: 'hi',
+        values: {},
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects an empty requestId', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'export-request',
+        requestId: '',
+        text: 'hi',
+        values: {},
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects a requestId outside the letters/digits/hyphen alphabet', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'export-request',
+        requestId: 'abc_123',
+        text: 'hi',
+        values: {},
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects an oversized requestId', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'export-request',
+        requestId: 'a'.repeat(65),
+        text: 'hi',
+        values: {},
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects a missing text', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'export-request',
+        requestId: 'abc-123',
+        values: {},
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects a missing values record', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'export-request',
+        requestId: 'abc-123',
+        text: 'hi',
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects an invalid values record', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'export-request',
+        requestId: 'abc-123',
+        text: 'hi',
+        values: { count: { value: 3 } },
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects an object that only inherits requestId from its prototype', () => {
+    const proto = { requestId: 'abc-123' };
+    const hostile: unknown = Object.assign(Object.create(proto), {
+      type: 'export-request',
+      text: 'hi',
+      values: {},
+    });
+    expect(isHostToWebviewMessage(hostile)).toBe(false);
+  });
+});
+
+describe('isWebviewToHostMessage — export-result', () => {
+  it('accepts a well-formed success round trip', () => {
+    expect(
+      isWebviewToHostMessage({
+        type: 'export-result',
+        requestId: 'abc-123',
+        ok: true,
+        html: '<p>hi</p>',
+      }),
+    ).toBe(true);
+  });
+
+  it('accepts a well-formed failure round trip', () => {
+    expect(
+      isWebviewToHostMessage({
+        type: 'export-result',
+        requestId: 'abc-123',
+        ok: false,
+        reason: 'render threw',
+      }),
+    ).toBe(true);
+  });
+
+  it('rejects the wrong type value', () => {
+    expect(
+      isWebviewToHostMessage({
+        type: 'export-resultx',
+        requestId: 'abc-123',
+        ok: true,
+        html: '<p>hi</p>',
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects a missing requestId', () => {
+    expect(
+      isWebviewToHostMessage({
+        type: 'export-result',
+        ok: true,
+        html: '<p>hi</p>',
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects an object that only inherits requestId from its prototype', () => {
+    const proto = { requestId: 'abc-123' };
+    const hostile: unknown = Object.assign(Object.create(proto), {
+      type: 'export-result',
+      ok: true,
+      html: '<p>hi</p>',
+    });
+    expect(isWebviewToHostMessage(hostile)).toBe(false);
+  });
+
+  it('rejects ok:true with no html', () => {
+    expect(
+      isWebviewToHostMessage({
+        type: 'export-result',
+        requestId: 'abc-123',
+        ok: true,
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects ok:true with a non-string html', () => {
+    expect(
+      isWebviewToHostMessage({
+        type: 'export-result',
+        requestId: 'abc-123',
+        ok: true,
+        html: 42,
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects an oversized html payload', () => {
+    expect(
+      isWebviewToHostMessage({
+        type: 'export-result',
+        requestId: 'abc-123',
+        ok: true,
+        html: 'a'.repeat(16 * 1024 * 1024 + 1),
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects ok:false with no reason', () => {
+    expect(
+      isWebviewToHostMessage({
+        type: 'export-result',
+        requestId: 'abc-123',
+        ok: false,
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects ok:false with an empty reason', () => {
+    expect(
+      isWebviewToHostMessage({
+        type: 'export-result',
+        requestId: 'abc-123',
+        ok: false,
+        reason: '',
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects ok:false with an oversized reason', () => {
+    expect(
+      isWebviewToHostMessage({
+        type: 'export-result',
+        requestId: 'abc-123',
+        ok: false,
+        reason: 'a'.repeat(4097),
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects a non-boolean ok', () => {
+    expect(
+      isWebviewToHostMessage({
+        type: 'export-result',
+        requestId: 'abc-123',
+        ok: 'true',
+        html: '<p>hi</p>',
+      }),
+    ).toBe(false);
+  });
+});
+
 describe('isNewerRevision', () => {
   it('is true when incoming is strictly greater than lastSeen', () => {
     expect(isNewerRevision(1, 2)).toBe(true);

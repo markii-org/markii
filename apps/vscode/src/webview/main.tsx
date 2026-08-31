@@ -11,8 +11,10 @@ import '@markii/react/doc.css';
 import './theme.css';
 import { defaultRegistry } from '@markii/react/components';
 import { buildRenderRegistry } from './pack-registry.js';
+import { exportResultFor } from './export-render.js';
 import { getVsCodeApi } from './vscode-api.js';
 import { Preview } from './preview.js';
+import { isHostToWebviewMessage } from '../protocol.js';
 import type { PackDiagnosticsMessage } from '../protocol.js';
 
 /**
@@ -52,6 +54,24 @@ if (
   };
   getVsCodeApi().postMessage(message);
 }
+
+/**
+ * GitHub issue #28 slice 2: answers the extension host's `export-request`
+ * with a static render of the note's body through THIS webview's own
+ * merged `registry` — the one place a pack component can render as itself
+ * rather than the unknown-component fallback box, since a pack is a React
+ * module the extension host cannot load on its own. Every other message
+ * type is `preview.tsx`'s concern; this listener only ever reacts to
+ * `export-request`, so it coexists with `Preview`'s own listener rather
+ * than replacing it.
+ */
+window.addEventListener('message', (event: MessageEvent<unknown>) => {
+  const data = event.data;
+  if (!isHostToWebviewMessage(data) || data.type !== 'export-request') {
+    return;
+  }
+  getVsCodeApi().postMessage(exportResultFor(data, registry));
+});
 
 const rootElement = document.getElementById('root');
 if (rootElement) {

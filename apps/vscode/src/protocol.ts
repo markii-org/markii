@@ -202,9 +202,41 @@ export interface PackDiagnosticsMessage {
   readonly duplicateComposedNames: readonly WireDuplicateComposedName[];
 }
 
+/**
+ * Host -> webview (GitHub issue #28 slice 2): asks the webview to render one
+ * note's body through its own React engine, for the `markii.exportHtml`
+ * command. `requestId` pairs this request with its `ExportResultMessage`
+ * reply, since a webview can in principle answer requests out of order (or
+ * never answer one at all, if the panel is hidden and torn down before it
+ * gets to it) — `preview-panel.ts`'s `requestExportBody` matches replies by
+ * this value rather than assuming the next `export-result` belongs to the
+ * most recent request.
+ */
+export interface ExportRequestMessage {
+  readonly type: 'export-request';
+  readonly requestId: string;
+  readonly text: string;
+  readonly values: Readonly<Record<string, WireStoredValue>>;
+}
+
+/**
+ * Webview -> host: the rendered body for one `ExportRequestMessage`, or why
+ * it could not be produced. `html` is present only when `ok` is true;
+ * `reason` only when it is false — `preview-panel.ts` treats either shape
+ * as a `@markii/host`'s `ExportBodyResult`.
+ */
+export interface ExportResultMessage {
+  readonly type: 'export-result';
+  readonly requestId: string;
+  readonly ok: boolean;
+  readonly html?: string;
+  readonly reason?: string;
+}
+
 export type HostToWebviewMessage =
-  UpdateMessage | ValuesMessage | BundleErrorMessage;
-export type WebviewToHostMessage = ReadyMessage | PackDiagnosticsMessage;
+  UpdateMessage | ValuesMessage | BundleErrorMessage | ExportRequestMessage;
+export type WebviewToHostMessage =
+  ReadyMessage | PackDiagnosticsMessage | ExportResultMessage;
 
 function hasOwn(value: object, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(value, key);
@@ -526,13 +558,91 @@ function isValuesMessage(value: unknown): value is ValuesMessage {
   return true;
 }
 
+/**
+ * A valid `requestId`: a bounded, non-empty string drawn only from
+ * letters, digits, and `-` — the same alphabet `webview-html.ts`'s
+ * `createNonce` produces, which is what `preview-panel.ts` mints one from.
+ * Restricted rather than merely length-capped because this value is never
+ * displayed or escaped anywhere; keeping its shape closed removes the
+ * question entirely.
+ */
+const MAX_REQUEST_ID_LENGTH = 64;
+const REQUEST_ID_PATTERN = /^[A-Za-z0-9-]+$/;
+
+function isValidRequestId(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    value.length <= MAX_REQUEST_ID_LENGTH &&
+    REQUEST_ID_PATTERN.test(value)
+  );
+}
+
+function isExportRequestMessage(value: unknown): value is ExportRequestMessage {
+  if (!isPlainObject(value)) return false;
+  if (!hasOwn(value, 'type') || value.type !== 'export-request') {
+    return false;
+  }
+  if (!hasOwn(value, 'requestId') || !isValidRequestId(value.requestId)) {
+    return false;
+  }
+  if (!hasOwn(value, 'text') || typeof value.text !== 'string') return false;
+  if (!hasOwn(value, 'values') || !isWireStoredValueRecord(value.values)) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * A sane upper bound on the exported body markup one `ExportResultMessage`
+ * may carry. A real export is a rendered note, typically kilobytes to a
+ * few hundred kilobytes; 16 MB comfortably covers a large note with many
+ * embedded `data:` images while still rejecting an implausibly, hostilely
+ * large payload before it is written to disk.
+ */
+const MAX_EXPORT_HTML_LENGTH = 16 * 1024 * 1024;
+
+/** A sane upper bound on an export failure's reason — matches `MAX_RUN_REASON_LENGTH`'s bound for the same kind of host-facing text. */
+const MAX_EXPORT_REASON_LENGTH = 4096;
+
+function isExportResultMessage(value: unknown): value is ExportResultMessage {
+  if (!isPlainObject(value)) return false;
+  if (!hasOwn(value, 'type') || value.type !== 'export-result') {
+    return false;
+  }
+  if (!hasOwn(value, 'requestId') || !isValidRequestId(value.requestId)) {
+    return false;
+  }
+  if (!hasOwn(value, 'ok') || typeof value.ok !== 'boolean') return false;
+  if (value.ok) {
+    if (
+      !hasOwn(value, 'html') ||
+      typeof value.html !== 'string' ||
+      value.html.length > MAX_EXPORT_HTML_LENGTH
+    ) {
+      return false;
+    }
+  } else {
+    if (
+      !hasOwn(value, 'reason') ||
+      typeof value.reason !== 'string' ||
+      value.reason.length === 0 ||
+      value.reason.length > MAX_EXPORT_REASON_LENGTH
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export function isHostToWebviewMessage(
   value: unknown,
 ): value is HostToWebviewMessage {
   return (
     isUpdateMessage(value) ||
     isValuesMessage(value) ||
-    isBundleErrorMessage(value)
+    isBundleErrorMessage(value) ||
+    isExportRequestMessage(value)
   );
 }
 
@@ -632,7 +742,11 @@ function isPackDiagnosticsMessage(
 export function isWebviewToHostMessage(
   value: unknown,
 ): value is WebviewToHostMessage {
-  return isReadyMessage(value) || isPackDiagnosticsMessage(value);
+  return (
+    isReadyMessage(value) ||
+    isPackDiagnosticsMessage(value) ||
+    isExportResultMessage(value)
+  );
 }
 
 /**

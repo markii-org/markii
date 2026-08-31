@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import type {
   BundleFsGrant,
@@ -34,10 +35,12 @@ import {
 import type { HtmlExportOutcome } from './export-html.js';
 import { isWebviewToHostMessage } from './protocol.js';
 import type {
+  ExportRequestMessage,
   HostToWebviewMessage,
   PackDiagnosticsMessage,
   ValuesMessage,
 } from './protocol.js';
+import { packExportStylesheets } from './packs/pack-export-styles.js';
 import {
   isCoveredByRoots,
   packWebviewRoots,
@@ -63,9 +66,13 @@ import {
   encodeBundleCacheForStorage,
   withPersistedCache,
   buildPackRegistrationScript,
-  buildNoteHtmlExport,
+  buildNoteExport,
 } from '@markii/host';
-import type { RunResult, SpawnRunOptions } from '@markii/host';
+import type {
+  ExportBodyResult,
+  RunResult,
+  SpawnRunOptions,
+} from '@markii/host';
 import { resolveWorkerPath } from './worker-path.js';
 import type { RunTrigger, StoredValue } from '@markii/runtime';
 import { MIN_REFRESH_INTERVAL_SECONDS } from './refresh-interval.js';
@@ -1436,6 +1443,96 @@ async function runWithTrigger(
 }
 
 /**
+ * GitHub issue #28 slice 2: the external wall-clock budget for one
+ * `export-request`/`export-result` round trip. `retainContextWhenHidden`
+ * is `false`, so a hidden panel's webview has been torn down and cannot
+ * answer at all until it is shown again — that is an entirely legitimate
+ * state, not a bug, and this deadline is what keeps `exportHtml` from
+ * hanging on it: past this, the export falls back to the static engine
+ * rather than waiting indefinitely for a reply that may never come.
+ */
+const EXPORT_RENDER_TIMEOUT_MS = 4000;
+
+/**
+ * Asks `preview`'s webview to render one note's body through its own React
+ * registry (GitHub issue #28 slice 2) and resolves with the result, or with
+ * a `timeout`/`render-failed` `ExportBodyResult` if the webview never
+ * answers or answers with a failure. Settles EXACTLY ONCE: whichever of the
+ * reply listener or the deadline timer fires first wins, and the other is
+ * always disposed/cleared on every path so neither leaks past this call.
+ *
+ * Matches replies by `requestId` rather than assuming the next
+ * `export-result` belongs to this request, since `onDidReceiveMessage`
+ * delivers every message the webview posts, not just this one.
+ */
+function requestExportBody(
+  preview: ActivePreview,
+  text: string,
+  values: Record<string, StoredValue>,
+): Promise<ExportBodyResult> {
+  const requestId = createNonce();
+  return new Promise<ExportBodyResult>((resolve) => {
+    let settled = false;
+    // A single mutable holder rather than two loose `let`s: `settle` (below)
+    // needs to read whichever of these has been set BY THE TIME IT RUNS, and
+    // each is itself only ever assigned once at the point of its own
+    // creation — a plain `let` assigned exactly once is a `prefer-const`
+    // lint error, and there is no way to give either an initializer at
+    // declaration time since `settle` must exist first for their own
+    // callbacks to reference.
+    const handles: {
+      listener?: vscode.Disposable;
+      timer?: ReturnType<typeof setTimeout>;
+    } = {};
+
+    const settle = (result: ExportBodyResult): void => {
+      if (settled) return;
+      settled = true;
+      handles.listener?.dispose();
+      if (handles.timer !== undefined) clearTimeout(handles.timer);
+      resolve(result);
+    };
+
+    handles.listener = preview.panel.webview.onDidReceiveMessage(
+      (raw: unknown) => {
+        if (!isWebviewToHostMessage(raw) || raw.type !== 'export-result') {
+          return;
+        }
+        if (raw.requestId !== requestId) return;
+        if (raw.ok) {
+          settle({ ok: true, html: raw.html ?? '' });
+        } else {
+          settle({
+            ok: false,
+            reason: 'render-failed',
+            detail: raw.reason ?? 'the preview reported a failure.',
+          });
+        }
+      },
+    );
+
+    handles.timer = setTimeout(() => {
+      settle({
+        ok: false,
+        reason: 'timeout',
+        detail: `the preview did not answer within ${String(EXPORT_RENDER_TIMEOUT_MS)}ms.`,
+      });
+    }, EXPORT_RENDER_TIMEOUT_MS);
+    // Never let this deadline keep the extension host's event loop alive on
+    // its own, matching `refreshTimer`'s own `unref` above.
+    handles.timer.unref?.();
+
+    const message: ExportRequestMessage = {
+      type: 'export-request',
+      requestId,
+      text,
+      values,
+    };
+    void preview.panel.webview.postMessage(message);
+  });
+}
+
+/**
  * Writes one export outcome to the "Markii" output channel — the other of a
  * failure's two homes (AGENTS.md's "clean is not silent"). The popup carries
  * the short sentence; the verbatim reason only ever lands here.
@@ -1451,15 +1548,44 @@ function logExportDiagnostics(outcome: HtmlExportOutcome): void {
 }
 
 /**
+ * Whether the currently open preview panel (if any) has at least one pack
+ * whose components can actually render in the webview — the same
+ * `webviewPacks` list `setHtml` reads to build the `<script>`/`<link>`
+ * tags, and therefore the exact set `requestExportBody` can render.
+ */
+function panelHasWebviewPacks(preview: ActivePreview): boolean {
+  return preview.packContext.webviewPacks.length > 0;
+}
+
+/**
  * The `markii.exportHtml` command handler ("Markii: Export as HTML", GitHub
- * issue #28 slice 1): writes the active note as ONE self-contained `.html`
- * file, at a path the user picks, defaulting to the note's own name beside
- * it.
+ * issue #28): writes the active note as ONE self-contained `.html` file, at
+ * a path the user picks, defaulting to the note's own name beside it.
  *
- * The file is rendered by `@markii/html`, the static string engine, through
- * `@markii/host`'s `buildNoteHtmlExport` — the same builder the Obsidian
- * plugin's export commands use, so the two hosts cannot drift on what an
- * exported file contains or what it is called. Nothing is rendered here.
+ * ENGINE. Built through `@markii/host`'s `buildNoteExport`, which chooses
+ * between two engines:
+ *
+ * - React, through the OPEN preview panel's own webview, when a panel is
+ *   open and it has at least one pack loaded with webview components
+ *   (`panelHasWebviewPacks`) — `requestExportBody` asks that webview to
+ *   render the note exactly as its live preview would, so pack components
+ *   export as themselves rather than as unknown-component boxes, and the
+ *   pack's own stylesheet (read from the same `webviewPacks` entries the
+ *   preview links, via `./packs/pack-export-styles.ts`) is embedded too.
+ * - `@markii/html`, the static string engine, otherwise: no panel is open,
+ *   or the open panel has no pack components to render. A pack directive
+ *   then comes out as that engine's ordinary unknown-component fallback, a
+ *   labeled box with the author's inner markdown still rendered inside it.
+ *   This is documented behavior, not a failure, so it is not reported as
+ *   one — see `export-html.ts`'s `exportHtmlDiagnosticLines` for exactly
+ *   how each case is worded on the diagnostics surface. The user-facing
+ *   popup never distinguishes the two engines; only the "Markii" output
+ *   channel does.
+ *
+ * No hidden hosting panel is ever created to render an export: VS Code
+ * cannot create a genuinely invisible webview, and spinning up a visible
+ * throwaway panel with the whole pack script-tag bootstrap just to answer
+ * one export would be worse than a clearly diagnosed static fallback.
  *
  * VALUES. The note's last run is baked in: `readPersistedValues` reads the
  * same `workspaceState` entry the preview rehydrates from, keyed by the
@@ -1469,12 +1595,6 @@ function logExportDiagnostics(outcome: HtmlExportOutcome): void {
  * against, and a page full of stale markers would misreport a snapshot as a
  * live view that has fallen behind. A note that has never been run exports
  * with the standard empty states, and the confirmation message says so.
- *
- * PACK COMPONENTS. The static engine only knows the standard set: packs are
- * React modules it cannot load. A pack directive therefore comes out as the
- * engine's ordinary unknown-component fallback, a labeled box with the
- * author's inner markdown still rendered inside it. That is the documented
- * behavior of this slice, not a failure, so it is not reported as one.
  *
  * IMAGES. The exported HTML keeps the note's own relative image sources, so
  * a file written beside the note resolves them exactly as the note does.
@@ -1510,18 +1630,51 @@ export async function exportHtml(
   );
   let outcome: HtmlExportOutcome;
   try {
-    const html = buildNoteHtmlExport({
-      text: document.getText(),
-      fileName: defaultName,
-      values,
-    });
-    const bytes = new TextEncoder().encode(html);
+    const preview = active;
+    const useReact = preview !== undefined && panelHasWebviewPacks(preview);
+
+    let exportRequest: Parameters<typeof buildNoteExport>[0];
+    if (useReact && preview) {
+      const packStylesheets = await packExportStylesheets(
+        preview.packContext.webviewPacks,
+        (path) => readFile(path, 'utf8'),
+      );
+      exportRequest = {
+        text: document.getText(),
+        fileName: defaultName,
+        values,
+        renderBody: (text, vals) => requestExportBody(preview, text, vals),
+        packStylesheets,
+        packCount: preview.packContext.webviewPacks.length,
+      };
+    } else {
+      // No panel open at all -> 'no-renderer' when at least one pack folder
+      // is configured (there WOULD be pack components to render if a panel
+      // were open), 'no-packs' otherwise. A panel open with zero webview
+      // packs is 'no-packs' regardless of configuration, since nothing about
+      // opening a panel would change what this export renders.
+      const staticReason =
+        preview === undefined && configuredPackFolders().length > 0
+          ? 'no-renderer'
+          : 'no-packs';
+      exportRequest = {
+        text: document.getText(),
+        fileName: defaultName,
+        values,
+        staticReason,
+      };
+    }
+
+    const exportDocument = await buildNoteExport(exportRequest);
+
+    const bytes = new TextEncoder().encode(exportDocument.html);
     await vscode.workspace.fs.writeFile(target, bytes);
     outcome = {
       kind: 'written',
       path: target.fsPath,
       bytes: bytes.byteLength,
-      valueCount: Object.keys(values).length,
+      valueCount: exportDocument.valueCount,
+      render: exportDocument.render,
     };
   } catch (error) {
     outcome = {

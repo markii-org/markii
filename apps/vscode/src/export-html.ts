@@ -17,6 +17,7 @@
  * Nothing here renders anything.
  */
 import { exportedFileName } from '@markii/host';
+import type { ExportRenderInfo } from '@markii/host';
 
 /** Shown when the command runs with no Markii document to export. */
 export const EXPORT_HTML_NO_DOCUMENT_MESSAGE =
@@ -54,6 +55,8 @@ export type HtmlExportOutcome =
       readonly bytes: number;
       /** How many last-run values were baked into the file. */
       readonly valueCount: number;
+      /** Which engine rendered the body, and why when it was the static one (GitHub issue #28 slice 2). Diagnostics-facing only; see `exportHtmlDiagnosticLines`. */
+      readonly render: ExportRenderInfo;
     }
   | {
       readonly kind: 'failed';
@@ -92,6 +95,36 @@ export function exportHtmlResultMessage(outcome: HtmlExportOutcome): string {
 }
 
 /**
+ * The one diagnostic line describing HOW an export's body was rendered
+ * (GitHub issue #28 slice 2): the pack-vs-static distinction the user asked
+ * to keep out of the popup and put here instead, in
+ * `exportHtmlDiagnosticLines`'s designated diagnostics surface.
+ */
+function renderDiagnosticLine(render: ExportRenderInfo): string {
+  if (render.engine === 'react') {
+    const packs =
+      render.packCount === 1 ? '1 pack' : `${String(render.packCount)} packs`;
+    const stylesheets =
+      render.stylesheetCount === 1
+        ? '1 stylesheet'
+        : `${String(render.stylesheetCount)} stylesheets`;
+    return `Rendered through the preview's React engine, with ${packs} and ${stylesheets} embedded.`;
+  }
+  if (render.reason === 'no-packs') {
+    return 'Rendered with the static engine because no pack components are loaded, which matches what the preview shows.';
+  }
+  if (render.reason === 'no-renderer') {
+    return 'Rendered with the static engine because no preview panel was open. Pack components exported as labeled boxes; open the preview and export again to include them.';
+  }
+  if (render.reason === 'timeout') {
+    const detail = render.detail ? ` Detail: ${render.detail}` : '';
+    return `Rendered with the static engine because the preview did not answer in time. Pack components exported as labeled boxes.${detail}`;
+  }
+  const detail = render.detail ? ` Detail: ${render.detail}` : '';
+  return `Rendered with the static engine because the preview could not render the note. Pack components exported as labeled boxes.${detail}`;
+}
+
+/**
  * The lines written to the "Markii" output channel for one export — this
  * extension's designated diagnostics surface. Every failure reaches here in
  * full, including the reason the popup deliberately omits.
@@ -105,5 +138,6 @@ export function exportHtmlDiagnosticLines(
   }
   return [
     `HTML export wrote ${outcome.path}: ${String(outcome.bytes)} bytes, ${String(outcome.valueCount)} stored values baked in.`,
+    renderDiagnosticLine(outcome.render),
   ];
 }

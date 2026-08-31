@@ -7,10 +7,16 @@
  * last-run values, hands this module a `NoteExportFs` backed by the vault
  * adapter, and shows the `Notice` this module worded.
  *
- * The rendering is `@markii/html`'s, reached through `@markii/host`'s
- * `buildNoteHtmlExport` — the same builder the VS Code extension's export
- * command uses, so the two hosts cannot drift on what an exported file
- * contains or what it is called. Nothing is rendered here.
+ * The rendering goes through `@markii/host`'s `buildNoteExport` (GitHub
+ * issue #28, slice 2): a host that has React and a loaded pack registry in
+ * front of it (`main.ts` wires this from the open preview, or loads one on
+ * demand) renders the body itself, so an exported note's pack components
+ * are the real components, not the static engine's unknown-component box.
+ * A host with no packs loaded, or no renderer to hand over, falls back to
+ * `@markii/html`'s static engine, the same document slice 1 produced. This
+ * module decides nothing about WHICH engine ran; it only threads
+ * `render`, `buildNoteExport`'s account of that choice, into the outcomes
+ * this module already reports.
  *
  * THE PDF SEAM. Printing needs Electron, which exists only in a real
  * Obsidian desktop window and cannot be imported under Vitest. So the
@@ -20,7 +26,13 @@
  * Electron surface at all" to "printing threw", degrades to writing the
  * HTML file instead — the user always ends up with an exported note.
  */
-import { buildNoteHtmlExport, exportedSiblingPath } from '@markii/host';
+import { buildNoteExport, exportedSiblingPath } from '@markii/host';
+import type {
+  ExportBodyRenderer,
+  ExportPackStylesheet,
+  ExportRenderInfo,
+  StaticExportReason,
+} from '@markii/host';
 import type { StoredValue } from '@markii/runtime';
 
 /** The vault writes an export needs. Backed by Obsidian's `DataAdapter` in `main.ts`; a plain object in tests. */
@@ -88,11 +100,14 @@ export type NoteExportOutcome =
       readonly path: string;
       /** How many last-run values were baked in. */
       readonly valueCount: number;
+      /** Which engine rendered the body, and why when it was the static one. */
+      readonly render: ExportRenderInfo;
     }
   | {
       readonly kind: 'pdf';
       readonly path: string;
       readonly valueCount: number;
+      readonly render: ExportRenderInfo;
     }
   | {
       /** This device cannot print at all; the HTML file was written instead. */
@@ -100,6 +115,7 @@ export type NoteExportOutcome =
       readonly path: string;
       readonly valueCount: number;
       readonly reason: string;
+      readonly render: ExportRenderInfo;
     }
   | {
       /** Printing was possible but failed this time; the HTML file was written instead. */
@@ -107,6 +123,7 @@ export type NoteExportOutcome =
       readonly path: string;
       readonly valueCount: number;
       readonly reason: string;
+      readonly render: ExportRenderInfo;
     }
   | {
       /** Nothing was written. */
@@ -123,6 +140,20 @@ export interface NoteExportRequest {
   /** The note's persisted last-run values, baked into the export. Empty means the note has never been run. */
   readonly values?: Record<string, StoredValue>;
   readonly fs: NoteExportFs;
+  /**
+   * The host's React render of the body, bound to its merged pack
+   * registry (`./export/render-body.ts`'s `renderNoteBodyForExport`).
+   * Omitted when no packs are loaded, or no renderer is available, in
+   * which case `staticReason` says why and the static engine renders
+   * instead.
+   */
+  readonly renderBody?: ExportBodyRenderer;
+  /** Why the static engine is used when `renderBody` is omitted. Defaults to `no-packs` in `@markii/host`. */
+  readonly staticReason?: StaticExportReason;
+  /** The loaded packs' stylesheets, embedded only when `renderBody` actually ran. */
+  readonly packStylesheets?: readonly ExportPackStylesheet[];
+  /** How many loaded packs contributed components to the registry that rendered this file. Diagnostics only. */
+  readonly packCount?: number;
 }
 
 /** `exportNoteAsPdf`'s extra inputs: the printer, and the folder it may print from. */
@@ -132,18 +163,35 @@ export interface NotePdfExportRequest extends NoteExportRequest {
   readonly baseDir: string | undefined;
 }
 
-/** Builds the standalone document for one note. Never throws: the static engine returns its own fallback rather than propagating. */
-function buildDocument(request: NoteExportRequest): {
+/** Builds the standalone document for one note. Never throws: `buildNoteExport` classifies a failing `renderBody` and falls back to the static engine rather than propagating. */
+async function buildDocument(request: NoteExportRequest): Promise<{
   html: string;
   valueCount: number;
-} {
+  render: ExportRenderInfo;
+}> {
   const values = request.values ?? {};
-  const html = buildNoteHtmlExport({
+  const document = await buildNoteExport({
     text: request.text,
     fileName: request.notePath,
     values,
+    ...(request.renderBody !== undefined
+      ? { renderBody: request.renderBody }
+      : {}),
+    ...(request.staticReason !== undefined
+      ? { staticReason: request.staticReason }
+      : {}),
+    ...(request.packStylesheets !== undefined
+      ? { packStylesheets: request.packStylesheets }
+      : {}),
+    ...(request.packCount !== undefined
+      ? { packCount: request.packCount }
+      : {}),
   });
-  return { html, valueCount: Object.keys(values).length };
+  return {
+    html: document.html,
+    valueCount: document.valueCount,
+    render: document.render,
+  };
 }
 
 /**
@@ -156,9 +204,9 @@ export async function exportNoteAsHtml(
 ): Promise<NoteExportOutcome> {
   const path = exportedSiblingPath(request.notePath, '.html');
   try {
-    const { html, valueCount } = buildDocument(request);
+    const { html, valueCount, render } = await buildDocument(request);
     await request.fs.writeText(path, html);
-    return { kind: 'html', path, valueCount };
+    return { kind: 'html', path, valueCount, render };
   } catch (error) {
     return { kind: 'failed', reason: reasonOf(error) };
   }
@@ -181,8 +229,9 @@ export async function exportNoteAsPdf(
 
   let html: string;
   let valueCount: number;
+  let render: ExportRenderInfo;
   try {
-    ({ html, valueCount } = buildDocument(request));
+    ({ html, valueCount, render } = await buildDocument(request));
   } catch (error) {
     return { kind: 'failed', reason: reasonOf(error) };
   }
@@ -190,7 +239,7 @@ export async function exportNoteAsPdf(
   try {
     const pdf = await request.htmlToPdf({ html, baseDir: request.baseDir });
     await request.fs.writeBinary(pdfPath, pdf);
-    return { kind: 'pdf', path: pdfPath, valueCount };
+    return { kind: 'pdf', path: pdfPath, valueCount, render };
   } catch (error) {
     const kind = isPdfUnavailable(error) ? 'pdf-unavailable' : 'pdf-failed';
     const reason = reasonOf(error);
@@ -203,7 +252,7 @@ export async function exportNoteAsPdf(
         reason: `${reason}; the HTML fallback also failed: ${reasonOf(fallbackError)}`,
       };
     }
-    return { kind, path: htmlPath, valueCount, reason };
+    return { kind, path: htmlPath, valueCount, reason, render };
   }
 }
 
@@ -240,6 +289,40 @@ export function exportNoticeText(outcome: NoteExportOutcome): string {
   }
 }
 
+/** `count` plus `noun`, pluralized with a trailing `s`. Every noun this module uses is regular. */
+function countedNoun(count: number, noun: string): string {
+  return `${String(count)} ${noun}${count === 1 ? '' : 's'}`;
+}
+
+/**
+ * The diagnostics line describing which engine rendered an export's body
+ * and why, per `ExportRenderInfo` (GitHub issue #28, slice 2). Kept out of
+ * `exportNoticeText` on purpose, user-set: the pack-vs-static distinction
+ * belongs in the diagnostics surface, not the notice.
+ *
+ * `no-renderer` and `timeout` are unreachable on this host today, since
+ * `main.ts` never hands `buildNoteExport` a `renderBody` without also
+ * meaning to use it and the render itself is a plain synchronous call.
+ * They are handled anyway so this switch stays exhaustive against
+ * `@markii/host`'s `StaticExportReason`.
+ */
+function renderDiagnosticLine(render: ExportRenderInfo): string {
+  if (render.engine === 'react') {
+    return `Rendered through the preview's React engine with ${countedNoun(render.packCount, 'pack component')} and ${countedNoun(render.stylesheetCount, 'pack stylesheet')} embedded.`;
+  }
+  const detail = render.detail ? ` Detail: ${render.detail}` : '';
+  switch (render.reason) {
+    case 'no-packs':
+      return 'Rendered statically because no pack components are loaded, which matches the preview.';
+    case 'no-renderer':
+      return `Rendered statically because no React renderer was available on this host.${detail}`;
+    case 'timeout':
+      return `Rendered statically because the React render timed out. Pack components exported as labeled boxes.${detail}`;
+    case 'render-failed':
+      return `Rendered statically because the React render failed. Pack components exported as labeled boxes.${detail}`;
+  }
+}
+
 /**
  * The console lines for one outcome — this host's diagnostics surface, per
  * docs/integration.md. Every failure reaches here in full, including the
@@ -251,20 +334,24 @@ export function exportDiagnosticLines(outcome: NoteExportOutcome): string[] {
     case 'html':
       return [
         `Exported ${outcome.path} as HTML with ${String(outcome.valueCount)} stored values baked in.`,
+        renderDiagnosticLine(outcome.render),
       ];
     case 'pdf':
       return [
         `Exported ${outcome.path} as PDF with ${String(outcome.valueCount)} stored values baked in.`,
+        renderDiagnosticLine(outcome.render),
       ];
     case 'pdf-unavailable':
       return [
         `PDF export is unavailable on this device: ${outcome.reason}`,
         `Wrote ${outcome.path} as HTML instead. Open it in a browser and print from there to get a PDF.`,
+        renderDiagnosticLine(outcome.render),
       ];
     case 'pdf-failed':
       return [
         `PDF export failed: ${outcome.reason}`,
         `Wrote ${outcome.path} as HTML instead. Open it in a browser and print from there to get a PDF.`,
+        renderDiagnosticLine(outcome.render),
       ];
     case 'failed':
       return [`Export failed: ${outcome.reason}`];

@@ -87,6 +87,37 @@ export class MarkiiPreviewView extends ItemView {
   /** The last completed run's failure details (`RunOnceResult.failureDetails`), kept so the "Show Markii diagnostics" command can replay them on demand — diagnostics-surface only, never rendered into the page. */
   private lastRunFailures: RunOnceResult['failureDetails'] = [];
 
+  /**
+   * This preview's currently-loaded pack registry and stylesheets, for
+   * `main.ts`'s export commands (GitHub issue #28, slice 2): an export
+   * reuses whatever this open preview already loaded rather than loading
+   * a second copy. `undefined` before the first load completes, or once
+   * the view has closed and torn its pack context down, exactly the cases
+   * `refresh()` itself treats as "no packs".
+   *
+   * Also `undefined` when the load found no packs at all. An export with
+   * nothing to add to the standard set renders through `@markii/html`
+   * instead, which produces the same document the static engine has
+   * always produced for a pack-free note: the React path exists to bring
+   * pack components along, so it is not worth taking when there are none.
+   */
+  exportPackContext():
+    | {
+        registry: PackContext['registry'];
+        stylesheets: PackContext['stylesheets'];
+        packCount: number;
+      }
+    | undefined {
+    if (!this.packContext || this.packContext.packs.length === 0) {
+      return undefined;
+    }
+    return {
+      registry: this.packContext.registry,
+      stylesheets: this.packContext.stylesheets,
+      packCount: this.packContext.packs.length,
+    };
+  }
+
   constructor(leaf: WorkspaceLeaf, plugin: MarkiiPlugin) {
     super(leaf);
     this.plugin = plugin;

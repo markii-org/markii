@@ -12,13 +12,16 @@
  * cannot drift on file naming, on the page CSS an exported file carries, or
  * on how a value store is handed to the engine.
  *
- * WHAT AN EXPORT CONTAINS. The standard component set, rendered statically,
- * with the last run's values baked in wherever a note binds one (`data=`,
- * `:value[...]`). A directive the static engine does not know — every pack
- * component, since packs are React modules the string engine cannot load —
- * comes out as that engine's ordinary unknown-component fallback: a labeled
- * box with the inner markdown still rendered inside it. Nothing crashes and
- * no content is dropped; see `@markii/html`'s `render.ts`.
+ * WHAT AN EXPORT CONTAINS. The standard component set, with the last run's
+ * values baked in wherever a note binds one (`data=`, `:value[...]`), plus
+ * every pack component the exporting host has loaded (issue #28 slice 2 —
+ * see `buildNoteExport` and `composeNoteHtmlExport` at the bottom of this
+ * file). A host with React and a merged registry in front of it renders the
+ * body itself and hands the string here; a host with neither falls back to
+ * the static engine, where a pack directive comes out as that engine's
+ * ordinary unknown-component fallback: a labeled box with the inner
+ * markdown still rendered inside it. Nothing crashes and no content is
+ * dropped either way; see `@markii/html`'s `render.ts`.
  */
 import { exportHtmlDocument, renderMarkToHtml } from '@markii/html';
 import { defaultHtmlRegistry } from '@markii/html/components';
@@ -169,15 +172,285 @@ export interface NoteHtmlExportOptions {
  * rather than propagating, so a caller always gets a document it can write.
  */
 export function buildNoteHtmlExport(options: NoteHtmlExportOptions): string {
-  const values = options.values ?? {};
+  return composeNoteHtmlExport({
+    bodyHtml: renderStaticBody(options.text, options.values ?? {}),
+    fileName: options.fileName,
+    ...(options.extraCss !== undefined ? { extraCss: options.extraCss } : {}),
+  });
+}
+
+/**
+ * The static engine's body for one note: `@markii/html` walking
+ * `@markii/core`'s sanitized hast to a string, with the last run's values
+ * baked in. The one place `renderMarkToHtml` is called, so the static path
+ * and every React path's fallback produce the identical body.
+ */
+function renderStaticBody(
+  text: string,
+  values: Record<string, StoredValue>,
+): string {
   const store =
     Object.keys(values).length > 0 ? createValueStore(values) : undefined;
-  const body = renderMarkToHtml(options.text, defaultHtmlRegistry, store);
-  const extraCss = options.extraCss
-    ? `${EXPORT_PAGE_CSS}\n${options.extraCss}`
-    : EXPORT_PAGE_CSS;
-  return exportHtmlDocument(body, {
+  return renderMarkToHtml(text, defaultHtmlRegistry, store);
+}
+
+/**
+ * ISSUE #28 SLICE 2: rendering an export through a host's REACT engine.
+ *
+ * Slice 1 rendered every export with `@markii/html`, so a pack directive
+ * came out as that engine's unknown-component box. The static engine cannot
+ * load a pack, because a pack component is a React module. The fix is not a
+ * second component system: it is to let a host that ALREADY has React and a
+ * merged registry in front of it (both do, for the preview) render the
+ * export body with exactly what the preview renders, and hand the resulting
+ * STRING back here.
+ *
+ * That keeps this package React-free. Composition is the host-neutral part
+ * (the page shell, `doc.css`, the print rules, the pack stylesheets, the
+ * file name), and it needs no renderer at all once it has a body string.
+ * The React render itself happens where React already lives: the VS Code
+ * webview, and the Obsidian plugin's own renderer process.
+ */
+
+/** One loaded pack's emitted stylesheet, as a host already holds it for its preview. */
+export interface ExportPackStylesheet {
+  /** The pack's namespace, used only to label the block in the exported file. */
+  readonly namespace: string;
+  /** The stylesheet's text, exactly as the host injects it into its preview. */
+  readonly cssText: string;
+}
+
+/**
+ * Why an export fell back to the static engine. Diagnostics-facing: each
+ * host words these itself, since the thing a user would do about it differs
+ * per host.
+ *
+ * - `no-packs`: no pack components were loaded, so the static engine
+ *   renders precisely what the React engine would have. Not a degradation.
+ * - `no-renderer`: the host had no React surface to render through at all
+ *   (VS Code with no preview panel open).
+ * - `timeout`: the host's renderer was asked and did not answer in time.
+ * - `render-failed`: the renderer answered with a failure, or threw.
+ */
+export type StaticExportReason =
+  'no-packs' | 'no-renderer' | 'timeout' | 'render-failed';
+
+/** Which engine actually rendered an export's body, and what that means. */
+export type ExportRenderInfo =
+  | {
+      readonly engine: 'react';
+      /** How many loaded packs contributed components to the registry that rendered this file. */
+      readonly packCount: number;
+      /** How many of those packs contributed a stylesheet embedded in the file. */
+      readonly stylesheetCount: number;
+    }
+  | {
+      readonly engine: 'static';
+      readonly reason: StaticExportReason;
+      /** The verbatim detail behind a `timeout`/`render-failed`, for the diagnostics surface only. */
+      readonly detail?: string;
+    };
+
+/** What a host's React renderer returns: the body markup, or why it could not produce one. */
+export type ExportBodyResult =
+  | { readonly ok: true; readonly html: string }
+  | {
+      readonly ok: false;
+      readonly reason: Extract<StaticExportReason, 'timeout' | 'render-failed'>;
+      readonly detail?: string;
+    };
+
+/**
+ * A host's React render of one note's body, as a string. Given the note's
+ * text and the values to bake in, it returns the markup that goes INSIDE
+ * the exported document's `.doc` wrapper. It is expected not to throw; one
+ * that does is caught here and treated as `render-failed`, so a caller
+ * always gets a document it can write.
+ */
+export type ExportBodyRenderer = (
+  text: string,
+  values: Record<string, StoredValue>,
+) => ExportBodyResult | Promise<ExportBodyResult>;
+
+/**
+ * Neutralizes the one sequence that can end a `<style>` element early.
+ *
+ * Pack CSS is trusted in the security sense (docs/security.md: packs are
+ * user-installed), but trusted does not mean well-formed, and a stray
+ * `</style` in a pack's stylesheet would close the block and spill the rest
+ * of the sheet into the page as text. `<\/style` is a valid CSS escape for
+ * the same `/` inside a string, and outside a string a bare `</style` was
+ * never valid CSS anyway, so nothing legitimate changes meaning here.
+ */
+function neutralizeStyleClose(cssText: string): string {
+  return cssText.replace(/<\/(style)/gi, '<\\/$1');
+}
+
+/** A namespace reduced to what is safe inside a CSS comment label. Pack names are validated kebab-case upstream; this only guarantees the comment cannot be escaped. */
+function commentSafeNamespace(namespace: string): string {
+  const cleaned = namespace.replace(/[^a-zA-Z0-9._-]/g, '');
+  return cleaned.length > 0 ? cleaned : 'pack';
+}
+
+/**
+ * The pack stylesheets as one CSS block, in the order the host loaded them
+ * — the same order its preview injects them, which is what decides the
+ * cascade between two packs that style the same thing. Each block is
+ * labeled with its pack's namespace so a reader of the exported file can
+ * tell whose rules these are.
+ *
+ * Placed AFTER `doc.css` and `EXPORT_PAGE_CSS` by `composeNoteHtmlExport`,
+ * matching docs/packs.md's load order: a pack sees resolved `--mk-*` token
+ * values and is not overridden by the document stylesheet's broader rules.
+ */
+export function packStylesheetsCss(
+  sheets: readonly ExportPackStylesheet[],
+): string {
+  return sheets
+    .map(
+      (sheet) =>
+        `/* pack: ${commentSafeNamespace(sheet.namespace)} */\n${neutralizeStyleClose(sheet.cssText)}`,
+    )
+    .join('\n');
+}
+
+/** What `composeNoteHtmlExport` needs to wrap an already-rendered body in the export shell. */
+export interface ComposeNoteHtmlExportOptions {
+  /** The rendered body markup that goes inside the `.doc` wrapper. Inserted verbatim; it is expected to be renderer output, already escaped. */
+  readonly bodyHtml: string;
+  /** The note's file name, used for the document title. A path is accepted; only the last segment is read. */
+  readonly fileName: string;
+  /** The loaded packs' stylesheets, appended after `doc.css` and `EXPORT_PAGE_CSS`. */
+  readonly packStylesheets?: readonly ExportPackStylesheet[];
+  /** Extra host CSS, appended after `EXPORT_PAGE_CSS` and before the pack stylesheets. Trusted, inserted verbatim. */
+  readonly extraCss?: string;
+}
+
+/**
+ * Wraps an already-rendered body in the standalone export page: the same
+ * shell, `doc.css`, and print rules `buildNoteHtmlExport` produces, plus
+ * every loaded pack's stylesheet so pack components in the body are styled.
+ *
+ * Host-neutral and renderer-neutral on purpose: it takes a STRING, so the
+ * React path and the static path compose the identical page and can never
+ * drift on what an exported file carries.
+ */
+export function composeNoteHtmlExport(
+  options: ComposeNoteHtmlExportOptions,
+): string {
+  const packCss = packStylesheetsCss(options.packStylesheets ?? []);
+  const parts = [EXPORT_PAGE_CSS];
+  if (options.extraCss) parts.push(options.extraCss);
+  if (packCss) parts.push(packCss);
+  return exportHtmlDocument(options.bodyHtml, {
     title: exportDocumentTitle(options.fileName),
-    extraCss,
+    extraCss: parts.join('\n'),
   });
+}
+
+/** What `buildNoteExport` needs. Everything except `text`/`fileName` is optional; omitting `renderBody` is the plain static export. */
+export interface NoteExportBuildRequest {
+  /** The note's full source text. */
+  readonly text: string;
+  /** The note's file name, used for the document title. A path is accepted; only the last segment is read. */
+  readonly fileName: string;
+  /** The note's last-run values, baked in wherever the note binds one. Omitted or empty exports the note's standard empty states. */
+  readonly values?: Record<string, StoredValue>;
+  /**
+   * The host's React render of the body. Omitted when the host has nothing
+   * to render through, in which case `staticReason` says which case that
+   * is and the static engine renders instead.
+   */
+  readonly renderBody?: ExportBodyRenderer;
+  /** Why the static engine is being used, when `renderBody` is omitted. Defaults to `no-packs`. */
+  readonly staticReason?: StaticExportReason;
+  /** The loaded packs' stylesheets. Embedded only when the React path actually rendered the body; the static engine's output never references them. */
+  readonly packStylesheets?: readonly ExportPackStylesheet[];
+  /** How many loaded packs contributed components to the registry that rendered this file. Diagnostics only. */
+  readonly packCount?: number;
+  /** Extra host CSS appended after `EXPORT_PAGE_CSS`. Trusted, inserted verbatim. */
+  readonly extraCss?: string;
+}
+
+/** One built export: the complete document, how it was rendered, and how many values it baked in. */
+export interface NoteExportDocument {
+  /** The complete, self-contained HTML document. */
+  readonly html: string;
+  /** Which engine rendered the body, and why when it was the static one. */
+  readonly render: ExportRenderInfo;
+  /** How many last-run values were baked in. */
+  readonly valueCount: number;
+}
+
+/** The verbatim reason for a thrown value. Diagnostics only, never a notice. */
+function detailOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Builds one note's standalone export document, through the host's React
+ * engine when it offered one and through `@markii/html` otherwise.
+ *
+ * Never throws and never leaves a caller without a file: a renderer that
+ * fails, times out, or throws is classified, recorded in `render`, and
+ * replaced by the static engine's output, which is the same document slice
+ * 1 produced.
+ */
+export async function buildNoteExport(
+  request: NoteExportBuildRequest,
+): Promise<NoteExportDocument> {
+  const values = request.values ?? {};
+  const valueCount = Object.keys(values).length;
+
+  const staticDocument = (render: ExportRenderInfo): NoteExportDocument => ({
+    html: composeNoteHtmlExport({
+      bodyHtml: renderStaticBody(request.text, values),
+      fileName: request.fileName,
+      ...(request.extraCss !== undefined ? { extraCss: request.extraCss } : {}),
+    }),
+    render,
+    valueCount,
+  });
+
+  if (!request.renderBody) {
+    return staticDocument({
+      engine: 'static',
+      reason: request.staticReason ?? 'no-packs',
+    });
+  }
+
+  let result: ExportBodyResult;
+  try {
+    result = await request.renderBody(request.text, values);
+  } catch (error) {
+    return staticDocument({
+      engine: 'static',
+      reason: 'render-failed',
+      detail: detailOf(error),
+    });
+  }
+
+  if (!result.ok) {
+    return staticDocument({
+      engine: 'static',
+      reason: result.reason,
+      ...(result.detail !== undefined ? { detail: result.detail } : {}),
+    });
+  }
+
+  const packStylesheets = request.packStylesheets ?? [];
+  return {
+    html: composeNoteHtmlExport({
+      bodyHtml: result.html,
+      fileName: request.fileName,
+      packStylesheets,
+      ...(request.extraCss !== undefined ? { extraCss: request.extraCss } : {}),
+    }),
+    render: {
+      engine: 'react',
+      packCount: request.packCount ?? packStylesheets.length,
+      stylesheetCount: packStylesheets.length,
+    },
+    valueCount,
+  };
 }

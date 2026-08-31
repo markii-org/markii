@@ -3,11 +3,14 @@ import type { StoredValue } from '@markii/runtime';
 import {
   EXPORT_PAGE_CSS,
   FALLBACK_EXPORT_BASE_NAME,
+  buildNoteExport,
   buildNoteHtmlExport,
+  composeNoteHtmlExport,
   exportBaseName,
   exportDocumentTitle,
   exportedFileName,
   exportedSiblingPath,
+  packStylesheetsCss,
 } from './note-export.js';
 
 describe('exportBaseName', () => {
@@ -167,5 +170,212 @@ describe('buildNoteHtmlExport', () => {
     });
     expect(html).not.toContain('<title><script>');
     expect(html).toContain('&lt;script&gt;alert(1)&lt;x&gt;');
+  });
+});
+
+describe('packStylesheetsCss', () => {
+  it('keeps the host load order and labels each block with its pack', () => {
+    const css = packStylesheetsCss([
+      { namespace: 'ana', cssText: '.ana-timeline { color: red; }' },
+      { namespace: 'bee', cssText: '.bee-chip { color: blue; }' },
+    ]);
+    expect(css.indexOf('ana-timeline')).toBeLessThan(css.indexOf('bee-chip'));
+    expect(css).toContain('/* pack: ana */');
+    expect(css).toContain('/* pack: bee */');
+  });
+
+  it('is empty for no packs, so the shell gains nothing', () => {
+    expect(packStylesheetsCss([])).toBe('');
+  });
+
+  it('neutralizes a stray closing style tag rather than letting it end the block', () => {
+    const css = packStylesheetsCss([
+      {
+        namespace: 'ana',
+        cssText: '.a { content: "</style><script>x</script>"; }',
+      },
+    ]);
+    expect(css).not.toContain('</style>');
+    expect(css).toContain('<\\/style>');
+  });
+
+  it('cannot be escaped through the comment label', () => {
+    const css = packStylesheetsCss([
+      {
+        namespace: 'a*/ body { display: none } /*',
+        cssText: '.a { color: red; }',
+      },
+    ]);
+    expect(css).toContain('/* pack: abodydisplaynone */');
+    expect(css.split('/*').length).toBe(css.split('*/').length);
+  });
+});
+
+describe('composeNoteHtmlExport', () => {
+  it('embeds the body inside the shared doc shell', () => {
+    const html = composeNoteHtmlExport({
+      bodyHtml: '<p>hello</p>',
+      fileName: 'week.mk.md',
+    });
+    expect(html).toContain('<!doctype html>');
+    expect(html).toContain('<title>week</title>');
+    expect(html).toContain('<div class="doc">');
+    expect(html).toContain('<p>hello</p>');
+  });
+
+  it('places pack CSS after doc.css and the page CSS, per the pack load order', () => {
+    const html = composeNoteHtmlExport({
+      bodyHtml: '<p>hello</p>',
+      fileName: 'week.mk.md',
+      packStylesheets: [
+        { namespace: 'ana', cssText: '.ana-x { color: red; }' },
+      ],
+    });
+    expect(html.indexOf('--mk-')).toBeLessThan(html.indexOf('.ana-x'));
+    expect(html.indexOf('@media print')).toBeLessThan(html.indexOf('.ana-x'));
+    expect(html.indexOf('.ana-x')).toBeLessThan(html.indexOf('</style>'));
+  });
+
+  it('puts host extra CSS before the pack stylesheets', () => {
+    const html = composeNoteHtmlExport({
+      bodyHtml: '',
+      fileName: 'week.mk.md',
+      extraCss: '.host-layer { color: green; }',
+      packStylesheets: [
+        { namespace: 'ana', cssText: '.ana-x { color: red; }' },
+      ],
+    });
+    expect(html.indexOf('.host-layer')).toBeLessThan(html.indexOf('.ana-x'));
+  });
+
+  it('leaves exactly one style block, even with hostile pack CSS', () => {
+    const html = composeNoteHtmlExport({
+      bodyHtml: '',
+      fileName: 'week.mk.md',
+      packStylesheets: [
+        { namespace: 'ana', cssText: '.a { content: "</StYlE>"; }' },
+      ],
+    });
+    expect(html.split('</style>').length - 1).toBe(1);
+  });
+});
+
+describe('buildNoteExport', () => {
+  const text =
+    ':::callout{tone="info"}\nhi\n:::\n\n:::ana-timeline\nfrom a pack\n:::\n';
+
+  it('renders through the host renderer and embeds the pack CSS', async () => {
+    const result = await buildNoteExport({
+      text,
+      fileName: 'week.mk.md',
+      renderBody: () => ({
+        ok: true,
+        html: '<div class="ana-timeline">from a pack</div>',
+      }),
+      packStylesheets: [
+        { namespace: 'ana', cssText: '.ana-timeline { color: red; }' },
+      ],
+      packCount: 1,
+    });
+    expect(result.render).toEqual({
+      engine: 'react',
+      packCount: 1,
+      stylesheetCount: 1,
+    });
+    expect(result.html).toContain(
+      '<div class="ana-timeline">from a pack</div>',
+    );
+    expect(result.html).toContain('.ana-timeline { color: red; }');
+    expect(result.html).not.toContain('unknown component');
+  });
+
+  it('hands the renderer the note text and its values', async () => {
+    const seen: { text?: string; values?: Record<string, StoredValue> } = {};
+    await buildNoteExport({
+      text: 'body',
+      fileName: 'week.mk.md',
+      values: { total: { value: 3, status: 'fresh' } },
+      renderBody: (givenText, givenValues) => {
+        seen.text = givenText;
+        seen.values = givenValues;
+        return { ok: true, html: '<p>3</p>' };
+      },
+    });
+    expect(seen.text).toBe('body');
+    expect(seen.values).toEqual({ total: { value: 3, status: 'fresh' } });
+  });
+
+  it('counts the values it baked in', async () => {
+    const result = await buildNoteExport({
+      text: 'body',
+      fileName: 'week.mk.md',
+      values: {
+        a: { value: 1, status: 'fresh' },
+        b: { value: 2, status: 'fresh' },
+      },
+      renderBody: () => ({ ok: true, html: '<p>x</p>' }),
+    });
+    expect(result.valueCount).toBe(2);
+  });
+
+  it('falls back to the static engine when no renderer is offered', async () => {
+    const result = await buildNoteExport({ text, fileName: 'week.mk.md' });
+    expect(result.render).toEqual({ engine: 'static', reason: 'no-packs' });
+    expect(result.html).toContain('unknown component');
+  });
+
+  it('keeps the caller reason for a host with no renderer at all', async () => {
+    const result = await buildNoteExport({
+      text,
+      fileName: 'week.mk.md',
+      staticReason: 'no-renderer',
+    });
+    expect(result.render).toEqual({ engine: 'static', reason: 'no-renderer' });
+  });
+
+  it('classifies a renderer that reports a timeout', async () => {
+    const result = await buildNoteExport({
+      text,
+      fileName: 'week.mk.md',
+      renderBody: () => ({
+        ok: false,
+        reason: 'timeout',
+        detail: 'no answer in 4000 ms',
+      }),
+      packStylesheets: [
+        { namespace: 'ana', cssText: '.ana-timeline { color: red; }' },
+      ],
+    });
+    expect(result.render).toEqual({
+      engine: 'static',
+      reason: 'timeout',
+      detail: 'no answer in 4000 ms',
+    });
+    // The static body never references pack CSS, so none is embedded.
+    expect(result.html).not.toContain('.ana-timeline { color: red; }');
+    expect(result.html).toContain('unknown component');
+  });
+
+  it('classifies a renderer that throws, rather than propagating', async () => {
+    const result = await buildNoteExport({
+      text,
+      fileName: 'week.mk.md',
+      renderBody: () => {
+        throw new Error('registry exploded');
+      },
+    });
+    expect(result.render).toEqual({
+      engine: 'static',
+      reason: 'render-failed',
+      detail: 'registry exploded',
+    });
+    expect(result.html).toContain('<!doctype html>');
+  });
+
+  it('produces the same document as the slice 1 builder on every static path', async () => {
+    const result = await buildNoteExport({ text, fileName: 'week.mk.md' });
+    expect(result.html).toBe(
+      buildNoteHtmlExport({ text, fileName: 'week.mk.md' }),
+    );
   });
 });

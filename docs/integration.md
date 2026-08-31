@@ -260,16 +260,23 @@ A host can hand the reader a file rather than a view. Both reference hosts do:
 VS Code writes an HTML file at a path the user picks, and Obsidian writes one
 beside the note in the vault, or prints it straight to PDF.
 
-An export is not a screenshot of the preview. It is a second render, through
-`@markii/html`, the static string engine. The exported file carries the shared
-`doc.css` inside it and loads nothing at runtime, so it opens in any browser,
-attaches to an email, or goes into an archive unchanged. A host builds one
-with `@markii/host`'s `buildNoteHtmlExport`, which is where file naming and
-the page-level CSS live, so two hosts cannot drift on what an exported file
-contains or what it is called.
+An export is not a screenshot of the preview, but it renders the same
+components. A host that already has a renderer and a loaded registry in front
+of it, which both reference hosts do for their preview, renders the export
+body with exactly that registry and hands the resulting markup to
+`@markii/host`'s `composeNoteHtmlExport`. A host with nothing to render
+through falls back to `@markii/html`, the static string engine. Either way the
+exported file carries the shared `doc.css` inside it and loads nothing at
+runtime, so it opens in any browser, attaches to an email, or goes into an
+archive unchanged. `@markii/host`'s `buildNoteExport` owns the choice between
+the two paths, the file naming, and the page-level CSS, so two hosts cannot
+drift on what an exported file contains or what it is called. A host that
+renders through a surface it does not own, the way VS Code asks its webview,
+must bound the wait and fall back to the static engine rather than leave the
+command hanging.
 
-Three things follow from using the static engine, and a host should say them
-rather than let a reader discover them.
+Four things follow from how an export is rendered, and a host should say
+them rather than let a reader discover them.
 
 The last run is baked in. A host passes the same persisted value store the
 preview rehydrates from, so a monitoring note exports with the figures it was
@@ -278,11 +285,17 @@ demotes them: a file has no re-run to be stale against. A note that has never
 been run exports with its ordinary empty states, and the host says so in its
 confirmation.
 
-Pack components do not render. Packs are framework-bound component modules,
-and the string engine loads none of them, so a pack directive exports as the
-engine's ordinary unknown-component fallback: a labeled box with the author's
-own inner content still rendered inside it. That is the documented result, not
-a failure, and a host must not report it as one.
+Pack components render when the host has them loaded. Their markup comes from
+the same merged registry the preview uses, and each loaded pack's stylesheet
+is embedded in the exported file after `doc.css`, in the order the host
+injects it for the preview, so a pack component looks in the file the way it
+looks on screen. Where the host has no renderer to reach, the static engine
+renders instead and a pack directive exports as its ordinary unknown-component
+fallback: a labeled box with the author's own inner content still rendered
+inside it. Neither outcome is a failure, and a host must not report either as
+one. The two must be distinguishable on the host's diagnostics surface, so a
+reader who expected a component and got a box can find out why; the short
+notice stays the same either way.
 
 Relative images stay relative. The exported markup keeps the note's own image
 sources, so a file written beside its note resolves them exactly as the note

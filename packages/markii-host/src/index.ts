@@ -118,18 +118,29 @@ export { staleValuesForRehydration } from './run/stale-values.js';
 // a self-contained HTML document, via `@markii/html`. Host-neutral: both
 // apps build the same file and name it the same way.
 export type {
+  ComposeNoteHtmlExportOptions,
+  ExportBodyRenderer,
+  ExportBodyResult,
   ExportExtension,
+  ExportPackStylesheet,
+  ExportRenderInfo,
+  NoteExportBuildRequest,
+  NoteExportDocument,
   NoteHtmlExportOptions,
+  StaticExportReason,
 } from './export/note-export.js';
 export {
   EXPORT_PAGE_CSS,
   FALLBACK_EXPORT_BASE_NAME,
   MARK_EXTENSION,
+  buildNoteExport,
   buildNoteHtmlExport,
+  composeNoteHtmlExport,
   exportBaseName,
   exportDocumentTitle,
   exportedFileName,
   exportedSiblingPath,
+  packStylesheetsCss,
 } from './export/note-export.js';
 
 export type {
