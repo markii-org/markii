@@ -435,8 +435,8 @@ join the authoring side; nothing is built for that in advance.
 Two kinds of documents, two different jobs. These rules govern every edit
 to `README.md` and `docs/` — violating them is rework, not taste.
 
-**README = the front door. It links, it does not explain.** Keep it well
-under 150 lines, in exactly this shape:
+**README = the front door. It links, it does not explain.** Keep it
+concise (no hard line cap, per user 2026-08-31), in exactly this shape:
 
 1. Tagline + hook: what this is and why it exists, with one tiny example —
    enough to stop a reader from leaving.

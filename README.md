@@ -67,6 +67,27 @@ The identity is in what it refuses, the three things LaTeX could never give up.
 Closer relatives such as MDX put a full programming language inside the file,
 which is exactly the trade Markii declines.
 
+## Identity
+
+Markii is an extensible plain-text document format: CommonMark plus one small
+directive syntax that renders components you define, with packs as the unit
+of sharing them. Its identity is in three refusals.
+
+- The syntax is not a programming language. Directives carry no expressions,
+  conditionals, or loops. Scripting exists, but in a separate sandboxed Lua
+  layer that most files never touch.
+- Nothing stands between you and the note. A `.mk.md` file is valid
+  CommonMark and stays readable in any editor, with or without Markii
+  installed. An unknown component renders as a quiet labeled box, never an
+  error.
+- The target is a living note, not a typeset page. Components render live in
+  the host and can bind to data that refreshes. Static HTML or PDF is an
+  export, not the product.
+
+If you know LaTeX, Markii wants that extensibility without the macro language
+or the compiler. If you know MDX, it wants those custom components without
+putting a program inside the file.
+
 ## Getting started
 
 ### Apps
