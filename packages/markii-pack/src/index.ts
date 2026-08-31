@@ -7,6 +7,7 @@ export type { PackManifest, PackManifestParseResult } from './manifest.js';
 export { parsePackManifest } from './manifest.js';
 
 export type {
+  PackComponentAttribute,
   PackComponentDefinition,
   PackComponentEntry,
   PackComponentKind,
@@ -14,7 +15,9 @@ export type {
   ResolvedPackComponent,
 } from './components.js';
 export {
+  PACK_ATTRIBUTE_NAME_PATTERN,
   PACK_COMPONENT_KINDS,
+  isPackAttributeName,
   packComponents,
   resolvePackComponent,
 } from './components.js';

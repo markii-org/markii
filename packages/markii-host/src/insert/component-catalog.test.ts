@@ -311,3 +311,57 @@ describe('buildComponentCatalog — description truncation against real contract
     expect(untruncated).toEqual([]);
   });
 });
+
+describe('buildComponentCatalog: declared pack attributes (issue #27 slice 4)', () => {
+  const withAttributes = pack('ana', {
+    timeline: {
+      source: './Timeline.tsx',
+      kind: 'container',
+      attributes: [
+        { name: 'from', description: 'First date shown.', required: true },
+        { name: 'to', required: true },
+        { name: 'scale', values: ['days', 'weeks'], default: 'days' },
+      ],
+    },
+  });
+
+  it('carries the declared attribute list onto the catalog entry', () => {
+    const entry = buildComponentCatalog([withAttributes]).find(
+      (candidate) => candidate.directiveName === 'ana_timeline',
+    );
+    expect(entry?.attributes).toEqual([
+      { name: 'from', description: 'First date shown.', required: true },
+      { name: 'to', required: true },
+      { name: 'scale', values: ['days', 'weeks'], default: 'days' },
+    ]);
+  });
+
+  it('derives requiredAttributes from the declared list, in declaration order', () => {
+    const entry = buildComponentCatalog([withAttributes]).find(
+      (candidate) => candidate.directiveName === 'ana_timeline',
+    );
+    expect(entry?.requiredAttributes).toEqual(['from', 'to']);
+  });
+
+  it('leaves attributes absent and requiredAttributes empty for a pack that declares none', () => {
+    const entry = buildComponentCatalog([
+      pack('cat', { card: './Card.tsx' }),
+    ]).find((candidate) => candidate.directiveName === 'cat_card');
+    expect(entry?.attributes).toBeUndefined();
+    expect(entry?.requiredAttributes).toEqual([]);
+  });
+
+  it('drops a malformed declared attribute rather than throwing', () => {
+    const entry = buildComponentCatalog([
+      pack('cat', {
+        // Parsed from text rather than written as a literal: this is the
+        // shape a hostile or hand-edited pack.json really arrives in, and
+        // it is not assignable to `PackComponentEntry` by construction.
+        card: JSON.parse(
+          '{"source":"./Card.tsx","attributes":["not an object",{"name":"Mood"},{"name":"mood"}]}',
+        ) as PackComponentEntry,
+      }),
+    ]).find((candidate) => candidate.directiveName === 'cat_card');
+    expect(entry?.attributes).toEqual([{ name: 'mood' }]);
+  });
+});

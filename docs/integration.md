@@ -237,6 +237,14 @@ catalog (the standard set plus installed packs), the attribute contracts in
 exports are also the one source both renderers build their layout class
 maps from.
 
+A pack contributes its own attribute metadata to the same layer. A component
+that declares an `attributes` list in its `pack.json` (see docs/packs.md) is
+completed by attribute name and by enumerated value, and its hover
+documentation lists those attributes, so a pack component reads the same way
+a standard one does in the editor. A pack that declares nothing keeps the
+earlier behavior: its name completes, and its description is all the
+documentation there is.
+
 ## Where frameworks live
 
 The format is framework-free, but component implementations are bound to a

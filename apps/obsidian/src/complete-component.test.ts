@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { buildComponentCatalog, completionAt } from '@markii/host';
-import type { CompletionContext, CompletionItem } from '@markii/host';
+import type {
+  CompletionContext,
+  CompletionItem,
+  DiscoveredPack,
+} from '@markii/host';
 import {
   completionOriginTag,
   completionQuery,
@@ -202,5 +206,79 @@ describe('user-visible strings', () => {
       expect(row.origin).not.toMatch(/[()]/);
       expect(row.detail).not.toContain('—');
     }
+  });
+});
+
+/**
+ * Issue #27 slice 4: a pack component's declared attributes reach the
+ * Obsidian suggest popup through the shared host logic. No `obsidian` here
+ * either, so these assertions are on exactly the rows
+ * `./complete-suggest.ts` renders.
+ */
+describe('pack attribute metadata reaches the Obsidian suggest rows', () => {
+  const pack: DiscoveredPack = {
+    folder: '/packs/ana',
+    manifest: {
+      name: 'ana',
+      engine: 'react',
+      components: {
+        timeline: {
+          source: './Timeline.tsx',
+          kind: 'container',
+          description: 'A dated timeline.',
+          attributes: [
+            { name: 'from', description: 'First date shown.', required: true },
+            { name: 'scale', values: ['days', 'weeks'], default: 'days' },
+          ],
+        },
+      },
+    },
+    componentPaths: { timeline: '/packs/ana/Timeline.tsx' },
+    scriptsDir: '/packs/ana/scripts',
+    scriptPath: '/packs/ana/webview.js',
+  };
+  const packCatalog = buildComponentCatalog([pack]);
+
+  it('suggests the declared attribute names, with no origin tag of their own', () => {
+    const line = ':::ana_timeline{';
+    const rows = completionSuggestions(
+      completionAt(line, line.length, packCatalog),
+    );
+    expect(rows.map((row) => row.label)).toEqual([
+      'from',
+      'scale',
+      'width',
+      'align',
+    ]);
+    const from = rows.find((row) => row.label === 'from');
+    expect(from?.origin).toBe('');
+    expect(from?.detail).toBe('required. First date shown.');
+  });
+
+  it('filters the declared attribute rows by what the author typed', () => {
+    const line = ':::ana_timeline{sc';
+    const context = completionAt(line, line.length, packCatalog);
+    const rows = filterCompletionSuggestions(
+      completionSuggestions(context),
+      completionQuery(line, context, line.length),
+    );
+    expect(rows.map((row) => row.label)).toEqual(['scale']);
+  });
+
+  it('suggests the declared enum values', () => {
+    const line = ':::ana_timeline{scale="';
+    const context = completionAt(line, line.length, packCatalog);
+    const rows = completionSuggestions(context);
+    expect(rows.map((row) => row.label)).toEqual(['days', 'weeks']);
+    expect(rows[0]?.item.insertText).toBe('days"');
+  });
+
+  it('keeps the pack name as the origin on the component row itself', () => {
+    const rows = completionSuggestions(
+      completionAt(':::ana_time', 11, packCatalog),
+    );
+    const row = rows.find((candidate) => candidate.label === 'ana_timeline');
+    expect(row?.origin).toBe('ana');
+    expect(row?.item.insertText).toBe(':::ana_timeline{from=""}\n\n:::');
   });
 });

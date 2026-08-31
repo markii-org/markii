@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { CompletionItem, ComponentDocumentation } from '@markii/host';
+import { buildComponentCatalog, completionAt, hoverAt } from '@markii/host';
+import type {
+  CompletionItem,
+  ComponentDocumentation,
+  DiscoveredPack,
+} from '@markii/host';
 import {
   MARKII_COMPLETION_TRIGGER_CHARACTERS,
   completionFilterText,
@@ -261,5 +266,78 @@ describe('completionFilterText', () => {
 
   it('returns the label unchanged for an out-of-range start', () => {
     expect(completionFilterText(':::cal', 99, 'callout')).toBe('callout');
+  });
+});
+
+/**
+ * End to end over the pure modules for a PACK component's declared
+ * attributes (issue #27 slice 4): `@markii/host` decides what completes,
+ * this extension's wording module decides how it reads. No `vscode` here,
+ * so the assertions are on exactly what `extension.ts` maps onto
+ * `vscode.CompletionItem`.
+ */
+describe('pack attribute metadata reaches the VS Code rows', () => {
+  const pack: DiscoveredPack = {
+    folder: '/packs/ana',
+    manifest: {
+      name: 'ana',
+      engine: 'react',
+      components: {
+        timeline: {
+          source: './Timeline.tsx',
+          kind: 'container',
+          description: 'A dated timeline.',
+          attributes: [
+            { name: 'from', description: 'First date shown.', required: true },
+            { name: 'scale', values: ['days', 'weeks'], default: 'days' },
+          ],
+        },
+      },
+    },
+    componentPaths: { timeline: '/packs/ana/Timeline.tsx' },
+    scriptsDir: '/packs/ana/scripts',
+    scriptPath: '/packs/ana/webview.js',
+  };
+  const catalog = buildComponentCatalog([pack]);
+
+  it('offers a declared attribute name with its own detail, not an origin tag', () => {
+    const line = ':::ana_timeline{';
+    const ctx = completionAt(line, line.length, catalog);
+    const from = ctx.items.find((item) => item.label === 'from');
+    expect(from).toBeDefined();
+    expect(completionItemDetail(from!)).toBe('required. First date shown.');
+    expect(completionOriginTag(from!)).toBe('');
+    expect(snippetText(from!.insertText, from!.insertCursorOffset)).toBe(
+      'from="$0"',
+    );
+  });
+
+  it('offers declared enum values', () => {
+    const line = ':::ana_timeline{scale="';
+    const ctx = completionAt(line, line.length, catalog);
+    expect(ctx.items.map((item) => item.label)).toEqual(['days', 'weeks']);
+  });
+
+  it('keeps the component row detail to the origin tag only', () => {
+    const ctx = completionAt(':::ana_time', 11, catalog);
+    const item = ctx.items.find((i) => i.label === 'ana_timeline');
+    expect(completionItemDetail(item!)).toBe('ana');
+  });
+
+  it('renders the declared attributes into hover markdown', () => {
+    const hover = hoverAt(':::ana_timeline{}', 6, catalog);
+    expect(completionMarkdown(hover!.documentation)).toBe(
+      [
+        'A dated timeline.',
+        '',
+        '**Attributes**',
+        '- from (required)',
+        '- scale: days | weeks (default: days)',
+        '',
+        '```markii',
+        ':::ana_timeline{from=""}',
+        '```',
+      ].join('\n'),
+    );
   });
 });

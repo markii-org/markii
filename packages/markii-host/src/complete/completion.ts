@@ -7,6 +7,7 @@
  * (`../insert/component-skeleton.ts`) — this module never builds directive
  * text by hand, it reuses that skeleton builder.
  */
+import type { PackComponentAttribute } from '@markii/pack';
 import type { AttributeSchema, ComponentKind } from '@markii/stdlib';
 import {
   LAYOUT_ATTRIBUTES,
@@ -159,6 +160,62 @@ function directiveNameCompletionContext(
   };
 }
 
+/** The catalog entry for `directiveName`, matched case-insensitively the same way `hoverAt` matches. */
+function findCatalogEntry(
+  catalog: readonly InsertableComponent[],
+  directiveName: string,
+): InsertableComponent | undefined {
+  const lowered = directiveName.toLowerCase();
+  return catalog.find(
+    (component) => component.directiveName.toLowerCase() === lowered,
+  );
+}
+
+/**
+ * The declared attributes of the pack component named `directiveName`, or
+ * an empty list when the name is unknown, is a standard component (its
+ * attributes come from its contract instead), or declared none.
+ *
+ * On a block form the two reserved layout attributes are filtered out:
+ * `width` and `align` are offered from `@markii/stdlib`'s one layout
+ * source a few lines below, so a pack that also declares one of those
+ * names would otherwise produce two rows for the same attribute, with
+ * different values behind them. An inline directive is never offered the
+ * layout attributes at all, so there a declared `width` is the pack's own
+ * and passes through.
+ */
+function packAttributesFor(
+  directiveName: string,
+  form: DirectiveForm,
+  catalog: readonly InsertableComponent[],
+): readonly PackComponentAttribute[] {
+  const entry = findCatalogEntry(catalog, directiveName);
+  if (entry?.source !== 'pack' || entry.attributes === undefined) return [];
+  if (form === 'inline') return entry.attributes;
+  return entry.attributes.filter(
+    (attribute) => !LAYOUT_ATTRIBUTE_NAME_SET.has(attribute.name),
+  );
+}
+
+/**
+ * Expresses a pack's declared attribute as the same `AttributeSchema` a
+ * standard contract carries, so `attributeNameItem` below stays the ONE
+ * item builder for both sources rather than growing a near-duplicate for
+ * pack attributes. `default` has no place in `AttributeSchema` and is not
+ * invented into one here; it reaches the author through the attribute doc
+ * lines in `./documentation.ts`.
+ */
+function schemaForPackAttribute(
+  attribute: PackComponentAttribute,
+): AttributeSchema {
+  return {
+    type: 'string',
+    ...(attribute.required === true ? { required: true } : {}),
+    ...(attribute.values !== undefined ? { enum: attribute.values } : {}),
+    description: attribute.description ?? '',
+  };
+}
+
 function attributeNameItem(
   name: string,
   schema: AttributeSchema,
@@ -166,7 +223,11 @@ function attributeNameItem(
   const insertText = `${name}=""`;
   const insertCursorOffset = name.length + 2;
   const requiredPrefix = schema.required === true ? 'required. ' : '';
-  const detail = `${requiredPrefix}${firstSentence(schema.description)}`;
+  // A pack may declare an attribute with no description at all, which a
+  // standard contract never does. Trimming keeps that case from reading as
+  // `required. ` with a dangling separator, and is a no-op for every
+  // described attribute.
+  const detail = `${requiredPrefix}${firstSentence(schema.description)}`.trim();
 
   return {
     label: name,
@@ -186,8 +247,13 @@ function attributeNameItem(
  */
 const LAYOUT_ATTRIBUTE_NAMES = LAYOUT_ATTRIBUTE_KEYS;
 
+const LAYOUT_ATTRIBUTE_NAME_SET: ReadonlySet<string> = new Set(
+  LAYOUT_ATTRIBUTE_NAMES,
+);
+
 function attributeNameCompletionContext(
   ctx: AttributeNameParseResult,
+  catalog: readonly InsertableComponent[],
 ): CompletionContext {
   const contract = getContract(ctx.directiveName);
   const items: CompletionItem[] = [];
@@ -198,6 +264,22 @@ function attributeNameCompletionContext(
       if (ctx.presentNames.has(name.toLowerCase())) continue;
       items.push(attributeNameItem(name, schema));
       offered.add(name.toLowerCase());
+    }
+  } else {
+    // No contract means this is not a standard component, so the only
+    // attribute metadata that can exist for it is what its pack declared
+    // (issue #27 slice 4). A pack that declared none simply contributes no
+    // rows, and the layout attributes below still apply.
+    for (const attribute of packAttributesFor(
+      ctx.directiveName,
+      ctx.form,
+      catalog,
+    )) {
+      if (ctx.presentNames.has(attribute.name.toLowerCase())) continue;
+      items.push(
+        attributeNameItem(attribute.name, schemaForPackAttribute(attribute)),
+      );
+      offered.add(attribute.name.toLowerCase());
     }
   }
 
@@ -218,6 +300,7 @@ function attributeNameCompletionContext(
 
 function resolveValueEnum(
   ctx: AttributeValueParseResult,
+  catalog: readonly InsertableComponent[],
 ): readonly string[] | undefined {
   if (
     ctx.form !== 'inline' &&
@@ -226,7 +309,14 @@ function resolveValueEnum(
     return LAYOUT_ATTRIBUTES[ctx.attributeName].enum;
   }
   const contract = getContract(ctx.directiveName);
-  if (contract === undefined) return undefined;
+  if (contract === undefined) {
+    // A pack component's declared `values`, read through the same filtered
+    // accessor the attribute-name context uses, so a name offered from the
+    // layout source can never take its values from a pack declaration.
+    return packAttributesFor(ctx.directiveName, ctx.form, catalog).find(
+      (attribute) => attribute.name === ctx.attributeName,
+    )?.values;
+  }
   // `Object.hasOwn`, not bare indexing: a directive attribute literally
   // named `constructor` or `__proto__` must miss this lookup rather than
   // resolve through the prototype chain to an inherited `Object.prototype`
@@ -259,8 +349,9 @@ function attributeValueItem(
 
 function attributeValueCompletionContext(
   ctx: AttributeValueParseResult,
+  catalog: readonly InsertableComponent[],
 ): CompletionContext {
-  const enumValues = resolveValueEnum(ctx);
+  const enumValues = resolveValueEnum(ctx, catalog);
   if (enumValues === undefined || enumValues.length === 0) {
     return EMPTY_CONTEXT_AT(ctx.replaceEnd);
   }
@@ -291,9 +382,9 @@ export function completionAt(
 
     switch (ctx.kind) {
       case 'attribute-value':
-        return attributeValueCompletionContext(ctx);
+        return attributeValueCompletionContext(ctx, safeCatalog);
       case 'attribute-name':
-        return attributeNameCompletionContext(ctx);
+        return attributeNameCompletionContext(ctx, safeCatalog);
       case 'directive-name':
         return directiveNameCompletionContext(ctx, safeCatalog, safeLine);
       default:
@@ -319,9 +410,7 @@ export function hoverAt(
     const token = findDirectiveNameTokenAt(safeLine, column);
     if (token === undefined) return undefined;
 
-    const entry = safeCatalog.find(
-      (component) => component.directiveName.toLowerCase() === token.name,
-    );
+    const entry = findCatalogEntry(safeCatalog, token.name);
     if (entry === undefined) return undefined;
 
     return {

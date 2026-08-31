@@ -143,3 +143,58 @@ describe('formatComponentDocumentation', () => {
     expect(text.endsWith('\n')).toBe(false);
   });
 });
+
+describe('componentDocumentation: declared pack attributes (issue #27 slice 4)', () => {
+  it('renders one line per declared attribute', () => {
+    const doc = componentDocumentation(
+      packEntry({
+        description: 'A dated timeline.',
+        requiredAttributes: ['from'],
+        attributes: [
+          { name: 'from', description: 'First date.', required: true },
+          { name: 'scale', values: ['days', 'weeks'], default: 'days' },
+          { name: 'label' },
+        ],
+      }),
+    );
+    expect(doc.summary).toBe('A dated timeline.');
+    expect(doc.attributes).toEqual([
+      'from (required)',
+      'scale: days | weeks (default: days)',
+      'label',
+    ]);
+    expect(doc.example).toBe(':::cat_card{from=""}');
+  });
+
+  it('shows a declared default with no values', () => {
+    const doc = componentDocumentation(
+      packEntry({ attributes: [{ name: 'scale', default: 'days' }] }),
+    );
+    expect(doc.attributes).toEqual(['scale (default: days)']);
+  });
+
+  it('keeps the attribute list empty for a pack that declares none', () => {
+    expect(componentDocumentation(packEntry()).attributes).toEqual([]);
+  });
+
+  it('formats a pack component with attributes as plain text', () => {
+    const text = formatComponentDocumentation(
+      componentDocumentation(
+        packEntry({
+          description: 'A dated timeline.',
+          attributes: [{ name: 'scale', values: ['days', 'weeks'] }],
+        }),
+      ),
+    );
+    expect(text).toBe(
+      [
+        'A dated timeline.',
+        '',
+        'Attributes:',
+        '- scale: days | weeks',
+        '',
+        'Example: :::cat_card{}',
+      ].join('\n'),
+    );
+  });
+});

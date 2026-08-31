@@ -1,6 +1,14 @@
 import { validateLocalComponentName, validatePackName } from './namespace.js';
-import { PACK_COMPONENT_KINDS } from './components.js';
-import type { PackComponentEntry, PackComponentKind } from './components.js';
+import {
+  PACK_ATTRIBUTE_NAME_PATTERN,
+  PACK_COMPONENT_KINDS,
+  isPackAttributeName,
+} from './components.js';
+import type {
+  PackComponentAttribute,
+  PackComponentEntry,
+  PackComponentKind,
+} from './components.js';
 
 /**
  * `pack.json`'s contract (docs/packs.md). Three fields, all required:
@@ -14,8 +22,8 @@ import type { PackComponentEntry, PackComponentKind } from './components.js';
  * not maintain a closed enum of known engines. `components` maps a local
  * component name to either a pack-relative source path (the string
  * shorthand) or an object carrying that source plus optional `description`/
- * `kind` metadata (see `./components.ts`, `resolvePackComponent`,
- * `packComponents`).
+ * `kind`/`attributes` metadata (see `./components.ts`,
+ * `resolvePackComponent`, `packComponents`).
  *
  * Shared Lua modules are NOT a manifest field. docs/packs.md says they
  * travel under a conventional `scripts/` directory inside the pack
@@ -31,7 +39,8 @@ export interface PackManifest {
   engine: string;
   /**
    * Local component name -> a pack-relative source path, or an object
-   * naming that source plus optional `description`/`kind` metadata. Read
+   * naming that source plus optional `description`/`kind`/`attributes`
+   * metadata. Read
    * this map only through `resolvePackComponent`/`packComponents`
    * (`./components.ts`) rather than inspecting entries directly — that is
    * the one place both forms are normalized.
@@ -48,7 +57,22 @@ const KNOWN_TOP_LEVEL_KEYS = new Set(['name', 'engine', 'components']);
 // The keys a component's object-form entry may carry, and which of those
 // are required. Mirrors KNOWN_TOP_LEVEL_KEYS's role for the manifest root:
 // an unrecognized key here is a forward-compatible warning, not an error.
-const KNOWN_COMPONENT_KEYS = new Set(['source', 'description', 'kind']);
+const KNOWN_COMPONENT_KEYS = new Set([
+  'source',
+  'description',
+  'kind',
+  'attributes',
+]);
+// The keys one entry of a component's `attributes` array may carry. Same
+// posture as KNOWN_COMPONENT_KEYS one level up: an unrecognized key is a
+// forward-compatible warning, everything recognized is validated strictly.
+const KNOWN_ATTRIBUTE_KEYS = new Set([
+  'name',
+  'description',
+  'required',
+  'values',
+  'default',
+]);
 // Checked against ./components.ts's single runtime list rather than a second
 // copy of the three values, so the validator and the accessor can never
 // disagree about what a valid `kind` is.
@@ -58,6 +82,147 @@ const PACK_COMPONENT_KIND_SET: ReadonlySet<string> = new Set(
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+/**
+ * The strict half of attribute validation (the lenient half lives in
+ * `./components.ts`'s `resolveAttribute`, which a consumer may call on
+ * never-validated JSON). Anything malformed here pushes an error and
+ * rejects the WHOLE manifest, so a pack author is told what is wrong at
+ * validation time rather than quietly losing an attribute from a
+ * completion popup later.
+ *
+ * Returns the sanitized list, or `undefined` when anything failed. An
+ * empty declared list is valid and returns `[]`; the caller drops that
+ * rather than storing it, so "declared nothing" and "declared an empty
+ * list" are one state downstream.
+ */
+function parseComponentAttributes(
+  componentKey: string,
+  raw: readonly unknown[],
+  errors: string[],
+  warnings: string[],
+): PackComponentAttribute[] | undefined {
+  const parsed: PackComponentAttribute[] = [];
+  const seen = new Set<string>();
+  let valid = true;
+
+  for (const [index, entry] of raw.entries()) {
+    const where = `"components.${componentKey}.attributes[${String(index)}]"`;
+
+    if (!isPlainObject(entry)) {
+      errors.push(`${where} must be an object with a "name" field`);
+      valid = false;
+      continue;
+    }
+
+    const rawName = Object.hasOwn(entry, 'name') ? entry.name : undefined;
+    if (!isPackAttributeName(rawName)) {
+      errors.push(
+        `${where}.name must be a non-empty string matching ${PACK_ATTRIBUTE_NAME_PATTERN.source}`,
+      );
+      valid = false;
+      continue;
+    }
+    if (seen.has(rawName)) {
+      errors.push(`${where}.name "${rawName}" is declared more than once`);
+      valid = false;
+      continue;
+    }
+    seen.add(rawName);
+
+    let entryValid = true;
+
+    let description: string | undefined;
+    if (Object.hasOwn(entry, 'description')) {
+      const rawDescription = entry.description;
+      if (typeof rawDescription !== 'string' || rawDescription.length === 0) {
+        errors.push(`${where}.description must be a non-empty string`);
+        entryValid = false;
+      } else {
+        description = rawDescription;
+      }
+    }
+
+    let required: boolean | undefined;
+    if (Object.hasOwn(entry, 'required')) {
+      const rawRequired = entry.required;
+      if (typeof rawRequired !== 'boolean') {
+        errors.push(`${where}.required must be a boolean`);
+        entryValid = false;
+      } else {
+        required = rawRequired;
+      }
+    }
+
+    let values: string[] | undefined;
+    if (Object.hasOwn(entry, 'values')) {
+      const rawValues = entry.values;
+      if (
+        !Array.isArray(rawValues) ||
+        rawValues.length === 0 ||
+        rawValues.some(
+          (value) => typeof value !== 'string' || value.length === 0,
+        )
+      ) {
+        errors.push(
+          `${where}.values must be a non-empty array of non-empty strings`,
+        );
+        entryValid = false;
+      } else {
+        values = rawValues as string[];
+      }
+    }
+
+    let defaultValue: string | undefined;
+    if (Object.hasOwn(entry, 'default')) {
+      const rawDefault = entry.default;
+      if (typeof rawDefault !== 'string' || rawDefault.length === 0) {
+        errors.push(`${where}.default must be a non-empty string`);
+        entryValid = false;
+      } else if (values !== undefined && !values.includes(rawDefault)) {
+        errors.push(
+          `${where}.default "${rawDefault}" must be one of its "values": ${values.join(', ')}`,
+        );
+        entryValid = false;
+      } else {
+        defaultValue = rawDefault;
+      }
+    }
+
+    for (const attributeKey of Object.keys(entry)) {
+      if (
+        Object.hasOwn(entry, attributeKey) &&
+        !KNOWN_ATTRIBUTE_KEYS.has(attributeKey)
+      ) {
+        warnings.push(
+          `unknown pack component attribute key ${where}.${attributeKey} (ignored by this implementation)`,
+        );
+      }
+    }
+
+    if (!entryValid) {
+      valid = false;
+      continue;
+    }
+
+    // Rebuilt rather than stored raw, the same discipline the component
+    // object form uses: only checked fields ever reach the result.
+    const sanitized: {
+      name: string;
+      description?: string;
+      required?: boolean;
+      values?: readonly string[];
+      default?: string;
+    } = { name: rawName };
+    if (description !== undefined) sanitized.description = description;
+    if (required !== undefined) sanitized.required = required;
+    if (values !== undefined) sanitized.values = values;
+    if (defaultValue !== undefined) sanitized.default = defaultValue;
+    parsed.push(sanitized);
+  }
+
+  return valid ? parsed : undefined;
 }
 
 /**
@@ -121,9 +286,10 @@ export function parsePackManifest(json: string): PackManifestParseResult {
   // --- components (required) ---
   //
   // Each entry is either the string shorthand (a pack-relative source path)
-  // or an object form { source, description?, kind? }. A malformed entry —
-  // wrong value type, invalid key, bad `kind`, non-string `description`,
-  // missing/empty `source` in object form — pushes an error and rejects the
+  // or an object form { source, description?, kind?, attributes? }. A
+  // malformed entry — wrong value type, invalid key, bad `kind`, non-string
+  // `description`, a malformed `attributes` list, missing/empty `source` in
+  // object form — pushes an error and rejects the
   // WHOLE manifest, matching this file's existing posture for a bad
   // top-level field. An unrecognized key INSIDE a component object is a
   // forward-compatible warning, the same posture KNOWN_TOP_LEVEL_KEYS uses
@@ -221,6 +387,29 @@ export function parsePackManifest(json: string): PackManifestParseResult {
         }
       }
 
+      let attributes: PackComponentAttribute[] | undefined;
+      if (Object.hasOwn(value, 'attributes')) {
+        const rawAttributes = value.attributes;
+        if (!Array.isArray(rawAttributes)) {
+          errors.push(
+            `"components.${key}.attributes" must be an array of attribute objects`,
+          );
+          entryValid = false;
+        } else {
+          const parsed = parseComponentAttributes(
+            key,
+            rawAttributes,
+            errors,
+            warnings,
+          );
+          if (parsed === undefined) {
+            entryValid = false;
+          } else if (parsed.length > 0) {
+            attributes = parsed;
+          }
+        }
+      }
+
       for (const componentKey of Object.keys(value)) {
         if (
           Object.hasOwn(value, componentKey) &&
@@ -245,9 +434,11 @@ export function parsePackManifest(json: string): PackManifestParseResult {
         source: string;
         description?: string;
         kind?: PackComponentKind;
+        attributes?: readonly PackComponentAttribute[];
       } = { source: source as string };
       if (description !== undefined) sanitized.description = description;
       if (kind !== undefined) sanitized.kind = kind;
+      if (attributes !== undefined) sanitized.attributes = attributes;
       result[key] = sanitized;
     }
 

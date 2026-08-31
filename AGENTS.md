@@ -128,7 +128,7 @@ packages/markii-pack    component pack contract (docs/packs.md, issue #3) — no
   src/namespace.ts   namespace/engine rules: pack-name + local-component-name
                      validation (lowercase-kebab), reserved bundle-segment
                      rejection, directive-name composition (packName + localName
-                     → "ana-timeline"), collision-detection predicate
+                     → "ana_timeline"), collision-detection predicate
   src/uses.ts        resolveUses(): resolves a note's declared `uses:` list
                      against installed pack namespaces (missing/satisfied),
                      host-facing metadata only — no loading, no registry

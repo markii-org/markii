@@ -9,8 +9,13 @@
  * Never throws. A malformed pack (an empty or missing `components` map, or
  * a local name that fails `@markii/pack`'s namespace validation) simply
  * contributes nothing — the same cleanliness posture as `./discover.ts`.
+ * A pack component's declared attribute metadata (`pack.json`'s optional
+ * `attributes` list, issue #27 slice 4) is carried through untouched;
+ * `@markii/pack`'s `packComponents` has already dropped anything malformed
+ * in it, so this module never re-validates it.
  */
 import { composeDirectiveName, packComponents } from '@markii/pack';
+import type { PackComponentAttribute } from '@markii/pack';
 import type { ComponentKind } from '@markii/stdlib';
 import { STANDARD_COMPONENTS } from '@markii/stdlib';
 import type { DiscoveredPack } from '../packs/discover.js';
@@ -62,8 +67,20 @@ export interface InsertableComponent {
    * user-facing strings).
    */
   readonly description?: string;
-  /** Required attribute names, in contract-declared order. Always empty for a pack component (see this module's top comment). */
+  /**
+   * Required attribute names, in declaration order: a standard component's
+   * contract order, or a pack component's own `attributes` order for the
+   * entries it marked `required`. Empty when nothing is required, which is
+   * still the case for every pack that declares no attributes at all.
+   */
   readonly requiredAttributes: readonly string[];
+  /**
+   * A pack component's declared attribute metadata (issue #27 slice 4),
+   * in the order the manifest declared it. Absent for a standard
+   * component, whose attributes come from its `@markii/stdlib` contract
+   * instead, and absent for a pack component that declared none.
+   */
+  readonly attributes?: readonly PackComponentAttribute[];
   /**
    * True when `kind` came from the component's own declaration (every
    * standard component, and a pack component whose manifest entry
@@ -146,7 +163,12 @@ function packCatalogEntries(
       ...(listing.description !== undefined
         ? { description: listing.description }
         : {}),
-      requiredAttributes: [],
+      requiredAttributes: (listing.attributes ?? [])
+        .filter((attribute) => attribute.required === true)
+        .map((attribute) => attribute.name),
+      ...(listing.attributes !== undefined
+        ? { attributes: listing.attributes }
+        : {}),
       kindDeclared: listing.kind !== undefined,
     });
   }

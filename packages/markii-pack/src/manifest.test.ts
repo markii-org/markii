@@ -453,3 +453,160 @@ describe('parsePackManifest', () => {
     });
   });
 });
+
+describe('parsePackManifest: declared component attributes', () => {
+  function parseAttributes(attributes: unknown) {
+    return parsePackManifest(
+      JSON.stringify({
+        name: 'cat',
+        engine: 'react',
+        components: { profile: { source: './profile.tsx', attributes } },
+      }),
+    );
+  }
+
+  it('accepts a full attribute declaration and keeps declaration order', () => {
+    const result = parseAttributes([
+      { name: 'name', description: "The cat's name.", required: true },
+      {
+        name: 'mood',
+        values: ['happy', 'grumpy'],
+        default: 'happy',
+        required: false,
+      },
+    ]);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.manifest.components.profile).toEqual({
+      source: './profile.tsx',
+      attributes: [
+        { name: 'name', description: "The cat's name.", required: true },
+        {
+          name: 'mood',
+          required: false,
+          values: ['happy', 'grumpy'],
+          default: 'happy',
+        },
+      ],
+    });
+    expect(result.warnings).toEqual([]);
+  });
+
+  it('accepts an attribute declaring only a name', () => {
+    const result = parseAttributes([{ name: 'mood' }]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.manifest.components.profile).toEqual({
+      source: './profile.tsx',
+      attributes: [{ name: 'mood' }],
+    });
+  });
+
+  it('accepts a hyphenated attribute name', () => {
+    const result = parseAttributes([{ name: 'refresh-every' }]);
+    expect(result.ok).toBe(true);
+  });
+
+  it('drops an empty attributes list rather than storing it', () => {
+    const result = parseAttributes([]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.manifest.components.profile).toEqual({
+      source: './profile.tsx',
+    });
+  });
+
+  it('rejects a non-array attributes field', () => {
+    const result = parseAttributes({ mood: 'happy' });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors.join('\n')).toContain(
+      '"components.profile.attributes" must be an array',
+    );
+  });
+
+  it('rejects a non-object attribute entry', () => {
+    for (const entry of ['mood', 42, null, ['mood']]) {
+      const result = parseAttributes([entry]);
+      expect(result.ok).toBe(false);
+      if (result.ok) continue;
+      expect(result.errors.join('\n')).toContain(
+        '"components.profile.attributes[0]" must be an object',
+      );
+    }
+  });
+
+  it('rejects an attribute name outside the allowed charset', () => {
+    for (const name of ['', 'Mood', '1mood', '-mood', 'my_attr', 'a:b', 42]) {
+      const result = parseAttributes([{ name }]);
+      expect(result.ok).toBe(false);
+    }
+  });
+
+  it('rejects an attribute name declared twice', () => {
+    const result = parseAttributes([{ name: 'mood' }, { name: 'mood' }]);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors.join('\n')).toContain('declared more than once');
+  });
+
+  it('rejects a non-string or empty description', () => {
+    expect(parseAttributes([{ name: 'mood', description: 7 }]).ok).toBe(false);
+    expect(parseAttributes([{ name: 'mood', description: '' }]).ok).toBe(false);
+  });
+
+  it('rejects a non-boolean required', () => {
+    const result = parseAttributes([{ name: 'mood', required: 'yes' }]);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors.join('\n')).toContain('.required must be a boolean');
+  });
+
+  it('rejects values that is not a non-empty array of non-empty strings', () => {
+    for (const values of [[], 'happy', [''], ['happy', 3], {}, null]) {
+      const result = parseAttributes([{ name: 'mood', values }]);
+      expect(result.ok).toBe(false);
+    }
+  });
+
+  it('rejects a default that is not one of the declared values', () => {
+    const result = parseAttributes([
+      { name: 'mood', values: ['happy'], default: 'grumpy' },
+    ]);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors.join('\n')).toContain('must be one of its "values"');
+  });
+
+  it('accepts a default with no values declared', () => {
+    const result = parseAttributes([{ name: 'mood', default: 'happy' }]);
+    expect(result.ok).toBe(true);
+  });
+
+  it('rejects an empty or non-string default', () => {
+    expect(parseAttributes([{ name: 'mood', default: '' }]).ok).toBe(false);
+    expect(parseAttributes([{ name: 'mood', default: 3 }]).ok).toBe(false);
+  });
+
+  it('warns about an unknown key inside an attribute entry', () => {
+    const result = parseAttributes([{ name: 'mood', tooltip: 'hi' }]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.warnings.join('\n')).toContain(
+      '"components.profile.attributes[0]".tooltip',
+    );
+    expect(result.manifest.components.profile).toEqual({
+      source: './profile.tsx',
+      attributes: [{ name: 'mood' }],
+    });
+  });
+
+  it('never treats an attribute entry key as a prototype write', () => {
+    const result = parseAttributes([
+      JSON.parse('{"name":"mood","__proto__":{"polluted":true}}'),
+    ]);
+    expect(result.ok).toBe(true);
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+  });
+});

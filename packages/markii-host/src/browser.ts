@@ -52,6 +52,9 @@ export {
   offsetToLineColumn,
 } from './insert/component-skeleton.js';
 export type { InsertableComponent } from './insert/component-catalog.js';
+// Re-exported so a host reading `InsertableComponent.attributes` names the
+// type through this seam rather than reaching past it into `@markii/pack`.
+export type { PackComponentAttribute } from '@markii/pack';
 export {
   LAYOUT_WRAPPER_NAMES,
   buildComponentCatalog,

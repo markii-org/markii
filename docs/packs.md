@@ -38,7 +38,11 @@ path, or an object that adds metadata:
   "timeline": {
     "source": "./Timeline.tsx",
     "description": "A dated event timeline.",
-    "kind": "leaf"
+    "kind": "leaf",
+    "attributes": [
+      { "name": "from", "description": "First date shown.", "required": true },
+      { "name": "scale", "values": ["days", "weeks"], "default": "days" }
+    ]
   }
 }
 ```
@@ -53,11 +57,39 @@ no `kind` is offered in all three directive forms, one with `kind` only in
 the form it renders as. Both forms may mix in one manifest, and older
 string-only manifests are unaffected.
 
+`attributes` lists the attributes the component reads, so an editor can
+offer them the way it already offers a standard component's. Each entry
+needs a `name`, a lowercase word that may contain digits and hyphens.
+Everything else is optional: `description` is the one line shown beside the
+attribute in a completion row, `required` marks an attribute the component
+cannot do without, `values` is the closed set of accepted values, and
+`default` is what the component falls back to when the attribute is absent.
+A `default` declared alongside `values` must be one of them.
+
+Declaring attributes changes three things in a host. Typing inside the
+braces of your directive offers your attribute names alongside the reserved
+`width` and `align`. An attribute with `values` offers those values once the
+author opens the quotes. Accepting the component from the completion popup
+pre-fills its required attributes, ready for the author to fill in, exactly
+as a standard component's required attributes already are. Hover
+documentation lists all of it, including any default.
+
+This is metadata for the editor, not enforcement. Nothing checks a written
+directive against the list, and a component still owns how it reads its own
+props. Two names are reserved and belong to the layout system rather than to
+you: a block component declaring `width` or `align` has that declaration
+ignored, because those come from the layout presets instead. An inline
+component has no layout attributes, so it may declare either name freely.
+
 The failure posture matches the rest of the manifest: a bad `kind`, an
-empty `description`, or a missing `source` fails validation for the whole
-`pack.json`, and the host reports the pack as skipped with the reason. An
-unrecognized key inside a component object is only a warning, so a field
-added in a future version cannot break the pack on an older host.
+empty `description`, a missing `source`, or a malformed `attributes` entry
+fails validation for the whole `pack.json`, and the host reports the pack as
+skipped with the reason. A malformed attribute means a name outside the
+allowed charset, the same name twice, a non-boolean `required`, a `values`
+list that is not a non-empty list of non-empty strings, or a `default`
+outside its own `values`. An unrecognized key inside a component object or
+an attribute entry is only a warning, so a field added in a future version
+cannot break the pack on an older host.
 
 ## Names and namespaces
 

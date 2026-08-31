@@ -343,3 +343,152 @@ describe('hoverAt', () => {
     expect(() => hoverAt('', 0, STANDARD_CATALOG)).not.toThrow();
   });
 });
+
+describe('completionAt: pack attribute metadata (issue #27 slice 4)', () => {
+  const ANA = pack('ana', {
+    timeline: {
+      source: './Timeline.tsx',
+      kind: 'container',
+      description: 'A dated timeline.',
+      attributes: [
+        {
+          name: 'from',
+          description: 'First date shown. Inclusive.',
+          required: true,
+        },
+        { name: 'scale', values: ['days', 'weeks', 'months'], default: 'days' },
+        { name: 'label' },
+      ],
+    },
+    tag: {
+      source: './Tag.tsx',
+      kind: 'inline',
+      attributes: [{ name: 'width', values: ['tight', 'loose'] }],
+    },
+  });
+  const CATALOG = buildComponentCatalog([ANA]);
+
+  it('offers the declared attribute names inside the braces', () => {
+    const line = ':::ana_timeline{';
+    const ctx = completionAt(line, line.length, CATALOG);
+    expect(ctx.kind).toBe('attribute-name');
+    expect(labels(ctx.items)).toEqual([
+      'align',
+      'from',
+      'label',
+      'scale',
+      'width',
+    ]);
+  });
+
+  it('marks a declared required attribute and shows its first sentence', () => {
+    const line = ':::ana_timeline{';
+    const ctx = completionAt(line, line.length, CATALOG);
+    const from = ctx.items.find((item) => item.label === 'from');
+    expect(from?.kind).toBe('attribute');
+    expect(from?.detail).toBe('required. First date shown.');
+    expect(from?.insertText).toBe('from=""');
+    expect(from?.insertCursorOffset).toBe(6);
+  });
+
+  it('leaves the detail empty rather than dangling for an attribute with no description', () => {
+    const line = ':::ana_timeline{';
+    const ctx = completionAt(line, line.length, CATALOG);
+    expect(ctx.items.find((item) => item.label === 'label')?.detail).toBe('');
+  });
+
+  it('does not re-offer an attribute already written in the braces', () => {
+    const line = ':::ana_timeline{from="2020" ';
+    const ctx = completionAt(line, line.length, CATALOG);
+    expect(labels(ctx.items)).not.toContain('from');
+    expect(labels(ctx.items)).toContain('scale');
+  });
+
+  it('offers declared values in an attribute-value context', () => {
+    const line = ':::ana_timeline{scale="';
+    const ctx = completionAt(line, line.length, CATALOG);
+    expect(ctx.kind).toBe('attribute-value');
+    expect(ctx.items.map((item) => item.label)).toEqual([
+      'days',
+      'weeks',
+      'months',
+    ]);
+    expect(ctx.items[0]?.insertText).toBe('days"');
+  });
+
+  it('completes nothing for a declared attribute with no values', () => {
+    const line = ':::ana_timeline{from="';
+    const ctx = completionAt(line, line.length, CATALOG);
+    expect(ctx.kind).toBe('none');
+  });
+
+  it('still offers the reserved layout attributes and their values', () => {
+    const nameCtx = completionAt(':::ana_timeline{', 16, CATALOG);
+    expect(labels(nameCtx.items)).toContain('align');
+
+    const line = ':::ana_timeline{align="';
+    const valueCtx = completionAt(line, line.length, CATALOG);
+    expect(valueCtx.items.map((item) => item.label)).toContain('center');
+  });
+
+  it('never offers a block pack attribute that shadows a reserved layout name twice', () => {
+    const line = ':::ana_timeline{';
+    const ctx = completionAt(line, line.length, CATALOG);
+    const widthItems = ctx.items.filter((item) => item.label === 'width');
+    expect(widthItems).toHaveLength(1);
+
+    // The one `width` row is the layout one, so its values are the layout
+    // presets, not a pack redeclaration of the same name.
+    const valueLine = ':::ana_timeline{width="';
+    const valueCtx = completionAt(valueLine, valueLine.length, CATALOG);
+    expect(valueCtx.items.map((item) => item.label)).toContain('narrow');
+  });
+
+  it('offers a pack-declared width on an inline directive, which has no layout attributes', () => {
+    const line = ':ana_tag[]{';
+    const ctx = completionAt(line, line.length, CATALOG);
+    expect(labels(ctx.items)).toEqual(['width']);
+
+    const valueLine = ':ana_tag[]{width="';
+    const valueCtx = completionAt(valueLine, valueLine.length, CATALOG);
+    expect(valueCtx.items.map((item) => item.label)).toEqual([
+      'tight',
+      'loose',
+    ]);
+  });
+
+  it('offers only the layout attributes for a pack component that declares none', () => {
+    const catalog = buildComponentCatalog([
+      pack('cat', { card: './Card.tsx' }),
+    ]);
+    const line = ':::cat_card{';
+    const ctx = completionAt(line, line.length, catalog);
+    expect(labels(ctx.items)).toEqual(['align', 'width']);
+  });
+
+  it('completes an unknown directive name to the layout attributes only', () => {
+    const line = ':::nope_nope{';
+    const ctx = completionAt(line, line.length, CATALOG);
+    expect(labels(ctx.items)).toEqual(['align', 'width']);
+  });
+
+  it('inserts required declared attributes with the directive-name skeleton', () => {
+    const ctx = completionAt(':::ana_time', 11, CATALOG);
+    const item = ctx.items.find((i) => i.label === 'ana_timeline');
+    expect(item?.insertText).toBe(':::ana_timeline{from=""}\n\n:::');
+    expect(item?.insertCursorOffset).toBe(22);
+    expect(item?.insertText.slice(item.insertCursorOffset)).toBe('"}\n\n:::');
+  });
+
+  it('documents the declared attributes on hover', () => {
+    const hover = hoverAt(':::ana_timeline{}', 6, CATALOG);
+    expect(hover?.directiveName).toBe('ana_timeline');
+    expect(hover?.documentation.summary).toBe('A dated timeline.');
+    expect(hover?.documentation.attributes).toEqual([
+      'from (required)',
+      'scale: days | weeks | months (default: days)',
+      'label',
+    ]);
+    expect(hover?.documentation.example).toBe(':::ana_timeline{from=""}');
+  });
+});

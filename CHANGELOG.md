@@ -4,6 +4,37 @@ All notable changes to Markii and the `@markii/*` packages are recorded here. Th
 format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`@markii/pack`: a component can declare its attributes in `pack.json`.**
+  The object form of a `components` entry takes an optional `attributes`
+  list, each entry carrying a `name` plus an optional `description`,
+  `required` flag, closed `values` set, and `default`. The field is
+  optional and every existing manifest keeps parsing unchanged, so this is
+  backward compatible. `parsePackManifest` validates the list strictly and
+  rejects a manifest that gets it wrong: a bad attribute name, a duplicate
+  name, a non-boolean `required`, a `values` list that is not a non-empty
+  array of non-empty strings, or a `default` outside its own `values`. An
+  unknown key inside an attribute entry stays a forward-compatible warning.
+  `resolvePackComponent` normalizes the same field leniently for callers
+  reading a manifest that never went through validation, dropping what it
+  cannot make sense of. New exports: the `PackComponentAttribute` type,
+  `PACK_ATTRIBUTE_NAME_PATTERN`, and `isPackAttributeName`.
+
+### Changed
+
+- **Directive completion and hover now know a pack component's attributes**
+  (VS Code extension, Obsidian plugin). Inside the braces of a pack
+  directive, the popup offers the component's own declared attribute names
+  alongside the reserved `width` and `align`, marks the required ones, and
+  offers the declared `values` as attribute-value completions. Hover
+  documentation lists the same attributes, including any declared default.
+  Accepting a pack component's name now pre-fills its required attributes
+  the way a standard component's have always been pre-filled. A pack that
+  declares no attributes behaves exactly as before.
+
 ## [0.9.0] - 2026-08-31
 
 ### Added

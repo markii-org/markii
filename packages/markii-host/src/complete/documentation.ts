@@ -4,6 +4,7 @@
  * text for a host with no rich-text popup. Used by both `hoverAt` and the
  * `component` completion items in `./completion.ts`.
  */
+import type { PackComponentAttribute } from '@markii/pack';
 import type { AttributeSchema } from '@markii/stdlib';
 import { getContract } from '@markii/stdlib';
 import { componentSkeleton } from '../insert/component-skeleton.js';
@@ -16,6 +17,22 @@ function attributeDocLine(name: string, schema: AttributeSchema): string {
   const enumPart =
     schema.enum !== undefined ? `: ${schema.enum.join(' | ')}` : '';
   return `${name}${requiredPart}${enumPart}`;
+}
+
+/**
+ * The same line for a pack's declared attribute, plus the one thing a
+ * standard contract has no field for: a declared `default`, appended as
+ * `(default: x)`. Everything else lines up with `attributeDocLine` above
+ * so a reader cannot tell from the shape of the line whether the
+ * attributes came from a contract or from a `pack.json`.
+ */
+function packAttributeDocLine(attribute: PackComponentAttribute): string {
+  const requiredPart = attribute.required === true ? ' (required)' : '';
+  const valuesPart =
+    attribute.values !== undefined ? `: ${attribute.values.join(' | ')}` : '';
+  const defaultPart =
+    attribute.default !== undefined ? ` (default: ${attribute.default})` : '';
+  return `${attribute.name}${requiredPart}${valuesPart}${defaultPart}`;
 }
 
 /**
@@ -40,8 +57,10 @@ function exampleFor(component: InsertableComponent): string {
  * Builds the structured documentation for one catalog entry: a standard
  * component's contract description and attribute list (its full prose, not
  * the picker row's first-sentence truncation), or a pack component's own
- * declared description with no attribute metadata (pack manifests carry
- * none yet — issue #27 slice 4) and no composed filler text.
+ * declared description and declared attribute list (issue #27 slice 4).
+ * Never composed filler text: a pack that declares neither gets empty
+ * strings and an empty list, and the host decides what, if anything, to
+ * show in their place.
  */
 export function componentDocumentation(
   component: InsertableComponent,
@@ -62,7 +81,13 @@ export function componentDocumentation(
     };
   }
 
-  return { summary: component.description ?? '', attributes: [], example };
+  return {
+    summary: component.description ?? '',
+    attributes: (component.attributes ?? []).map((attribute) =>
+      packAttributeDocLine(attribute),
+    ),
+    example,
+  };
 }
 
 /**

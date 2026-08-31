@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { packComponents, resolvePackComponent } from './components.js';
+import {
+  isPackAttributeName,
+  packComponents,
+  resolvePackComponent,
+} from './components.js';
 import type { PackManifest } from './manifest.js';
 
 describe('resolvePackComponent', () => {
@@ -151,5 +155,132 @@ describe('packComponents', () => {
     expect(packComponents(manifest)).toEqual([
       { localName: 'real', source: './Real.tsx' },
     ]);
+  });
+});
+
+describe('resolvePackComponent: declared attributes', () => {
+  it('normalizes a declared attribute list', () => {
+    expect(
+      resolvePackComponent({
+        source: './x.tsx',
+        attributes: [
+          { name: 'name', description: 'The name.', required: true },
+          { name: 'mood', values: ['happy', 'grumpy'], default: 'grumpy' },
+        ],
+      }),
+    ).toEqual({
+      source: './x.tsx',
+      attributes: [
+        { name: 'name', description: 'The name.', required: true },
+        { name: 'mood', values: ['happy', 'grumpy'], default: 'grumpy' },
+      ],
+    });
+  });
+
+  it('omits attributes entirely when the list is missing, empty, or not an array', () => {
+    for (const attributes of [undefined, [], 'mood', {}, null]) {
+      const resolved = resolvePackComponent({ source: './x.tsx', attributes });
+      expect(resolved).toEqual({ source: './x.tsx' });
+    }
+  });
+
+  it('drops a malformed entry instead of throwing', () => {
+    expect(
+      resolvePackComponent({
+        source: './x.tsx',
+        attributes: [
+          'mood',
+          { name: 'Mood' },
+          { description: 'no name' },
+          null,
+          { name: 'ok' },
+        ],
+      }),
+    ).toEqual({ source: './x.tsx', attributes: [{ name: 'ok' }] });
+  });
+
+  it('keeps the first of a duplicated attribute name', () => {
+    expect(
+      resolvePackComponent({
+        source: './x.tsx',
+        attributes: [
+          { name: 'mood', description: 'first' },
+          { name: 'mood', description: 'second' },
+        ],
+      }),
+    ).toEqual({
+      source: './x.tsx',
+      attributes: [{ name: 'mood', description: 'first' }],
+    });
+  });
+
+  it('drops a default that is not one of the declared values', () => {
+    expect(
+      resolvePackComponent({
+        source: './x.tsx',
+        attributes: [{ name: 'mood', values: ['happy'], default: 'grumpy' }],
+      }),
+    ).toEqual({
+      source: './x.tsx',
+      attributes: [{ name: 'mood', values: ['happy'] }],
+    });
+  });
+
+  it('drops non-string members of values and the field when none survive', () => {
+    expect(
+      resolvePackComponent({
+        source: './x.tsx',
+        attributes: [{ name: 'mood', values: ['happy', 3, ''] }],
+      }),
+    ).toEqual({
+      source: './x.tsx',
+      attributes: [{ name: 'mood', values: ['happy'] }],
+    });
+    expect(
+      resolvePackComponent({
+        source: './x.tsx',
+        attributes: [{ name: 'mood', values: [3, ''] }],
+      }),
+    ).toEqual({ source: './x.tsx', attributes: [{ name: 'mood' }] });
+  });
+
+  it('reads attribute fields only as own properties', () => {
+    const hostile = Object.create({ name: 'inherited' }) as object;
+    expect(
+      resolvePackComponent({ source: './x.tsx', attributes: [hostile] }),
+    ).toEqual({ source: './x.tsx' });
+  });
+
+  it('ignores a non-true required rather than rejecting the attribute', () => {
+    expect(
+      resolvePackComponent({
+        source: './x.tsx',
+        attributes: [{ name: 'mood', required: 'yes' }],
+      }),
+    ).toEqual({ source: './x.tsx', attributes: [{ name: 'mood' }] });
+  });
+});
+
+describe('isPackAttributeName', () => {
+  it('accepts lowercase names with digits and hyphens', () => {
+    for (const name of ['a', 'mood', 'mood2', 'refresh-every', 'a-b-c']) {
+      expect(isPackAttributeName(name)).toBe(true);
+    }
+  });
+
+  it('rejects anything else', () => {
+    for (const name of [
+      '',
+      'Mood',
+      '1mood',
+      '-mood',
+      'my_attr',
+      'a:b',
+      42,
+      null,
+      undefined,
+    ]) {
+      expect(isPackAttributeName(name)).toBe(false);
+    }
   });
 });
