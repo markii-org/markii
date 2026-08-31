@@ -4,10 +4,19 @@ All notable changes to Markii and the `@markii/*` packages are recorded here. Th
 format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.9.0] - 2026-08-31
 
 ### Added
 
+- **Directive completion and hover in both hosts** (VS Code extension,
+  Obsidian plugin; shared logic in the private host package). Typing an
+  opener suggests component names in the forms the component's kind allows;
+  inside the braces it suggests the component's attributes plus the reserved
+  `width` and `align`, and enumerated values for attributes that have them.
+  Accepting a name inserts the same skeleton the Insert command builds.
+  VS Code also shows hover documentation for a directive name. Pack
+  components complete by name and description; declaring `kind` in
+  `pack.json` narrows which forms offer them.
 - **A `divider` standard component** (`@markii/stdlib`, `@markii/react`,
   `@markii/html`) — a leaf directive for a section break that carries a
   label or a chosen look: `::divider`, `::divider{label="Part 2" variant="dots"}`.
@@ -28,6 +37,20 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
   completes attributes reads them exactly like a component's own. This is
   the one source both renderers' `layout.ts` now build their class maps
   from, replacing two independently hand-copied literals.
+
+### Fixed
+
+- **`@markii/core`: a prose colon no longer parses as a text directive.**
+  Previously any single colon could open a text directive, so a clock time
+  (`12:34`), a Bible verse (`John 3:16`), a ratio (`a:b`), or a `key:value`
+  pair was misread as a directive and every renderer showed an "unknown
+  component" fallback box in the middle of an ordinary sentence. A text
+  directive is now recognized only when its name starts with an ASCII
+  letter and the colon sits at a word start (the start of the document, or
+  preceded by anything other than an ASCII letter or digit). A colon that
+  fails this rule is left as plain text, byte-identical to the source.
+  Leaf (`::`) and container (`:::`) directives are unaffected, since they
+  only ever occur at the start of a line.
 
 ### Changed
 
