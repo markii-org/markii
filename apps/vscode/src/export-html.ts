@@ -82,29 +82,30 @@ function fileNameOf(path: string): string {
 }
 
 /**
- * The short message shown after an export. A success names the file and
- * says whether values were baked in, so a user who exported before running
- * the note is not surprised by empty states in the file. A failure says
- * what failed and points at the diagnostics surface, never at a stack
- * trace: the verbatim reason goes to the output channel instead.
+ * The short message shown after an export. A success names the file. A
+ * failure says what failed and points at the diagnostics surface, never at
+ * a stack trace: the verbatim reason goes to the output channel instead.
+ *
+ * HOW MANY VALUES were baked in is deliberately NOT here. It is one number
+ * that only matters when a reader is checking their work, and the output
+ * channel already carries it next to the byte count, the render engine,
+ * and the image report, where per-count detail belongs. Both hosts now say
+ * the same thing in the popup, each in its own voice: the file's name, and
+ * a run hint only when the note actually has scripts.
+ *
+ * THE RUN HINT is unchanged. A note with scripts that has never been run
+ * exports with empty states, and a reader who was not told would think the
+ * export dropped their data. A scriptless note has nothing to run and gets
+ * the plain confirmation, which is what `noteHasScripts` is for.
  */
 export function exportHtmlResultMessage(outcome: HtmlExportOutcome): string {
   if (outcome.kind === 'failed') {
     return 'Markii: could not export this note as HTML. Open the Markii output for details.';
   }
   const name = fileNameOf(outcome.path);
-  if (outcome.valueCount === 0) {
-    // Explaining empty states only makes sense for a note that HAS scripts;
-    // a scriptless note gets the plain confirmation.
-    return outcome.hasScripts === true
-      ? `Markii: exported ${name}. The note has no stored script values, so data-bound components show their empty states.`
-      : `Markii: exported ${name}.`;
-  }
-  const values =
-    outcome.valueCount === 1
-      ? '1 script value'
-      : `${String(outcome.valueCount)} script values`;
-  return `Markii: exported ${name} with ${values} from the last run.`;
+  return outcome.valueCount === 0 && outcome.hasScripts === true
+    ? `Markii: exported ${name}. The note has no stored script values, so data-bound components show their empty states.`
+    : `Markii: exported ${name}.`;
 }
 
 /**

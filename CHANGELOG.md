@@ -117,8 +117,57 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
   untouched and the insertion proceeds as before. The shared scan and the
   edit computation live in the private host package, so both hosts run the
   same logic.
+- **A preview width setting** (VS Code extension, Obsidian plugin). The
+  preview's text column can now be widened. In VS Code the new
+  `markii.previewWidth` setting takes `normal`, the 48rem reading column
+  the preview has always used, `wide` for 64rem, the same measure a
+  `width=wide` block gets, or `full` for no cap at all with slightly wider
+  gutters. It is read when a preview opens, so change it and reopen the
+  preview to apply. In Obsidian the same three values live in the plugin's
+  settings tab under Preview width, applied to open previews immediately.
+  Obsidian already gives the preview the whole pane, so there `wide` is the
+  value that introduces a fixed reading column and `full` only widens the
+  gutters. Both hosts default to `normal`, which renders exactly as before.
+- **Run and Export in the Obsidian preview's header.** The Markii preview
+  pane now carries two icons, Run Markii scripts and Export Markii note as
+  HTML, so the two things a reader does with an open note are one click
+  away. PDF, the HTML cascade, Insert component, and Show diagnostics stay
+  in the command palette. The diagnostics icon that used to sit in the
+  preview header was removed with it.
+- **Export as HTML in the VS Code editor title menu.** `Markii: Export as
+HTML` is now contributed to the editor's overflow menu for a `.mk.md`
+  file, alongside the Open Preview action, so it no longer needs the
+  command palette.
+
+### Fixed
+
+- **Images resolve in the Obsidian preview** (Obsidian plugin). A note that
+  references a picture sitting next to it, whether as
+  `:::figure{src="./photo.png"}` or as a plain markdown image, showed a
+  missing file rather than the picture, and a path read from the vault root
+  failed the same way. The preview now rewrites every image source to the
+  URL Obsidian serves the file at, after each render, so a value update or
+  a fresh run keeps the pictures in place. A source is read against the
+  note's own folder first, then through Obsidian's own link resolution, so
+  a shortest-path reference finds its file the way it does everywhere else
+  in the app, and then against the vault root. Percent-encoded names such
+  as `my%20image.png` resolve too. This is the same reading of a source the
+  HTML and PDF exports already used, now shared between the two so a note
+  previews with the pictures it exports with. A source with a scheme of its
+  own, an `https:` or `data:` image, is left exactly as written, and so is
+  one that matches no file in the vault: the image is simply missing, as it
+  was before, and the reason is named once on the console, this host's
+  diagnostics surface.
 
 ### Changed
+
+- **Export confirmations say the same thing on both hosts.** The VS Code
+  popup no longer counts the script values baked into the file. Both hosts
+  now name the exported file and nothing more, keeping only the hint that a
+  note with scripts which has never been run exports with empty states. The
+  value count still appears in full on each host's diagnostics surface,
+  where the byte count, the render engine, and the image report already
+  live. A scriptless note is still never told to run itself first.
 
 - **Directive completion and hover now know a pack component's attributes**
   (VS Code extension, Obsidian plugin). Inside the braces of a pack

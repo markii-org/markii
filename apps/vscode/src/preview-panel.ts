@@ -84,6 +84,11 @@ import type {
 import { resolveWorkerPath } from './worker-path.js';
 import type { RunTrigger, StoredValue } from '@markii/runtime';
 import { MIN_REFRESH_INTERVAL_SECONDS } from './refresh-interval.js';
+import {
+  DEFAULT_PREVIEW_WIDTH,
+  normalizePreviewWidth,
+} from './preview-width.js';
+import type { PreviewWidth } from './preview-width.js';
 import { loadPackContext } from './packs/pack-context.js';
 import type { PackContext } from './packs/pack-context.js';
 import {
@@ -241,6 +246,13 @@ interface ActivePreview {
    * `retainContextWhenHidden: false`).
    */
   ranOnOpen: boolean;
+  /**
+   * The reading measure this panel renders at (`markii.previewWidth`,
+   * `./preview-width.ts`) — cosmetic only. Read once at panel creation and
+   * sent with every `update`, like `packContext` and `localResourceRoots`:
+   * changing the setting takes effect on the next panel.
+   */
+  readonly previewWidth: PreviewWidth;
 }
 
 /** The stable storage identity for a preview source — a plain document's URI, or a zip-form bundle's archive identity. A `bundle-error` source has nothing runnable and thus no key. */
@@ -465,6 +477,15 @@ function workspaceRootPath(): string | undefined {
   return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 }
 
+/** The configured `markii.previewWidth` (`./preview-width.ts`), normalized — a cosmetic setting, so an unknown value quietly reads as the default rather than failing the panel. */
+function configuredPreviewWidth(): PreviewWidth {
+  return normalizePreviewWidth(
+    vscode.workspace
+      .getConfiguration('markii')
+      .get<string>('previewWidth', DEFAULT_PREVIEW_WIDTH),
+  );
+}
+
 /** Whether `markii.runOnOpen` (GitHub issue #11) is enabled — an opt-in, read-only run when a note's preview first opens. Off by default. */
 function runOnOpenEnabled(): boolean {
   return vscode.workspace
@@ -628,6 +649,7 @@ function postUpdate(preview: ActivePreview): void {
       readOnly: true,
       packNamespaces: preview.packContext.namespaces,
       packSkippedCount: skippedPackCount(preview.packContext),
+      previewWidth: preview.previewWidth,
       ...(lastRun ? { lastRun } : {}),
     };
     void preview.panel.webview.postMessage(message);
@@ -650,6 +672,7 @@ function postUpdate(preview: ActivePreview): void {
     ...(baseUri === undefined ? {} : { baseUri }),
     packNamespaces: preview.packContext.namespaces,
     packSkippedCount: skippedPackCount(preview.packContext),
+    previewWidth: preview.previewWidth,
     ...(lastRun ? { lastRun } : {}),
   };
   void preview.panel.webview.postMessage(message);
@@ -933,6 +956,7 @@ async function createPreview(
     webviewReady: false,
     readyWaiters: [],
     ranOnOpen: false,
+    previewWidth: configuredPreviewWidth(),
   };
   active = preview;
   void vscode.commands.executeCommand(

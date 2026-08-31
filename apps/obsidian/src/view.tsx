@@ -15,6 +15,11 @@ import { extractFrontmatterUses } from '@markii/core';
 import { resolveUses } from '@markii/pack';
 import { defaultRegistry } from '@markii/react/components';
 import { renderDocument } from './render-document.js';
+import {
+  VaultImageDocument,
+  createUnresolvedImageReporter,
+} from './preview-images.js';
+import type { VaultImageResolver } from './preview-images.js';
 import { createLocalStorageMemento } from './run/local-storage-memento.js';
 import {
   promptHostModal,
@@ -37,6 +42,7 @@ import {
   applyPackStylesheets,
   removePackStylesheets,
 } from './packs/pack-styles.js';
+import { PREVIEW_WIDTH_CLASSES, previewWidthClassName } from './settings.js';
 import type MarkiiPlugin from './main.js';
 
 export const MARKII_PREVIEW_VIEW_TYPE = 'markii-preview';
@@ -86,6 +92,20 @@ export class MarkiiPreviewView extends ItemView {
   private packContext: PackContext | undefined;
   /** The last completed run's failure details (`RunOnceResult.failureDetails`), kept so the "Show Markii diagnostics" command can replay them on demand — diagnostics-surface only, never rendered into the page. */
   private lastRunFailures: RunOnceResult['failureDetails'] = [];
+
+  /**
+   * The console line for an image source that names no file in the vault
+   * (`src/preview-images.ts`). One per source per note for this view's
+   * whole life, so a note that re-renders every refresh interval cannot
+   * turn one missing picture into a console drip. No `Notice`: a broken
+   * image is visible in the page on its own, so this is the reason, not
+   * the alarm.
+   */
+  private readonly reportUnresolvedImage = createUnresolvedImageReporter(
+    (line) => {
+      console.warn(line);
+    },
+  );
 
   /**
    * This preview's currently-loaded pack registry and stylesheets, for
@@ -139,18 +159,23 @@ export class MarkiiPreviewView extends ItemView {
     const container = this.containerEl.children[1] ?? this.containerEl;
     container.addClass('mk-obsidian-preview');
     this.root = createRoot(container);
+    this.applyPreviewWidth();
 
     // The rendered pane is where a reader actually is when they want to
-    // re-run a note, so the controls belong in ITS header rather than only
-    // in the source editor's. `ItemView.addAction` puts them next to the
-    // view's own menu, and this view is created fresh per open, so there
-    // is nothing to deduplicate.
+    // re-run or export a note, so the two primary actions belong in ITS
+    // header rather than only in the palette. `ItemView.addAction` puts
+    // them next to the view's own menu, and this view is created fresh per
+    // open, so there is nothing to deduplicate.
+    //
+    // These two only. PDF, the cascade export, Insert component, and Show
+    // diagnostics stay palette-only: a header that offers everything
+    // offers nothing, and each of those is either a variant of an action
+    // already here or a tool a reader reaches for deliberately.
     this.addAction('play', 'Run Markii scripts', () => {
       void this.runScripts('manual');
     });
-    this.addAction('bug', 'Show Markii diagnostics', () => {
-      this.logPackDiagnostics();
-      new Notice('Markii: pack diagnostics printed to the console.');
+    this.addAction('file-code', 'Export Markii note as HTML', () => {
+      void this.plugin.exportActiveNoteAsHtml();
     });
 
     this.registerEvent(
@@ -206,6 +231,26 @@ export class MarkiiPreviewView extends ItemView {
     }
     this.root?.unmount();
     this.root = null;
+  }
+
+  /**
+   * Puts the current `previewWidth` setting (`src/settings.ts`) on the view
+   * root as a class, dropping whichever one was there before. Cosmetic
+   * only, which is why it lives in the vault-synced settings alongside
+   * preview placement rather than in the device-local ones.
+   *
+   * Public so the settings tab can apply a change to an already-open
+   * preview instead of making the reader close and reopen it; `refresh()`
+   * calls it too, so a preview that outlives a settings change still lands
+   * on the right width.
+   */
+  applyPreviewWidth(): void {
+    const container = this.containerEl.children[1] ?? this.containerEl;
+    for (const className of PREVIEW_WIDTH_CLASSES) {
+      container.removeClass(className);
+    }
+    const current = previewWidthClassName(this.plugin.settings.previewWidth);
+    if (current !== undefined) container.addClass(current);
   }
 
   /**
@@ -304,6 +349,31 @@ export class MarkiiPreviewView extends ItemView {
     if (context.registrationCollisions.length > 0) {
       new Notice(packCollisionNotice(context.registrationCollisions));
     }
+  }
+
+  /**
+   * The three vault calls the preview's image rewrite needs
+   * (`src/preview-images.ts`): Obsidian's own link resolution, an
+   * existence check, and the URL Obsidian serves a vault file at. Every
+   * decision beyond these one-liners lives in that module and in
+   * `src/vault-image-paths.ts`, which the export's image embedder walks
+   * too, so a note previews with the same pictures it exports with.
+   *
+   * THE JAIL. All three are vault APIs: `getFirstLinkpathDest` searches
+   * the link index, and the adapter cannot reach outside the vault it was
+   * handed. `preview-images.ts` additionally refuses to pass on anything
+   * that could read as an absolute path, so `getResourcePath` only ever
+   * sees a vault-relative one.
+   */
+  private vaultImageResolver(): VaultImageResolver {
+    const adapter = this.app.vault.adapter;
+    return {
+      linkpathDest: (src, from) =>
+        this.app.metadataCache.getFirstLinkpathDest(src, from)?.path,
+      vaultPathExists: (vaultPath) =>
+        this.app.vault.getAbstractFileByPath(vaultPath) instanceof TFile,
+      resourcePath: (vaultPath) => adapter.getResourcePath(vaultPath),
+    };
   }
 
   /** The `GrantMemento` for this run's whole session — see this class's top comment on why every key it touches is device-local, never `saveData`. Built once per call so a stale reference is never reused across an `await`. */
@@ -458,6 +528,7 @@ export class MarkiiPreviewView extends ItemView {
   }
 
   private async refresh(): Promise<void> {
+    this.applyPreviewWidth();
     const file = this.app.workspace.getActiveFile();
     const isNewFile = file?.path !== this.currentFile?.path;
     this.currentFile = file;
@@ -512,9 +583,20 @@ export class MarkiiPreviewView extends ItemView {
       createElement(
         Fragment,
         null,
+        // The `.doc` wrapper, with the image rewrite attached to it: a
+        // relative `<img src>` is resolved against the vault after every
+        // render, value updates included (`src/preview-images.ts`). The
+        // `key` is the note's path so switching notes remounts the tree
+        // rather than reusing an `<img>` still holding the previous
+        // note's resolved URL.
         createElement(
-          'div',
-          { className: 'doc' },
+          VaultImageDocument,
+          {
+            key: file.path,
+            notePath: file.path,
+            resolver: this.vaultImageResolver(),
+            onUnresolved: this.reportUnresolvedImage,
+          },
           renderDocument(text, store, registry),
         ),
         usesResolution.missing.length > 0

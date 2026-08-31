@@ -335,6 +335,49 @@ describe('isHostToWebviewMessage — packNamespaces', () => {
   });
 });
 
+describe('isHostToWebviewMessage — previewWidth', () => {
+  it('accepts each documented width', () => {
+    for (const width of ['normal', 'wide', 'full']) {
+      expect(
+        isHostToWebviewMessage({
+          type: 'update',
+          revision: 1,
+          text: 'hi',
+          previewWidth: width,
+        }),
+      ).toBe(true);
+    }
+  });
+
+  it('accepts an omitted previewWidth field', () => {
+    expect(
+      isHostToWebviewMessage({ type: 'update', revision: 1, text: 'hi' }),
+    ).toBe(true);
+  });
+
+  it('rejects an unknown previewWidth', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'update',
+        revision: 1,
+        text: 'hi',
+        previewWidth: 'enormous',
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects a non-string previewWidth', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'update',
+        revision: 1,
+        text: 'hi',
+        previewWidth: 64,
+      }),
+    ).toBe(false);
+  });
+});
+
 describe('isHostToWebviewMessage — packSkippedCount', () => {
   it('accepts a well-formed packSkippedCount', () => {
     expect(

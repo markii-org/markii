@@ -56,6 +56,25 @@ body {
   font-family: var(--vscode-font-family, system-ui, sans-serif);
 }
 
+/*
+ * The `markii.previewWidth` setting (`../preview-width.ts`), applied as a
+ * class on `.doc` by `preview.tsx`. `normal` is the rule above and carries
+ * no class at all, so the default rendering is untouched. `wide` is the
+ * same 64rem measure `doc.css` gives a `width=wide` block, which keeps the
+ * two ideas of "wide" in one place conceptually even though each file
+ * states its own value. `full` drops the cap and widens the side padding a
+ * little, since a full-panel column with a 1.25rem gutter reads as text
+ * jammed against the frame.
+ */
+.doc.mk-preview--wide {
+  max-width: 64rem;
+}
+
+.doc.mk-preview--full {
+  max-width: none;
+  padding-inline: 2rem;
+}
+
 .doc pre,
 .doc code {
   font-family: var(

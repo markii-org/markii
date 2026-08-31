@@ -326,6 +326,32 @@ describe('exportNoticeText', () => {
     ).not.toContain('reports/');
   });
 
+  it('keeps the value count out of the notice, where the two hosts now agree', () => {
+    const text = exportNoticeText({
+      kind: 'html',
+      path: 'reports/week.html',
+      valueCount: 4,
+      hasScripts: true,
+      render: RENDER_STATIC_NO_PACKS,
+      images: EMPTY_IMAGE_REPORT,
+    });
+    expect(text).toContain('week.html');
+    expect(text).not.toContain('4');
+    expect(text).not.toContain('value');
+  });
+
+  it('still puts the count on the diagnostics surface', () => {
+    const lines = exportDiagnosticLines({
+      kind: 'html',
+      path: 'reports/week.html',
+      valueCount: 4,
+      hasScripts: true,
+      render: RENDER_STATIC_NO_PACKS,
+      images: EMPTY_IMAGE_REPORT,
+    });
+    expect(lines[0]).toContain('4 stored values baked in');
+  });
+
   it('says PDF is unavailable on this device and names the file written instead', () => {
     const text = exportNoticeText({
       kind: 'pdf-unavailable',

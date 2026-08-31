@@ -110,6 +110,11 @@
           "command": "markii.runScripts",
           "when": "activeWebviewPanelId == 'markii.preview'",
           "group": "navigation@2"
+        },
+        {
+          "command": "markii.exportHtml",
+          "when": "resourceFilename =~ /\\.mk\\.md$/",
+          "group": "1_markii@1"
         }
       ],
       "commandPalette": [
@@ -194,6 +199,22 @@
           "minimum": 0,
           "scope": "application",
           "markdownDescription": "Re-run the previewed note's scripts on this interval, in seconds, at the READ-ONLY tier — for dashboard/monitoring notes. `0` (the default) turns scheduled refresh off. A positive value under 5 is treated as 5. Like auto-run, a scheduled run never prompts and never adds network access; it reuses only the hosts you already granted by hand. The interval is read when the preview opens; change it and reopen the preview to apply. This setting is USER-scope only (it cannot be set from a workspace's `.vscode/settings.json`), so opening someone else's project can never start a refresh timer on your behalf."
+        },
+        "markii.previewWidth": {
+          "type": "string",
+          "enum": [
+            "normal",
+            "wide",
+            "full"
+          ],
+          "enumDescriptions": [
+            "A 48rem reading column, the default.",
+            "A 64rem reading column, matching the layout system's wide preset.",
+            "The full width of the preview panel."
+          ],
+          "default": "normal",
+          "scope": "window",
+          "markdownDescription": "How wide the preview's text column is allowed to grow. Cosmetic only: it changes nothing about what runs, what loads, or what a note can reach. `normal` is the 48rem reading column the preview has always used, `wide` is 64rem, which is the same measure a `width=wide` block gets, and `full` removes the cap so the column fills the panel. The value is read when the preview opens; change it and reopen the preview to apply."
         },
         "markii.allowPrivateNetworkAddresses": {
           "type": "boolean",

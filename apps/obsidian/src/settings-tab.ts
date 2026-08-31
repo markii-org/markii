@@ -1,6 +1,7 @@
 import { App, PluginSettingTab, Setting } from 'obsidian';
 import type MarkiiPlugin from './main.js';
-import type { PreviewPlacement } from './settings.js';
+import type { PreviewPlacement, PreviewWidth } from './settings.js';
+import { MARKII_PREVIEW_VIEW_TYPE, MarkiiPreviewView } from './view.js';
 import {
   MIN_REFRESH_INTERVAL_SECONDS,
   normalizeLocalSettings,
@@ -48,6 +49,22 @@ export class MarkiiSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.previewPlacement)
           .onChange((value) => {
             void this.applyPlacement(value);
+          });
+      });
+
+    new Setting(containerEl)
+      .setName('Preview width')
+      .setDesc(
+        "How wide the preview's text column may grow. Normal keeps the pane's width.",
+      )
+      .addDropdown((dropdown) => {
+        dropdown
+          .addOption('normal', "Normal, the pane's width")
+          .addOption('wide', 'Wide, a 64rem reading column')
+          .addOption('full', 'Full, the pane with wider gutters')
+          .setValue(this.plugin.settings.previewWidth)
+          .onChange((value) => {
+            void this.applyWidth(value);
           });
       });
 
@@ -171,7 +188,30 @@ export class MarkiiSettingTab extends PluginSettingTab {
   private async applyPlacement(value: string): Promise<void> {
     const placement: PreviewPlacement =
       value === 'right-sidebar' ? 'right-sidebar' : 'main';
-    this.plugin.settings = { previewPlacement: placement };
+    this.plugin.settings = {
+      ...this.plugin.settings,
+      previewPlacement: placement,
+    };
     await this.plugin.saveSettings();
+  }
+
+  /**
+   * Writes the preview width and applies it to every preview that is
+   * already open, so the dropdown changes what the reader is looking at
+   * instead of only what the next preview will look like. Purely cosmetic,
+   * which is why it lives in the vault-synced settings beside placement.
+   */
+  private async applyWidth(value: string): Promise<void> {
+    const width: PreviewWidth =
+      value === 'wide' || value === 'full' ? value : 'normal';
+    this.plugin.settings = { ...this.plugin.settings, previewWidth: width };
+    await this.plugin.saveSettings();
+    for (const leaf of this.app.workspace.getLeavesOfType(
+      MARKII_PREVIEW_VIEW_TYPE,
+    )) {
+      if (leaf.view instanceof MarkiiPreviewView) {
+        leaf.view.applyPreviewWidth();
+      }
+    }
   }
 }

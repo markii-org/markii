@@ -24,6 +24,7 @@ import {
   type ValueStatus,
 } from '@markii/runtime';
 import type { ValuesFailure } from '@markii/host';
+import { isPreviewWidth, type PreviewWidth } from './preview-width.js';
 
 export type { ValuesFailure } from '@markii/host';
 
@@ -94,6 +95,14 @@ export interface UpdateMessage {
    * webview shows no run marker at all.
    */
   readonly lastRun?: WireRunTrace;
+  /**
+   * The reading measure the panel was created with (`markii.previewWidth`,
+   * see `./preview-width.ts`) — purely cosmetic, and the only thing the
+   * webview does with it is pick a class for its `.doc` element. Omitted
+   * by an older host or a message that predates the setting, which the
+   * webview reads as `normal`, the width the preview has always had.
+   */
+  readonly previewWidth?: PreviewWidth;
 }
 
 /**
@@ -383,6 +392,13 @@ function isUpdateMessage(value: unknown): value is UpdateMessage {
     hasOwn(value, 'lastRun') &&
     value.lastRun !== undefined &&
     !isWireRunTrace(value.lastRun)
+  ) {
+    return false;
+  }
+  if (
+    hasOwn(value, 'previewWidth') &&
+    value.previewWidth !== undefined &&
+    !isPreviewWidth(value.previewWidth)
   ) {
     return false;
   }

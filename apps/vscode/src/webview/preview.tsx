@@ -11,6 +11,11 @@ import type { WebviewToHostMessage, WireRunTrace } from '../protocol.js';
 import { runMarkerLabel, runMarkerTitle } from './run-marker.js';
 import { applyDocumentBase } from './document-images.js';
 import {
+  DEFAULT_PREVIEW_WIDTH,
+  previewDocumentClassName,
+} from '../preview-width.js';
+import type { PreviewWidth } from '../preview-width.js';
+import {
   getPersistedState,
   getVsCodeApi,
   setPersistedState,
@@ -134,6 +139,14 @@ interface LocalState extends PersistedState {
    * failed", so the marker is absent until a real count arrives.
    */
   readonly packSkippedCount?: number;
+  /**
+   * The reading measure the host was configured with
+   * (`protocol.ts`'s `UpdateMessage.previewWidth`), as of the most recent
+   * `update`. Cosmetic only, and `undefined` until the first `update`
+   * arrives, which renders as `normal` — the width the preview has always
+   * had.
+   */
+  readonly previewWidth?: PreviewWidth;
 }
 
 export interface PreviewProps {
@@ -215,6 +228,7 @@ export function Preview({ registry }: PreviewProps): ReactElement {
             // marker below stays absent, same as `packNamespaces`'s own
             // omitted-vs-empty convention.
             lastRun: data.lastRun,
+            previewWidth: data.previewWidth,
           };
         }
         if (data.type === 'bundle-error') {
@@ -229,6 +243,9 @@ export function Preview({ registry }: PreviewProps): ReactElement {
             readOnly: undefined,
             runValues: undefined,
             bundleError: data.message,
+            // Cosmetic and panel-wide: a bundle that failed to resolve is
+            // still shown at the width the panel was opened at.
+            previewWidth: previous.previewWidth,
           };
         }
         // `export-request` (GitHub issue #28 slice 2) is `./main.tsx`'s own
@@ -340,7 +357,13 @@ export function Preview({ registry }: PreviewProps): ReactElement {
         into it, which would point at the OLD folder. Remounting restores the
         relative source, and the effect re-resolves it against the new base.
       */}
-      <div className="doc" ref={documentRef} key={state.baseUri ?? ''}>
+      <div
+        className={previewDocumentClassName(
+          state.previewWidth ?? DEFAULT_PREVIEW_WIDTH,
+        )}
+        ref={documentRef}
+        key={state.baseUri ?? ''}
+      >
         {state.readOnly === true && (
           <p className="mk-preview__readonly-marker">
             Read-only bundle preview

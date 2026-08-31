@@ -5,11 +5,11 @@
  * owns the one decision that is specific to this host: how an `<img src>`
  * written in a note resolves to a real file in the vault.
  *
- * THE RESOLUTION ORDER, matching how Obsidian's own preview resolves an
- * image: `app.metadataCache.getFirstLinkpathDest` first, since that is
- * how Obsidian resolves a bare file name or a relative link from anywhere
- * in the vault; a plain vault-relative path second, for a source that
- * already names a real path Obsidian's link index does not recognize.
+ * THE RESOLUTION ORDER lives in `../vault-image-paths.ts`, shared with the
+ * preview's image rewrite so the two can never disagree about what a source
+ * means: the note's own folder first, Obsidian's `getFirstLinkpathDest`
+ * second for shortest-path references, a plain vault-relative path last.
+ * This module only walks that list with the seams below.
  *
  * FOUR SMALL SEAMS, NOT A VAULT. `main.ts` is the only file allowed to
  * import `obsidian` outside a short allowlist, so this module never touches
@@ -26,6 +26,10 @@
  */
 import { MAX_EMBEDDED_IMAGE_BYTES } from '@markii/host';
 import type { ExportImageReader, ExportImageResult } from '@markii/host';
+import {
+  isVaultRelativePath,
+  vaultImageCandidates,
+} from '../vault-image-paths.js';
 
 /** `app.metadataCache.getFirstLinkpathDest(src, notePath)`, returning the resolved vault path or `undefined` when nothing matches. */
 export type LinkpathResolver = (
@@ -56,18 +60,30 @@ function detailOf(error: unknown): string {
 }
 
 /**
- * Resolves `src` to a vault path, `getFirstLinkpathDest` first and a plain
- * vault-relative path second. `undefined` when neither resolves.
+ * Resolves `src` to a vault path by walking `vaultImageCandidates`, the
+ * one shared reading of what an image source means in a vault.
+ * `undefined` when nothing in the vault matches, and for a source that was
+ * never a vault path to begin with, such as an `https:` URL, which the
+ * caller reports as unreadable so `@markii/host`'s embedder leaves it
+ * exactly as written.
  */
 export async function resolveVaultImagePath(
   src: string,
   notePath: string,
   deps: Pick<VaultImageReaderDeps, 'linkpathDest' | 'pathExists'>,
 ): Promise<string | undefined> {
-  const viaLinkpath = deps.linkpathDest(src, notePath);
-  if (viaLinkpath !== undefined) return viaLinkpath;
-  const exists = await deps.pathExists(src);
-  return exists ? src : undefined;
+  for (const candidate of vaultImageCandidates(src, notePath)) {
+    const resolved =
+      candidate.kind === 'linkpath'
+        ? deps.linkpathDest(candidate.value, notePath)
+        : (await deps.pathExists(candidate.value))
+          ? candidate.value
+          : undefined;
+    if (resolved === undefined) continue;
+    if (!isVaultRelativePath(resolved)) continue;
+    return resolved;
+  }
+  return undefined;
 }
 
 /**

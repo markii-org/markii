@@ -401,6 +401,16 @@ export default class MarkiiPlugin extends Plugin {
    * `Notice`, and the full detail on the console, which is this host's
    * designated diagnostics surface.
    */
+  /**
+   * The HTML export, reachable from the preview's own header
+   * (`src/view.tsx`'s `onOpen`) as well as the palette. A thin public
+   * wrapper so the view triggers exactly the command's own handler rather
+   * than growing a second copy of the export flow.
+   */
+  exportActiveNoteAsHtml(): Promise<void> {
+    return this.exportActiveNote('html');
+  }
+
   private async exportActiveNote(format: 'html' | 'pdf'): Promise<void> {
     const file = this.activeMarkFile();
     if (!file) {

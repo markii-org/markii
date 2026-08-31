@@ -24,6 +24,13 @@
 /** Where the command opens the preview view. */
 export type PreviewPlacement = 'main' | 'right-sidebar';
 
+/**
+ * How wide the preview's text column is allowed to grow. Cosmetic, and the
+ * same three-value vocabulary the VS Code extension's `markii.previewWidth`
+ * uses, so the two hosts describe the reading measure the same way.
+ */
+export type PreviewWidth = 'normal' | 'wide' | 'full';
+
 export interface MarkiiSettings {
   /**
    * 'main': a new tab in the main workspace area, split beside the active
@@ -33,10 +40,27 @@ export interface MarkiiSettings {
    * opt-in alternative for anyone who prefers a narrow always-visible panel.
    */
   previewPlacement: PreviewPlacement;
+  /**
+   * 'normal': the pane's own width, which is exactly how the preview has
+   * always rendered here and stays the default.
+   * 'wide': a fixed 64rem reading column, centered in the pane. The same
+   * measure a `width=wide` block gets, for anyone who wants a stable line
+   * length on a large screen.
+   * 'full': the pane's width with wider gutters, for dashboard notes whose
+   * rows and charts want every pixel.
+   *
+   * Obsidian gives this view the whole pane already, so unlike the VS Code
+   * extension, where 'normal' is a 48rem column, the useful step here is
+   * 'wide': it is what introduces a reading column rather than removing
+   * one. 'normal' is left completely unstyled so the default rendering is
+   * unchanged.
+   */
+  previewWidth: PreviewWidth;
 }
 
 export const DEFAULT_SETTINGS: MarkiiSettings = {
   previewPlacement: 'main',
+  previewWidth: 'normal',
 };
 
 const PREVIEW_PLACEMENTS: readonly PreviewPlacement[] = [
@@ -50,6 +74,42 @@ function isPreviewPlacement(value: unknown): value is PreviewPlacement {
     (PREVIEW_PLACEMENTS as readonly string[]).includes(value)
   );
 }
+
+/** The width vocabulary, narrowest first, which is the order the dropdown offers them in. */
+export const PREVIEW_WIDTHS: readonly PreviewWidth[] = [
+  'normal',
+  'wide',
+  'full',
+];
+
+export function isPreviewWidth(value: unknown): value is PreviewWidth {
+  return (
+    typeof value === 'string' &&
+    (PREVIEW_WIDTHS as readonly string[]).includes(value)
+  );
+}
+
+/**
+ * The class the view root carries for `width`, or `undefined` for
+ * `normal`, which is styled by nothing at all so the default rendering is
+ * byte-for-byte what it was. `src/obsidian-theme.css` holds the two rules.
+ */
+export function previewWidthClassName(width: PreviewWidth): string | undefined {
+  switch (width) {
+    case 'wide':
+      return 'mk-obsidian-preview--wide';
+    case 'full':
+      return 'mk-obsidian-preview--full';
+    default:
+      return undefined;
+  }
+}
+
+/** Every width class, so the view root can drop the previous one before adding the current one. */
+export const PREVIEW_WIDTH_CLASSES: readonly string[] = [
+  'mk-obsidian-preview--wide',
+  'mk-obsidian-preview--full',
+];
 
 /**
  * Normalizes whatever `loadData()` handed back into a well-formed
@@ -68,5 +128,8 @@ export function normalizeSettings(data: unknown): MarkiiSettings {
     previewPlacement: isPreviewPlacement(raw.previewPlacement)
       ? raw.previewPlacement
       : DEFAULT_SETTINGS.previewPlacement,
+    previewWidth: isPreviewWidth(raw.previewWidth)
+      ? raw.previewWidth
+      : DEFAULT_SETTINGS.previewWidth,
   };
 }

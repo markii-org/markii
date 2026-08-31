@@ -82,7 +82,7 @@ describe('exportHtmlDefaultFileName', () => {
 });
 
 describe('exportHtmlResultMessage', () => {
-  it('names the written file and the values baked into it', () => {
+  it('names the written file, by name only and never by full path', () => {
     const message = exportHtmlResultMessage({
       kind: 'written',
       path: '/w/notes/week.html',
@@ -92,21 +92,35 @@ describe('exportHtmlResultMessage', () => {
       images: EMPTY_IMAGE_REPORT,
     });
     expect(message).toContain('week.html');
-    expect(message).toContain('3 script values');
     expect(message).not.toContain('/w/notes');
   });
 
-  it('uses the singular for one value', () => {
-    expect(
-      exportHtmlResultMessage({
+  it('keeps the value count out of the popup, where the two hosts now agree', () => {
+    for (const valueCount of [1, 3]) {
+      const message = exportHtmlResultMessage({
         kind: 'written',
         path: 'week.html',
         bytes: 10,
-        valueCount: 1,
+        valueCount,
+        hasScripts: true,
         render: STATIC_NO_PACKS,
         images: EMPTY_IMAGE_REPORT,
-      }),
-    ).toContain('with 1 script value from');
+      });
+      expect(message).toBe('Markii: exported week.html.');
+      expect(message).not.toContain('script value');
+    }
+  });
+
+  it('still puts the count on the diagnostics surface', () => {
+    const lines = exportHtmlDiagnosticLines({
+      kind: 'written',
+      path: '/w/notes/week.html',
+      bytes: 1234,
+      valueCount: 3,
+      render: STATIC_NO_PACKS,
+      images: EMPTY_IMAGE_REPORT,
+    });
+    expect(lines[0]).toContain('3 stored values baked in');
   });
 
   it('says so when nothing was baked in, rather than leaving empty states unexplained', () => {

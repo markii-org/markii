@@ -73,3 +73,23 @@
 .doc hr {
   border-color: var(--background-modifier-border);
 }
+
+/*
+ * ---------- the preview-width setting ----------
+ * `src/settings.ts`'s `previewWidth`, applied by the view root
+ * (`src/view.tsx`). `normal` is deliberately absent from this file: it
+ * carries no class and no rule, so the default rendering is exactly what
+ * it always was, the pane's own width. Obsidian gives this view the whole
+ * pane, so `wide` is the value that introduces a reading column rather
+ * than removing one, and `full` only widens the gutters.
+ */
+
+.mk-obsidian-preview--wide .doc {
+  max-width: 64rem;
+  margin-inline: auto;
+}
+
+.mk-obsidian-preview--full .doc {
+  max-width: none;
+  padding-inline: 1rem;
+}
