@@ -61,4 +61,9 @@ describe('mirrorReadme', () => {
     expect(readme).toContain('webview.js');
     expect(readme).toContain('esbuild-wasm');
   });
+
+  it('points the BRAT pack-compilation workaround at esbuild-wasm.zip', () => {
+    const readme = mirrorReadme('0.2.0');
+    expect(readme).toContain('esbuild-wasm.zip');
+  });
 });

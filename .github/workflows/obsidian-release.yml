@@ -12,17 +12,23 @@
 #   2. Run apps/obsidian/scripts/build-release.ts, which gates the release on
 #      the tag matching apps/obsidian/manifest.json and package.json (see the
 #      "Assemble the release" step for why), then writes the installable
-#      plugin folder and a source snapshot for the mirror.
-#   3. Zip the plugin folder.
+#      plugin folder, a staged copy of the esbuild-wasm compiler runtime, and
+#      a source snapshot for the mirror.
+#   3. Zip the plugin folder, and separately zip the staged esbuild-wasm
+#      runtime as its own release asset (issue #25 variant A). The plugin
+#      never downloads this runtime itself; this workflow is the only place
+#      that attaches it.
 #   4. Force-push the source snapshot to the mirror's main branch as a fresh,
 #      single-commit snapshot (no history stitching: the mirror is generated
 #      output, not a fork).
-#   5. Create the release on the MIRROR repo and attach the zip plus the
-#      loose manifest.json / main.js / styles.css, which now constitute a
-#      working BRAT install on their own: the Run path's worker bundle and
-#      its Lua wasm glue are embedded in main.js (issue #13 step 2), so BRAT
-#      needs nothing beyond these three files. See that step for the one
-#      caveat that install still carries.
+#   5. Create the release on the MIRROR repo and attach the plugin zip, the
+#      esbuild-wasm.zip runtime asset, and the loose manifest.json / main.js
+#      / styles.css, which now constitute a working BRAT install on their
+#      own: the Run path's worker bundle and its Lua wasm glue are embedded
+#      in main.js (issue #13 step 2), so BRAT needs nothing beyond these
+#      three files. See that step for the one caveat that install still
+#      carries, and esbuild-wasm.zip for how a BRAT install adds pack
+#      compilation without a full reinstall.
 #
 # Prerequisites:
 #   - The mirror repo markii-org/markii-obsidian exists (already created,
@@ -122,6 +128,14 @@ jobs:
           # straight into <vault>/.obsidian/plugins/.
           zip -qr "../markii-${VERSION}.zip" markii -X
 
+      - name: Zip the esbuild-wasm runtime
+        run: |
+          set -euo pipefail
+          cd release-stage/runtime
+          # Zipped with the top-level esbuild-wasm/ folder intact so it
+          # extracts straight next to main.js in a plugin folder.
+          zip -qr "../esbuild-wasm.zip" esbuild-wasm -X
+
       - name: Check OBSIDIAN_MIRROR_TOKEN is set
         run: |
           set -euo pipefail
@@ -170,9 +184,9 @@ jobs:
             echo
             echo "Download markii-${VERSION}.zip below and extract it into" \
               "<vault>/.obsidian/plugins/, then enable the plugin in Obsidian's" \
-              "Community plugins settings. This is the only route that" \
-              "includes the esbuild-wasm runtime component packs need to" \
-              "compile from source."
+              "Community plugins settings. This route already includes the" \
+              "esbuild-wasm runtime component packs need to compile from" \
+              "source."
             echo
             echo "### BRAT"
             echo
@@ -181,8 +195,15 @@ jobs:
               "manifest.json, main.js, and styles.css below and keeps them" \
               "updated. Note scripts and every built-in component work; a" \
               "component pack that ships source rather than a prebuilt" \
-              "webview.js cannot be compiled this way, so use the zip if" \
-              "you plan to install one of those."
+              "webview.js cannot be compiled this way, so grab" \
+              "esbuild-wasm.zip below if you plan to install one of those."
+            echo
+            echo "### Adding pack compilation to a BRAT install"
+            echo
+            echo "Download esbuild-wasm.zip below and extract it next to" \
+              "main.js in your plugin folder. That enables compiling" \
+              "component packs that ship source instead of a prebuilt" \
+              "webview.js."
             echo
             echo "## Issues"
             echo
@@ -196,9 +217,12 @@ jobs:
       # directly from a release. They are a complete install on their own
       # now that the Run path's worker bundle and Lua wasm are embedded in
       # main.js (issue #13 step 2); the one caveat is that compiling a
-      # component pack from source needs the esbuild-wasm runtime, which
-      # only the zip carries (apps/obsidian/src/packs/pack-compilation.ts
-      # degrades that cleanly rather than failing outright).
+      # component pack from source needs the esbuild-wasm runtime. The
+      # plugin zip already includes it, and esbuild-wasm.zip attaches it
+      # separately so a BRAT install (or anyone else on the loose files) can
+      # add it without a full reinstall
+      # (apps/obsidian/src/packs/pack-compilation.ts degrades its absence
+      # cleanly rather than failing outright).
       - name: Create or update the release on the mirror
         env:
           GH_TOKEN: ${{ secrets.OBSIDIAN_MIRROR_TOKEN }}
@@ -206,6 +230,7 @@ jobs:
         run: |
           set -euo pipefail
           ZIP="release-stage/markii-${VERSION}.zip"
+          RUNTIME_ZIP="release-stage/esbuild-wasm.zip"
           MANIFEST="release-stage/plugin/markii/manifest.json"
           MAIN_JS="release-stage/plugin/markii/main.js"
           STYLES="release-stage/plugin/markii/styles.css"
@@ -213,9 +238,9 @@ jobs:
             gh release edit "$VERSION" --repo markii-org/markii-obsidian \
               --title "$VERSION" --notes-file RELEASE_NOTES.md
             gh release upload "$VERSION" --repo markii-org/markii-obsidian \
-              "$ZIP" "$MANIFEST" "$MAIN_JS" "$STYLES" --clobber
+              "$ZIP" "$RUNTIME_ZIP" "$MANIFEST" "$MAIN_JS" "$STYLES" --clobber
           else
             gh release create "$VERSION" --repo markii-org/markii-obsidian \
               --title "$VERSION" --notes-file RELEASE_NOTES.md \
-              "$ZIP" "$MANIFEST" "$MAIN_JS" "$STYLES"
+              "$ZIP" "$RUNTIME_ZIP" "$MANIFEST" "$MAIN_JS" "$STYLES"
           fi
