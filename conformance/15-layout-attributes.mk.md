@@ -1,3 +1,7 @@
+:::chart{width=fit}
+A chart shrunk to its own content.
+:::
+
 :::chart{width=narrow}
 A narrow chart.
 :::

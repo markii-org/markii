@@ -1,7 +1,7 @@
 import type { HtmlComponent } from '../registry.js';
 
 /**
- * The closed set of layout-wrapper container names (docs/format.md): six
+ * The closed set of layout-wrapper container names (docs/format.md):
  * aliases of the one shared implementation below (`createLayoutWrapper`),
  * matching `@markii/react`'s `layout-wrapper.tsx`. There is deliberately no
  * `normal` alias (the default needs no wrapper at all) and no
@@ -14,15 +14,16 @@ export const LAYOUT_WRAPPER_PRESETS = [
   'wide',
   'narrow',
   'full',
+  'fit',
 ] as const;
 
-/** One of the six closed layout-wrapper preset names. */
+/** One of the closed layout-wrapper preset names. */
 export type LayoutWrapperPreset = (typeof LAYOUT_WRAPPER_PRESETS)[number];
 
 /**
  * Preset -> class string. Null-prototype, mirroring `layout.ts`'s
  * `WIDTH_CLASSES`/`ALIGN_CLASSES`. `center`/`left`/`right` reuse the
- * existing `mk-align-*` classes; `wide`/`narrow`/`full` reuse the existing
+ * existing `mk-align-*` classes; `wide`/`narrow`/`full`/`fit` reuse the existing
  * `mk-width-*` classes. `mk-layout` is the one class every preset adds on
  * top. Matches `@markii/react`'s `WRAPPER_CLASSES` byte-for-byte.
  */
@@ -35,13 +36,14 @@ const WRAPPER_CLASSES: Record<string, string> = Object.assign(
     wide: 'mk-layout mk-width-wide',
     narrow: 'mk-layout mk-width-narrow',
     full: 'mk-layout mk-width-full',
+    fit: 'mk-layout mk-width-fit',
   } satisfies Record<LayoutWrapperPreset, string>,
 );
 
 /**
- * Creates the registry component for one of docs/format.md's six layout-
+ * Creates the registry component for one of docs/format.md's layout-
  * wrapper container names — `:::center`, `:::left`, `:::right`, `:::wide`,
- * `:::narrow`, `:::full`. One shared implementation, bound to `preset` at
+ * `:::narrow`, `:::full`, and `:::fit`. One shared implementation, bound to `preset` at
  * registration time, matching `@markii/react`'s `createLayoutWrapper`.
  *
  * Deliberately never reads `attributes`: docs/format.md gives these

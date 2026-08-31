@@ -15,6 +15,7 @@ const EXPECTED_CLASSES: Record<LayoutWrapperPreset, string> = {
   wide: 'mk-layout mk-width-wide',
   narrow: 'mk-layout mk-width-narrow',
   full: 'mk-layout mk-width-full',
+  fit: 'mk-layout mk-width-fit',
 };
 
 describe('createLayoutWrapper', () => {

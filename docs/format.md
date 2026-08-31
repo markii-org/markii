@@ -200,19 +200,35 @@ is how they stay consistent as themes and component sets evolve.
 Any block directive can carry the two reserved attributes:
 
 ```
-:::chart{width=wide}       narrow | normal | wide | full
-::figure{width=narrow align=center}    left | center | right
+:::chart{width=wide}       fit | narrow | normal | wide | full
+::figure{width=fit align=right}        left | center | right
 ```
 
-An invalid value is ignored as if it were absent; nothing errors. Alignment
-only has a visible effect when the block is narrower than the column; a
-full-width block has nothing to align. Inline directives ignore both
-attributes entirely.
+`width` runs narrowest to widest: `fit`, `narrow`, `normal`, `wide`, `full`.
+`normal` is the default and the same as leaving `width` off. Every preset
+except `fit` caps how wide the block may grow; `fit` shrinks the block to
+the width of its own content instead.
+
+`align` places the block within the column, so it only shows on a block
+that is narrower than the column; a full-width block has nothing to align.
+That is why it pairs naturally with a width:
+
+```
+::chart{width=fit align=right}
+```
+
+hugs its content and sits against the right edge. `align` moves the box,
+never its contents. To align the text inside a full-width block, wrap the
+content in an alignment wrapper, or use the component's own attribute when
+it offers one, the way the divider's `label-align` places its label.
+
+An invalid value is ignored as if it were absent; nothing errors. Inline
+directives ignore both attributes entirely.
 
 ### Layout wrappers for plain markdown
 
 Ordinary markdown has nowhere to write attributes: a table or an image has no
-`{...}`. Six wrapper containers carry the same presets to any content:
+`{...}`. Seven wrapper containers carry the same presets to any content:
 
 ```
 :::center
@@ -222,13 +238,16 @@ Ordinary markdown has nowhere to write attributes: a table or an image has no
 :::
 ```
 
-The six names are `:::center`, `:::right`, `:::left`, `:::wide`,
-`:::narrow`, and `:::full`. Each applies its preset to everything in its
+The seven names are `:::center`, `:::right`, `:::left`, `:::wide`,
+`:::narrow`, `:::fit`, and `:::full`. Each applies its preset to everything in its
 scope. The alignment wrappers also align text lines, and place any block
 that is narrower than the column, which tables and images naturally are.
 `:::left` matches the default, so it is rarely written on its own; it
 exists to opt one scope back out of an alignment inherited from a
-surrounding container, such as one cell of a centered row. There is no
+surrounding container, such as one cell of a centered row. `:::fit` shrinks its
+contents to their own width, which is how a table or an image narrower than
+the column gets sized when there is no `{...}` to carry the attribute; nest
+it inside a `::::right` to place the result. There is no
 `:::normal`, because the width default needs no wrapper. In a plain
 viewer, a wrapper is just two extra fence lines around readable markdown.
 

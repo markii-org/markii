@@ -46,7 +46,7 @@ describe('STANDARD_COMPONENTS', () => {
     }
   });
 
-  it('seeds exactly the twenty-one components that exist in @markii/react today', () => {
+  it('seeds exactly the twenty-two components that exist in @markii/react today', () => {
     expect(Object.keys(STANDARD_COMPONENTS).sort()).toEqual([
       'badge',
       'callout',
@@ -57,6 +57,7 @@ describe('STANDARD_COMPONENTS', () => {
       'details',
       'divider',
       'figure',
+      'fit',
       'full',
       'kbd',
       'left',

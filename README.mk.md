@@ -70,7 +70,7 @@ inside use three. Bigger fence, bigger box.
 ## Layout without CSS
 
 Plain markdown can be placed too. Wrap anything in `:::center`,
-`:::right`, `:::narrow`, `:::wide`, or `:::full`:
+`:::right`, `:::fit`, `:::narrow`, `:::wide`, or `:::full`:
 
 :::center
 | build  | status  |

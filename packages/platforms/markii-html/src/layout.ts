@@ -28,8 +28,8 @@ const NORMAL_WIDTH = 'normal';
  * hostile value like `__proto__` or `constructor` cannot resolve through
  * the prototype chain to an inherited `Object.prototype` member; it simply
  * misses the lookup, same as any other unrecognized value. `doc.css`
- * (shared with `@markii/react`) defines `.mk-width-narrow`/
- * `.mk-width-wide`/`.mk-width-full` to match.
+ * (shared with `@markii/react`) defines `.mk-width-fit`/
+ * `.mk-width-narrow`/`.mk-width-wide`/`.mk-width-full` to match.
  */
 const WIDTH_CLASSES: Record<string, string> = Object.assign(
   Object.create(null) as Record<string, string>,

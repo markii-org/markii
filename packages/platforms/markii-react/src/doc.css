@@ -779,6 +779,19 @@
   max-width: 100%;
 }
 
+/*
+ * "fit" is the one preset that sets `width` rather than only capping it: it
+ * shrinks the block to its own content instead of filling the column, and
+ * `max-width` keeps that from overflowing when the content is wider than
+ * the column. Because the box is now narrower than its container, the
+ * `mk-align-*` auto margins below finally have room to work, which is what
+ * makes `{width=fit align=right}` hug the content AND sit right.
+ */
+.mk-width-fit {
+  width: fit-content;
+  max-width: 100%;
+}
+
 .mk-align-left {
   margin-inline-end: auto;
 }
@@ -792,8 +805,8 @@
 }
 
 /*
- * The five `:::center`/`:::right`/`:::wide`/`:::narrow`/`:::full` layout
- * wrappers (docs/format.md, `layout-wrapper.tsx`) reuse the `mk-width-*`/
+ * The `:::center`/`:::left`/`:::right`/`:::wide`/`:::narrow`/`:::full`/`:::fit`
+ * layout wrappers (docs/format.md, `layout-wrapper.tsx`) reuse the `mk-width-*`/
  * `mk-align-*` classes above and add `mk-layout` on top for the rules below,
  * which only make sense on a container that has its OWN plain-markdown
  * children (a table, an image, a paragraph) rather than on the bare

@@ -13,8 +13,15 @@ describe('LAYOUT_ATTRIBUTE_KEYS', () => {
 });
 
 describe('WIDTH_PRESETS', () => {
-  it('is normal, narrow, wide, full', () => {
-    expect(WIDTH_PRESETS).toEqual(['normal', 'narrow', 'wide', 'full']);
+  it('reads narrowest to widest: fit, narrow, normal, wide, full', () => {
+    expect(WIDTH_PRESETS).toEqual(['fit', 'narrow', 'normal', 'wide', 'full']);
+  });
+
+  it('keeps normal as the one preset that maps to no class', () => {
+    // Both renderers derive their class map by filtering `normal` out of
+    // this list, so a rename or a second classless preset would silently
+    // change what `mk-width-*` classes exist.
+    expect(WIDTH_PRESETS).toContain('normal');
   });
 });
 

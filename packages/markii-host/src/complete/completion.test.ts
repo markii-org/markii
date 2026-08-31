@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PackComponentEntry } from '@markii/pack';
+import { WIDTH_PRESETS } from '@markii/stdlib';
 import { buildComponentCatalog } from '../insert/component-catalog.js';
 import type { DiscoveredPack } from '../packs/discover.js';
 import { completionAt, hoverAt } from './completion.js';
@@ -214,7 +215,29 @@ describe('completionAt — attribute-value context', () => {
   it('offers the width preset enum on a block form', () => {
     const ctx = completionAt('::callout{width=', 16, STANDARD_CATALOG);
     expect(ctx.kind).toBe('attribute-value');
-    expect(labels(ctx.items)).toEqual(['full', 'narrow', 'normal', 'wide']);
+    expect(labels(ctx.items)).toEqual([
+      'fit',
+      'full',
+      'narrow',
+      'normal',
+      'wide',
+    ]);
+  });
+
+  it('offers fit among the width presets, in the preset list order', () => {
+    // The value items come straight off `@markii/stdlib`'s `WIDTH_PRESETS`,
+    // so a preset added there has to show up here with no completion change
+    // of its own. `labels` sorts; this checks the offered ORDER too.
+    const ctx = completionAt('::callout{width=', 16, STANDARD_CATALOG);
+    expect(ctx.items.map((item) => item.label)).toEqual([...WIDTH_PRESETS]);
+    expect(labels(ctx.items)).toContain('fit');
+  });
+
+  it('completes fit as a width value the same way any other preset completes', () => {
+    const ctx = completionAt('::callout{width=f', 17, STANDARD_CATALOG);
+    const item = ctx.items.find((entry) => entry.label === 'fit');
+    expect(item?.insertText).toBe('fit');
+    expect(item?.kind).toBe('value');
   });
 
   it('returns none (not an empty attribute-value context) when the attribute has no enum', () => {

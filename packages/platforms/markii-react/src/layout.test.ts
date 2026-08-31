@@ -9,6 +9,7 @@ describe('LAYOUT_ATTRIBUTE_KEYS', () => {
 
 describe('resolveLayoutAttributes — width', () => {
   it.each([
+    ['fit', 'mk-width-fit'],
     ['narrow', 'mk-width-narrow'],
     ['wide', 'mk-width-wide'],
     ['full', 'mk-width-full'],
@@ -132,5 +133,27 @@ describe('resolveLayoutAttributes — combined / prototype safety / never throws
   it('never throws for an empty attributes object', () => {
     expect(() => resolveLayoutAttributes({})).not.toThrow();
     expect(resolveLayoutAttributes({})).toEqual({ attributes: {} });
+  });
+});
+
+describe('resolveLayoutAttributes — width=fit with an alignment', () => {
+  // The pairing the preset exists for: `fit` shrinks the box to its content,
+  // which is what finally gives `mk-align-*`'s auto margins room to place it.
+  it.each([
+    ['left', 'mk-width-fit mk-align-left'],
+    ['center', 'mk-width-fit mk-align-center'],
+    ['right', 'mk-width-fit mk-align-right'],
+  ])('combines width=fit with align=%s as "%s"', (align, expectedClass) => {
+    const result = resolveLayoutAttributes({ width: 'fit', align });
+    expect(result.className).toBe(expectedClass);
+    expect(result.attributes).toEqual({});
+  });
+
+  it('keeps a hostile align from reaching the class list even alongside width=fit', () => {
+    const result = resolveLayoutAttributes({
+      width: 'fit',
+      align: 'right;color:red',
+    });
+    expect(result.className).toBe('mk-width-fit');
   });
 });

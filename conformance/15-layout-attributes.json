@@ -2,6 +2,24 @@
   "children": [
     {
       "attributes": {
+        "width": "fit"
+      },
+      "children": [
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": "A chart shrunk to its own content."
+            }
+          ],
+          "type": "paragraph"
+        }
+      ],
+      "name": "chart",
+      "type": "containerDirective"
+    },
+    {
+      "attributes": {
         "width": "narrow"
       },
       "children": [

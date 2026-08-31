@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { STANDARD_COMPONENTS } from '@markii/stdlib';
+import {
+  ALIGN_PRESETS,
+  STANDARD_COMPONENTS,
+  WIDTH_PRESETS,
+} from '@markii/stdlib';
 import type { PackComponentEntry } from '@markii/pack';
 import {
   LAYOUT_WRAPPER_NAMES,
@@ -239,8 +243,8 @@ describe('buildComponentCatalog', () => {
 });
 
 describe('LAYOUT_WRAPPER_NAMES', () => {
-  it('names exactly six wrappers, each a real container-kind, attribute-free standard component', () => {
-    expect(LAYOUT_WRAPPER_NAMES).toHaveLength(6);
+  it('names exactly seven wrappers, each a real container-kind, attribute-free standard component', () => {
+    expect(LAYOUT_WRAPPER_NAMES).toHaveLength(7);
     for (const name of LAYOUT_WRAPPER_NAMES) {
       const contract = STANDARD_COMPONENTS[name];
       expect(
@@ -250,6 +254,18 @@ describe('LAYOUT_WRAPPER_NAMES', () => {
       expect(contract?.kind).toBe('container');
       expect(Object.keys(contract?.attributes ?? {})).toEqual([]);
     }
+  });
+
+  it('names one wrapper per align preset and per non-default width preset', () => {
+    // The wrappers exist so a layout preset can reach plain markdown that
+    // has no `{...}` to write `width=`/`align=` into, so a preset without a
+    // wrapper is a hole in that story. `normal` is deliberately absent: the
+    // default needs no wrapper at all.
+    const expected = [
+      ...ALIGN_PRESETS,
+      ...WIDTH_PRESETS.filter((preset) => preset !== 'normal'),
+    ].sort();
+    expect([...LAYOUT_WRAPPER_NAMES].sort()).toEqual(expected);
   });
 });
 

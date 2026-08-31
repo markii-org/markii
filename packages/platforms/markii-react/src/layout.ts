@@ -30,7 +30,8 @@ const NORMAL_WIDTH = 'normal';
  * it simply misses the lookup, same as any other unrecognized value
  * (matches the same defensive pattern `@markii/core`'s
  * `URL_ATTRIBUTE_BY_TAG` uses in `to-hast.ts`). `doc.css` defines
- * `.mk-width-narrow`/`.mk-width-wide`/`.mk-width-full` to match.
+ * `.mk-width-fit`/`.mk-width-narrow`/`.mk-width-wide`/`.mk-width-full` to
+ * match.
  */
 const WIDTH_CLASSES: Record<string, string> = Object.assign(
   Object.create(null) as Record<string, string>,

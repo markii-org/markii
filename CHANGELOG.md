@@ -52,6 +52,21 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
   renderers emit the same `mk-divider--label-left` / `mk-divider--label-right`
   modifier class, and only for the non-default values, so `doc.css` still
   covers both.
+- **A `fit` width preset** (`@markii/stdlib`, `@markii/react`, `@markii/html`).
+  `width=fit` shrinks a block to its own content instead of filling the
+  column, and the matching `:::fit` wrapper does the same for plain markdown
+  that has no attributes to write on. The width scale now reads `fit`,
+  `narrow`, `normal`, `wide`, `full`, and `WIDTH_PRESETS` is listed in that
+  order, which is also the order a completion popup offers the values in.
+  Pairing it with an alignment is the point: `{width=fit align=right}` hugs
+  the content and sits right, because a box narrower than its container is
+  what gives the alignment margins room to work. Both renderers pick up
+  `mk-width-fit` from the shared preset list with no class map of their own
+  to edit, and `doc.css` carries the one new rule.
+- **Reworded the reserved `align` attribute's documentation**
+  (`@markii/stdlib`). Completion and hover now say that `align` places the
+  block when it is narrower than the page, and that it should be paired with
+  a `width`. The behavior is unchanged.
 - **Inserting a container inside a container lengthens the enclosing fences**
   (VS Code extension, Obsidian plugin). Nesting needs the outer fence pair
   to carry more colons than the inner one, which until now the author had

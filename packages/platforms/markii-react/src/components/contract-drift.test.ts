@@ -85,9 +85,9 @@ function extractMatches(source: string, pattern: RegExp): Set<string> {
  * `attributes`, not on `tab.tsx`'s own `attributes` prop (which `tab.tsx`
  * never even destructures).
  *
- * The six layout wrappers (`center`/`left`/`right`/`wide`/`narrow`/`full`)
+ * The layout wrappers (`center`/`left`/`right`/`wide`/`narrow`/`full`/`fit`)
  * all share `layout-wrapper.tsx`, which never reads `attributes` at all —
- * scanning it for all six is expected to yield the empty set every time.
+ * scanning it for every one of them is expected to yield the empty set.
  * `tabs`, `cell`, and `kbd` likewise read no attributes of their own.
  */
 interface AttributeReadSpec {
@@ -119,6 +119,7 @@ const ATTRIBUTE_READ_SOURCES: Record<string, AttributeReadSpec> = {
   wide: { own: ['layout-wrapper.tsx'] },
   narrow: { own: ['layout-wrapper.tsx'] },
   full: { own: ['layout-wrapper.tsx'] },
+  fit: { own: ['layout-wrapper.tsx'] },
 };
 
 /** The set of attribute keys `name`'s implementation actually reads, per `ATTRIBUTE_READ_SOURCES`. */
@@ -180,7 +181,7 @@ describe('STANDARD_COMPONENTS vs defaultRegistry — coverage', () => {
     );
   });
 
-  it('covers exactly the 21 standard components (the 20 audited for issue #17 slice 2, plus divider)', () => {
+  it('covers exactly the 22 standard components (the 20 audited for issue #17 slice 2, plus divider and the fit layout wrapper)', () => {
     // Not a load-bearing count on its own — the two tests above already
     // prove the sets are equal both ways — but pins the number so a
     // component silently added to one side and removed from the other
@@ -189,7 +190,7 @@ describe('STANDARD_COMPONENTS vs defaultRegistry — coverage', () => {
     expect(Object.keys(defaultRegistry).sort()).toEqual(
       Object.keys(STANDARD_COMPONENTS).sort(),
     );
-    expect(Object.keys(defaultRegistry)).toHaveLength(21);
+    expect(Object.keys(defaultRegistry)).toHaveLength(22);
   });
 });
 
@@ -255,7 +256,7 @@ describe('STANDARD_COMPONENTS vs component implementations — attribute-name dr
   // Components genuinely expected to read NO attributes: confirms the
   // empty result for these is deliberate (per ATTRIBUTE_READ_SOURCES'
   // comment), not a byproduct of the regex failing to match.
-  it('kbd, tabs, cell, and the six layout wrappers read no attributes', () => {
+  it('kbd, tabs, cell, and every layout wrapper read no attributes', () => {
     for (const name of [
       'kbd',
       'tabs',
@@ -266,6 +267,7 @@ describe('STANDARD_COMPONENTS vs component implementations — attribute-name dr
       'wide',
       'narrow',
       'full',
+      'fit',
     ]) {
       expect(actualAttributeReads(name), name).toEqual(new Set());
       expect(contractAttributeKeys(STANDARD_COMPONENTS[name]!), name).toEqual(

@@ -102,4 +102,8 @@ export const defaultHtmlRegistry: HtmlRegistry = createHtmlRegistry({
     component: createLayoutWrapper('full'),
     inline: inlineFromContract('full'),
   },
+  fit: {
+    component: createLayoutWrapper('fit'),
+    inline: inlineFromContract('fit'),
+  },
 });

@@ -105,4 +105,8 @@ export const defaultRegistry: Registry = {
     component: createLayoutWrapper('full'),
     inline: inlineFromContract('full'),
   },
+  fit: {
+    component: createLayoutWrapper('fit'),
+    inline: inlineFromContract('fit'),
+  },
 };

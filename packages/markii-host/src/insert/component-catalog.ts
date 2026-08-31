@@ -40,6 +40,7 @@ export const LAYOUT_WRAPPER_NAMES: readonly string[] = [
   'wide',
   'narrow',
   'full',
+  'fit',
 ];
 
 /** One component a picker can offer to insert. */

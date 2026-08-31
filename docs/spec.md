@@ -68,11 +68,12 @@ they are stripped and have no effect.
 Layout controls form a closed set. There is no freeform styling attribute
 and no arbitrary values; an invalid value degrades to the default silently.
 
-- `width`: `narrow | normal | wide | full`
+- `width`: `fit | narrow | normal | wide | full`; `fit` sizes the block to
+  its own content, every other preset caps its maximum width
 - `align`: `left | center | right`; visible only when the block is narrower
   than the column
 - wrapper containers `:::center`, `:::right`, `:::left`, `:::wide`,
-  `:::narrow`, `:::full`: apply the corresponding preset to their contents,
+  `:::narrow`, `:::fit`, `:::full`: apply the corresponding preset to their contents,
   including plain markdown; the alignment wrappers also set text alignment
   in scope
 - `:::row{cols=2|3|4}`: the one multi-cell container; equal-width cells,

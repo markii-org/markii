@@ -18,8 +18,20 @@ import type { AttributeSchema } from './contracts.js';
 /** The two attribute names docs/format.md reserves on every block directive. */
 export const LAYOUT_ATTRIBUTE_KEYS = ['width', 'align'] as const;
 
-/** The closed `width=` preset vocabulary (docs/format.md), in the order the docs list them. */
-export const WIDTH_PRESETS = ['normal', 'narrow', 'wide', 'full'] as const;
+/**
+ * The closed `width=` preset vocabulary (docs/format.md), listed narrowest
+ * to widest so the list reads as the scale it is: `fit` hugs the block's
+ * own content, `normal` is the default column width, and `full` fills the
+ * column. Order is user-visible: a completion popup offers the values in
+ * this order.
+ */
+export const WIDTH_PRESETS = [
+  'fit',
+  'narrow',
+  'normal',
+  'wide',
+  'full',
+] as const;
 
 /** The closed `align=` preset vocabulary (docs/format.md), in the order the docs list them. */
 export const ALIGN_PRESETS = ['left', 'center', 'right'] as const;
@@ -37,19 +49,21 @@ export const LAYOUT_ATTRIBUTES: Readonly<
     required: false,
     enum: WIDTH_PRESETS,
     description:
-      'Sets how wide the directive renders: `normal` (the default column ' +
-      'width), `narrow`, `wide`, or `full`. `normal` is the explicit ' +
-      'default and produces no class, the same as leaving `width` off ' +
-      'entirely. An invalid value is ignored as if absent; nothing errors.',
+      'Sets how wide the directive renders, from narrowest to widest: ' +
+      '`fit` shrinks the block to its own content, then `narrow`, ' +
+      '`normal` at the default column width, `wide`, and `full`. ' +
+      '`normal` is the explicit default and produces no class, the same ' +
+      'as leaving `width` off entirely. An invalid value is ignored as if ' +
+      'absent; nothing errors.',
   },
   align: {
     type: 'string',
     required: false,
     enum: ALIGN_PRESETS,
     description:
-      'Sets how the directive is aligned within the column: `left`, ' +
-      '`center`, or `right`. Only has a visible effect when the block is ' +
-      'narrower than the column; a full-width block has nothing to align. ' +
-      'An invalid value is ignored as if absent; nothing errors.',
+      'Places the directive within the column: `left`, `center`, or ' +
+      '`right`. It only shows when the block is narrower than the page, ' +
+      'so pair it with a `width` such as `fit` or `narrow`. An invalid ' +
+      'value is ignored as if absent; nothing errors.',
   },
 };

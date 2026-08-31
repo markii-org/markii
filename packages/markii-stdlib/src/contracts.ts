@@ -51,17 +51,18 @@ export interface ComponentContract {
 }
 
 /**
- * Builds one of docs/format.md's five layout-wrapper container contracts —
- * `center`/`right`/`wide`/`narrow`/`full` — which are otherwise identical in
+ * Builds one of docs/format.md's layout-wrapper container contracts,
+ * `center`/`left`/`right`/`wide`/`narrow`/`full`/`fit`, which are otherwise identical in
  * shape (`kind: 'container'`, no attributes) and differ only in `name` and
- * the preset-specific half of `description`. A tiny helper rather than five
- * hand-copied literals, since a typo in one copy's `kind`/`attributes` would
- * otherwise be easy to miss across five near-duplicate blocks.
+ * the preset-specific half of `description`. A tiny helper rather than one
+ * hand-copied literal per preset, since a typo in one copy's
+ * `kind`/`attributes` would otherwise be easy to miss across a run of
+ * near-duplicate blocks.
  *
  * `whatItDoes` is the preset-specific clause (e.g. "Centers narrower-than-
  * column plain markdown..."); the shared clause about why these exist (the
  * attribute mechanism cannot reach plain markdown) and about composing with
- * a nested wrapper is appended identically for all five.
+ * a nested wrapper is appended identically for all of them.
  */
 function layoutWrapperContract(
   name: string,
@@ -72,7 +73,7 @@ function layoutWrapperContract(
     kind: 'container',
     attributes: {},
     description:
-      `${whatItDoes} Takes no attributes — docs/format.md gives these five ` +
+      `${whatItDoes} Takes no attributes — docs/format.md gives these ` +
       'wrapper names a closed, attribute-free form; unlike a `width`/`align` ' +
       'attribute on a directive, a wrapper also reaches plain markdown a ' +
       'directive attribute mechanism structurally cannot (a GFM table or a ' +
@@ -387,6 +388,10 @@ export const STANDARD_COMPONENTS: Record<string, ComponentContract> = {
   full: layoutWrapperContract(
     'full',
     "Sizes its scope's content to the full available document-column width, e.g. `:::full ... :::`.",
+  ),
+  fit: layoutWrapperContract(
+    'fit',
+    'Shrinks its scope to the width of its own content rather than filling the column, e.g. `:::fit ... :::`. Pair it with an alignment wrapper to place the result, as in `::::right :::fit ... ::: ::::`.',
   ),
 };
 
