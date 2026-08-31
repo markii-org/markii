@@ -123,6 +123,23 @@ export function createChoiceSettlement<T>(
 }
 
 /**
+ * Case-insensitive substring match on `label`, shared by every suggestion
+ * picker this workspace builds (`./complete-component.ts`'s completion
+ * popup reuses this exact behavior for its own row shape rather than
+ * re-implementing it). An empty query matches everything.
+ */
+export function filterSuggestionsByLabel<T extends { readonly label: string }>(
+  suggestions: readonly T[],
+  query: string,
+): readonly T[] {
+  const needle = query.trim().toLowerCase();
+  if (needle.length === 0) return suggestions;
+  return suggestions.filter((suggestion) =>
+    suggestion.label.toLowerCase().includes(needle),
+  );
+}
+
+/**
  * Filters suggestions by `query` against the directive name only (matching
  * `./insert-modals.ts`'s `SuggestModal.getSuggestions` role) — case
  * insensitive substring match. An empty query matches everything.
@@ -131,9 +148,5 @@ export function filterInsertComponentSuggestions(
   suggestions: readonly InsertComponentSuggestion[],
   query: string,
 ): readonly InsertComponentSuggestion[] {
-  const needle = query.trim().toLowerCase();
-  if (needle.length === 0) return suggestions;
-  return suggestions.filter((suggestion) =>
-    suggestion.label.toLowerCase().includes(needle),
-  );
+  return filterSuggestionsByLabel(suggestions, query);
 }

@@ -120,6 +120,34 @@ describe('buildComponentCatalog', () => {
     expect(entry?.kind).toBe('container');
   });
 
+  it('marks kindDeclared false for a pack component with no declared kind', () => {
+    const catalog = buildComponentCatalog([
+      pack('cat', { card: { source: './Card.tsx' } }),
+    ]);
+    const entry = catalog.find((e) => e.directiveName === 'cat_card');
+    expect(entry?.kindDeclared).toBe(false);
+  });
+
+  it('marks kindDeclared true for a pack component whose manifest declares kind', () => {
+    const catalog = buildComponentCatalog([
+      pack('cat', {
+        profile: {
+          source: './Profile.tsx',
+          kind: 'leaf',
+        },
+      }),
+    ]);
+    const entry = catalog.find((e) => e.directiveName === 'cat_profile');
+    expect(entry?.kindDeclared).toBe(true);
+  });
+
+  it('marks kindDeclared true for every standard component', () => {
+    const catalog = buildComponentCatalog([]);
+    for (const entry of catalog.filter((e) => e.source === 'standard')) {
+      expect(entry.kindDeclared).toBe(true);
+    }
+  });
+
   it("sorts a pack's own local names alphabetically", () => {
     const catalog = buildComponentCatalog([
       pack('cat', { zeta: './Z.tsx', alpha: './A.tsx' }),

@@ -221,10 +221,21 @@ importance:
 ## Editor support
 
 Editor tooling is application territory. A directive-aware language server
-was considered and deliberately deferred; syntax highlighting for directives
-and fence-meta plus a rendered preview cover most of the value, and that is
-the shape of the planned VS Code extension: a webview preview embedding the
-reference renderer, plus a grammar for highlighting.
+was considered and deliberately deferred. What the two hosts carry instead
+is a small, shared authoring layer: a rendered preview, a grammar for
+highlighting (VS Code), an Insert Component command, and directive
+completion with hover documentation.
+
+Completion and hover are note-authoring features, so both hosts carry them,
+the same way both carry Insert Component. A host implements them against
+`@markii/host`'s `completionAt` and `hoverAt`, which read the line around
+the cursor and return the items and the range to replace. A host never
+re-derives directive parsing of its own. The items come from the component
+catalog (the standard set plus installed packs), the attribute contracts in
+`@markii/stdlib`, and the layout preset lists the same package exports
+(`WIDTH_PRESETS`, `ALIGN_PRESETS`, `LAYOUT_ATTRIBUTES`). Those preset
+exports are also the one source both renderers build their layout class
+maps from.
 
 ## Where frameworks live
 

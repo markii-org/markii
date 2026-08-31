@@ -289,6 +289,21 @@ than parsing them. This is deliberate: directives are the extension
 mechanism, and layout is a directive concern, never a raw `<div>`. Dropping
 HTML also removes a whole class of injection problems before they start.
 
+That includes `<br>`. For a line break inside a paragraph, use a markdown
+hard break, which works the same inside a component as in plain text. End
+the line with a backslash:
+
+```
+first line\
+second line
+```
+
+Two trailing spaces also work, but many editors delete trailing whitespace
+on save, so the backslash is the form to rely on. Space between blocks is
+not something a document asks for: the document stylesheet owns vertical
+rhythm, and two components that sit too close together is a stylesheet bug
+to report, not a gap to pad.
+
 ## Frontmatter and links
 
 A document may open with optional YAML frontmatter for metadata. The

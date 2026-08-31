@@ -33,8 +33,10 @@ import {
   createNetProvider,
   offsetToLineColumn,
 } from '@markii/host';
+import type { InsertableComponent } from '@markii/host';
 import { discoverConfiguredPacks } from './packs/discover-configured-packs.js';
 import { pickInsertableComponent } from './insert-modals.js';
+import { MarkiiCompletionSuggest } from './complete-suggest.js';
 
 /**
  * Imports `obsidian` — deliberately NOT unit-tested (Vitest cannot resolve
@@ -79,11 +81,30 @@ export default class MarkiiPlugin extends Plugin {
    */
   browserWorker: BrowserWorkerSetup | undefined;
 
+  /**
+   * The directive-autocompletion catalog (GitHub issue #27, slice 3): every
+   * standard component plus every configured pack's components, the same
+   * pairing `insertComponent` below builds fresh on each invocation. This
+   * copy is held on the plugin instance and refreshed by
+   * `refreshCompletionCatalog` (on load, and again from `savePackSettings`)
+   * rather than rebuilt per keystroke, since `MarkiiCompletionSuggest`'s
+   * `onTrigger` runs on every keypress in a `.mk.md` note and cannot afford
+   * a pack-discovery filesystem walk each time. Starts empty so the
+   * suggester has a well-formed, if temporarily incomplete, catalog before
+   * the first async refresh settles.
+   */
+  private completionCatalog: readonly InsertableComponent[] = [];
+
   override async onload(): Promise<void> {
     await this.loadSettings();
     this.loadLocalSettings();
     this.loadPackSettings();
     this.browserWorker = this.createBrowserWorker();
+    // Not awaited: pack discovery touches the filesystem, and the
+    // completion catalog is allowed to arrive a moment after the note does
+    // (`onTrigger` simply sees an empty/standard-only catalog until then)
+    // rather than blocking activation on it.
+    void this.refreshCompletionCatalog();
 
     this.registerView(
       MARKII_PREVIEW_VIEW_TYPE,
@@ -135,6 +156,10 @@ export default class MarkiiPlugin extends Plugin {
         return true;
       },
     });
+
+    this.registerEditorSuggest(
+      new MarkiiCompletionSuggest(this.app, () => this.completionCatalog),
+    );
 
     this.addCommand({
       id: 'show-markii-diagnostics',
@@ -247,6 +272,32 @@ export default class MarkiiPlugin extends Plugin {
         ? { line: insertPosition.line, ch: insertPosition.ch + cursor.column }
         : { line: insertPosition.line + cursor.line, ch: cursor.column };
     editor.setCursor(cursorPosition);
+  }
+
+  /**
+   * Rebuilds `completionCatalog` from every configured pack plus the
+   * standard set, the same discovery + catalog pairing `insertComponent`
+   * uses. Called from `onload` and again from `savePackSettings`, so
+   * adding or removing a pack folder updates what completes without a
+   * plugin reload.
+   *
+   * A pack-discovery failure never leaves the catalog stale with a broken
+   * promise: `discoverConfiguredPacks` already degrades quietly (a bad
+   * folder is simply skipped, never thrown), so a caught error here still
+   * falls back to the standard set alone, matching `insertComponent`'s
+   * posture exactly.
+   */
+  private async refreshCompletionCatalog(): Promise<void> {
+    let packs: Awaited<ReturnType<typeof discoverConfiguredPacks>> = [];
+    try {
+      packs = await discoverConfiguredPacks(
+        this.packSettings.packFolders,
+        this.vaultBasePath(),
+      );
+    } catch {
+      packs = [];
+    }
+    this.completionCatalog = buildComponentCatalog(packs);
   }
 
   /**
@@ -393,6 +444,11 @@ export default class MarkiiPlugin extends Plugin {
   savePackSettings(next: PackSettings): void {
     this.packSettings = next;
     this.app.saveLocalStorage(PACK_SETTINGS_STORAGE_KEY, next);
+    // Adding or removing a pack folder should update what autocompletes
+    // without requiring a plugin reload. Not awaited, for the same reason
+    // `onload`'s call isn't: this is a settings-tab action, not something
+    // that should block on a filesystem walk.
+    void this.refreshCompletionCatalog();
   }
 
   private async openPreview(): Promise<void> {

@@ -6,6 +6,29 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **`@markii/stdlib`: a neutral `layout.ts`** exporting the docs/format.md
+  layout system as data — `LAYOUT_ATTRIBUTE_KEYS` (`width`, `align`),
+  `WIDTH_PRESETS` (`normal`, `narrow`, `wide`, `full`), `ALIGN_PRESETS`
+  (`left`, `center`, `right`), and `LAYOUT_ATTRIBUTES`, the same two
+  attributes expressed as `AttributeSchema`s so a tool that documents or
+  completes attributes reads them exactly like a component's own. This is
+  the one source both renderers' `layout.ts` now build their class maps
+  from, replacing two independently hand-copied literals.
+
+### Changed
+
+- **`@markii/react` and `@markii/html`: the reserved layout-attribute keys
+  and preset values now come from `@markii/stdlib`** instead of a
+  hand-copied literal in each renderer's own `layout.ts`. Each renderer's
+  `width`/`align` class map is now derived mechanically from
+  `@markii/stdlib`'s preset lists (`mk-width-<preset>` for every width
+  preset but `normal`, `mk-align-<preset>` for every align preset). No
+  behavior change: the produced classes, the `normal`-is-classless rule,
+  and the null-prototype defense against a hostile value are exactly as
+  before.
+
 ## [0.8.1] - 2026-08-30
 
 ### Fixed

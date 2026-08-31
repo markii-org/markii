@@ -14,6 +14,7 @@ import { composeDirectiveName, packComponents } from '@markii/pack';
 import type { ComponentKind } from '@markii/stdlib';
 import { STANDARD_COMPONENTS } from '@markii/stdlib';
 import type { DiscoveredPack } from '../packs/discover.js';
+import { firstSentence } from './first-sentence.js';
 
 /**
  * The six layout-wrapper container directive names (docs/format.md):
@@ -63,27 +64,13 @@ export interface InsertableComponent {
   readonly description?: string;
   /** Required attribute names, in contract-declared order. Always empty for a pack component (see this module's top comment). */
   readonly requiredAttributes: readonly string[];
-}
-
-/**
- * Truncates `description` to its first sentence, for a picker row that has
- * no room for a contract's full prose.
- *
- * A sentence boundary is a period followed by a space AND an uppercase
- * letter, NOT merely ". ". Almost every contract description in
- * `@markii/stdlib` contains "e.g. " before its first real sentence break,
- * and a bare ". " split truncates 19 of the 20 standard components to a
- * row reading "A titled panel, e.g." — the example, which is the useful
- * half, cut off mid-phrase. The uppercase requirement steps over "e.g. `"
- * and "... :::`" alike, because neither is followed by a capital.
- *
- * When no such boundary exists the whole string is returned unchanged: a
- * description that is already one sentence is not worth mangling further.
- */
-function firstSentence(description: string): string {
-  const boundary = /\.\s+(?=[A-Z])/.exec(description);
-  if (boundary === null) return description;
-  return description.slice(0, boundary.index + 1);
+  /**
+   * True when `kind` came from the component's own declaration (every
+   * standard component, and a pack component whose manifest entry
+   * declares `kind`); false when `kind` is this catalog's `'container'`
+   * default for a pack component that declared none.
+   */
+  readonly kindDeclared: boolean;
 }
 
 /** Required attribute names off a contract's `attributes` map, in the map's own key order. */
@@ -117,6 +104,7 @@ function standardCatalogEntries(): InsertableComponent[] {
     group: LAYOUT_WRAPPER_NAME_SET.has(name) ? 'layout' : 'standard',
     description: firstSentence(contract.description),
     requiredAttributes: requiredAttributeNames(contract.attributes),
+    kindDeclared: true,
   }));
 }
 
@@ -159,6 +147,7 @@ function packCatalogEntries(
         ? { description: listing.description }
         : {}),
       requiredAttributes: [],
+      kindDeclared: listing.kind !== undefined,
     });
   }
 

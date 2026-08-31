@@ -76,6 +76,7 @@ const markiiSrcRoots = {
   ),
   '@markii/host': path.join(repoRoot, 'packages', 'markii-host', 'src'),
   '@markii/pack': path.join(repoRoot, 'packages', 'markii-pack', 'src'),
+  '@markii/stdlib': path.join(repoRoot, 'packages', 'markii-stdlib', 'src'),
 };
 
 /**

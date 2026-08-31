@@ -48,8 +48,10 @@ such as the insert picker. `kind` names the directive form the component
 renders as: `container` for `:::ana_timeline ... :::`, `leaf` for
 `::ana_timeline{}`, `inline` for `:ana_timeline[]`. A host assumes
 `container` when `kind` is absent, so a leaf or inline component should
-declare it. Both forms may mix in one manifest, and older string-only
-manifests are unaffected.
+declare it. Declaring it also narrows directive completion: a component with
+no `kind` is offered in all three directive forms, one with `kind` only in
+the form it renders as. Both forms may mix in one manifest, and older
+string-only manifests are unaffected.
 
 The failure posture matches the rest of the manifest: a bad `kind`, an
 empty `description`, or a missing `source` fails validation for the whole

@@ -21,6 +21,7 @@
     "@markii/pack": "*",
     "@markii/react": "*",
     "@markii/runtime": "*",
+    "@markii/stdlib": "*",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

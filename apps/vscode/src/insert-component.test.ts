@@ -21,6 +21,7 @@ function standard(
     group: 'standard',
     description: description ?? 'A thing.',
     requiredAttributes: [],
+    kindDeclared: true,
   };
 }
 
@@ -32,6 +33,7 @@ function layout(directiveName: string): InsertableComponent {
     group: 'layout',
     description: 'A layout wrapper.',
     requiredAttributes: [],
+    kindDeclared: true,
   };
 }
 
@@ -48,6 +50,10 @@ function fromPack(
     packName,
     description,
     requiredAttributes: [],
+    // A pack manifest listing may or may not declare `kind` per component
+    // (docs/packs.md); these fixtures model the common case, an entry with
+    // no declared kind, where the catalog falls back to `'container'`.
+    kindDeclared: false,
   };
 }
 

@@ -29,6 +29,15 @@ import { describe, expect, it } from 'vitest';
  * cannot exist without importing `obsidian`, and is untestable regardless
  * of which file it lives in — kept separate from `main.ts` for the same
  * reason `run-modals.ts` is kept separate from `view.tsx`.
+ *
+ * `complete-suggest.ts` was added to this allowlist deliberately when
+ * directive autocompletion landed (GitHub issue #27, slice 3): its
+ * `MarkiiCompletionSuggest` is a real Obsidian `EditorSuggest` subclass,
+ * which cannot exist without importing `obsidian`, and is untestable
+ * regardless of which file it lives in, for the same reason
+ * `insert-modals.ts` is. Every piece worth testing in isolation (the row
+ * shape, the query slice, the filter, the wording) lives in
+ * `./complete-component.ts`.
  */
 const ALLOWED_FILES = new Set([
   'main.ts',
@@ -36,6 +45,7 @@ const ALLOWED_FILES = new Set([
   'settings-tab.ts',
   'run-modals.ts',
   'insert-modals.ts',
+  'complete-suggest.ts',
 ]);
 
 const IMPORT_PATTERN =

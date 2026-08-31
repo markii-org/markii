@@ -1,3 +1,8 @@
+import {
+  ALIGN_PRESETS,
+  LAYOUT_ATTRIBUTE_KEYS,
+  WIDTH_PRESETS,
+} from '@markii/stdlib';
 import type { DirectiveAttributes } from './registry.js';
 
 /**
@@ -5,37 +10,48 @@ import type { DirectiveAttributes } from './registry.js';
  * non-freeform-CSS vocabulary any block directive can carry regardless of
  * which component renders it. These two keys are reserved: always intercepted
  * before a component sees its `attributes`, whether or not their value turns
- * out to be valid. This mirrors `@markii/react`'s `layout.ts` exactly, so the
- * two renderers strip and classify the same keys the same way.
+ * out to be valid. The key list and the two preset vocabularies now live in
+ * `@markii/stdlib`'s `layout.ts`, the one source both this module and
+ * `@markii/react`'s `layout.ts` build their class maps from, so the two
+ * renderers strip and classify the same keys the same way without a
+ * hand-copied literal in either.
  */
-export const LAYOUT_ATTRIBUTE_KEYS = ['width', 'align'] as const;
+export { LAYOUT_ATTRIBUTE_KEYS };
 
 /** `width=normal` is the explicit default: it maps to no class, same as an absent `width`. */
 const NORMAL_WIDTH = 'normal';
 
 /**
- * `width` value -> class. Null-prototype so a hostile value like `__proto__`
- * or `constructor` cannot resolve through the prototype chain to an inherited
- * `Object.prototype` member; it simply misses the lookup, same as any other
- * unrecognized value.
+ * `width` value -> class, derived mechanically from `@markii/stdlib`'s
+ * `WIDTH_PRESETS` as `mk-width-<preset>` for every preset except `normal`
+ * (which stays classless — see `NORMAL_WIDTH`). Null-prototype so a
+ * hostile value like `__proto__` or `constructor` cannot resolve through
+ * the prototype chain to an inherited `Object.prototype` member; it simply
+ * misses the lookup, same as any other unrecognized value. `doc.css`
+ * (shared with `@markii/react`) defines `.mk-width-narrow`/
+ * `.mk-width-wide`/`.mk-width-full` to match.
  */
 const WIDTH_CLASSES: Record<string, string> = Object.assign(
   Object.create(null) as Record<string, string>,
-  {
-    narrow: 'mk-width-narrow',
-    wide: 'mk-width-wide',
-    full: 'mk-width-full',
-  },
+  Object.fromEntries(
+    WIDTH_PRESETS.filter((preset) => preset !== NORMAL_WIDTH).map((preset) => [
+      preset,
+      `mk-width-${preset}`,
+    ]),
+  ),
 );
 
-/** `align` value -> class. Same null-prototype defense as `WIDTH_CLASSES`. */
+/**
+ * `align` value -> class, derived mechanically from `@markii/stdlib`'s
+ * `ALIGN_PRESETS` as `mk-align-<preset>`. Same null-prototype defense as
+ * `WIDTH_CLASSES`. `doc.css` defines `.mk-align-left`/`.mk-align-center`/
+ * `.mk-align-right` to match.
+ */
 const ALIGN_CLASSES: Record<string, string> = Object.assign(
   Object.create(null) as Record<string, string>,
-  {
-    left: 'mk-align-left',
-    center: 'mk-align-center',
-    right: 'mk-align-right',
-  },
+  Object.fromEntries(
+    ALIGN_PRESETS.map((preset) => [preset, `mk-align-${preset}`]),
+  ),
 );
 
 export interface ResolvedLayoutAttributes {

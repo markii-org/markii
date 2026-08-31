@@ -89,6 +89,12 @@ Enable Scheduled Refresh…** prompts for a number of seconds and writes
   unknown component shows a labeled fallback. The setting is user-scope only,
   so opening someone else's project never loads a pack on your behalf. See the
   [packs guide](https://github.com/markii-org/markii/blob/main/docs/packs.md).
+- **Authoring help.** Typing `:` or `:::` suggests component names; inside a
+  brace it suggests attribute names and, for an attribute with a fixed set
+  of values, the values themselves. Hovering a directive name shows its
+  documentation. The **Markii: Insert Component…** command inserts a
+  chosen component's skeleton at the cursor, with every standard component
+  and any configured pack's components on offer.
 - **Images.** Local images resolve relative to the note (`nice.png` beside
   it, `img/nice.png` in a subfolder) and remote images load over https.
   Anything outside the note's folder and your workspace is not loaded, the

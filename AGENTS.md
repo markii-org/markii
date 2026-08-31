@@ -111,6 +111,9 @@ packages/markii-stdlib  standard component contracts (docs/integration.md) — n
                         zero deps, no React; the seam every renderer implements against:
   src/contracts.ts   ComponentKind/AttributeSchema/ComponentContract types,
                      STANDARD_COMPONENTS (callout/kbd/rating), getContract()
+  src/layout.ts      the layout system as data: LAYOUT_ATTRIBUTE_KEYS,
+                     WIDTH_PRESETS, ALIGN_PRESETS, LAYOUT_ATTRIBUTES. The one
+                     source both renderers' class maps and completion read
 packages/markii-bundle  .mkz bundle handling (docs/bundles.md, L2) — no React, no parsing:
   src/manifest.ts    manifest.json types + hand-rolled validation (no schema deps)
   src/paths.ts       path-jail: bundle-relative path normalization/rejection
@@ -190,6 +193,12 @@ packages/markii-host    PRIVATE, never published (no npm presence, absent from
   src/insert/        the insert-component seam (issue #17): skeleton builder
                      (container/leaf/inline forms per @markii/stdlib kind)
                      + catalog (stdlib + installed packs) both hosts consume
+  src/complete/      directive completion + hover (issue #27): the pure
+                     line/column context parser (directive name, attribute
+                     name, attribute value), completionAt/hoverAt over the
+                     insert catalog, stdlib contracts, and stdlib's layout
+                     presets; structured ComponentDocumentation both hosts
+                     format. Node-free, exported from @markii/host/browser
 packages/markii-lua     Lua sandbox runtime (docs/security.md, L3) — no React, no parsing:
   src/globals.ts     empty-env whitelist: curated string/table/math only
   src/capabilities.ts net/cache/bundle tables; two-tier (manual vs auto) gating
@@ -233,7 +242,11 @@ apps/vscode          the "Markii" VS Code extension (preview + Run + packs) — 
                      composes them; export-pack.ts + discover-configured-packs.ts
                      back the markii.exportPack command (issue #16);
                      src/insert-component.ts backs markii.insertComponent
-                     (issue #17)
+                     (issue #17); src/completion.ts (wording, snippet and
+                     filter text) + src/completion-catalog.ts (cached pack
+                     discovery) back the completion and hover providers
+                     registered in extension.ts for the markii language
+                     only (issue #27)
   syntaxes/          TextMate injection grammar for the three directive forms
   esbuild.config.mjs two bundles: extension host (node/cjs, vscode external)
                      and webview (browser/iife); @markii/* aliased to src/;
@@ -249,8 +262,9 @@ apps/obsidian        the "Markii" Obsidian plugin (desktop only) — an
                      inline) and a Live Preview CM6 extension:
   src/main.ts        Plugin subclass: view registration, the three commands
                      (Open Markii Preview, Run Markii scripts, Show Markii
-                     diagnostics), settings load. With view.tsx and
-                     settings-tab.ts the ONLY files allowed to import
+                     diagnostics), settings load. With view.tsx,
+                     settings-tab.ts, run-modals.ts, insert-modals.ts, and
+                     complete-suggest.ts the ONLY files allowed to import
                      `obsidian` (guarded by src/obsidian-import-guard.test.ts)
   src/view.tsx       ItemView owning a React root, re-rendering on active
                      file and vault change
@@ -287,7 +301,9 @@ apps/obsidian        the "Markii" Obsidian plugin (desktop only) — an
                      catalog. No export/build command here by design (see
                      Host positioning below): src/insert-component.ts +
                      src/insert-modals.ts back Insert Markii component
-                     (issue #17)
+                     (issue #17); src/complete-component.ts +
+                     src/complete-suggest.ts (an EditorSuggest, .mk.md
+                     notes only) back directive completion (issue #27)
   src/obsidian-theme.css  maps doc.css's 15 Tier 1 tokens onto Obsidian's
                      theme variables; src/theme-coverage.test.ts fails when
                      a token is left unmapped

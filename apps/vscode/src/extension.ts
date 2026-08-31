@@ -22,11 +22,26 @@ import { discoverConfiguredPacks } from './packs/discover-configured-packs.js';
 import {
   buildPackRegistrationScript,
   buildComponentCatalog,
+  completionAt,
   componentSkeleton,
   exportPack,
+  hoverAt,
   offsetToLineColumn,
 } from '@markii/host';
-import type { DiscoveredPack } from '@markii/host';
+import type {
+  CompletionItem as MarkCompletionItem,
+  DiscoveredPack,
+} from '@markii/host';
+import { createCatalogCache } from './completion-catalog.js';
+import type { CatalogCache } from './completion-catalog.js';
+import {
+  MARKII_COMPLETION_TRIGGER_CHARACTERS,
+  completionFilterText,
+  completionItemDetail,
+  completionMarkdown,
+  completionSortText,
+  snippetText,
+} from './completion.js';
 import {
   parseRefreshIntervalSeconds,
   refreshIntervalValidationMessage,
@@ -333,6 +348,168 @@ async function insertComponentCommand(): Promise<void> {
 }
 
 /**
+ * The document selector both the completion and hover providers register
+ * against: this extension's OWN `markii` language id (declared in
+ * `package.json`'s `contributes.languages`), for the two schemes a real
+ * editable document can have. Deliberately NOT plain `markdown`: the
+ * Insert Component command accepts a `.md` file because the user invoked
+ * it explicitly on that file, but a completion popup firing on every `:`
+ * in every markdown file in the workspace — most of which are not Markii
+ * documents at all — would be intrusive rather than helpful.
+ */
+const MARKII_DOCUMENT_SELECTOR: vscode.DocumentSelector = [
+  { language: 'markii', scheme: 'file' },
+  { language: 'markii', scheme: 'untitled' },
+];
+
+/**
+ * Maps a slice-1 `CompletionItem.kind` onto a `vscode.CompletionItemKind`
+ * for the popup's icon: `component` as `Snippet` (its `insertText` is
+ * usually a multi-attribute or multi-line skeleton, not a single token),
+ * `attribute` as `Property` (an attribute name on a directive), and
+ * `value` as `EnumMember` (one member of an attribute's fixed value set).
+ */
+function vscodeCompletionItemKind(
+  kind: MarkCompletionItem['kind'],
+): vscode.CompletionItemKind {
+  switch (kind) {
+    case 'component':
+      return vscode.CompletionItemKind.Snippet;
+    case 'attribute':
+      return vscode.CompletionItemKind.Property;
+    case 'value':
+      return vscode.CompletionItemKind.EnumMember;
+  }
+}
+
+/**
+ * Maps one slice-1 `CompletionItem` onto a `vscode.CompletionItem`: label,
+ * kind, detail and documentation via `./completion.ts`'s wording, a
+ * catalog-order-preserving `sortText`, the escaped/cursor-spliced snippet
+ * text, and a range replacing exactly the span `completionAt` reported.
+ *
+ * An attribute-NAME item also gets a `triggerSuggest` follow-up command:
+ * accepting `type=""` lands the cursor between the quotes, which is
+ * exactly where value completion should open next, so this reopens the
+ * popup immediately instead of making the user press a key first.
+ */
+function toVscodeCompletionItem(
+  item: MarkCompletionItem,
+  index: number,
+  lineText: string,
+  line: number,
+  replaceStart: number,
+  replaceEnd: number,
+): vscode.CompletionItem {
+  const completion = new vscode.CompletionItem(
+    item.label,
+    vscodeCompletionItemKind(item.kind),
+  );
+  completion.detail = completionItemDetail(item);
+  // Not the label: VS Code scores an item against the text from its own
+  // replace range to the cursor, and a directive-name range starts on the
+  // colon run. See `completionFilterText`.
+  completion.filterText = completionFilterText(
+    lineText,
+    replaceStart,
+    item.label,
+  );
+  if (item.documentation !== undefined) {
+    const markdown = completionMarkdown(item.documentation);
+    if (markdown.length > 0) {
+      completion.documentation = new vscode.MarkdownString(markdown);
+    }
+  }
+  completion.sortText = completionSortText(index);
+  completion.insertText = new vscode.SnippetString(
+    snippetText(item.insertText, item.insertCursorOffset),
+  );
+  completion.range = new vscode.Range(
+    new vscode.Position(line, replaceStart),
+    new vscode.Position(line, replaceEnd),
+  );
+  if (item.kind === 'attribute') {
+    completion.command = { command: 'editor.action.triggerSuggest', title: '' };
+  }
+  return completion;
+}
+
+/**
+ * Builds the `CompletionItemProvider`/`HoverProvider` pair, both reading
+ * the cursor's line and the cached catalog and delegating every decision
+ * to `@markii/host`'s `completionAt`/`hoverAt` and `./completion.ts`'s
+ * wording. Both bodies are wrapped defensively: slice 1 never throws, but
+ * a failure anywhere in a provider must degrade to "no completions" /
+ * "no hover", never a VS Code error toast.
+ */
+function createCompletionAndHoverProviders(catalogCache: CatalogCache): {
+  completionProvider: vscode.CompletionItemProvider;
+  hoverProvider: vscode.HoverProvider;
+} {
+  const completionProvider: vscode.CompletionItemProvider = {
+    async provideCompletionItems(document, position) {
+      try {
+        const lineText = document.lineAt(position.line).text;
+        const catalog = await catalogCache.get();
+        const ctx = completionAt(lineText, position.character, catalog);
+        if (ctx.kind === 'none' || ctx.items.length === 0) return undefined;
+        return ctx.items.map((item, index) =>
+          toVscodeCompletionItem(
+            item,
+            index,
+            lineText,
+            position.line,
+            ctx.replaceStart,
+            ctx.replaceEnd,
+          ),
+        );
+      } catch {
+        return undefined;
+      }
+    },
+  };
+
+  const hoverProvider: vscode.HoverProvider = {
+    async provideHover(document, position) {
+      try {
+        const lineText = document.lineAt(position.line).text;
+        const catalog = await catalogCache.get();
+        const info = hoverAt(lineText, position.character, catalog);
+        if (info === undefined) return undefined;
+        const markdown = completionMarkdown(info.documentation);
+        if (markdown.length === 0) return undefined;
+        const range = new vscode.Range(
+          new vscode.Position(position.line, info.start),
+          new vscode.Position(position.line, info.end),
+        );
+        return new vscode.Hover(new vscode.MarkdownString(markdown), range);
+      } catch {
+        return undefined;
+      }
+    },
+  };
+
+  return { completionProvider, hoverProvider };
+}
+
+/**
+ * The catalog cache's `load`: today's configured packs, discovered fresh.
+ * Shared shape with `insertComponentCommand`'s own discovery call, kept
+ * separate rather than factored together since the two callers have
+ * different failure handling (the cache degrades to the standard set and
+ * caches nothing on failure; the command just falls back to `[]` inline).
+ */
+function loadConfiguredPacksForCompletion(): Promise<
+  readonly DiscoveredPack[]
+> {
+  const configuredPacks = vscode.workspace
+    .getConfiguration('markii')
+    .get<string[]>('packs', []);
+  const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  return discoverConfiguredPacks(configuredPacks, workspaceRoot);
+}
+
+/**
  * Extension entry point. Imports `vscode` — deliberately NOT unit-tested
  * (vitest cannot resolve `vscode`); this file is wiring only, registering
  * the commands `package.json`'s `contributes.commands` declares
@@ -407,6 +584,35 @@ export function activate(context: vscode.ExtensionContext): void {
       void insertComponentCommand();
     },
   );
+
+  // Directive autocompletion and hover (GitHub issue #27, slice 2). The
+  // cache avoids re-discovering packs from disk on every keystroke; it is
+  // invalidated whenever what it would discover could have changed:
+  // `markii.packs` edited, or a workspace folder added/removed (packs are
+  // discovered relative to the workspace root).
+  const catalogCache = createCatalogCache(loadConfiguredPacksForCompletion);
+  const { completionProvider, hoverProvider } =
+    createCompletionAndHoverProviders(catalogCache);
+  const completionProviderHandle =
+    vscode.languages.registerCompletionItemProvider(
+      MARKII_DOCUMENT_SELECTOR,
+      completionProvider,
+      ...MARKII_COMPLETION_TRIGGER_CHARACTERS,
+    );
+  const hoverProviderHandle = vscode.languages.registerHoverProvider(
+    MARKII_DOCUMENT_SELECTOR,
+    hoverProvider,
+  );
+  const packsConfigChangeListener = vscode.workspace.onDidChangeConfiguration(
+    (event) => {
+      if (event.affectsConfiguration('markii.packs')) catalogCache.invalidate();
+    },
+  );
+  const workspaceFoldersChangeListener =
+    vscode.workspace.onDidChangeWorkspaceFolders(() => {
+      catalogCache.invalidate();
+    });
+
   context.subscriptions.push(
     diagnosticsChannel,
     showDiagnosticsCommand,
@@ -418,6 +624,10 @@ export function activate(context: vscode.ExtensionContext): void {
     toggleRunOnOpenCommand,
     exportPackCommandHandle,
     insertComponentCommandHandle,
+    completionProviderHandle,
+    hoverProviderHandle,
+    packsConfigChangeListener,
+    workspaceFoldersChangeListener,
   );
 }
 

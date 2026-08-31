@@ -237,3 +237,21 @@ export {
 } from './insert/component-skeleton.js';
 export type { InsertableComponent } from './insert/component-catalog.js';
 export { buildComponentCatalog } from './insert/component-catalog.js';
+
+// Directive autocompletion (issue #27, slice 1): pure line/column parsing
+// over the insert catalog and `@markii/stdlib` contracts, plus hover
+// documentation. See `./complete/index.ts`.
+export type {
+  CompletionContext,
+  CompletionContextKind,
+  CompletionItem,
+  CompletionItemKind,
+  ComponentDocumentation,
+  HoverInfo,
+} from './complete/index.js';
+export {
+  completionAt,
+  componentDocumentation,
+  formatComponentDocumentation,
+  hoverAt,
+} from './complete/index.js';

@@ -17,6 +17,7 @@ function standard(
   return {
     directiveName,
     kind: 'container',
+    kindDeclared: true,
     source: 'standard',
     group: 'standard',
     description: description ?? 'A thing.',
@@ -28,6 +29,7 @@ function layout(directiveName: string): InsertableComponent {
   return {
     directiveName,
     kind: 'container',
+    kindDeclared: true,
     source: 'standard',
     group: 'layout',
     description: 'A layout wrapper.',
@@ -43,6 +45,7 @@ function fromPack(
   return {
     directiveName,
     kind: 'container',
+    kindDeclared: true,
     source: 'pack',
     group: 'pack',
     packName,
