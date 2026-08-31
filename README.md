@@ -47,6 +47,26 @@ line Markii holds: components and scripts feed the document; they never become
 the document. Unknown components degrade to a labeled box, scripts never run
 on open, and nothing in a note can break the page.
 
+## Identity
+
+Markii belongs to the same family as LaTeX: a plain-text document format you
+extend with your own vocabulary, and packs fill the role packages fill there.
+The identity is in what it refuses, the three things LaTeX could never give up.
+
+- The core is not a programming language. Directives carry no expressions,
+  conditionals, or loops. Scripting exists, but in a separate sandboxed Lua
+  layer that most files never touch.
+- There is no compiler between you and the note. A `.mk.md` file is valid
+  CommonMark and stays readable in any editor, with or without Markii
+  installed. An unknown component renders as a quiet labeled box, never an
+  error.
+- The target is a living note, not a typeset page. Components render live in
+  the host and can bind to data that refreshes. Static HTML or PDF is an
+  export, not the product.
+
+Closer relatives such as MDX put a full programming language inside the file,
+which is exactly the trade Markii declines.
+
 ## Getting started
 
 ### Apps
