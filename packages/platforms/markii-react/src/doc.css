@@ -314,6 +314,51 @@
   color: var(--mk-warning);
 }
 
+/* ---------- divider ---------- */
+
+/*
+ * The `::before`/`::after` pseudo-elements are the flanking hairlines; the
+ * label sits between them as ordinary flex children. The label carries its
+ * own inline margin rather than a flex `gap` because an unlabeled divider
+ * has no label element to create a gap around — with `gap` the rule would
+ * split into two disconnected segments instead of staying one unbroken
+ * line.
+ */
+
+.mk-divider {
+  display: flex;
+  align-items: center;
+  color: var(--mk-faint);
+}
+
+.mk-divider::before,
+.mk-divider::after {
+  content: '';
+  flex: 1 1 0;
+  border-block-start: 1px solid var(--mk-border);
+}
+
+.mk-divider--dots::before,
+.mk-divider--dots::after {
+  border-block-start-style: dotted;
+}
+
+.mk-divider--ornament::before,
+.mk-divider--ornament::after {
+  border-block-start-color: transparent;
+}
+
+.mk-divider__label {
+  margin-inline: 0.75em;
+  font-size: 0.85em;
+  color: var(--mk-muted);
+}
+
+.mk-divider__ornament {
+  margin-inline: 0.35em;
+  font-size: 0.9em;
+}
+
 /* ---------- value interpolation ---------- */
 
 .mk-value {

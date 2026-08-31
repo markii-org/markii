@@ -89,6 +89,7 @@ const ATTRIBUTE_READ_SOURCES: Record<string, AttributeReadSpec> = {
   callout: { own: ['callout.tsx'] },
   kbd: { own: ['kbd.tsx'] },
   rating: { own: ['rating.tsx'] },
+  divider: { own: ['divider.tsx'] },
   details: { own: ['details.tsx'] },
   card: { own: ['card.tsx'] },
   badge: { own: ['badge.tsx'] },
@@ -164,7 +165,7 @@ describe('STANDARD_COMPONENTS vs defaultRegistry — coverage', () => {
     );
   });
 
-  it('covers exactly the 20 components audited for issue #17 slice 2', () => {
+  it('covers exactly the 21 standard components (the 20 audited for issue #17 slice 2, plus divider)', () => {
     // Not a load-bearing count on its own — the two tests above already
     // prove the sets are equal both ways — but pins the number so a
     // component silently added to one side and removed from the other
@@ -173,7 +174,7 @@ describe('STANDARD_COMPONENTS vs defaultRegistry — coverage', () => {
     expect(Object.keys(defaultRegistry).sort()).toEqual(
       Object.keys(STANDARD_COMPONENTS).sort(),
     );
-    expect(Object.keys(defaultRegistry)).toHaveLength(20);
+    expect(Object.keys(defaultRegistry)).toHaveLength(21);
   });
 });
 

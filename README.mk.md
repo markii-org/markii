@@ -127,6 +127,10 @@ And a figure pairs an image with a markdown caption:
 **Figure 1.** The caption is markdown, so it can hold *emphasis* or links.
 ::::
 
+A divider marks a section break without borrowing CommonMark's `---`:
+
+::divider{label="Part 2" variant="dots"}
+
 
 ## Now break something
 

@@ -8,6 +8,18 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A `divider` standard component** (`@markii/stdlib`, `@markii/react`,
+  `@markii/html`) — a leaf directive for a section break that carries a
+  label or a chosen look: `::divider`, `::divider{label="Part 2" variant="dots"}`.
+  `variant` is one of `line`, `dots`, or `ornament`, defaulting to `line` when
+  absent or unrecognized; `label` is optional and, when present, is centered
+  in the break and also carried as the separator's `aria-label`. Both
+  renderers emit the same `mk-divider` separator markup, so `doc.css` covers
+  both, and the insert catalog, directive completion, and hover
+  documentation pick it up from `STANDARD_COMPONENTS` automatically. A
+  plain `---` thematic break keeps its own CommonMark meaning and is
+  untouched.
+
 - **`@markii/stdlib`: a neutral `layout.ts`** exporting the docs/format.md
   layout system as data — `LAYOUT_ATTRIBUTE_KEYS` (`width`, `align`),
   `WIDTH_PRESETS` (`normal`, `narrow`, `wide`, `full`), `ALIGN_PRESETS`

@@ -63,7 +63,7 @@ packages/platforms/markii-react   the reference L1 renderer, a platform adapter
   src/render.tsx     hast + registry → React tree (unknown-directive fallback;
                      folds {name=…} script blocks into a collapsed marker)
   src/components/    the @markii/stdlib standard set (callout, card, badge,
-                     details, figure, tabs/tab, kbd, rating; data-bound
+                     details, figure, tabs/tab, kbd, rating, divider; data-bound
                      dashboard: stat, progress, chart; row + cell; layout wrappers
                      center/right/wide/narrow/full via createLayoutWrapper;
                      failure-presentation.ts — the ONE home of failure wording)
@@ -99,7 +99,7 @@ packages/platforms/markii-html   the static HTML renderer (issue #2), a second
   src/escape.ts      the one HTML-escaping primitive (ctx.esc)
   src/conformance.test.ts  runs the L1 corpus through this engine (issue #2 gate)
   src/components/    the standard set as string emitters (callout, card, badge,
-                     details, figure, tabs/tab, kbd, rating, row, cell, layout
+                     details, figure, tabs/tab, kbd, rating, divider, row, cell, layout
                      wrappers, and the data-bound stat/progress/chart — chart is
                      dependency-free SVG) + defaultHtmlRegistry; markup/classes
                      match @markii/react so doc.css is shared

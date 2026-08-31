@@ -113,9 +113,20 @@ Attributes become the component's settings, and the markdown inside a
 container becomes its content.
 
 The reference renderer ships a standard set: `callout`, `card`, `badge`,
-`details`, `figure`, `tabs` and `tab`, `kbd`, `rating`, and three data-bound
-components, `stat`, `progress`, and `chart`. These are defaults, not a fixed
-vocabulary. You can restyle them, replace them, or add your own.
+`details`, `figure`, `tabs` and `tab`, `kbd`, `rating`, `divider`, and three
+data-bound components, `stat`, `progress`, and `chart`. These are defaults,
+not a fixed vocabulary. You can restyle them, replace them, or add your own.
+
+A `---` thematic break keeps its plain CommonMark meaning. The `divider`
+component is the separate directive for a break that needs a label or a
+particular look:
+
+```
+::divider{label="Part 2" variant="dots"}
+```
+
+`variant` accepts `line`, `dots`, or `ornament`. Any other value quietly
+falls back to `line`.
 
 A registry may also carry aliases: a second name for a component it already
 holds, optionally with preset attributes, so `warn` can stand for

@@ -134,7 +134,8 @@ const view = renderMark(source, defaultRegistry);
 ## Components
 
 Every Markii app ships the standard set: callout, card, badge, details,
-figure, tabs, kbd, rating, and the data-bound stat, progress, and chart.
+figure, tabs, kbd, rating, divider, and the data-bound stat, progress, and
+chart.
 They cover everyday notes, and they are defaults, not the ceiling.
 
 When you outgrow them, components travel as a pack: a folder with a manifest

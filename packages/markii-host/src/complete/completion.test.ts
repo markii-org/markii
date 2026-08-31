@@ -46,6 +46,13 @@ describe('completionAt — directive-name context', () => {
     expect(names).not.toContain('callout');
   });
 
+  it('completes ::div to the standard divider leaf skeleton', () => {
+    const ctx = completionAt('::div', 5, STANDARD_CATALOG);
+    const item = ctx.items.find((i) => i.label === 'divider');
+    expect(item).toBeDefined();
+    expect(item?.insertText).toBe('::divider{}');
+  });
+
   it('includes the layout wrappers among container offerings', () => {
     const ctx = completionAt(':::c', 4, STANDARD_CATALOG);
     const names = labels(ctx.items);

@@ -7,6 +7,7 @@ import { Card } from './card.js';
 import { Cell } from './cell.js';
 import { Chart } from './chart.js';
 import { Details } from './details.js';
+import { Divider } from './divider.js';
 import { Figure } from './figure.js';
 import { Kbd } from './kbd.js';
 import { createLayoutWrapper } from './layout-wrapper.js';
@@ -25,6 +26,8 @@ export { Card } from './card.js';
 export { Cell } from './cell.js';
 export { Chart } from './chart.js';
 export { Details } from './details.js';
+export { Divider } from './divider.js';
+export type { DividerVariant } from './divider.js';
 export { Figure } from './figure.js';
 export { Kbd } from './kbd.js';
 export {
@@ -63,6 +66,7 @@ export const defaultHtmlRegistry: HtmlRegistry = createHtmlRegistry({
   callout: { component: Callout, inline: inlineFromContract('callout') },
   kbd: { component: Kbd, inline: inlineFromContract('kbd') },
   rating: { component: Rating, inline: inlineFromContract('rating') },
+  divider: { component: Divider, inline: inlineFromContract('divider') },
   details: { component: Details, inline: inlineFromContract('details') },
   card: { component: Card, inline: inlineFromContract('card') },
   badge: { component: Badge, inline: inlineFromContract('badge') },

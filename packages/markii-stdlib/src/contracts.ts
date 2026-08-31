@@ -86,7 +86,7 @@ function layoutWrapperContract(
 /**
  * The standard component set, seeded from the components that ship with
  * `@markii/react` today (`packages/platforms/markii-react/src/components/
- * {callout,kbd,rating,details,card,badge,figure,tabs,tab}.tsx`). Each
+ * {callout,kbd,rating,divider,details,card,badge,figure,tabs,tab}.tsx`). Each
  * contract was written by reading the real implementation — `kind` from how
  * the component is registered in `defaultRegistry`, `attributes` from
  * exactly the props the component reads (no invented attributes).
@@ -143,6 +143,27 @@ export const STANDARD_COMPONENTS: Record<string, ComponentContract> = {
     },
     description:
       'A leaf directive rendering a row of stars, e.g. `::rating{value=3 max=5}`. Has no body — both attributes are optional and degrade gracefully rather than throwing.',
+  },
+  divider: {
+    name: 'divider',
+    kind: 'leaf',
+    attributes: {
+      label: {
+        type: 'string',
+        required: false,
+        description:
+          'Optional short text shown centered in the line. Absent or empty means an unlabeled divider.',
+      },
+      variant: {
+        type: 'string',
+        required: false,
+        enum: ['line', 'dots', 'ornament'],
+        description:
+          'Which break to draw: a solid hairline, a dotted hairline, or a centered ornament with no hairline. Defaults to `line` when absent or not one of the allowed values.',
+      },
+    },
+    description:
+      'A leaf directive drawing a section break, e.g. `::divider{label="Part 2" variant="dots"}`. Has no body, and both attributes are optional. A plain `---` thematic break keeps its own CommonMark meaning; this directive is for a break that carries a label or a chosen look.',
   },
   details: {
     name: 'details',

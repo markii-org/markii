@@ -46,7 +46,7 @@ describe('STANDARD_COMPONENTS', () => {
     }
   });
 
-  it('seeds exactly the twenty components that exist in @markii/react today', () => {
+  it('seeds exactly the twenty-one components that exist in @markii/react today', () => {
     expect(Object.keys(STANDARD_COMPONENTS).sort()).toEqual([
       'badge',
       'callout',
@@ -55,6 +55,7 @@ describe('STANDARD_COMPONENTS', () => {
       'center',
       'chart',
       'details',
+      'divider',
       'figure',
       'full',
       'kbd',
@@ -81,6 +82,18 @@ describe('STANDARD_COMPONENTS', () => {
 
   it('marks rating as a leaf directive, matching its ::rating{...} form', () => {
     expect(STANDARD_COMPONENTS.rating?.kind).toBe('leaf');
+  });
+
+  it('marks divider as a leaf directive, matching its ::divider{...} form', () => {
+    expect(STANDARD_COMPONENTS.divider?.kind).toBe('leaf');
+  });
+
+  it("divider's variant attribute is a closed enum of exactly line/dots/ornament", () => {
+    expect(STANDARD_COMPONENTS.divider?.attributes.variant?.enum).toEqual([
+      'line',
+      'dots',
+      'ornament',
+    ]);
   });
 
   it("callout's type attribute is a closed enum of exactly the variants the component recognizes", () => {
