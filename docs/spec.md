@@ -42,6 +42,13 @@ frontmatter MUST NOT require a YAML parser.
 Directive names SHOULD be lowercase-kebab. A name MUST NOT contain `:`.
 Namespaced names from packs join the namespace and name with `_`; the
 parser itself accepts any legal directive name.
+
+An inline directive is recognized only when its name starts with an ASCII
+letter and its colon starts a word: the colon is the first character of
+the paragraph, or the character before it is not an ASCII letter or digit.
+Any other single colon is literal text. A conforming parser MUST apply
+this rule (conformance fixture 28); leaf and container forms are not
+affected.
 The first path segments `scripts`, `assets`, and `.cache` are reserved for
 bundle structure and MUST NOT be pack or library namespaces; the same
 reservation applies to component name prefixes.

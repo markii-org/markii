@@ -75,6 +75,13 @@ nothing errors: the parser pairs the fences it can and leaves any stray
 The syntax comes from the CommonMark "generic directives" proposal, so it is
 shared with other markdown tools rather than invented here.
 
+Ordinary colons in prose stay prose. `Meet at 12:34`, `John 3:16`, and
+`key:value` never become directives, because an inline directive needs a
+name that starts with a letter and a colon that starts a word (preceded by
+a space, punctuation, or the start of the line). Writing `:kbd[x]` after a
+space, inside parentheses, or inside emphasis all work as expected;
+`word:kbd[x]` glued to the previous word is literal text.
+
 ### Closing containers
 
 Two pairing rules decide which fence closes what. A bare closing fence

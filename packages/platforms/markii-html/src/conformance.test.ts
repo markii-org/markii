@@ -52,6 +52,7 @@ const FIXTURE_NAMES = [
   '25-container-auto-close-by-parent-fence.mk.md',
   '26-container-same-colon-nesting.mk.md',
   '27-row-align-left-wrapper.mk.md',
+  '28-text-directive-word-start.mk.md',
 ];
 
 describe('conformance corpus renders through @markii/html', () => {

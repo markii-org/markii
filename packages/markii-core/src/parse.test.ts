@@ -180,6 +180,71 @@ describe('parse', () => {
   });
 });
 
+describe('parse — text-directive word-start rule (prose colons vs. directives)', () => {
+  it('demotes a clock time, a Bible verse, a ratio, and a key:value pair back to plain text', () => {
+    const tree = parse(readFixture('28-text-directive-word-start.mk.md'));
+    const paragraphs = findAll(tree, 'paragraph');
+
+    expect(paragraphs[0]?.children).toHaveLength(1);
+    expect(paragraphs[0]?.children[0]?.type).toBe('text');
+    expect(
+      paragraphs[0]?.children[0] && 'value' in paragraphs[0].children[0]
+        ? paragraphs[0].children[0].value
+        : undefined,
+    ).toBe('Meet at 12:34 pm sharp.');
+
+    expect(paragraphs[1]?.children).toHaveLength(1);
+    expect(paragraphs[2]?.children).toHaveLength(1);
+    expect(paragraphs[3]?.children).toHaveLength(1);
+  });
+
+  it('demotes the text node to the exact original source slice, byte-identical', () => {
+    const source = 'Meet at 12:34 pm sharp.';
+    const tree = parse(source);
+    const paragraph = findAll(tree, 'paragraph')[0];
+    expect(paragraph?.children).toHaveLength(1);
+    const textNode = paragraph?.children[0];
+    expect(textNode?.type).toBe('text');
+    expect(textNode && 'value' in textNode ? textNode.value : undefined).toBe(
+      source,
+    );
+    expect(findAll(tree, 'textDirective')).toHaveLength(0);
+  });
+
+  it('keeps a directive after whitespace, punctuation, an opening paren, and at a paragraph start', () => {
+    const tree = parse(readFixture('28-text-directive-word-start.mk.md'));
+    const directives = findAll(tree, 'textDirective') as TextDirective[];
+    // "see :kbd[x] ok", "(:kbd[x])", "**:kbd[x]**", ":kbd[x] at line start"
+    expect(directives).toHaveLength(4);
+    expect(directives.every((d) => d.name === 'kbd')).toBe(true);
+  });
+
+  it('keeps a directive inside emphasis where the preceding character is not a letter/digit', () => {
+    const tree = parse('**:kbd[x]**');
+    const directives = findAll(tree, 'textDirective') as TextDirective[];
+    expect(directives).toHaveLength(1);
+  });
+
+  it('demotes a directive-like colon immediately preceded by a letter, even inside emphasis', () => {
+    const tree = parse('word:kbd[x]');
+    expect(findAll(tree, 'textDirective')).toHaveLength(0);
+    const paragraph = findAll(tree, 'paragraph')[0];
+    expect(paragraph?.children).toHaveLength(1);
+    expect(
+      paragraph?.children[0] && 'value' in paragraph.children[0]
+        ? paragraph.children[0].value
+        : undefined,
+    ).toBe('word:kbd[x]');
+  });
+
+  it('leaves leaf (`::`) and container (`:::`) directives untouched (they always sit at line start)', () => {
+    const tree = parse(readFixture('03-leaf-directive.mk.md'));
+    expect(findAll(tree, 'leafDirective')).toHaveLength(1);
+    const containerTree = parse(readFixture('04-container-directive.mk.md'));
+    expect(findAll(containerTree, 'containerDirective')).toHaveLength(1);
+  });
+});
+
 describe('parse — GFM (tables, task lists, strikethrough, autolinks)', () => {
   it('parses a GFM table into table/tableRow/tableCell nodes, alongside a directive in the same document', () => {
     const tree = parse(readFixture('12-gfm-table.mk.md'));

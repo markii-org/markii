@@ -1,0 +1,130 @@
+{
+  "children": [
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "Meet at 12:34 pm sharp."
+        }
+      ],
+      "type": "paragraph"
+    },
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "John 3:16"
+        }
+      ],
+      "type": "paragraph"
+    },
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "ratio a:b and key:value"
+        }
+      ],
+      "type": "paragraph"
+    },
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "x :1st place"
+        }
+      ],
+      "type": "paragraph"
+    },
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "see "
+        },
+        {
+          "attributes": {},
+          "children": [
+            {
+              "type": "text",
+              "value": "x"
+            }
+          ],
+          "name": "kbd",
+          "type": "textDirective"
+        },
+        {
+          "type": "text",
+          "value": " ok"
+        }
+      ],
+      "type": "paragraph"
+    },
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "("
+        },
+        {
+          "attributes": {},
+          "children": [
+            {
+              "type": "text",
+              "value": "x"
+            }
+          ],
+          "name": "kbd",
+          "type": "textDirective"
+        },
+        {
+          "type": "text",
+          "value": ")"
+        }
+      ],
+      "type": "paragraph"
+    },
+    {
+      "children": [
+        {
+          "children": [
+            {
+              "attributes": {},
+              "children": [
+                {
+                  "type": "text",
+                  "value": "x"
+                }
+              ],
+              "name": "kbd",
+              "type": "textDirective"
+            }
+          ],
+          "type": "strong"
+        }
+      ],
+      "type": "paragraph"
+    },
+    {
+      "children": [
+        {
+          "attributes": {},
+          "children": [
+            {
+              "type": "text",
+              "value": "x"
+            }
+          ],
+          "name": "kbd",
+          "type": "textDirective"
+        },
+        {
+          "type": "text",
+          "value": " at line start"
+        }
+      ],
+      "type": "paragraph"
+    }
+  ],
+  "type": "root"
+}
