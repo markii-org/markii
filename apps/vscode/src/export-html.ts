@@ -60,6 +60,8 @@ export type HtmlExportOutcome =
       readonly bytes: number;
       /** How many last-run values were baked into the file. */
       readonly valueCount: number;
+      /** True when the note contains a script fence. Absent or false means no scripts, so the popup never explains empty states the note cannot have. */
+      readonly hasScripts?: boolean;
       /** Which engine rendered the body, and why when it was the static one (GitHub issue #28 slice 2). Diagnostics-facing only; see `exportHtmlDiagnosticLines`. */
       readonly render: ExportRenderInfo;
       /** What image embedding did, for the diagnostics surface only (GitHub issue #28 slice 3). The empty report when the note has no images or none was offered a reader. */
@@ -92,7 +94,11 @@ export function exportHtmlResultMessage(outcome: HtmlExportOutcome): string {
   }
   const name = fileNameOf(outcome.path);
   if (outcome.valueCount === 0) {
-    return `Markii: exported ${name}. The note has no stored script values, so data-bound components show their empty states.`;
+    // Explaining empty states only makes sense for a note that HAS scripts;
+    // a scriptless note gets the plain confirmation.
+    return outcome.hasScripts === true
+      ? `Markii: exported ${name}. The note has no stored script values, so data-bound components show their empty states.`
+      : `Markii: exported ${name}.`;
   }
   const values =
     outcome.valueCount === 1

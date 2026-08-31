@@ -136,6 +136,7 @@ export {
   buildNoteExport,
   buildNoteHtmlExport,
   composeNoteHtmlExport,
+  noteHasScripts,
   exportBaseName,
   exportDocumentTitle,
   exportedFileName,

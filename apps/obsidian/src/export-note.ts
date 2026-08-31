@@ -27,6 +27,7 @@
  * HTML file instead — the user always ends up with an exported note.
  */
 import {
+  noteHasScripts,
   MAX_EMBEDDED_IMAGE_BYTES,
   buildNoteExport,
   exportedSiblingPath,
@@ -107,6 +108,8 @@ export type NoteExportOutcome =
       readonly path: string;
       /** How many last-run values were baked in. */
       readonly valueCount: number;
+      /** True when the note contains a script fence. Absent or false means no scripts, so the notice never says to run the note first. */
+      readonly hasScripts?: boolean;
       /** Which engine rendered the body, and why when it was the static one. */
       readonly render: ExportRenderInfo;
       /** What image embedding did, for the diagnostics surface. */
@@ -116,6 +119,7 @@ export type NoteExportOutcome =
       readonly kind: 'pdf';
       readonly path: string;
       readonly valueCount: number;
+      readonly hasScripts?: boolean;
       readonly render: ExportRenderInfo;
       readonly images: EmbeddedImageReport;
     }
@@ -227,10 +231,11 @@ export async function exportNoteAsHtml(
   request: NoteExportRequest,
 ): Promise<NoteExportOutcome> {
   const path = exportedSiblingPath(request.notePath, '.html');
+  const hasScripts = noteHasScripts(request.text);
   try {
     const { html, valueCount, render, images } = await buildDocument(request);
     await request.fs.writeText(path, html);
-    return { kind: 'html', path, valueCount, render, images };
+    return { kind: 'html', path, valueCount, hasScripts, render, images };
   } catch (error) {
     return { kind: 'failed', reason: reasonOf(error) };
   }
@@ -250,6 +255,7 @@ export async function exportNoteAsPdf(
   request: NotePdfExportRequest,
 ): Promise<NoteExportOutcome> {
   const pdfPath = exportedSiblingPath(request.notePath, '.pdf');
+  const hasScripts = noteHasScripts(request.text);
 
   let html: string;
   let valueCount: number;
@@ -264,7 +270,7 @@ export async function exportNoteAsPdf(
   try {
     const pdf = await request.htmlToPdf({ html, baseDir: request.baseDir });
     await request.fs.writeBinary(pdfPath, pdf);
-    return { kind: 'pdf', path: pdfPath, valueCount, render, images };
+    return { kind: 'pdf', path: pdfPath, valueCount, hasScripts, render, images };
   } catch (error) {
     const kind = isPdfUnavailable(error) ? 'pdf-unavailable' : 'pdf-failed';
     const reason = reasonOf(error);
@@ -300,11 +306,12 @@ export function exportNoticeText(outcome: NoteExportOutcome): string {
   const name = outcome.kind === 'failed' ? '' : fileNameOf(outcome.path);
   switch (outcome.kind) {
     case 'html':
-      return outcome.valueCount === 0
+    case 'pdf':
+      // The run hint only makes sense for a note that HAS scripts to run: a
+      // scriptless note has no values to bake in and nothing to be told.
+      return outcome.valueCount === 0 && outcome.hasScripts === true
         ? `Markii: exported ${name}. Run the note first if you want its script values in the file.`
         : `Markii: exported ${name}. It sits beside the note in your vault.`;
-    case 'pdf':
-      return `Markii: exported ${name}. It sits beside the note in your vault.`;
     case 'pdf-unavailable':
       return `Markii: PDF export is not available on this device. Markii wrote ${name} instead.`;
     case 'pdf-failed':

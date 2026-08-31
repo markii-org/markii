@@ -115,10 +115,24 @@ describe('exportHtmlResultMessage', () => {
       path: 'week.html',
       bytes: 10,
       valueCount: 0,
+      hasScripts: true,
       render: STATIC_NO_PACKS,
       images: EMPTY_IMAGE_REPORT,
     });
     expect(message).toContain('no stored script values');
+  });
+
+  it('gives a scriptless note the plain confirmation, not an empty-states explanation', () => {
+    const message = exportHtmlResultMessage({
+      kind: 'written',
+      path: 'week.html',
+      bytes: 10,
+      valueCount: 0,
+      render: STATIC_NO_PACKS,
+      images: EMPTY_IMAGE_REPORT,
+    });
+    expect(message).not.toContain('no stored script values');
+    expect(message).toContain('exported week.html');
   });
 
   it('points a failure at the diagnostics surface and never carries the reason', () => {

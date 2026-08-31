@@ -11,6 +11,7 @@ import {
   exportedFileName,
   exportedSiblingPath,
   packStylesheetsCss,
+  noteHasScripts,
 } from './note-export.js';
 
 describe('exportBaseName', () => {
@@ -434,5 +435,25 @@ describe('buildNoteExport image embedding', () => {
       detail: 'boom',
     });
     expect(result.images.embedded).toEqual(['nice.png']);
+  });
+});
+
+describe('noteHasScripts', () => {
+  it('sees a lua fence', () => {
+    expect(noteHasScripts('# a\n\n```lua {name=x}\nreturn 1\n```\n')).toBe(
+      true,
+    );
+  });
+  it('sees a bare lua fence with no attributes', () => {
+    expect(noteHasScripts('```lua\nreturn 1\n```')).toBe(true);
+  });
+  it('ignores other code fences', () => {
+    expect(noteHasScripts('```python\nprint(1)\n```')).toBe(false);
+  });
+  it('ignores prose that merely mentions lua', () => {
+    expect(noteHasScripts('I like lua scripts.')).toBe(false);
+  });
+  it('ignores an indented code block deeper than three spaces', () => {
+    expect(noteHasScripts('    ```lua\n')).toBe(false);
   });
 });

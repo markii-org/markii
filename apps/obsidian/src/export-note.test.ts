@@ -360,6 +360,32 @@ describe('exportNoticeText', () => {
         kind: 'html',
         path: 'week.html',
         valueCount: 0,
+        hasScripts: true,
+        render: RENDER_STATIC_NO_PACKS,
+        images: EMPTY_IMAGE_REPORT,
+      }),
+    ).toContain('Run the note first');
+  });
+
+  it('never tells a scriptless note to run itself first', () => {
+    const text = exportNoticeText({
+      kind: 'html',
+      path: 'week.html',
+      valueCount: 0,
+      render: RENDER_STATIC_NO_PACKS,
+      images: EMPTY_IMAGE_REPORT,
+    });
+    expect(text).not.toContain('Run the note first');
+    expect(text).toContain('sits beside the note');
+  });
+
+  it('gives the run hint on a PDF of a scripted, never-run note', () => {
+    expect(
+      exportNoticeText({
+        kind: 'pdf',
+        path: 'week.pdf',
+        valueCount: 0,
+        hasScripts: true,
         render: RENDER_STATIC_NO_PACKS,
         images: EMPTY_IMAGE_REPORT,
       }),

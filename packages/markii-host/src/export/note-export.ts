@@ -485,3 +485,12 @@ export async function buildNoteExport(
     packStylesheets,
   );
 }
+
+/**
+ * Whether `text` contains at least one Markii script fence, i.e. a code
+ * fence whose info string names `lua`. Both hosts' export notices use this
+ * so a note with no scripts is never told to run itself first.
+ */
+export function noteHasScripts(text: string): boolean {
+  return /^ {0,3}(?:`{3,}|~{3,})[ \t]*lua\b/m.test(text);
+}

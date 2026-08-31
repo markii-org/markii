@@ -72,6 +72,7 @@ import {
   withPersistedCache,
   buildPackRegistrationScript,
   buildNoteExport,
+  noteHasScripts,
   MAX_EMBEDDED_IMAGE_BYTES,
 } from '@markii/host';
 import type {
@@ -1809,6 +1810,7 @@ export async function exportHtml(
       path: target.fsPath,
       bytes: bytes.byteLength,
       valueCount: exportDocument.valueCount,
+      hasScripts: noteHasScripts(document.getText()),
       render: exportDocument.render,
       images: exportDocument.images,
     };

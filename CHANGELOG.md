@@ -166,6 +166,10 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Export notices no longer tell a scriptless note to run itself first: the
+  run hint and the empty-states explanation appear only when the note
+  contains a script fence, in both hosts.
+
 - **`@markii/core`: a prose colon no longer parses as a text directive.**
   Previously any single colon could open a text directive, so a clock time
   (`12:34`), a Bible verse (`John 3:16`), a ratio (`a:b`), or a `key:value`
