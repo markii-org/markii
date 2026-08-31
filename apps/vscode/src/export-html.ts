@@ -121,7 +121,7 @@ function renderDiagnosticLine(render: ExportRenderInfo): string {
     return 'Rendered with the static engine because no pack components are loaded, which matches what the preview shows.';
   }
   if (render.reason === 'no-renderer') {
-    return 'Rendered with the static engine because no preview panel was open. Pack components exported as labeled boxes; open the preview and export again to include them.';
+    return 'Rendered with the static engine because a preview panel could not be opened for this note. Pack components exported as labeled boxes; open the preview and export again to include them.';
   }
   if (render.reason === 'timeout') {
     const detail = render.detail ? ` Detail: ${render.detail}` : '';

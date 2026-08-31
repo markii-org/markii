@@ -214,6 +214,16 @@ interface ActivePreview {
    */
   running: boolean;
   /**
+   * True once this panel's webview has posted `ready` and can receive
+   * messages; reset whenever the panel becomes hidden, since
+   * `retainContextWhenHidden: false` tears a hidden webview down.
+   * `exportHtml` waits on this before asking the webview to render an
+   * export body, so an export never posts into the void.
+   */
+  webviewReady: boolean;
+  /** Resolvers waiting on the next `ready` — see `waitForWebviewReady`. */
+  readonly readyWaiters: Array<() => void>;
+  /**
    * GitHub issue #11 (scheduled refresh): the interval timer driving
    * `'scheduled'`-trigger re-runs, when `markii.refreshIntervalSeconds` is
    * set above zero at this panel's creation. `undefined` when refresh is
@@ -919,6 +929,8 @@ async function createPreview(
       postUpdate(preview);
     }),
     running: false,
+    webviewReady: false,
+    readyWaiters: [],
     ranOnOpen: false,
   };
   active = preview;
@@ -936,6 +948,8 @@ async function createPreview(
     panel.webview.onDidReceiveMessage((raw: unknown) => {
       if (!isWebviewToHostMessage(raw)) return;
       if (raw.type === 'ready') {
+        preview.webviewReady = true;
+        for (const wake of preview.readyWaiters.splice(0)) wake();
         postUpdate(preview);
         maybeRunOnOpen(context, preview);
       } else if (raw.type === 'pack-diagnostics') {
@@ -974,6 +988,10 @@ async function createPreview(
     panel.onDidChangeViewState(() => {
       if (panel.visible) {
         postUpdate(preview);
+      } else {
+        // The hidden webview is torn down; it must re-post `ready` after a
+        // rebuild before anything may be posted to it.
+        preview.webviewReady = false;
       }
     }),
   ];
@@ -1539,6 +1557,26 @@ const EXPORT_RENDER_TIMEOUT_MS = 4000;
  * `export-result` belongs to this request, since `onDidReceiveMessage`
  * delivers every message the webview posts, not just this one.
  */
+/**
+ * Resolves once `preview`'s webview has posted `ready`, or after
+ * `timeoutMs`, whichever comes first. Never rejects: `requestExportBody`
+ * carries its own deadline and fallback, so a webview that never becomes
+ * ready costs a bounded wait and a classified static fallback, not a hang.
+ */
+function waitForWebviewReady(
+  preview: ActivePreview,
+  timeoutMs: number,
+): Promise<void> {
+  if (preview.webviewReady) return Promise.resolve();
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, timeoutMs);
+    preview.readyWaiters.push(() => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+}
+
 function requestExportBody(
   preview: ActivePreview,
   text: string,
@@ -1708,7 +1746,23 @@ export async function exportHtml(
   );
   let outcome: HtmlExportOutcome;
   try {
+    // Issue #28 slice 2 follow-up: rendering pack components needs the
+    // preview webview, and the original design silently fell back to the
+    // static engine when no panel was open, burying "open the preview and
+    // export again" in the output channel. Now the command opens the
+    // preview itself when pack folders are configured, reveals a hidden
+    // panel (a hidden webview is torn down and cannot answer), and waits
+    // for `ready` before asking it to render. If the webview still is not
+    // ready when the wait expires, `requestExportBody`'s own deadline
+    // classifies the static fallback as before.
+    if (active === undefined && configuredPackFolders().length > 0) {
+      await presentSource(context, { kind: 'document', document });
+    }
     const preview = active;
+    if (preview !== undefined && !preview.webviewReady) {
+      preview.panel.reveal(preview.panel.viewColumn, true);
+      await waitForWebviewReady(preview, EXPORT_RENDER_TIMEOUT_MS);
+    }
     const useReact = preview !== undefined && panelHasWebviewPacks(preview);
     const embedImages = createExportImageReader(document);
 

@@ -8,6 +8,11 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- VS Code: Export as HTML opens the preview itself when pack folders are
+  configured and no panel is open, and reveals a hidden one, so pack
+  components render in the export without a manual step. The static engine
+  remains the classified fallback when the webview cannot answer in time.
+
 - **Export a note as a self-contained HTML file** (VS Code extension,
   Obsidian plugin). **Markii: Export as HTML…** in VS Code asks where to
   save and writes one `.html` file; **Export Markii note as HTML** in

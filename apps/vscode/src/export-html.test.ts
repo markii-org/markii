@@ -216,7 +216,7 @@ describe('exportHtmlDiagnosticLines', () => {
       render: { engine: 'static', reason: 'no-renderer' },
       images: EMPTY_IMAGE_REPORT,
     });
-    expect(lines[1]).toContain('no preview panel was open');
+    expect(lines[1]).toContain('a preview panel could not be opened');
     expect(lines[1]).toContain('labeled boxes');
     expect(lines[1]).toContain('open the preview and export again');
   });
