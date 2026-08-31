@@ -23,10 +23,6 @@ file it still opens VS Code's built-in markdown preview, unchanged.
 The preview opens beside the editor, follows whichever `.mk.md` file is
 active, updates as you type, and matches your VS Code theme.
 
-Something to paste into a new file to see it work:
-
-<img width="2324" height="1008" alt="image" src="https://github.com/user-attachments/assets/7b398ff7-8a52-4cdd-b76d-13dfcf5f8cf7" />
-
 ## Configuration
 
 Markii has four settings: `markii.packs`, `markii.runOnOpen`,
