@@ -8,6 +8,11 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **VS Code writes a run's script failures to the Markii output channel**,
+  one line per failed script with its name, failure kind, and the short
+  reason the value marker's tooltip carries, so a failure behind a
+  collapsed or hidden marker is discoverable without hovering. Obsidian
+  already wrote the same lines to its console.
 - **Hide script blocks in the preview** (VS Code extension, Obsidian
   plugin). A named Lua fence normally renders as a collapsed marker you can
   expand to read the source. Turn on `markii.hideScriptBlocks` in VS Code,

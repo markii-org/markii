@@ -96,9 +96,11 @@ import type {
   CascadeNoteReader,
   ExportBodyResult,
   ExportImageReader,
+  RunOnceResult,
   RunResult,
   SpawnRunOptions,
 } from '@markii/host';
+import { formatRunFailureLines } from './run-diagnostics.js';
 import { resolveWorkerPath } from './worker-path.js';
 import type { RunTrigger, StoredValue } from '@markii/runtime';
 import { MIN_REFRESH_INTERVAL_SECONDS } from './refresh-interval.js';
@@ -654,6 +656,25 @@ function logPackDiagnostics(packContext: PackContext): void {
   if (lines.length === 0) return;
   diagnosticsChannel.appendLine(
     `Markii: pack load at ${new Date().toISOString()}`,
+  );
+  for (const line of lines) diagnosticsChannel.appendLine(`  ${line}`);
+}
+
+/**
+ * Writes a run's per-script failures to the "Markii" output channel
+ * (GitHub issue #37, `./run-diagnostics.ts`), so a failure a collapsed or
+ * hidden marker buries is still discoverable without hovering. A clean run
+ * writes nothing.
+ */
+function logRunFailures(
+  trigger: RunTrigger,
+  failures: RunOnceResult['failureDetails'],
+): void {
+  if (!diagnosticsChannel) return;
+  const lines = formatRunFailureLines(failures);
+  if (lines.length === 0) return;
+  diagnosticsChannel.appendLine(
+    `Markii: ${trigger} run at ${new Date().toISOString()}, ${String(lines.length)} script failure(s)`,
   );
   for (const line of lines) diagnosticsChannel.appendLine(`  ${line}`);
 }
@@ -1634,6 +1655,8 @@ async function runWithTrigger(
     // ITEM 3 (AGENTS.md "clean is not silent"): this run's own outcome,
     // attached to its `values` message so the marker updates immediately —
     // see `./run/run-trace.ts`'s doc comment and `ValuesMessage.lastRun`'s.
+    logRunFailures(trigger, result.failureDetails);
+
     const lastRun = { trigger, ranAt: Date.now(), ok: true as const };
     const message: ValuesMessage = {
       type: 'values',
