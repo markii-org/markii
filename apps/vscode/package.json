@@ -90,6 +90,11 @@
         "command": "markii.exportHtml",
         "title": "Export as HTML…",
         "category": "Markii"
+      },
+      {
+        "command": "markii.exportHtmlCascade",
+        "title": "Export as HTML cascade…",
+        "category": "Markii"
       }
     ],
     "menus": {
@@ -115,6 +120,11 @@
           "command": "markii.exportHtml",
           "when": "resourceFilename =~ /\\.mk\\.md$/",
           "group": "1_markii@1"
+        },
+        {
+          "command": "markii.exportHtmlCascade",
+          "when": "resourceFilename =~ /\\.mk\\.md$/",
+          "group": "1_markii@2"
         }
       ],
       "commandPalette": [
@@ -148,6 +158,10 @@
         },
         {
           "command": "markii.exportHtml",
+          "when": "editorLangId == markii || markii.previewActive"
+        },
+        {
+          "command": "markii.exportHtmlCascade",
           "when": "editorLangId == markii || markii.previewActive"
         }
       ]

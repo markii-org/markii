@@ -758,3 +758,134 @@ describe('runDocumentScripts: publishing (docs/scripting.md vault)', () => {
     expect(summary.publishedCount).toBe(1);
   });
 });
+
+describe('runDocumentScripts — the doc view a script receives', () => {
+  it('hands every script the listing the caller supplied', async () => {
+    const store = createValueStore();
+    const listing = {
+      directives: [
+        {
+          name: 'q',
+          form: 'container' as const,
+          attributes: { a: '1' },
+          text: 'x',
+        },
+      ],
+      truncated: false,
+    };
+    const seen: unknown[] = [];
+    const executor: ScriptExecutor = async ({ doc }) => {
+      seen.push(doc?.directives);
+      return { ok: true, value: 1 };
+    };
+
+    await runDocumentScripts({
+      scripts: [block({ name: 'a' }), block({ name: 'b' })],
+      executor,
+      trigger: 'manual',
+      store,
+      doc: { directives: listing },
+    });
+
+    expect(seen).toEqual([listing, listing]);
+  });
+
+  it('hands an empty listing, never a missing doc, when the caller supplied none', async () => {
+    const store = createValueStore();
+    let received: unknown;
+    const executor: ScriptExecutor = async ({ doc }) => {
+      received = doc?.directives;
+      return { ok: true, value: 1 };
+    };
+
+    await runDocumentScripts({
+      scripts: [block({ name: 'a' })],
+      executor,
+      trigger: 'manual',
+      store,
+    });
+
+    expect(received).toEqual({ directives: [], truncated: false });
+  });
+
+  it('lets a script read a value produced above it and refuses one produced below', async () => {
+    const store = createValueStore();
+    const reads: Record<string, unknown> = {};
+    const executor: ScriptExecutor = async ({ code, doc }) => {
+      if (code !== 'second') return { ok: true, value: { n: 7 } };
+      reads.above = doc?.value('first');
+      reads.below = doc?.value('third');
+      reads.self = doc?.value('second');
+      reads.unknown = doc?.value('nowhere');
+      return { ok: true, value: 2 };
+    };
+
+    await runDocumentScripts({
+      scripts: [
+        block({ name: 'first', code: 'first' }),
+        block({ name: 'second', code: 'second' }),
+        block({ name: 'third', code: 'third' }),
+      ],
+      executor,
+      trigger: 'manual',
+      store,
+    });
+
+    expect(reads.above).toEqual({ ok: true, value: { n: 7 } });
+    expect(reads.below).toEqual({
+      ok: false,
+      message: 'reads "third", which runs later in the note',
+    });
+    expect(reads.self).toEqual({
+      ok: false,
+      message: 'reads "second", which runs later in the note',
+    });
+    expect(reads.unknown).toEqual({ ok: true, value: undefined });
+  });
+
+  it('is not tier-gated: an auto run gets the same view a manual run gets', async () => {
+    const store = createValueStore();
+    const listing = { directives: [], truncated: true };
+    const seen: (boolean | undefined)[] = [];
+    const executor: ScriptExecutor = async ({ doc }) => {
+      seen.push(doc?.directives.truncated);
+      return { ok: true, value: 1 };
+    };
+
+    for (const trigger of ['manual', 'auto', 'scheduled'] as RunTrigger[]) {
+      await runDocumentScripts({
+        scripts: [block({ name: 'a' })],
+        executor,
+        trigger,
+        store,
+        doc: { directives: listing },
+      });
+    }
+
+    expect(seen).toEqual([true, true, true]);
+  });
+
+  it("reads a failed script's name as nil rather than blaming the reader", async () => {
+    const store = createValueStore();
+    let read: unknown;
+    const executor: ScriptExecutor = async ({ code, doc }) => {
+      if (code === 'broken') {
+        return { ok: false, error: { kind: 'script-error', message: 'boom' } };
+      }
+      read = doc?.value('broken');
+      return { ok: true, value: 1 };
+    };
+
+    await runDocumentScripts({
+      scripts: [
+        block({ name: 'broken', code: 'broken' }),
+        block({ name: 'reader', code: 'reader' }),
+      ],
+      executor,
+      trigger: 'manual',
+      store,
+    });
+
+    expect(read).toEqual({ ok: true, value: undefined });
+  });
+});

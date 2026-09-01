@@ -34,6 +34,21 @@ import {
 } from './export-html.js';
 import type { HtmlExportOutcome } from './export-html.js';
 import {
+  EXPORT_CASCADE_FILTERS,
+  EXPORT_CASCADE_NO_DOCUMENT_MESSAGE,
+  EXPORT_CASCADE_SAVE_DIALOG_TITLE,
+  EXPORT_CASCADE_SAVE_LABEL,
+  buildNoteCascadeArchive,
+  exportCascadeDefaultFileName,
+  exportCascadeDiagnosticLines,
+  exportCascadeResultMessage,
+} from './export-cascade.js';
+import type {
+  CascadeArchiveRequest,
+  CascadeExportOutcome,
+} from './export-cascade.js';
+import { resolveNoteRelativeLink } from './cascade-links.js';
+import {
   IMAGE_NO_DOCUMENT_FOLDER_DETAIL,
   imageOutsideWorkspaceDetail,
   imageReadErrorDetail,
@@ -76,6 +91,8 @@ import {
   MAX_EMBEDDED_IMAGE_BYTES,
 } from '@markii/host';
 import type {
+  CascadeLinkResolver,
+  CascadeNoteReader,
   ExportBodyResult,
   ExportImageReader,
   RunResult,
@@ -310,11 +327,15 @@ function imageJailRoots(documentFolderUri: vscode.Uri): string[] {
  *
  * An untitled document has no folder at all, so every relative source in
  * one reads `unreadable` without an attempt at resolution.
+ *
+ * Takes the FOLDER rather than the document, because the cascade command
+ * (`markii.exportHtmlCascade`) needs one reader per note it reaches, and a
+ * note two hops from the root has no `TextDocument` of its own. A relative
+ * source must resolve against the note that wrote it either way.
  */
 function createExportImageReader(
-  document: vscode.TextDocument,
+  folder: vscode.Uri | undefined,
 ): ExportImageReader {
-  const folder = documentFolder(document);
   if (!folder) {
     return () => ({
       kind: 'unreadable',
@@ -1789,7 +1810,7 @@ export async function exportHtml(
       await waitForWebviewReady(preview, EXPORT_RENDER_TIMEOUT_MS);
     }
     const useReact = preview !== undefined && panelHasWebviewPacks(preview);
-    const embedImages = createExportImageReader(document);
+    const embedImages = createExportImageReader(documentFolder(document));
 
     let exportRequest: Parameters<typeof buildNoteExport>[0];
     if (useReact && preview) {
@@ -1848,6 +1869,208 @@ export async function exportHtml(
 
   logExportDiagnostics(outcome);
   const message = exportHtmlResultMessage(outcome);
+  if (outcome.kind === 'failed') {
+    void vscode.window.showWarningMessage(message);
+    return;
+  }
+  void vscode.window
+    .showInformationMessage(message, EXPORT_HTML_REVEAL_LABEL)
+    .then((choice) => {
+      if (choice === EXPORT_HTML_REVEAL_LABEL) {
+        void vscode.commands.executeCommand('revealFileInOS', target);
+      }
+    });
+}
+
+/**
+ * Writes one cascade outcome to the "Markii" output channel, the other of
+ * a failure's two homes. Every note that was skipped, and every bound that
+ * cut the walk short, is named here rather than only in a count.
+ */
+function logCascadeDiagnostics(outcome: CascadeExportOutcome): void {
+  if (!diagnosticsChannel) return;
+  diagnosticsChannel.appendLine(
+    `Markii: HTML cascade export at ${new Date().toISOString()}`,
+  );
+  for (const line of exportCascadeDiagnosticLines(outcome)) {
+    diagnosticsChannel.appendLine(`  ${line}`);
+  }
+}
+
+/**
+ * The `markii.exportHtmlCascade` command handler ("Markii: Export as HTML
+ * cascade", GitHub issue #36): exports the active note AND the notes it
+ * links to as one zip archive of self-contained HTML files, with the links
+ * between them rewritten to the exported file names so the set browses on
+ * its own.
+ *
+ * SAME RENDER AS ONE NOTE. Every note in the cascade goes through the
+ * exact `buildNoteExport` path `exportHtml` uses, including opening the
+ * preview when pack folders are configured, revealing a hidden panel, and
+ * waiting for `ready` before asking the webview to render. The webview
+ * renders whatever text it is handed, so one open panel renders every note
+ * in the walk; each request carries its own deadline, so a webview that
+ * stops answering costs a classified static fallback for that note rather
+ * than a hung command.
+ *
+ * LINKS. `./cascade-links.ts` resolves an ordinary markdown link against
+ * the folder of the note that wrote it, which is the link form a workspace
+ * uses. The resolved note must then land inside the SAME roots an exported
+ * image must land inside, the note's own folder and every open workspace
+ * folder, so a link that points outside is never read. It stays in the
+ * exported page exactly as the author wrote it.
+ *
+ * VALUES AND IMAGES are per note, not per command: each note's own
+ * persisted last run is baked into its own file, and each note's images
+ * resolve against its own folder.
+ *
+ * An untitled buffer has no folder to resolve anything against, so its
+ * cascade is the one note itself.
+ */
+export async function exportHtmlCascade(
+  context: vscode.ExtensionContext,
+): Promise<void> {
+  const document =
+    activePreviewableDocument() ??
+    (active?.source.kind === 'document' ? active.source.document : undefined);
+  if (!document) {
+    void vscode.window.showInformationMessage(
+      EXPORT_CASCADE_NO_DOCUMENT_MESSAGE,
+    );
+    return;
+  }
+
+  const defaultName = exportCascadeDefaultFileName(document.uri.path);
+  const defaultUri =
+    document.uri.scheme === 'untitled'
+      ? undefined
+      : vscode.Uri.joinPath(document.uri, '..', defaultName);
+  const target = await vscode.window.showSaveDialog({
+    title: EXPORT_CASCADE_SAVE_DIALOG_TITLE,
+    saveLabel: EXPORT_CASCADE_SAVE_LABEL,
+    filters: EXPORT_CASCADE_FILTERS as Record<string, string[]>,
+    ...(defaultUri ? { defaultUri } : {}),
+  });
+  if (!target) return; // cancelled
+
+  let outcome: CascadeExportOutcome;
+  try {
+    if (active === undefined && configuredPackFolders().length > 0) {
+      await presentSource(context, { kind: 'document', document });
+    }
+    const preview = active;
+    if (preview !== undefined && !preview.webviewReady) {
+      preview.panel.reveal(preview.panel.viewColumn, true);
+      await waitForWebviewReady(preview, EXPORT_RENDER_TIMEOUT_MS);
+    }
+    const useReact = preview !== undefined && panelHasWebviewPacks(preview);
+
+    // Every note path in this walk is a URI path in the ROOT note's own
+    // scheme and authority, so a cascade works the same on a remote or
+    // virtual file system as it does on disk.
+    const uriForNote = (notePath: string): vscode.Uri =>
+      document.uri.with({ path: notePath });
+    const folderForNote = (notePath: string): vscode.Uri | undefined => {
+      const separator = notePath.lastIndexOf('/');
+      return separator === -1
+        ? undefined
+        : uriForNote(notePath.slice(0, separator));
+    };
+
+    // An open editor's text wins over the file on disk, so a cascade
+    // exported mid-edit matches what the author is looking at, exactly as
+    // the single-note export uses `document.getText()`.
+    const readNote: CascadeNoteReader = async (notePath) => {
+      const uri = uriForNote(notePath);
+      const key = uri.toString();
+      const open = vscode.workspace.textDocuments.find(
+        (candidate) => candidate.uri.toString() === key,
+      );
+      if (open) return open.getText();
+      try {
+        return new TextDecoder().decode(
+          await vscode.workspace.fs.readFile(uri),
+        );
+      } catch {
+        return undefined;
+      }
+    };
+
+    const rootFolder = documentFolder(document);
+    const roots = rootFolder ? imageJailRoots(rootFolder) : [];
+    const resolveLink: CascadeLinkResolver = (link, fromNotePath) => {
+      if (link.kind !== 'markdown') return undefined;
+      if (roots.length === 0) return undefined;
+      const resolved = resolveNoteRelativeLink(fromNotePath, link.path);
+      if (resolved === undefined) return undefined;
+      return isCoveredByRoots(roots, rootKey(uriForNote(resolved)))
+        ? resolved
+        : undefined;
+    };
+
+    const common = {
+      rootPath: document.uri.path,
+      readNote,
+      resolveLink,
+      readValues: (notePath: string) =>
+        readPersistedValues(
+          context.workspaceState,
+          uriForNote(notePath).toString(),
+        ),
+      embedImagesFor: (notePath: string) =>
+        createExportImageReader(folderForNote(notePath)),
+    };
+
+    let request: CascadeArchiveRequest;
+    if (useReact && preview) {
+      const packStylesheets = await packExportStylesheets(
+        preview.packContext.webviewPacks,
+        (path) => readFile(path, 'utf8'),
+      );
+      request = {
+        ...common,
+        renderBody: (text, vals) => requestExportBody(preview, text, vals),
+        packStylesheets,
+        packCount: preview.packContext.webviewPacks.length,
+      };
+    } else {
+      const staticReason =
+        preview === undefined && configuredPackFolders().length > 0
+          ? 'no-renderer'
+          : 'no-packs';
+      request = { ...common, staticReason };
+    }
+
+    const archive = await buildNoteCascadeArchive(request);
+    if (archive.kind === 'failed') {
+      outcome = {
+        kind: 'failed',
+        path: target.fsPath,
+        reason: archive.reason,
+      };
+    } else {
+      await vscode.workspace.fs.writeFile(target, archive.bytes);
+      outcome = {
+        kind: 'written',
+        path: target.fsPath,
+        bytes: archive.bytes.byteLength,
+        notes: archive.notes,
+        unreadable: archive.unreadable,
+        ...(archive.truncated !== undefined
+          ? { truncated: archive.truncated }
+          : {}),
+      };
+    }
+  } catch (error) {
+    outcome = {
+      kind: 'failed',
+      path: target.fsPath,
+      reason: error instanceof Error ? error.message : String(error),
+    };
+  }
+
+  logCascadeDiagnostics(outcome);
+  const message = exportCascadeResultMessage(outcome);
   if (outcome.kind === 'failed') {
     void vscode.window.showWarningMessage(message);
     return;

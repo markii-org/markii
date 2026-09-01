@@ -75,8 +75,8 @@ export type HtmlExportOutcome =
       readonly reason: string;
     };
 
-/** The last path segment of a `/`-separated or `\`-separated path, for naming a file in a message. */
-function fileNameOf(path: string): string {
+/** The last path segment of a `/`-separated or `\`-separated path, for naming a file in a message. Exported for `./export-cascade.ts`, which names its archive the same way. */
+export function fileNameOf(path: string): string {
   const segments = path.split(/[/\\]/);
   return segments[segments.length - 1] ?? path;
 }
@@ -113,8 +113,11 @@ export function exportHtmlResultMessage(outcome: HtmlExportOutcome): string {
  * (GitHub issue #28 slice 2): the pack-vs-static distinction the user asked
  * to keep out of the popup and put here instead, in
  * `exportHtmlDiagnosticLines`'s designated diagnostics surface.
+ *
+ * Exported so `./export-cascade.ts` says this the same way for every note
+ * in a cascade rather than growing a second copy of the wording.
  */
-function renderDiagnosticLine(render: ExportRenderInfo): string {
+export function renderEngineDiagnosticLine(render: ExportRenderInfo): string {
   if (render.engine === 'react') {
     const packs =
       render.packCount === 1 ? '1 pack' : `${String(render.packCount)} packs`;
@@ -161,9 +164,13 @@ function skippedImageLine(skipped: SkippedImage): string {
  * embedded and how many bytes they added, one line per skipped image, and a
  * remote-source count when any sources still reach the network. Empty when
  * a note has no images at all, so an export with nothing to say about
- * images adds nothing to the diagnostics.
+ * images adds nothing to the diagnostics. Exported for the same reason
+ * `renderEngineDiagnosticLine` is: the cascade command reports each note's
+ * images with these exact lines.
  */
-function imageDiagnosticLines(images: EmbeddedImageReport): string[] {
+export function imageEmbedDiagnosticLines(
+  images: EmbeddedImageReport,
+): string[] {
   const lines: string[] = [];
   if (images.embedded.length > 0) {
     const count =
@@ -201,7 +208,7 @@ export function exportHtmlDiagnosticLines(
   }
   return [
     `HTML export wrote ${outcome.path}: ${String(outcome.bytes)} bytes, ${String(outcome.valueCount)} stored values baked in.`,
-    renderDiagnosticLine(outcome.render),
-    ...imageDiagnosticLines(outcome.images),
+    renderEngineDiagnosticLine(outcome.render),
+    ...imageEmbedDiagnosticLines(outcome.images),
   ];
 }

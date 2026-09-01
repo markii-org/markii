@@ -110,6 +110,62 @@ a workspace cannot widen network reach for whoever opens it.
 One property of hostname grants is unchanged and still worth stating: a
 grant covers every port and path on the host it names.
 
+### The note view (`doc`)
+
+A script can read the note it runs in: `doc.directives()` for the note's
+directives as plain data, and `doc.value(name)` for a value a script above
+it already produced.
+
+What this exposes is the note's own content and the values the same run
+already computed. It reaches no host, no clock, no file, and no network,
+and it has no write side. Because it grants no authority, it is not tier
+gated: an auto or scheduled run gets the same view a manual run gets, and
+no grant prompt is involved.
+
+The listing is built once per run, from the tree the run already parsed,
+before anything enters the interpreter. Nothing inside the sandbox parses
+anything. It crosses in as JSON text and is rebuilt into ordinary tables by
+the same in-Lua decoder a fetched response uses, so a script never receives
+a live handle to a host object.
+
+Caps. The listing is bounded before it is handed over: 512 KiB in total,
+2,000 directives, 8 KiB of text and 32 attributes per directive, 1 KiB per
+attribute value, 128 bytes per attribute name, and 200 levels of tree
+depth. Exceeding any of them shortens the listing and sets
+`doc.truncated`; it never raises. A value read through `doc.value` is
+checked against the same depth and node budget the marshaling layer
+already applies to a script's own return value.
+
+Sanitizing. Text and attribute values arrive with C0 control characters
+(other than tab and newline), DEL, and unpaired surrogates removed. The NUL
+byte matters most: the interpreter's string bridge truncates at the first
+NUL, so one pasted into a note would otherwise cut off the rest of the
+listing silently.
+
+Classification. Reading a script that runs later fails the run as a script
+error. It is deliberately not a capability denial: nothing was denied, and
+telling a user their note needs a permission it does not need is worse than
+saying nothing. The message is recorded host-side, out of band, the same
+way genuine capability denials are, so the user sees the sentence rather
+than an interpreter traceback, and a script raising the same text cannot
+forge the classification.
+
+Verification status. An executed probe suite runs against the real
+interpreter (`packages/markii-lua/src/doc.probe.test.ts`) and against a
+real worker isolate (`packages/markii-host/src/run/doc-run.probe.test.ts`).
+It shows that a NUL byte, an unpaired surrogate, a megabyte of text, a
+thousand levels of nesting, an attribute named `__proto__`, and attribute
+values shaped like Lua source all arrive as bounded ordinary strings or do
+not arrive at all; that every cap is enforced where documented and being
+over one is reported rather than raised; that writing to the table or to an
+entry it returned changes nothing for the next call or the next script;
+that rebinding the JSON decoder, `type`, or `error` before a call cannot
+change what it returns; that the raw host handles are nil by the time a
+script runs and the wiring leaves no private name in the globals table;
+that a later-script read fails as specified and cannot be forged; and that
+the table exposes exactly `directives`, `value`, and `truncated`, each
+entry exposing exactly `name`, `form`, `attributes`, and `text`.
+
 ## Triggers cap capabilities
 
 How a run was triggered limits what it may do, independent of what was

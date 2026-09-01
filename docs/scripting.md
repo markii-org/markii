@@ -81,6 +81,79 @@ data-bound component. When a run has failed, the reason appears as a hover
 tooltip on that placeholder, never as error text in the page. A document
 never breaks because its data isn't there yet.
 
+## Reading the note from a script
+
+A script knows its own source and nothing about the note around it. That
+makes one common shape awkward: you write ten question cards by hand, then
+want a summary built from those same ten cards without typing them again.
+
+The `doc` table closes that gap. It is in scope for every script block and
+holds three things.
+
+`doc.directives(filter)` returns the note's directives in document order.
+Each one is a table:
+
+```lua
+{
+  name = "prep_q",
+  form = "container",
+  attributes = { level = "easy" },
+  text = "A false positive, never a false negative.",
+}
+```
+
+`form` is `"leaf"`, `"container"`, or `"inline"`. `text` is the
+directive's inner text with the markdown stripped, blocks separated by a
+newline. `attributes` holds values as written, always as strings; an
+attribute written bare reads as an empty string.
+
+`filter` is optional. Pass `{ name = "prep_q" }` for only the directives
+with that name:
+
+```lua
+local cards = doc.directives{ name = "prep_q" }
+```
+
+A directive written inside another appears in the list right after its
+parent, so a filter by name finds every match whatever wraps it. A
+container's `text` includes the text of anything nested inside it, because
+that text is inside the container.
+
+`doc.value(name)` returns what the script named `name` produced, provided
+that script sits above the caller. Scripts run in document order, so
+"above" means "already finished". A name no script carries reads as nil,
+and so does a name whose script failed; that failure is already reported
+against the script that had it.
+
+Reading a name that belongs to a script further down the note, or to the
+caller itself, fails the run, and the note's marker reads: reads "quiz",
+which runs later in the note. This is deliberately not a nil. The value
+would otherwise mean something different depending on where the reader was
+written, and a note that quietly changes meaning when you move a block is
+worse than one that tells you to move it back.
+
+`doc.truncated` says whether the listing is complete. A note far larger
+than anything written by hand can exceed the caps (512 KiB in total, 2,000
+directives, 8 KiB of text and 32 attributes per directive). Over a cap the
+listing is shortened and this flag is true. It is never an error.
+
+Together, a note that collects its own questions:
+
+```lua {name=quiz}
+local questions = {}
+for _, card in ipairs(doc.directives{ name = "prep_q" }) do
+  questions[#questions + 1] = { q = card.attributes.q, answer = card.text }
+end
+return { questions = questions }
+```
+
+The `doc` table is read-only. Writing to it, or to anything it returns,
+changes nothing: the next call rebuilds its tables, and the next script
+runs in a fresh interpreter. It also grants nothing. Everything it exposes
+is the note's own content and this run's own values, so unlike `net`,
+`cache`, and `bundle` it needs no permission and is not tier gated. An auto
+or scheduled run sees exactly what a manual run sees.
+
 ## Rendering never runs code
 
 Opening a note executes nothing. Rendering only reads last-known values from

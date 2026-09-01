@@ -126,6 +126,59 @@ describe('contributes.menus — explorer context (bundle preview)', () => {
   });
 });
 
+describe('contributes — the two export commands (#28, #36)', () => {
+  // Both export commands are reachable only through `contributes`: the
+  // palette entry, and the editor-title group the single export already
+  // sits in. A cascade export writes a whole archive of files, so the two
+  // must stay side by side and stay scoped the same way; an edit that
+  // dropped either declaration would make the command invisible with
+  // nothing else failing.
+  function commandTitle(command: string): string {
+    const commands = asArray(contributes.commands, 'contributes.commands')
+      .map((entry) => asRecord(entry, 'contributes.commands[]'))
+      .filter((entry) => entry.command === command);
+    expect(commands).toHaveLength(1);
+    return asString(commands[0]?.title, `${command} title`);
+  }
+
+  function menuEntry(menu: string, command: string): Record<string, unknown> {
+    const menus = asRecord(contributes.menus, 'contributes.menus');
+    const entries = asArray(menus[menu], `menus[${JSON.stringify(menu)}]`)
+      .map((entry) => asRecord(entry, `menus[${JSON.stringify(menu)}][]`))
+      .filter((entry) => entry.command === command);
+    expect(entries).toHaveLength(1);
+    return entries[0] as Record<string, unknown>;
+  }
+
+  it('declares both commands under the Markii category', () => {
+    expect(commandTitle('markii.exportHtml')).toBe('Export as HTML…');
+    expect(commandTitle('markii.exportHtmlCascade')).toBe(
+      'Export as HTML cascade…',
+    );
+  });
+
+  it('puts the cascade command beside the single export in the editor title menu, with the same scope', () => {
+    const single = menuEntry('editor/title', 'markii.exportHtml');
+    const cascade = menuEntry('editor/title', 'markii.exportHtmlCascade');
+    expect(single.group).toBe('1_markii@1');
+    expect(cascade.group).toBe('1_markii@2');
+    expect(cascade.when).toBe(single.when);
+
+    const pattern = resourceFilenamePattern(
+      asString(cascade.when, 'cascade menu entry when'),
+    );
+    expect(pattern.test('notes.mk.md')).toBe(true);
+    expect(pattern.test('notes.md')).toBe(false);
+  });
+
+  it('offers both in the command palette on the same condition', () => {
+    const single = menuEntry('commandPalette', 'markii.exportHtml');
+    const cascade = menuEntry('commandPalette', 'markii.exportHtmlCascade');
+    expect(cascade.when).toBe(single.when);
+    expect(cascade.when).toBe('editorLangId == markii || markii.previewActive');
+  });
+});
+
 describe('contributes.configuration — markii.packs application scope (H-1)', () => {
   // H-1 (pass-3 pentest report, section 10.2): `markii.packs` being
   // USER-scope only is the entire reason a malicious repo's

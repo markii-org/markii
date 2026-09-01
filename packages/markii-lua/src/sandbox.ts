@@ -1,4 +1,5 @@
 import type { ScriptView } from '@markii/bundle';
+import type { DocView } from '@markii/runtime';
 import { LuaReturn, type LuaThread } from 'wasmoon';
 import {
   buildCapabilities,
@@ -7,6 +8,7 @@ import {
   type NetGrants,
   type NetProvider,
 } from './capabilities.js';
+import { buildDoc } from './doc.js';
 import { MARSHAL_ERROR_TAG, ScriptLimitError } from './errors.js';
 import type { ScriptFailure, ScriptMarshalReason } from './errors.js';
 import { createEmptyLuaEngine } from './globals.js';
@@ -29,6 +31,14 @@ export interface RunScriptOptions {
   cache?: CacheProvider;
   /** Bundle-scoped filesystem (spec §11), already capability-restricted — see `@markii/bundle`'s `createScriptView`. Also backs bundle-local `require "scripts/..."` (`./require`) — the SAME `ScriptView`, so a module require goes through the identical path-jail and read-permission check as `bundle.read`. */
   bundle?: ScriptView;
+  /**
+   * This script's read-only view of the note it runs in (GitHub issue #33,
+   * `./doc`), supplied per script by `@markii/runtime`'s
+   * `runDocumentScripts`. Omitted (a standalone `runScript` call), the
+   * `doc` table is still defined, with an empty listing and a `value` that
+   * answers nil: a script never meets a nil `doc`.
+   */
+  doc?: DocView;
   /** Optional pack-module `require` seam (`./require`'s `PackModuleResolver`) — resolves `require "packName/modulePath"`. Omitted (the default: no host wires packs yet), every pack-namespaced `require` fails as a clean capability denial, never a crash. */
   packModuleResolver?: PackModuleResolver;
   maxFetchBytes?: number;
@@ -327,6 +337,20 @@ export async function runScript(
 
     await engine.doString(buildMarshalPrelude(marshalLimits));
 
+    // ./doc: the note-scoped read-only view (GitHub issue #33). Wired
+    // AFTER the marshal prelude and, like `require`, wired unconditionally
+    // — with no `options.doc` it is an empty listing, never an absent
+    // global. It records nothing on `denials`: nothing here is a
+    // capability, so nothing here may classify a run as capability-denied.
+    const docBuild = buildDoc({
+      ...(options.doc ? { doc: options.doc } : {}),
+      marshalLimits,
+    });
+    for (const [name, fn] of Object.entries(docBuild.rawGlobals)) {
+      engine.global.set(name, fn);
+    }
+    await engine.doString(docBuild.preludeLua);
+
     thread = engine.global.newThread();
     threadStackIndex = engine.global.getTop();
     limitHandle = installLimits(thread, limits);
@@ -460,6 +484,21 @@ export async function runScript(
             message: denial.message,
           },
         };
+      }
+      // A refused `doc` read (`./doc`, GitHub issue #33), recorded the
+      // same out-of-band way and checked AFTER the capability handle,
+      // which outranks it: a genuine denial is the more important thing to
+      // tell the user about. This is NOT a capability failure, so it stays
+      // a `'runtime'` kind (`'script-error'` once `./executor` maps it);
+      // the handle exists only so the reported MESSAGE is the clean
+      // sentence rather than the Lua-wrapped one, which arrives prefixed
+      // with "Error: " and trailing a stack traceback. It carries the same
+      // accepted edge as the denial handle above: a script that provokes a
+      // refusal, swallows it with its own `pcall`, and then fails for an
+      // unrelated reason is still reported against the refusal.
+      const rejection = docBuild.rejections.last();
+      if (rejection) {
+        return { ok: false, error: { kind: 'runtime', message: rejection } };
       }
       return { ok: false, error: classifyRuntimeError(runResult.err) };
     }

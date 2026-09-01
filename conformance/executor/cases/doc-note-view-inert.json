@@ -1,0 +1,16 @@
+{
+  "id": "isolation/doc-note-view-inert",
+  "area": "isolation",
+  "invariant": "The note view an executor exposes is inert, capped data: guest writes to it never reach the host, the next call, or the next script, and it grants no capability of its own.",
+  "scenario": {
+    "hostInput": "a note listing (directives in document order, each with name, form, attributes, plain text) plus this script's position in the note",
+    "guestCode": "list the note's directives; mutate an entry, its attributes, and the view itself; list again; enumerate every name the view exposes"
+  },
+  "mustHold": [
+    "listing entries expose only the documented fields, and the view only the documented names",
+    "a mutation the guest makes is not visible to a later call in the same run, nor to any later script",
+    "content over the documented caps is reported as truncated, never raised as an error and never delivered whole",
+    "no ambient capability becomes reachable through the view: it is data, not a handle",
+    "a listing string reaches the guest with control characters and unpaired surrogates already removed, so no single character can truncate the payload"
+  ]
+}

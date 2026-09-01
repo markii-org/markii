@@ -3,6 +3,7 @@ import {
   esbuildBrowserModulePath,
   esbuildWasmBinaryPath,
   exportHtml,
+  exportHtmlCascade,
   openPreview,
   packCacheDir,
   resetScriptGrants,
@@ -571,7 +572,8 @@ function loadConfiguredPacksForCompletion(): Promise<
  * (`markii.openPreview`, `markii.runScripts`, `markii.resetScriptGrants`,
  * `markii.addPackFolder`, `markii.enableScheduledRefresh`,
  * `markii.toggleRunOnOpen`, `markii.showDiagnostics`,
- * `markii.exportPack`, `markii.insertComponent`, `markii.exportHtml`) and
+ * `markii.exportPack`, `markii.insertComponent`, `markii.exportHtml`,
+ * `markii.exportHtmlCascade`) and
  * delegating all actual behavior to `preview-panel.ts` and small plain
  * helpers.
  */
@@ -646,6 +648,12 @@ export function activate(context: vscode.ExtensionContext): void {
       void exportHtml(context);
     },
   );
+  const exportHtmlCascadeCommandHandle = vscode.commands.registerCommand(
+    'markii.exportHtmlCascade',
+    () => {
+      void exportHtmlCascade(context);
+    },
+  );
 
   // Directive autocompletion and hover (GitHub issue #27, slice 2). The
   // cache avoids re-discovering packs from disk on every keystroke; it is
@@ -687,6 +695,7 @@ export function activate(context: vscode.ExtensionContext): void {
     exportPackCommandHandle,
     insertComponentCommandHandle,
     exportHtmlCommandHandle,
+    exportHtmlCascadeCommandHandle,
     completionProviderHandle,
     hoverProviderHandle,
     packsConfigChangeListener,

@@ -1,4 +1,10 @@
 import type { ScriptBlock } from '@markii/core';
+import {
+  createDocViewSource,
+  EMPTY_DIRECTIVE_LISTING,
+  type DocumentContext,
+  type DocView,
+} from './doc.js';
 import { normalizeFailureKind, type FailureKind } from './failure.js';
 import type { StoredValue, ValueStore } from './store.js';
 import type { VaultWriter } from './vault.js';
@@ -92,6 +98,19 @@ export type ExecuteResult = ExecuteSuccess | ExecuteFailure;
 export type ScriptExecutor = (input: {
   code: string;
   tier: ExecutionTier;
+  /**
+   * This script's read-only view of the note it lives in (`./doc.ts`,
+   * GitHub issue #33): the note's directives as plain data, and a read of
+   * what the scripts ABOVE this one already produced. Optional so an
+   * executor written before this existed still satisfies the type; every
+   * executor that does expose it must expose it as read-only data and must
+   * turn a rejected `value()` read into an ordinary failed execution.
+   *
+   * It carries no authority and is therefore NOT tier-gated: the same view
+   * is handed to a script under `'auto'` as under `'manual'`, because
+   * everything in it is the note's own content and this run's own values.
+   */
+  doc?: DocView;
 }) => Promise<ExecuteResult>;
 
 /** One script's outcome from a `runDocumentScripts` batch, in document order. */
@@ -180,6 +199,17 @@ export interface RunDocumentScriptsOptions {
    * (successfully) produced.
    */
   vault?: VaultWriter;
+  /**
+   * The note itself, for the `doc` view a script sees (`./doc.ts`). The
+   * caller builds this once from the tree it already parsed to find
+   * `scripts`; this package parses nothing.
+   *
+   * Absent, scripts still get a `doc` view, with an empty listing — the
+   * ORDERING rules `doc.value` enforces do not depend on it, so a host
+   * that never builds a listing still cannot let one script read another
+   * that has not run.
+   */
+  doc?: DocumentContext;
 }
 
 function describeThrown(err: unknown): string {
@@ -229,6 +259,7 @@ async function runOne(
   executor: ScriptExecutor,
   tier: ExecutionTier,
   loadSource: RunDocumentScriptsOptions['loadSource'],
+  doc: DocView,
 ): Promise<RunOneOutcome> {
   let code: string;
   try {
@@ -264,7 +295,7 @@ async function runOne(
 
   let result: ExecuteResult;
   try {
-    result = await executor({ code, tier });
+    result = await executor({ code, tier, doc });
   } catch (err) {
     const message = describeThrown(err);
     const ranAt = Date.now();
@@ -342,18 +373,37 @@ export async function runDocumentScripts(
   const { scripts, executor, trigger, store, loadSource, vault } = options;
   const tier = tierForTrigger(trigger);
 
+  // GitHub issue #33: one source of `doc` views for the whole batch. Built
+  // unconditionally, even with no `options.doc`, because it also owns the
+  // "a script may only read what ran above it" rule, which is a property
+  // of this loop's ordering rather than of the listing.
+  const docViews = createDocViewSource({
+    directives: options.doc?.directives ?? EMPTY_DIRECTIVE_LISTING,
+    scriptNames: scripts.map((script) => script.name),
+  });
+
   const results: RunSummaryEntry[] = [];
   const seenNames = new Set<string>();
   const duplicateNames = new Set<string>();
 
-  for (const script of scripts) {
+  for (const [index, script] of scripts.entries()) {
     if (seenNames.has(script.name)) {
       duplicateNames.add(script.name);
     }
     seenNames.add(script.name);
 
-    const outcome = await runOne(script, executor, tier, loadSource);
+    const outcome = await runOne(
+      script,
+      executor,
+      tier,
+      loadSource,
+      docViews.viewFor(index),
+    );
     store.set(script.name, outcome.storedValue);
+    // Recorded AFTER the run, so a script can never see its own name, and
+    // recorded for a failed run too (as `undefined`), so a later reader
+    // gets nil rather than a refusal blaming it for someone else's error.
+    docViews.recordCompleted(script.name, outcome.storedValue.value);
 
     // Publishing (docs/scripting.md): only for a block that both asked to
     // publish (bare `publish` on its fence — see `ScriptBlock.publish`) and

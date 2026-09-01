@@ -6,6 +6,72 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **A script can read the note it runs in** (`@markii/runtime`,
+  `@markii/lua`). A `doc` table is now in scope for every script block:
+  `doc.directives(filter)` returns the note's directives in document order,
+  each as `{name, form, attributes, text}` with the inner markdown
+  stripped, and `doc.value(name)` returns what a script ABOVE the caller
+  produced. That is enough for a note to collect what its author already
+  wrote: several `:::prep_q` blocks, one script that turns them into a
+  quiz, one component that renders it. `filter` accepts `{name = "..."}`;
+  a directive written inside another appears in the list right after its
+  parent, so filtering by name finds every match whatever wraps it.
+  `doc.truncated` says whether anything was left out to stay inside the
+  caps.
+
+  The table is read-only and carries no authority, so it is not tier
+  gated: an auto or scheduled run sees exactly what a manual run sees, and
+  nothing new was granted. Reading a name that belongs to a script further
+  down the note (or to the caller itself) fails the run and the marker
+  reads "script error: reads "quiz", which runs later in the note", rather
+  than quietly returning a value whose meaning depends on where the reader
+  happened to be written. An unknown name, and a name whose script failed,
+  both read as nil.
+
+- **`@markii/runtime`: `buildDirectiveListing`, `createDocViewSource`,
+  `laterScriptReadMessage`, `DEFAULT_DOC_LISTING_LIMITS`,
+  `EMPTY_DIRECTIVE_LISTING`, `sanitizeText`, `utf8ByteLength`**, plus the
+  `DirectiveEntry`, `DirectiveListing`, `DocListingLimits`, `DocView`,
+  `DocValueRead`, `DocViewSource`, `DocumentContext` and
+  `DocumentTreeNode` types. `runDocumentScripts` takes a new optional
+  `doc` option (the listing the host built from the tree it already
+  parsed) and `ScriptExecutor` receives a new optional `doc` input, one
+  view per script. An executor written before this still satisfies the
+  type and behaves exactly as it did.
+
+  The listing is capped: 512 KiB in total, 2,000 directives, 8 KiB of text
+  and 32 attributes per directive, 1 KiB per attribute value, and 200
+  levels of tree depth. Being over a cap shortens the listing and sets
+  `truncated`; it is never an error. Text and attribute values reach a
+  script with control characters and unpaired surrogates already removed.
+
+- **`@markii/lua`: `buildDoc` and the `DocConfig`/`DocRejections` types**,
+  and a `doc` option on `runScript`. The listing crosses into Lua as JSON
+  text and is decoded by the same trusted in-Lua decoder `net.fetch_json`
+  uses, so a script receives genuine Lua tables. Each `doc.directives()`
+  call decodes afresh, so an entry a script writes to cannot change what
+  the next call returns, and each script already runs in its own engine. A
+  refused read is recorded out of band, the way capability denials already
+  are, so the reported sentence is the clean one rather than a Lua stack
+  traceback, and a script cannot forge it.
+
+### Added
+
+- **Export a note and the notes it links to as one archive** (VS Code
+  extension). **Markii: Export as HTML cascade…** follows the note-relative
+  markdown links out of the active note, exports each note it reaches the
+  same way the single-note export does, and writes one zip archive at a path
+  you pick. Links between exported notes are rewritten to the exported file
+  names, so the archive browses on its own, and a link to anything outside
+  your workspace or the note's own folder is never followed and stays exactly
+  as written. The walk is bounded at four hops and one hundred notes, and
+  every note that was skipped or could not be read is named on the Markii
+  output channel. This mirrors the Obsidian plugin's **Export Markii note as
+  HTML cascade**, and both hosts share the walk, the naming, the link
+  rewriting, and the archive itself.
+
 ## [0.10.0] - 2026-09-01
 
 ### Added

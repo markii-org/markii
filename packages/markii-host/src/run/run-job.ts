@@ -22,6 +22,7 @@
  */
 import { extractScripts, parse } from '@markii/core';
 import {
+  buildDirectiveListing,
   createValueStore,
   runDocumentScripts,
   type FailureKind,
@@ -233,6 +234,12 @@ export async function runJob(
 
   const tree = parse(job.text);
   const scripts = extractScripts(tree);
+  // GitHub issue #33: the note's own directives, as capped plain data for
+  // the `doc` table a script sees. Built from the tree ALREADY parsed on
+  // the line above, so a run still parses the note exactly once, and built
+  // HERE rather than in either host so both isolates (the Node worker and
+  // the Web Worker) get a listing produced by one piece of code.
+  const directives = buildDirectiveListing(tree);
 
   // Slice 2 of the .mkz Run-path arc (GitHub issue #9): a bundle-backed run
   // gets a snapshot-backed ScriptView (never a live zip/disk handle — see
@@ -287,6 +294,9 @@ export async function runJob(
     // read-only gate for auto/scheduled runs. Never note-influenced.
     trigger: job.trigger ?? 'manual',
     store,
+    // Read-only and tier-free: the listing is the note's own content, so
+    // it is handed to an auto/scheduled run exactly as to a manual one.
+    doc: { directives },
     // `src=scripts/foo.lua` resolution (design point 4): the referenced
     // file's source lives in the snapshot under its own bundle-relative
     // path (`ScriptBlock.src` already carries the full "scripts/..." path

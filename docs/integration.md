@@ -333,11 +333,26 @@ surface named in the host checklist above.
 
 ### Exporting a linked set
 
-One note rarely stands alone. The Obsidian plugin can follow the links out of
-a note, export every note it reaches, and write the whole set as one zip
-beside the root note. The walk follows both wikilinks and markdown links that
-resolve to notes in the vault, detects cycles, and stops at a depth bound and
-a note-count bound, saying on the diagnostics surface which bound stopped it.
+One note rarely stands alone. Both reference hosts can follow the links out
+of a note, export every note they reach, and write the whole set as one zip
+archive. Obsidian writes the archive beside the root note in the vault. VS
+Code asks where to save it, offering the root note's own name with a `.zip`
+extension. Each note in the set is exported exactly the way that host
+exports a single note, so pack components, stored values, and embedded
+images behave the same in a set as they do alone.
+
+What counts as a link is the host's decision, because only the host knows
+what its own links mean. Obsidian resolves both wikilinks and markdown links
+against the vault. VS Code resolves note-relative markdown links against the
+folder of the note that wrote them, and refuses any target that lands
+outside the note's own folder and the open workspace folders. Neither host
+follows a link to something that is not a markdown note.
+
+The walk detects cycles and stops at a depth bound and a note-count bound,
+saying on the diagnostics surface which bound stopped it. A note that a link
+pointed at and the host could not read is named there too, beside the note
+that linked to it, so a set that came back smaller than expected is never
+silent about why.
 
 Links between exported notes are rewritten to point at the sibling files, so
 the archive is navigable with no vault and no network. A link to a note
@@ -345,9 +360,10 @@ outside the exported set, or to something that is not a note, is left exactly
 as written. A wikilink that does point into the set becomes a markdown link,
 because Markii renders CommonMark, where a wikilink is ordinary text rather
 than a link; without that conversion the exported pages could not reach each
-other. The walk, the naming, and the rewriting are host-neutral logic in
-`@markii/host`, so a second host can adopt the command without reimplementing
-any of it. Exporting a linked set to PDF is not offered.
+other. The walk, the naming, the rewriting, and the archive are host-neutral
+logic in `@markii/host`, so a host adopts the command by supplying two
+functions: one that reads a note and one that resolves a link. Exporting a
+linked set to PDF is not offered.
 
 ## Where frameworks live
 

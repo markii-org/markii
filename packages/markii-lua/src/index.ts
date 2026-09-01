@@ -46,6 +46,9 @@ export {
   netProviderDenial,
 } from './capabilities.js';
 
+export type { DocConfig } from './doc.js';
+export { buildDoc } from './doc.js';
+
 export type { MarshalLimits } from './marshal.js';
 export {
   DEFAULT_MARSHAL_LIMITS,

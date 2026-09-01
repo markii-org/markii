@@ -23,13 +23,16 @@ import type { ScriptFailure } from './errors.js';
  */
 
 /**
- * Everything `runScript` accepts except `code`/`tier` — those two are
- * supplied per call by `runDocumentScripts` (`@markii/runtime`); everything
+ * Everything `runScript` accepts except `code`/`tier`/`doc` — those three
+ * are supplied per call by `runDocumentScripts` (`@markii/runtime`): the
+ * first two per the `ScriptExecutor` contract, and `doc` because a note
+ * view is per-SCRIPT (it says which values are already available), so it
+ * can never be captured once at construction time; everything
  * else (net/netGrants/cache/bundle/maxFetchBytes/limits/marshalLimits) is
  * this note's fixed capability/resource configuration, closed over once at
  * executor-construction time.
  */
-export type LuaExecutorConfig = Omit<RunScriptOptions, 'code' | 'tier'>;
+export type LuaExecutorConfig = Omit<RunScriptOptions, 'code' | 'tier' | 'doc'>;
 
 /**
  * Maps this package's own `ScriptFailure.kind` (`'limit' | 'capability' |
@@ -77,8 +80,13 @@ function toRuntimeFailureKind(failure: ScriptFailure): FailureKind {
 export function createLuaExecutor(
   config: LuaExecutorConfig = {},
 ): ScriptExecutor {
-  return async ({ code, tier }): Promise<ExecuteResult> => {
-    const result = await runScript({ ...config, code, tier });
+  return async ({ code, tier, doc }): Promise<ExecuteResult> => {
+    const result = await runScript({
+      ...config,
+      code,
+      tier,
+      ...(doc ? { doc } : {}),
+    });
     if (result.ok) {
       return { ok: true, value: result.value };
     }

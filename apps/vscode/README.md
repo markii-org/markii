@@ -97,7 +97,13 @@ Enable Scheduled Refresh…** prompts for a number of seconds and writes
   images working. The static renderer knows the standard component set, so a
   pack component exports as the same labeled fallback box an uninstalled
   pack shows, with your own content still inside it. For a PDF, open the
-  exported file in a browser and print it.
+  exported file in a browser and print it. **Markii: Export as HTML
+  cascade…** does the same for a whole set: it follows the markdown links
+  out of the note, exports every note it reaches, and writes one zip
+  archive, with the links between those notes pointing at the exported
+  files so the set browses offline. A link to anything outside your
+  workspace is never followed and stays as you wrote it, and every note
+  left out is named on the Markii output channel.
 - **Images.** Local images resolve relative to the note (`nice.png` beside
   it, `img/nice.png` in a subfolder) and remote images load over https.
   Anything outside the note's folder and your workspace is not loaded, the

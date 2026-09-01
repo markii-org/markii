@@ -30,6 +30,27 @@ export {
 } from './vault.js';
 
 export {
+  DEFAULT_DOC_LISTING_LIMITS,
+  EMPTY_DIRECTIVE_LISTING,
+  buildDirectiveListing,
+  createDocViewSource,
+  laterScriptReadMessage,
+  sanitizeText,
+  utf8ByteLength,
+  type DirectiveEntry,
+  type DirectiveForm,
+  type DirectiveListing,
+  type DocListingLimits,
+  type DocValueRead,
+  type DocValueRejection,
+  type DocValueSuccess,
+  type DocView,
+  type DocViewSource,
+  type DocumentContext,
+  type DocumentTreeNode,
+} from './doc.js';
+
+export {
   runDocumentScripts,
   tierForTrigger,
   type ExecuteFailure,

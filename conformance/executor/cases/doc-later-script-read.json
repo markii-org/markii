@@ -1,0 +1,16 @@
+{
+  "id": "contract/doc-later-script-read",
+  "area": "contract",
+  "invariant": "A script may read only the values of scripts that finished above it; reading a name that belongs to a script at or after its own position is a failed execution, not a stale or absent value.",
+  "scenario": {
+    "hostInput": "a note whose scripts run sequentially in document order, with the values of the finished ones available to the view",
+    "guestCode": "read a name produced above; read a name produced below; read the guest's own name; read a name no script carries"
+  },
+  "mustHold": [
+    "a name produced above reads back as that value",
+    "a name produced below, and the script's own name, fail the execution",
+    "the failure is classified 'script-error': it claims no capability was denied and no tier blocked it",
+    "the reported message is the host-recorded sentence, not text that crossed the guest boundary, so a guest cannot forge it and a guest's own error cannot displace it",
+    "a name no script carries, and a name whose script failed, both read as absent rather than failing"
+  ]
+}
