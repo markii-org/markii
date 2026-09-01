@@ -99,13 +99,42 @@ describe('issue #12 / item 5: markii.runOnOpen and markii.refreshIntervalSeconds
     expect(property('markii.refreshIntervalSeconds').scope).toBe('application');
   });
 
-  it('every setting that can cause code to run unattended is application-scoped, so a new one cannot be added without this decision being made', () => {
+  /**
+   * `markii.scriptsDisabled` (GitHub issue #34) is the same declaration
+   * read from the other side. It turns script execution OFF for every
+   * trigger on this machine, so the injection to foreclose is a repo's
+   * `.vscode/settings.json` setting it back to `false` for a reader who
+   * turned it on. `application` scope is what makes that impossible, and,
+   * as with the two settings above, the pin is one string in
+   * `package.json` that nothing else depends on.
+   */
+  it('markii.scriptsDisabled is pinned to application scope, so a workspace cannot turn script execution back on for a reader who turned it off', () => {
+    expect(Object.hasOwn(property('markii.scriptsDisabled'), 'scope')).toBe(
+      true,
+    );
+    expect(property('markii.scriptsDisabled').scope).toBe('application');
+  });
+
+  it('every setting that decides whether code runs unattended is application-scoped, so a new one cannot be added without this decision being made', () => {
     for (const name of [
       'markii.packs',
       'markii.runOnOpen',
       'markii.refreshIntervalSeconds',
+      'markii.scriptsDisabled',
     ]) {
       expect(property(name).scope).toBe('application');
     }
+  });
+
+  /**
+   * The counterpart pin: `markii.hideScriptBlocks` is COSMETIC and must
+   * NOT be dragged into the list above by a future tidy-up. It hides the
+   * collapsed script markers in the preview and nothing else, so a
+   * workspace setting it changes what a reader looks at, never what runs.
+   * Pinning it to `window` here records that as a decision rather than an
+   * oversight.
+   */
+  it('markii.hideScriptBlocks stays window scope, because it is cosmetic and authorizes nothing', () => {
+    expect(property('markii.hideScriptBlocks').scope).toBe('window');
   });
 });

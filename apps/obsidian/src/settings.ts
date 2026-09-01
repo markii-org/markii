@@ -33,6 +33,19 @@ export type PreviewWidth = 'normal' | 'wide' | 'full';
 
 export interface MarkiiSettings {
   /**
+   * Hide script blocks in the preview (GitHub issue #34). A
+   * ` ```lua {name=...} ` fence normally renders as a collapsed `⚙ name`
+   * marker; with this on, the preview leaves the markers out entirely, for
+   * a note meant to be read rather than edited.
+   *
+   * Cosmetic, which is why it belongs in this vault-synced file: it
+   * authorizes nothing, and it hides the SOURCE blocks and nothing else. A
+   * failed script still marks the value it feeds, still shows its failure
+   * in the run notice a manual run gets, and still writes its full reason
+   * to the developer console, this host's diagnostics surface.
+   */
+  hideScriptBlocks: boolean;
+  /**
    * 'main': a new tab in the main workspace area, split beside the active
    * editor (vertical split) — the default, since a document preview needs
    * document width, not the narrow utility sidebar.
@@ -61,7 +74,17 @@ export interface MarkiiSettings {
 export const DEFAULT_SETTINGS: MarkiiSettings = {
   previewPlacement: 'main',
   previewWidth: 'normal',
+  hideScriptBlocks: false,
 };
+
+/**
+ * The class the view root carries while `hideScriptBlocks` is on.
+ * `src/obsidian-theme.css` turns it into a single `display: none` on
+ * `.mk-script` and on nothing else, so every failure surface stays where
+ * it was. Named like the width classes beside it, since it lives on the
+ * same element.
+ */
+export const HIDE_SCRIPT_BLOCKS_CLASS = 'mk-obsidian-preview--hide-scripts';
 
 const PREVIEW_PLACEMENTS: readonly PreviewPlacement[] = [
   'main',
@@ -131,5 +154,9 @@ export function normalizeSettings(data: unknown): MarkiiSettings {
     previewWidth: isPreviewWidth(raw.previewWidth)
       ? raw.previewWidth
       : DEFAULT_SETTINGS.previewWidth,
+    hideScriptBlocks:
+      typeof raw.hideScriptBlocks === 'boolean'
+        ? raw.hideScriptBlocks
+        : DEFAULT_SETTINGS.hideScriptBlocks,
   };
 }

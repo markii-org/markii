@@ -108,6 +108,16 @@ body {
   border-color: var(--mk-border);
 }
 
+/* ---------- hidden script blocks (markii.hideScriptBlocks, src/preview-width.ts) ----------
+   Hides the collapsed `⚙ name` markers `@markii/react` renders for a
+   `{name=...}` fence, and NOTHING else: per-value failure markers, the
+   run marker, and the pack/uses markers all stay exactly where they were,
+   so a failure a reader needs to see is never hidden with the source. */
+
+.doc.mk-preview--hide-scripts .mk-script {
+  display: none;
+}
+
 /* ---------- this extension's own quiet error state (webview/preview.tsx) ---------- */
 
 .mk-preview__error {

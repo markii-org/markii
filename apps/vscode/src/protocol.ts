@@ -103,6 +103,16 @@ export interface UpdateMessage {
    * webview reads as `normal`, the width the preview has always had.
    */
   readonly previewWidth?: PreviewWidth;
+  /**
+   * Whether the panel was created with `markii.hideScriptBlocks` on (see
+   * `./preview-width.ts`) — purely cosmetic, and like `previewWidth` the
+   * only thing the webview does with it is pick a class for its `.doc`
+   * element, which hides the collapsed `.mk-script` markers and nothing
+   * else. Omitted by an older host or a message that predates the setting,
+   * which the webview reads as `false`, the way the preview has always
+   * rendered.
+   */
+  readonly hideScriptBlocks?: boolean;
 }
 
 /**
@@ -424,6 +434,13 @@ function isUpdateMessage(value: unknown): value is UpdateMessage {
     hasOwn(value, 'previewWidth') &&
     value.previewWidth !== undefined &&
     !isPreviewWidth(value.previewWidth)
+  ) {
+    return false;
+  }
+  if (
+    hasOwn(value, 'hideScriptBlocks') &&
+    value.hideScriptBlocks !== undefined &&
+    typeof value.hideScriptBlocks !== 'boolean'
   ) {
     return false;
   }

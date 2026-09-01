@@ -236,6 +236,66 @@ describe('contributes.configuration — run-on-open / scheduled refresh (#11)', 
   });
 });
 
+describe('contributes — the two script knobs (#34)', () => {
+  function property(name: string): Record<string, unknown> {
+    const configuration = asRecord(
+      contributes.configuration,
+      'contributes.configuration',
+    );
+    const properties = asRecord(
+      configuration.properties,
+      'contributes.configuration.properties',
+    );
+    return asRecord(properties[name], `properties[${JSON.stringify(name)}]`);
+  }
+
+  it('markii.hideScriptBlocks is a boolean defaulting off, so today renders unchanged', () => {
+    const setting = property('markii.hideScriptBlocks');
+    expect(setting.type).toBe('boolean');
+    expect(setting.default).toBe(false);
+  });
+
+  it('markii.scriptsDisabled is a boolean defaulting off, so scripting works as before until asked otherwise', () => {
+    const setting = property('markii.scriptsDisabled');
+    expect(setting.type).toBe('boolean');
+    expect(setting.default).toBe(false);
+  });
+
+  it('declares the toggle command, in the Markii category and in the palette', () => {
+    const commands = asArray(contributes.commands, 'contributes.commands').map(
+      (entry) => asRecord(entry, 'contributes.commands[]'),
+    );
+    const toggle = commands.filter(
+      (entry) => entry.command === 'markii.toggleScriptExecution',
+    );
+    expect(toggle).toHaveLength(1);
+    expect(toggle[0]?.category).toBe('Markii');
+    expect(toggle[0]?.title).toBe('Toggle Script Execution');
+
+    const menus = asRecord(contributes.menus, 'contributes.menus');
+    const palette = asArray(menus.commandPalette, 'menus.commandPalette').map(
+      (entry) => asRecord(entry, 'menus.commandPalette[]'),
+    );
+    expect(
+      palette.some((entry) => entry.command === 'markii.toggleScriptExecution'),
+    ).toBe(true);
+  });
+
+  it('mirrors the existing toggle: same category, same unconditional palette entry as markii.toggleRunOnOpen', () => {
+    const menus = asRecord(contributes.menus, 'contributes.menus');
+    const palette = asArray(menus.commandPalette, 'menus.commandPalette').map(
+      (entry) => asRecord(entry, 'menus.commandPalette[]'),
+    );
+    const runOnOpen = palette.find(
+      (entry) => entry.command === 'markii.toggleRunOnOpen',
+    );
+    const scripts = palette.find(
+      (entry) => entry.command === 'markii.toggleScriptExecution',
+    );
+    expect(Object.keys(runOnOpen ?? {})).toEqual(Object.keys(scripts ?? {}));
+  });
+});
+
 describe('contributes.configuration — markii.allowPrivateNetworkAddresses application scope (#10)', () => {
   // Same reasoning as `markii.packs`' H-1 pin above, applied to the
   // network-widening setting GitHub issue #10 adds: `allowPrivateNetworkAddresses`

@@ -68,11 +68,38 @@ export class MarkiiSettingTab extends PluginSettingTab {
           });
       });
 
+    new Setting(containerEl)
+      .setName('Hide script blocks')
+      .setDesc(
+        'Leaves script markers out of the preview. Failures still show on the values they feed.',
+      )
+      .addToggle((toggle) => {
+        toggle
+          .setValue(this.plugin.settings.hideScriptBlocks)
+          .onChange((value) => {
+            void this.applyHideScriptBlocks(value);
+          });
+      });
+
     containerEl.createEl('h3', { text: 'Scripting' });
     containerEl.createEl('p', {
       text: 'Stored on this device only. Never synced, never shared.',
       cls: 'setting-item-description',
     });
+
+    new Setting(containerEl)
+      .setName('Turn off script execution on this device')
+      .setDesc('No note runs its scripts. Your grants are left as they are.')
+      .addToggle((toggle) => {
+        toggle
+          .setValue(this.plugin.localSettings.scriptsDisabled)
+          .onChange((value) => {
+            this.plugin.saveLocalSettings({
+              ...this.plugin.localSettings,
+              scriptsDisabled: value,
+            });
+          });
+      });
 
     new Setting(containerEl)
       .setName('Run scripts when a note opens')
@@ -183,6 +210,30 @@ export class MarkiiSettingTab extends PluginSettingTab {
     if (next === undefined) return;
     this.plugin.savePackSettings({ packFolders: next });
     this.display();
+  }
+
+  /**
+   * Writes the hide-script-blocks preference and applies it to every
+   * preview that is already open, so the toggle changes what the reader is
+   * looking at instead of only what the next preview will look like.
+   * Purely cosmetic, which is why it lives in the vault-synced settings
+   * beside placement and width; the switch that decides whether scripts
+   * RUN is the device-local one above it, written through
+   * `saveLocalSettings`.
+   */
+  private async applyHideScriptBlocks(value: boolean): Promise<void> {
+    this.plugin.settings = {
+      ...this.plugin.settings,
+      hideScriptBlocks: value,
+    };
+    await this.plugin.saveSettings();
+    for (const leaf of this.app.workspace.getLeavesOfType(
+      MARKII_PREVIEW_VIEW_TYPE,
+    )) {
+      if (leaf.view instanceof MarkiiPreviewView) {
+        leaf.view.applyScriptBlockVisibility();
+      }
+    }
   }
 
   private async applyPlacement(value: string): Promise<void> {

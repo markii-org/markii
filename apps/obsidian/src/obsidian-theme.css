@@ -93,3 +93,18 @@
   max-width: none;
   padding-inline: 1rem;
 }
+
+/**
+ * Hidden script blocks (GitHub issue #34): the `hideScriptBlocks` setting
+ * (`src/settings.ts`), applied to the view root by `src/view.tsx`.
+ *
+ * This hides the collapsed `⚙ name` markers `@markii/react` renders for a
+ * ` ```lua {name=...} ` fence, and NOTHING else. Per-value failure markers,
+ * the missing-pack marker, and every other quiet state stay exactly where
+ * they were, so a failure a reader needs to see is never hidden along with
+ * the source it came from.
+ */
+
+.mk-obsidian-preview--hide-scripts .doc .mk-script {
+  display: none;
+}

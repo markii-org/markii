@@ -1,7 +1,8 @@
 /**
  * DEVICE-LOCAL settings — everything that authorizes execution or network
  * access, or schedules either of those to happen without a click: run on
- * open, and the scheduled-refresh interval. See `src/run/local-storage-memento.ts`'s
+ * open, the scheduled-refresh interval, and the switch that turns script
+ * execution off on this device entirely. See `src/run/local-storage-memento.ts`'s
  * top comment for the full rule this file exists to serve, and
  * `src/settings.ts`'s PERSISTENCE TIER note for the contrast with the
  * ordinary, vault-synced `saveData`-backed settings.
@@ -34,11 +35,32 @@ export interface LocalSettings {
    * it was typed low.
    */
   readonly refreshIntervalSeconds: number;
+  /**
+   * GitHub issue #34: the device-level off switch for the whole Run path.
+   * When it is `true`, no trigger runs a note's scripts on this device:
+   * not the `run-markii-scripts` command, not `runOnOpen` above, not the
+   * scheduled interval. Off by default, so nothing changes for anyone who
+   * never touches it.
+   *
+   * It lives HERE rather than in `src/settings.ts` for the reason this
+   * file exists: it decides whether code runs. A vault-synced copy would
+   * mean one device's decision about executing scripts travelling to every
+   * other device, and to anyone the vault is shared with, which is exactly
+   * the class of setting `saveData` must never carry.
+   *
+   * It is not a security boundary and does not pretend to be one: the tier
+   * gate, the grant model, and the isolate are what contain a script that
+   * DOES run, and none of them change here. Turning this on leaves every
+   * stored grant untouched, and turning it back off re-authorizes nothing
+   * beyond what was already granted by hand.
+   */
+  readonly scriptsDisabled: boolean;
 }
 
 export const DEFAULT_LOCAL_SETTINGS: LocalSettings = {
   runOnOpen: false,
   refreshIntervalSeconds: 0,
+  scriptsDisabled: false,
 };
 
 /**
@@ -65,6 +87,10 @@ export function normalizeLocalSettings(data: unknown): LocalSettings {
         ? raw.runOnOpen
         : DEFAULT_LOCAL_SETTINGS.runOnOpen,
     refreshIntervalSeconds,
+    scriptsDisabled:
+      typeof raw.scriptsDisabled === 'boolean'
+        ? raw.scriptsDisabled
+        : DEFAULT_LOCAL_SETTINGS.scriptsDisabled,
   };
 }
 

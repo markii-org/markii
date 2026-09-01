@@ -148,6 +148,13 @@ interface LocalState extends PersistedState {
    * had.
    */
   readonly previewWidth?: PreviewWidth;
+  /**
+   * Whether the host asked for script markers to be hidden
+   * (`markii.hideScriptBlocks`, `protocol.ts`'s
+   * `UpdateMessage.hideScriptBlocks`), as of the most recent `update`.
+   * Absent means no, the way the preview has always rendered.
+   */
+  readonly hideScriptBlocks?: boolean;
 }
 
 export interface PreviewProps {
@@ -230,6 +237,7 @@ export function Preview({ registry }: PreviewProps): ReactElement {
             // omitted-vs-empty convention.
             lastRun: data.lastRun,
             previewWidth: data.previewWidth,
+            hideScriptBlocks: data.hideScriptBlocks,
           };
         }
         if (data.type === 'bundle-error') {
@@ -245,8 +253,10 @@ export function Preview({ registry }: PreviewProps): ReactElement {
             runValues: undefined,
             bundleError: data.message,
             // Cosmetic and panel-wide: a bundle that failed to resolve is
-            // still shown at the width the panel was opened at.
+            // still shown at the width the panel was opened at, and with
+            // the script-marker preference it was opened with.
             previewWidth: previous.previewWidth,
+            hideScriptBlocks: previous.hideScriptBlocks,
           };
         }
         // `export-request` (GitHub issue #28 slice 2) is `./main.tsx`'s own
@@ -386,6 +396,7 @@ export function Preview({ registry }: PreviewProps): ReactElement {
       <div
         className={previewDocumentClassName(
           state.previewWidth ?? DEFAULT_PREVIEW_WIDTH,
+          state.hideScriptBlocks === true,
         )}
         ref={documentRef}
         key={state.baseUri ?? ''}

@@ -72,6 +72,11 @@
         "category": "Markii"
       },
       {
+        "command": "markii.toggleScriptExecution",
+        "title": "Toggle Script Execution",
+        "category": "Markii"
+      },
+      {
         "command": "markii.showDiagnostics",
         "title": "Show Diagnostics",
         "category": "Markii"
@@ -150,6 +155,9 @@
           "command": "markii.toggleRunOnOpen"
         },
         {
+          "command": "markii.toggleScriptExecution"
+        },
+        {
           "command": "markii.exportPack"
         },
         {
@@ -214,6 +222,18 @@
           "scope": "application",
           "markdownDescription": "Re-run the previewed note's scripts on this interval, in seconds, at the READ-ONLY tier — for dashboard/monitoring notes. `0` (the default) turns scheduled refresh off. A positive value under 5 is treated as 5. Like auto-run, a scheduled run never prompts and never adds network access; it reuses only the hosts you already granted by hand. The interval is read when the preview opens; change it and reopen the preview to apply. This setting is USER-scope only (it cannot be set from a workspace's `.vscode/settings.json`), so opening someone else's project can never start a refresh timer on your behalf."
         },
+        "markii.scriptsDisabled": {
+          "type": "boolean",
+          "default": false,
+          "scope": "application",
+          "markdownDescription": "Turn script execution off on this machine. When it is on, no note runs its Lua script blocks: not an explicit **Markii: Run Scripts**, not `markii.runOnOpen`, and not the `markii.refreshIntervalSeconds` timer. A blocked **Markii: Run Scripts** says so; a blocked auto or scheduled run is written to the Markii output channel instead of showing a popup on every note you open. Notes still preview, still export, and still show whatever values their last run produced. This changes nothing about what you have granted: your existing network and bundle grants are left exactly as they are, and turning script execution back on re-authorizes nothing beyond them. This setting is USER-scope only (it cannot be set from a workspace's `.vscode/settings.json`), so a repository you open can never turn script execution back on for you."
+        },
+        "markii.hideScriptBlocks": {
+          "type": "boolean",
+          "default": false,
+          "scope": "window",
+          "markdownDescription": "Hide script blocks in the preview. A ` ```lua {name=...} ` fence normally renders as a collapsed `⚙ name` marker you can expand to read the source; with this on, the preview leaves it out entirely, for a note meant to be read rather than edited. Cosmetic only: it changes nothing about what runs or what a note can reach, and it hides the SOURCE blocks and nothing else. A failed script still marks the value it feeds, still flips the run marker to its failed state, and still writes its full reason to the Markii output channel. The value is read when the preview opens; change it and reopen the preview to apply."
+        },
         "markii.previewWidth": {
           "type": "string",
           "enum": [
@@ -272,7 +292,7 @@
           {
             "id": "settings",
             "title": "Find the settings",
-            "description": "Markii's four settings are user-scope only, so a workspace can never set them for you. Open Settings filtered to Markii to see them.\n[Open Markii Settings](command:workbench.action.openSettings?%22markii%22)",
+            "description": "Markii's settings for what may run are user-scope only, so a workspace can never set them for you. Open Settings filtered to Markii to see them.\n[Open Markii Settings](command:workbench.action.openSettings?%22markii%22)",
             "media": {
               "markdown": "walkthrough/settings.md"
             },

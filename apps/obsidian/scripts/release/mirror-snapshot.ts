@@ -101,8 +101,28 @@ All of these are in the command palette.
 - **Export Markii note as PDF** prints that same file to a \`.pdf\` beside the
   note. If this device cannot print, the command writes the HTML file instead
   and says so.
+- **Toggle Markii script execution** turns script execution on or off for this
+  device. While it is off, no note runs its scripts, whether you press Run,
+  open a note with run on open enabled, or wait for a scheduled refresh. Your
+  network and bundle grants are left exactly as they are.
 - **Show Markii diagnostics** prints the current preview's pack diagnostics to
   the developer console.
+
+## Settings
+
+Open Settings, go to Community plugins, and click Markii.
+
+Preview placement, preview width, and **Hide script blocks** are ordinary
+plugin settings: they are cosmetic, and they travel with the vault. Hiding
+script blocks leaves the collapsed script markers out of the preview, for a
+note meant to be read rather than edited. It hides the source blocks only: a
+script that fails still marks the value it feeds, and a manual run still says
+that it failed.
+
+The settings under **Scripting**, run on open, the scheduled refresh interval,
+and **Turn off script execution on this device**, are stored on this device
+only. They are never synced and never shared, because each of them decides
+whether code runs.
 
 ## About the source in this repository
 

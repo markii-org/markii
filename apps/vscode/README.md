@@ -25,12 +25,17 @@ active, updates as you type, and matches your VS Code theme.
 
 ## Configuration
 
-Markii has four settings: `markii.packs`, `markii.runOnOpen`,
-`markii.refreshIntervalSeconds`, and `markii.allowPrivateNetworkAddresses`.
-All four are user-scope only. A workspace's `.vscode/settings.json` cannot
-set them, on purpose: it is what stops a repository you open from silently
-enabling script execution, loading a pack, or widening network access on
-your behalf.
+Five settings decide what may run: `markii.packs`, `markii.runOnOpen`,
+`markii.refreshIntervalSeconds`, `markii.scriptsDisabled`, and
+`markii.allowPrivateNetworkAddresses`. All five are user-scope only. A
+workspace's `.vscode/settings.json` cannot set them, on purpose: it is what
+stops a repository you open from silently enabling script execution,
+loading a pack, or widening network access on your behalf, and it is also
+what stops one turning script execution back on once you have turned it
+off.
+
+Two more settings are cosmetic and a workspace may set them:
+`markii.previewWidth` and `markii.hideScriptBlocks`.
 
 To reach them:
 
@@ -52,10 +57,31 @@ A worked example, in that JSON file:
 }
 ```
 
-Two commands write these settings without opening the JSON by hand:
-**Markii: Toggle Run On Open** flips `markii.runOnOpen`, and **Markii:
-Enable Scheduled Refresh…** prompts for a number of seconds and writes
-`markii.refreshIntervalSeconds`.
+Three commands write these settings without opening the JSON by hand:
+**Markii: Toggle Run On Open** flips `markii.runOnOpen`, **Markii: Enable
+Scheduled Refresh…** prompts for a number of seconds and writes
+`markii.refreshIntervalSeconds`, and **Markii: Toggle Script Execution**
+flips `markii.scriptsDisabled`.
+
+### Turning scripts off
+
+Set `markii.scriptsDisabled` to `true` and no note runs its scripts on this
+machine: not **Markii: Run Scripts**, not run on open, not the refresh
+timer. A blocked **Markii: Run Scripts** says so; a blocked automatic run
+is written to the Markii output channel instead of interrupting you on
+every note you open. Notes still preview, still export, and still show
+whatever values their last run produced. Your grants are untouched in both
+directions, so turning script execution back on re-authorizes nothing
+beyond what you had already granted by hand.
+
+### Hiding script blocks
+
+Set `markii.hideScriptBlocks` to `true` and the preview leaves script
+markers out, for a note meant to be read rather than edited. It hides the
+source blocks only. A script that fails still marks the value it feeds,
+still flips the note's run marker to its failed state, and still writes its
+reason to the Markii output channel, so nothing is hidden that you would
+need in order to work out what went wrong.
 
 ## Features
 

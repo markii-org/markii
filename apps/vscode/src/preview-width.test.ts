@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_PREVIEW_WIDTH,
+  HIDE_SCRIPT_BLOCKS_CLASS,
   PREVIEW_WIDTHS,
   isPreviewWidth,
+  normalizeHideScriptBlocks,
   normalizePreviewWidth,
   previewDocumentClassName,
   previewWidthClassName,
@@ -37,5 +39,33 @@ describe('preview width', () => {
   it('names one modifier class per widened value', () => {
     expect(previewDocumentClassName('wide')).toBe('doc mk-preview--wide');
     expect(previewDocumentClassName('full')).toBe('doc mk-preview--full');
+  });
+});
+
+describe('hidden script blocks (markii.hideScriptBlocks, issue #34)', () => {
+  it('reads only a real true as on, so a missing or hostile value renders as it always has', () => {
+    expect(normalizeHideScriptBlocks(true)).toBe(true);
+    expect(normalizeHideScriptBlocks(false)).toBe(false);
+    expect(normalizeHideScriptBlocks(undefined)).toBe(false);
+    expect(normalizeHideScriptBlocks('true')).toBe(false);
+    expect(normalizeHideScriptBlocks(1)).toBe(false);
+    expect(normalizeHideScriptBlocks({})).toBe(false);
+  });
+
+  it('defaults to off, so omitting the argument is the rendering the preview has always had', () => {
+    expect(previewDocumentClassName('normal')).toBe('doc');
+    expect(previewDocumentClassName('normal', false)).toBe('doc');
+  });
+
+  it('adds one modifier class, alongside the width class when there is one', () => {
+    expect(previewDocumentClassName('normal', true)).toBe(
+      `doc ${HIDE_SCRIPT_BLOCKS_CLASS}`,
+    );
+    expect(previewDocumentClassName('wide', true)).toBe(
+      `doc mk-preview--wide ${HIDE_SCRIPT_BLOCKS_CLASS}`,
+    );
+    expect(previewDocumentClassName('full', true)).toBe(
+      `doc mk-preview--full ${HIDE_SCRIPT_BLOCKS_CLASS}`,
+    );
   });
 });

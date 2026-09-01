@@ -75,10 +75,18 @@ describe('mirrorReadme', () => {
       'Insert Markii component',
       'Export Markii note as HTML',
       'Export Markii note as PDF',
+      'Toggle Markii script execution',
       'Show Markii diagnostics',
     ]) {
       expect(readme).toContain(command);
     }
+  });
+
+  it('separates the vault-synced cosmetic settings from the device-local scripting ones', () => {
+    const readme = mirrorReadme('0.2.0');
+    expect(readme).toContain('Hide script blocks');
+    expect(readme).toContain('Turn off script execution on this device');
+    expect(readme).toContain('stored on this device');
   });
 
   it('states the PDF command degrades to writing HTML rather than failing', () => {

@@ -43,7 +43,16 @@ import {
   applyPackStylesheets,
   removePackStylesheets,
 } from './packs/pack-styles.js';
-import { PREVIEW_WIDTH_CLASSES, previewWidthClassName } from './settings.js';
+import {
+  HIDE_SCRIPT_BLOCKS_CLASS,
+  PREVIEW_WIDTH_CLASSES,
+  previewWidthClassName,
+} from './settings.js';
+import {
+  SCHEDULED_REFRESH_NOT_STARTED_LINE,
+  scriptsDisabledDiagnosticLine,
+  scriptsDisabledNotice,
+} from './script-execution.js';
 import type MarkiiPlugin from './main.js';
 
 export const MARKII_PREVIEW_VIEW_TYPE = 'markii-preview';
@@ -161,6 +170,7 @@ export class MarkiiPreviewView extends ItemView {
     container.addClass('mk-obsidian-preview');
     this.root = createRoot(container);
     this.applyPreviewWidth();
+    this.applyScriptBlockVisibility();
 
     // The rendered pane is where a reader actually is when they want to
     // re-run or export a note, so the two primary actions belong in ITS
@@ -202,7 +212,12 @@ export class MarkiiPreviewView extends ItemView {
     const intervalMs = refreshIntervalMsFromSeconds(
       this.plugin.localSettings.refreshIntervalSeconds,
     );
-    if (intervalMs !== undefined) {
+    if (intervalMs !== undefined && this.plugin.localSettings.scriptsDisabled) {
+      // GitHub issue #34: a configured interval plus script execution off
+      // is not an error, but it must not be mute either — the note would
+      // simply stop updating with no explanation anywhere.
+      console.log(SCHEDULED_REFRESH_NOT_STARTED_LINE);
+    } else if (intervalMs !== undefined) {
       this.refreshTimer = setInterval(() => {
         void this.runScripts('scheduled');
       }, intervalMs);
@@ -252,6 +267,26 @@ export class MarkiiPreviewView extends ItemView {
     }
     const current = previewWidthClassName(this.plugin.settings.previewWidth);
     if (current !== undefined) container.addClass(current);
+  }
+
+  /**
+   * Puts (or removes) the hide-script-blocks class on the view root
+   * (GitHub issue #34). Cosmetic, like the width beside it, and it hides
+   * the collapsed `.mk-script` markers and NOTHING else: a failed script
+   * still marks the value it feeds, still produces the manual run's
+   * failure notice, and still writes its reason to the console.
+   *
+   * Public for the same reason `applyPreviewWidth` is: the settings tab
+   * applies the change to previews that are already open, rather than
+   * making the reader close and reopen them.
+   */
+  applyScriptBlockVisibility(): void {
+    const container = this.containerEl.children[1] ?? this.containerEl;
+    if (this.plugin.settings.hideScriptBlocks) {
+      container.addClass(HIDE_SCRIPT_BLOCKS_CLASS);
+    } else {
+      container.removeClass(HIDE_SCRIPT_BLOCKS_CLASS);
+    }
   }
 
   /**
@@ -418,6 +453,26 @@ export class MarkiiPreviewView extends ItemView {
     const file = this.currentFile;
     if (!file) return;
 
+    // GitHub issue #34: the one choke point every trigger passes through,
+    // so the device switch cannot be worked around by a path that forgot
+    // about it. Read from the live local settings (not a copy taken when
+    // the view opened) so turning it on stops an already-open preview.
+    // Grants are deliberately untouched: this decides whether a run
+    // happens at all, and it returns before any grant flow is reached.
+    if (this.plugin.localSettings.scriptsDisabled) {
+      console.log(scriptsDisabledDiagnosticLine(trigger));
+      if (trigger === 'scheduled' && this.refreshTimer !== undefined) {
+        // Stopped rather than left ticking against a closed door: the log
+        // line above would otherwise repeat every interval for as long as
+        // this preview stayed open.
+        clearInterval(this.refreshTimer);
+        this.refreshTimer = undefined;
+      }
+      const notice = scriptsDisabledNotice(trigger);
+      if (notice) new Notice(notice);
+      return;
+    }
+
     if (!this.plugin.browserWorker) {
       console.error(
         'Markii: runScripts skipped — this main.js carries no embedded worker bundle (run `npm run build`, which embeds it).',
@@ -543,6 +598,7 @@ export class MarkiiPreviewView extends ItemView {
 
   private async refresh(): Promise<void> {
     this.applyPreviewWidth();
+    this.applyScriptBlockVisibility();
     const file = this.app.workspace.getActiveFile();
     const isNewFile = file?.path !== this.currentFile?.path;
     this.currentFile = file;

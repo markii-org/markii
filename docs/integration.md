@@ -142,6 +142,16 @@ fails if its theme layer leaves a palette entry unmapped. Adding a token to
 the palette therefore breaks every host until it is mapped, which is the
 intended behavior.
 
+A host preference about what the reader sees, rather than about what a
+component is, belongs in the host's own theme layer, not in the renderer.
+Put a class on the document root and write one rule for it beside the token
+mapping. Hiding script markers works this way in both reference hosts: the
+renderer still emits every marker, and the host's rule hides `.mk-script`
+and nothing else, so value failure markers, run markers, and pack markers
+stay where they were. A preference that reached into the renderer instead
+would have to be an option defaulting to today's behavior, never a change
+to what the renderer does by default.
+
 ## Host responsibilities for scripting (L3)
 
 The libraries deliberately stop at the seam where application policy begins.
@@ -177,6 +187,17 @@ importance:
 4. **Trigger discipline.** Route manual, auto, and scheduled runs through
    the runtime's trigger parameter so the tier gate applies; schedules live
    in the app, never in scripts.
+   A host may also offer a single switch that turns script execution off
+   for the user's own machine. Put the check in the shared body every
+   trigger passes through, not in each command, so a trigger added later
+   cannot miss it, and read the setting at the moment of the run rather
+   than caching it when the view opened, so turning the switch on stops a
+   view that is already open. The switch decides whether a run happens; it
+   does not touch stored grants, and turning it back off must not widen
+   anything beyond what was already granted by hand. A blocked run reports
+   on both surfaces the way any other failure does: a short line for the
+   run the user asked for, and the diagnostics surface for a run the host
+   started on its own.
 5. **Value persistence.** Keep last-run values in app storage keyed by note
    identity, so plain files reopen with data while the vault directory stays
    untouched; write a bundle's `.cache/` only for bundles.
@@ -214,8 +235,9 @@ importance:
     diagnostics surface as an informational line; it is a supported state
     and never warrants a notification.
 11. **Storage that does not travel.** Anything that authorizes execution or
-    network access, meaning grants, auto-run, and any scheduled interval,
-    is stored per user and per device, never anywhere that moves with the
+    network access, meaning grants, auto-run, any scheduled interval, and
+    any switch that decides whether scripts run at all, is stored per user
+    and per device, never anywhere that moves with the
     content. VS Code's application-scoped settings and global state satisfy
     this. Obsidian has no equivalent, because plugin data lives inside the
     vault and rides Sync, so the plugin uses device-local storage instead.

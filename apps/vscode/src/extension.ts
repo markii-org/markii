@@ -48,6 +48,10 @@ import {
   parseRefreshIntervalSeconds,
   refreshIntervalValidationMessage,
 } from './refresh-interval.js';
+import {
+  SCRIPTS_DISABLED_CONFIRMATION,
+  SCRIPTS_ENABLED_CONFIRMATION,
+} from './script-execution.js';
 import { isPreviewableDocument } from './mark-document.js';
 import {
   insertComponentQuickPickItems,
@@ -148,6 +152,37 @@ async function toggleRunOnOpen(): Promise<void> {
     next
       ? "Markii: run on open turned ON. A note's scripts will run automatically, at the read-only tier, the next time its preview opens. This is read when a preview (re)opens, so an already-open preview is unaffected until you reopen it."
       : 'Markii: run on open turned OFF. An already-open preview keeps its current behavior until you reopen it.',
+  );
+}
+
+/**
+ * The `markii.toggleScriptExecution` command (GitHub issue #34): flips
+ * `markii.scriptsDisabled` at the GLOBAL target, same reasoning as
+ * `toggleRunOnOpen` above — the setting is application-scoped so a
+ * workspace can never turn script execution back on for a reader who
+ * turned it off.
+ *
+ * Unlike run-on-open and the refresh interval, this one is read fresh on
+ * every run rather than at panel creation (`preview-panel.ts`'s
+ * `scriptsDisabled`), so turning it on stops an already-open preview
+ * immediately. That is why the confirmations below do not tell anyone to
+ * reopen anything.
+ *
+ * Turning it back on re-authorizes nothing: the stored grants are
+ * untouched in both directions, which is what the "on" confirmation says
+ * out loud rather than leaving the reader to wonder.
+ */
+async function toggleScriptExecution(): Promise<void> {
+  const config = vscode.workspace.getConfiguration('markii');
+  const disabled = config.get<boolean>('scriptsDisabled', false);
+  const next = !disabled;
+  await config.update(
+    'scriptsDisabled',
+    next,
+    vscode.ConfigurationTarget.Global,
+  );
+  void vscode.window.showInformationMessage(
+    next ? SCRIPTS_DISABLED_CONFIRMATION : SCRIPTS_ENABLED_CONFIRMATION,
   );
 }
 
@@ -571,7 +606,8 @@ function loadConfiguredPacksForCompletion(): Promise<
  * the commands `package.json`'s `contributes.commands` declares
  * (`markii.openPreview`, `markii.runScripts`, `markii.resetScriptGrants`,
  * `markii.addPackFolder`, `markii.enableScheduledRefresh`,
- * `markii.toggleRunOnOpen`, `markii.showDiagnostics`,
+ * `markii.toggleRunOnOpen`, `markii.toggleScriptExecution`,
+ * `markii.showDiagnostics`,
  * `markii.exportPack`, `markii.insertComponent`, `markii.exportHtml`,
  * `markii.exportHtmlCascade`) and
  * delegating all actual behavior to `preview-panel.ts` and small plain
@@ -628,6 +664,12 @@ export function activate(context: vscode.ExtensionContext): void {
     'markii.toggleRunOnOpen',
     () => {
       void toggleRunOnOpen();
+    },
+  );
+  const toggleScriptExecutionCommand = vscode.commands.registerCommand(
+    'markii.toggleScriptExecution',
+    () => {
+      void toggleScriptExecution();
     },
   );
   const exportPackCommandHandle = vscode.commands.registerCommand(
@@ -692,6 +734,7 @@ export function activate(context: vscode.ExtensionContext): void {
     addPackFolderCommand,
     enableScheduledRefreshCommand,
     toggleRunOnOpenCommand,
+    toggleScriptExecutionCommand,
     exportPackCommandHandle,
     insertComponentCommandHandle,
     exportHtmlCommandHandle,

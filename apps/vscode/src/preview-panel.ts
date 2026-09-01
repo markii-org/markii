@@ -104,9 +104,15 @@ import type { RunTrigger, StoredValue } from '@markii/runtime';
 import { MIN_REFRESH_INTERVAL_SECONDS } from './refresh-interval.js';
 import {
   DEFAULT_PREVIEW_WIDTH,
+  normalizeHideScriptBlocks,
   normalizePreviewWidth,
 } from './preview-width.js';
 import type { PreviewWidth } from './preview-width.js';
+import {
+  SCHEDULED_REFRESH_NOT_STARTED_LINE,
+  scriptsDisabledDiagnosticLine,
+  scriptsDisabledNotice,
+} from './script-execution.js';
 import { loadPackContext } from './packs/pack-context.js';
 import type { PackContext } from './packs/pack-context.js';
 import {
@@ -271,6 +277,12 @@ interface ActivePreview {
    * changing the setting takes effect on the next panel.
    */
   readonly previewWidth: PreviewWidth;
+  /**
+   * Whether this panel hides script markers (`markii.hideScriptBlocks`,
+   * `./preview-width.ts`) — cosmetic only, read once at panel creation and
+   * sent with every `update`, exactly like `previewWidth` beside it.
+   */
+  readonly hideScriptBlocks: boolean;
 }
 
 /** The stable storage identity for a preview source — a plain document's URI, or a zip-form bundle's archive identity. A `bundle-error` source has nothing runnable and thus no key. */
@@ -508,6 +520,29 @@ function configuredPreviewWidth(): PreviewWidth {
   );
 }
 
+/** Whether `markii.hideScriptBlocks` (GitHub issue #34) is on — a cosmetic setting, so anything but `true` reads as off rather than failing the panel. */
+function configuredHideScriptBlocks(): boolean {
+  return normalizeHideScriptBlocks(
+    vscode.workspace
+      .getConfiguration('markii')
+      .get<boolean>('hideScriptBlocks', false),
+  );
+}
+
+/**
+ * Whether `markii.scriptsDisabled` (GitHub issue #34) is on — the
+ * device-level off switch for the whole Run path. Read fresh at every
+ * decision point rather than cached on the panel, exactly like
+ * `allowPrivateNetworkAddresses` above: turning it ON must take effect
+ * immediately, including on an already-open preview whose refresh timer is
+ * already ticking, so it can never be a stale copy from panel creation.
+ */
+function scriptsDisabled(): boolean {
+  return vscode.workspace
+    .getConfiguration('markii')
+    .get<boolean>('scriptsDisabled', false);
+}
+
 /** Whether `markii.runOnOpen` (GitHub issue #11) is enabled — an opt-in, read-only run when a note's preview first opens. Off by default. */
 function runOnOpenEnabled(): boolean {
   return vscode.workspace
@@ -672,6 +707,7 @@ function postUpdate(preview: ActivePreview): void {
       packNamespaces: preview.packContext.namespaces,
       packSkippedCount: skippedPackCount(preview.packContext),
       previewWidth: preview.previewWidth,
+      hideScriptBlocks: preview.hideScriptBlocks,
       ...(lastRun ? { lastRun } : {}),
     };
     void preview.panel.webview.postMessage(message);
@@ -695,6 +731,7 @@ function postUpdate(preview: ActivePreview): void {
     packNamespaces: preview.packContext.namespaces,
     packSkippedCount: skippedPackCount(preview.packContext),
     previewWidth: preview.previewWidth,
+    hideScriptBlocks: preview.hideScriptBlocks,
     ...(lastRun ? { lastRun } : {}),
   };
   void preview.panel.webview.postMessage(message);
@@ -979,6 +1016,7 @@ async function createPreview(
     readyWaiters: [],
     ranOnOpen: false,
     previewWidth: configuredPreviewWidth(),
+    hideScriptBlocks: configuredHideScriptBlocks(),
   };
   active = preview;
   void vscode.commands.executeCommand(
@@ -1049,7 +1087,12 @@ async function createPreview(
   // panel never keeps firing, and each tick is a no-op while a run is already
   // in flight (`runWithTrigger`'s own `running` guard).
   const intervalMs = refreshIntervalMs();
-  if (intervalMs !== undefined) {
+  if (intervalMs !== undefined && scriptsDisabled()) {
+    // GitHub issue #34: a configured interval plus script execution off is
+    // not an error, but it must not be mute either — the note would simply
+    // stop updating with no explanation anywhere.
+    logScriptExecutionLine(SCHEDULED_REFRESH_NOT_STARTED_LINE);
+  } else if (intervalMs !== undefined) {
     preview.refreshTimer = setInterval(() => {
       if (active !== preview) return;
       void runWithTrigger(context, 'scheduled');
@@ -1468,6 +1511,36 @@ export async function runScripts(
   await runWithTrigger(context, 'manual');
 }
 
+/** One line in the Markii output channel, this extension's designated diagnostics surface, tagged so script-execution lines are findable among the pack and export ones. */
+function logScriptExecutionLine(line: string): void {
+  diagnosticsChannel?.appendLine(`Markii: ${line}`);
+}
+
+/**
+ * A run refused because `markii.scriptsDisabled` is on (GitHub issue #34).
+ *
+ * AGENTS.md's "clean is not silent": every blocked trigger reaches the
+ * Markii output channel, and the one the user is actively watching (a
+ * `markii.runScripts` press) additionally gets a short notice saying where
+ * to turn scripting back on. An `'auto'` or `'scheduled'` run gets no
+ * popup, because those fire on every note open and on a timer, and a popup
+ * per open would be a drip reporting a state the user set themselves. A
+ * blocked `'scheduled'` run also stops this preview's timer, so the log
+ * line is written once rather than every interval.
+ *
+ * Grants are deliberately untouched: this switch decides whether a run
+ * happens at all, and re-enabling it must not silently widen anything.
+ */
+function blockRun(preview: ActivePreview, trigger: RunTrigger): void {
+  logScriptExecutionLine(scriptsDisabledDiagnosticLine(trigger));
+  if (trigger === 'scheduled' && preview.refreshTimer !== undefined) {
+    clearInterval(preview.refreshTimer);
+    preview.refreshTimer = undefined;
+  }
+  const notice = scriptsDisabledNotice(trigger);
+  if (notice) void vscode.window.showInformationMessage(notice);
+}
+
 /**
  * The shared body behind the manual `markii.runScripts` press and the
  * `'auto'`/`'scheduled'` runs GitHub issue #11 adds. `trigger` flows through
@@ -1487,6 +1560,15 @@ async function runWithTrigger(
   if (!preview || preview.running) return;
   const source = preview.source;
   if (source.kind === 'bundle-error') return;
+
+  // GitHub issue #34: the one choke point every trigger passes through, so
+  // the device switch cannot be worked around by a path that forgot about
+  // it. Read fresh (not from panel state) so turning it on stops an
+  // already-open preview too.
+  if (scriptsDisabled()) {
+    blockRun(preview, trigger);
+    return;
+  }
 
   preview.running = true;
   const revision = preview.revision;

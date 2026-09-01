@@ -8,6 +8,43 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Hide script blocks in the preview** (VS Code extension, Obsidian
+  plugin). A named Lua fence normally renders as a collapsed marker you can
+  expand to read the source. Turn on `markii.hideScriptBlocks` in VS Code,
+  or "Hide script blocks" in the Obsidian settings, and the preview leaves
+  those markers out, for a note meant to be read rather than edited.
+
+  The setting is cosmetic and hides the source blocks only. A script that
+  fails still marks the value it feeds, still flips the run marker to its
+  failed state in VS Code, still produces the failure notice a manual run
+  gets in Obsidian, and still writes its full reason to the host's
+  diagnostics surface. The renderer is untouched: both hosts put one class
+  on the document root and their own theme layer does the rest, so an
+  exported note and any other consumer of `@markii/react` render exactly
+  as before.
+
+- **Turn script execution off on this device** (VS Code extension, Obsidian
+  plugin). Set `markii.scriptsDisabled` in VS Code, or turn on "Turn off
+  script execution on this device" in the Obsidian settings, and no note
+  runs its scripts: not an explicit Run, not run on open, and not a
+  scheduled refresh. **Markii: Toggle Script Execution** and **Toggle
+  Markii script execution** flip it from the command palette.
+
+  A blocked Run says so in one line. A blocked automatic run is written to
+  the host's diagnostics surface instead of interrupting you on every note
+  you open, and a blocked scheduled run also stops that preview's timer, so
+  the reason is recorded once rather than every interval. Notes still
+  preview, still export, and still show whatever values their last run
+  produced.
+
+  Grants are untouched in both directions. Turning execution off leaves
+  every stored network and bundle grant as it is, and turning it back on
+  re-authorizes nothing beyond what was already granted by hand. In VS Code
+  the setting is user-scope only, so a workspace cannot turn execution back
+  on for you; in Obsidian it is stored per device through local storage,
+  never in the vault, so one device's decision never travels with Sync or
+  with a shared vault.
+
 - **Values appear one at a time while a run is going** (VS Code extension,
   Obsidian plugin). A note's scripts run one after another in a single
   isolate, so the first number is often ready seconds before the last one

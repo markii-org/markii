@@ -64,6 +64,10 @@ import {
 } from './export/cascade-export.js';
 import type { CascadeExportOutcome } from './export/cascade-export.js';
 import { createLocalStorageMemento } from './run/local-storage-memento.js';
+import {
+  SCRIPTS_DISABLED_CONFIRMATION,
+  SCRIPTS_ENABLED_CONFIRMATION,
+} from './script-execution.js';
 import { buildPackRegistrationScript } from '@markii/host';
 import type { Registry } from '@markii/react';
 import { defaultRegistry } from '@markii/react/components';
@@ -87,7 +91,8 @@ export default class MarkiiPlugin extends Plugin {
   /**
    * DEVICE-LOCAL settings (`app.saveLocalStorage`/`loadLocalStorage`, NEVER
    * `saveData`) — auto-run and the scheduled-refresh interval, both of
-   * which schedule execution without a click. See `src/local-settings.ts`'s
+   * which schedule execution without a click, plus the switch that turns
+   * script execution off on this device entirely. See `src/local-settings.ts`'s
    * top comment for why these can never live in `settings` above.
    */
   localSettings: LocalSettings = DEFAULT_LOCAL_SETTINGS;
@@ -219,6 +224,26 @@ export default class MarkiiPlugin extends Plugin {
       name: 'Export Markii note as HTML cascade',
       callback: () => {
         void this.exportActiveCascade();
+      },
+    });
+
+    // GitHub issue #34: the device-local off switch, reachable without
+    // opening the settings tab. Mirrors the settings tab's own toggle
+    // rather than duplicating the decision: both write the same
+    // `scriptsDisabled` key through `saveLocalSettings`, and the gate that
+    // reads it lives in one place, `src/view.tsx`'s `runScripts`.
+    this.addCommand({
+      id: 'toggle-markii-script-execution',
+      name: 'Toggle Markii script execution',
+      callback: () => {
+        const next = !this.localSettings.scriptsDisabled;
+        this.saveLocalSettings({
+          ...this.localSettings,
+          scriptsDisabled: next,
+        });
+        new Notice(
+          next ? SCRIPTS_DISABLED_CONFIRMATION : SCRIPTS_ENABLED_CONFIRMATION,
+        );
       },
     });
 
@@ -822,7 +847,8 @@ export default class MarkiiPlugin extends Plugin {
   }
 
   /**
-   * DEVICE-LOCAL settings (auto-run, the scheduled-refresh interval) —
+   * DEVICE-LOCAL settings (auto-run, the scheduled-refresh interval, the
+   * script-execution switch) —
    * `app.loadLocalStorage`/`app.saveLocalStorage`, synchronous, and NEVER
    * routed through `loadData`/`saveData`. See `src/local-settings.ts`'s top
    * comment.

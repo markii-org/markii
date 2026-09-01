@@ -568,6 +568,32 @@ what they cannot understand and build their output so that every name
 survives, matching the discipline `@markii/runtime`'s own value store already
 followed.
 
+### Turning script execution off
+
+Both hosts offer a switch that turns script execution off for one machine:
+`markii.scriptsDisabled` in VS Code, and a device-local `scriptsDisabled`
+setting in the Obsidian plugin. While it is on, no trigger runs a note's
+scripts, whether the user presses Run, opens a note with run on open
+enabled, or waits for a scheduled refresh. The check sits in the single
+shared body all three triggers pass through, and it returns before any
+grant is read and before the isolate is spawned.
+
+This is a convenience, not a containment boundary. What contains a script
+that does run is unchanged: the trigger-to-tier gate, the grant model, the
+pinned network capability, and the terminatable isolate. The switch adds a
+way to decline the whole mechanism rather than a new layer inside it.
+
+Its storage is the part that matters. In VS Code the setting is pinned to
+application scope, so a repository's own `.vscode/settings.json` cannot set
+it in either direction: a workspace can neither turn scripting on for a
+reader who turned it off, nor claim to have turned it off. In Obsidian it
+lives in device-local storage rather than plugin data, because plugin data
+is written inside the vault and travels with Sync and with any shared copy;
+one device's decision about executing code must not become another's.
+Grants are untouched in both directions. Turning execution off leaves every
+stored network and bundle grant as it was, and turning it back on
+re-authorizes nothing beyond what the user had already granted by hand.
+
 One coverage limit from that pass is worth stating plainly rather than
 leaving implied. The timer lifecycle itself, meaning the interval's clearing
 on disposal, the at-most-once run on open across a hide and show, and the

@@ -1,13 +1,19 @@
 /**
- * The preview column's reading measure — the `markii.previewWidth` setting
- * (`package.json`), read once per panel creation like every other
- * per-panel setting and threaded to the webview on each `update`
- * (`protocol.ts`).
+ * The preview's COSMETIC appearance: the reading measure
+ * (`markii.previewWidth`) and whether script blocks are hidden
+ * (`markii.hideScriptBlocks`), both read once per panel creation like
+ * every other per-panel setting and threaded to the webview on each
+ * `update` (`protocol.ts`). Together they decide the one thing the webview
+ * puts on its `.doc` element: its class list.
  *
  * COSMETIC ONLY. Nothing here authorizes anything, so unlike `markii.packs`
- * and the run settings this one is not user-scope-locked: a workspace may
- * set it, because the worst a hostile workspace can do with it is make the
- * text column wider.
+ * and the run settings these are not user-scope-locked: a workspace may
+ * set them, because the worst a hostile workspace can do is make the text
+ * column wider or fold the script markers away. Hiding script markers
+ * hides the SOURCE blocks and nothing else: a failed script still shows
+ * its per-value failure marker in the note, still flips the run marker to
+ * its failed state, and its full reason is still written to the Markii
+ * output channel.
  *
  * `vscode`-free on purpose (see `extension.ts`'s file-scope note): the
  * value vocabulary, the hostile-input normalization, and the class name
@@ -58,8 +64,32 @@ export function previewWidthClassName(width: PreviewWidth): string | undefined {
   }
 }
 
-/** The `.doc` element's full class list for `width`. */
-export function previewDocumentClassName(width: PreviewWidth): string {
+/**
+ * The class the webview puts on its `.doc` element when
+ * `markii.hideScriptBlocks` is on. `theme.css` turns it into a single
+ * `display: none` on `.mk-script`, the collapsed script marker
+ * `@markii/react` renders for a `{name=...}` fence — and on nothing else,
+ * so every failure surface stays exactly where it was.
+ */
+export const HIDE_SCRIPT_BLOCKS_CLASS = 'mk-preview--hide-scripts';
+
+/** Whatever the settings store or a `postMessage` handed over, reduced to a real boolean; anything else reads as `false`, the way the preview has always rendered. */
+export function normalizeHideScriptBlocks(value: unknown): boolean {
+  return value === true;
+}
+
+/**
+ * The `.doc` element's full class list, given the reading measure and
+ * whether script blocks are hidden. The default pair (`normal`, not
+ * hidden) is the bare `doc` the preview has always rendered.
+ */
+export function previewDocumentClassName(
+  width: PreviewWidth,
+  hideScriptBlocks = false,
+): string {
+  const classes = ['doc'];
   const modifier = previewWidthClassName(width);
-  return modifier === undefined ? 'doc' : `doc ${modifier}`;
+  if (modifier !== undefined) classes.push(modifier);
+  if (hideScriptBlocks) classes.push(HIDE_SCRIPT_BLOCKS_CLASS);
+  return classes.join(' ');
 }
