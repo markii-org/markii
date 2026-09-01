@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { render } from '@testing-library/react';
-import { ALIGN_PRESETS, WIDTH_PRESETS } from '@markii/stdlib';
+import {
+  ALIGN_PRESETS,
+  WIDTH_PRESETS,
+  layoutWrapperAxis,
+  otherLayoutAxis,
+} from '@markii/stdlib';
 import { resolveLayoutAttributes } from '../layout';
 import { createLayoutWrapper, LAYOUT_WRAPPER_PRESETS } from './layout-wrapper';
 
@@ -29,10 +34,29 @@ function attributeClass(key: 'width' | 'align', preset: string): string {
 
 const ALIGN_PRESET_SET: ReadonlySet<string> = new Set(ALIGN_PRESETS);
 
-function renderedClassName(preset: (typeof LAYOUT_WRAPPER_PRESETS)[number]) {
+function renderedClassName(
+  preset: (typeof LAYOUT_WRAPPER_PRESETS)[number],
+  layoutClassName?: string,
+) {
   const Wrapper = createLayoutWrapper(preset);
-  const { container } = render(<Wrapper attributes={{}}>x</Wrapper>);
+  const { container } = render(
+    <Wrapper attributes={{}} layoutClassName={layoutClassName}>
+      x
+    </Wrapper>,
+  );
   return container.firstElementChild?.className;
+}
+
+/** The axis `preset` decides by its own name, and the one it leaves open. */
+function axesOf(preset: string): {
+  own: 'width' | 'align';
+  open: 'width' | 'align';
+} {
+  const own = layoutWrapperAxis(preset);
+  if (own === undefined) {
+    throw new Error(`"${preset}" is not a layout-wrapper name`);
+  }
+  return { own, open: otherLayoutAxis(own) };
 }
 
 describe('layout wrappers compose from the layout attribute classes', () => {
@@ -76,6 +100,23 @@ describe('layout wrappers compose from the layout attribute classes', () => {
       );
     }
   });
+
+  it.each(LAYOUT_WRAPPER_PRESETS)(
+    ':::%s composed with its open axis is its own class plus the attribute class, on one element',
+    (preset) => {
+      const { own, open } = axesOf(preset);
+      const openValue = open === 'align' ? 'center' : 'fit';
+      const ownClass = attributeClass(own, preset);
+      const openClass = attributeClass(open, openValue);
+      // `render.tsx` resolves the open axis through the very same
+      // `resolveLayoutAttributes` path an ordinary directive uses, so the
+      // composed class must be the wrapper's own plus exactly that class,
+      // with nothing invented in between.
+      expect(renderedClassName(preset, openClass)).toBe(
+        `mk-layout ${ownClass} ${openClass}`,
+      );
+    },
+  );
 
   it('sanity: the comparison is not vacuous', () => {
     // Every assertion above would pass trivially against an empty preset

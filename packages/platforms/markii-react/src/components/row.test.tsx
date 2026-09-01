@@ -96,40 +96,77 @@ describe('renderMark — :::row{cols=...} container directive', () => {
   });
 });
 
-describe('renderMark — :::row{align=...} cascades into cells', () => {
+describe('renderMark — :::row{text=...} cascades into cells', () => {
   it.each(['left', 'center', 'right'])(
-    'wraps the row in the generic mk-align-%s div (same reserved-attribute interception as any other block directive)',
-    (align) => {
+    'text=%s puts the matching mk-text-* class on the row itself, with no extra wrapper',
+    (text) => {
       const { container } = render(
         renderMark(
-          `:::row{cols=2 align=${align}}\ncell one\n\ncell two\n:::`,
+          `:::row{cols=2 text=${text}}\ncell one\n\ncell two\n:::`,
           defaultRegistry,
         ),
       );
-      const outer = container.firstElementChild;
-      expect(outer?.className).toBe(`mk-align-${align}`);
-      const row = outer?.querySelector('.mk-row.mk-row--cols-2');
-      expect(row).not.toBeNull();
-      expect(outer?.firstElementChild).toBe(row);
+      const row = container.firstElementChild;
+      expect(row?.className).toBe(`mk-row mk-row--cols-2 mk-text-${text}`);
+      expect(container.children).toHaveLength(1);
     },
   );
 
-  it('an invalid align value on a row degrades silently: no wrapper, plain mk-row', () => {
+  it('an invalid text value degrades silently to a plain row', () => {
     const { container } = render(
       renderMark(
-        ':::row{cols=2 align=diagonal}\ncell one\n\ncell two\n:::',
+        ':::row{cols=2 text=diagonal}\ncell one\n\ncell two\n:::',
         defaultRegistry,
       ),
     );
-    const outer = container.firstElementChild;
-    expect(outer?.className).toBe('mk-row mk-row--cols-2');
+    expect(container.firstElementChild?.className).toBe(
+      'mk-row mk-row--cols-2',
+    );
   });
 
-  it('a more local :::left wrapper inside a cell overrides the row-level align=center (locality wins)', () => {
+  it('text never reaches the DOM as an attribute', () => {
+    const { container } = render(
+      renderMark(':::row{text=center}\ncell one\n:::', defaultRegistry),
+    );
+    expect(container.firstElementChild?.getAttribute('text')).toBeNull();
+  });
+
+  it('a cell with its own text overrides the row cascade', () => {
     const { container } = render(
       renderMark(
         [
-          '::::row{cols=2 align=center}',
+          '::::row{cols=2 text=center}',
+          ':::cell{text=left}',
+          'opted-out cell',
+          ':::',
+          '',
+          ':::cell',
+          'inheriting cell',
+          ':::',
+          '::::',
+        ].join('\n'),
+        defaultRegistry,
+      ),
+    );
+    const row = container.querySelector('.mk-row.mk-text-center');
+    expect(row).not.toBeNull();
+    const overriding = row?.querySelector('.mk-cell.mk-text-left');
+    expect(overriding).not.toBeNull();
+    expect(overriding?.textContent).toContain('opted-out cell');
+    // the inheriting cell carries no text class of its own: the row's value
+    // reaches it through ordinary CSS inheritance, not a copied class
+    const cells = row?.querySelectorAll('.mk-cell') ?? [];
+    const inheriting = [...cells].find((cell) =>
+      cell.textContent?.includes('inheriting cell'),
+    );
+    expect(inheriting?.className).toBe('mk-cell');
+  });
+
+  it('a more local :::left wrapper inside a cell overrides the row-level text=center (locality wins)', () => {
+    const { container } = render(
+      renderMark(
+        [
+          '::::row{cols=2 text=center}',
           ':::left',
           'opted-out cell',
           ':::',
@@ -140,29 +177,55 @@ describe('renderMark — :::row{align=...} cascades into cells', () => {
         defaultRegistry,
       ),
     );
-    const rowWrapper = container.querySelector('.mk-align-center');
-    expect(rowWrapper).not.toBeNull();
-    const row = rowWrapper?.querySelector('.mk-row');
+    const row = container.querySelector('.mk-row.mk-text-center');
     expect(row).not.toBeNull();
     const localOverride = row?.querySelector('.mk-layout.mk-align-left');
     expect(localOverride).not.toBeNull();
     expect(localOverride?.textContent).toContain('opted-out cell');
-    // the local wrapper is a descendant of the row-level align wrapper,
-    // not a sibling — this is what lets plain text-align inheritance,
-    // rather than any CSS-specificity trick, decide the winner
-    expect(rowWrapper?.contains(localOverride as Node)).toBe(true);
+    // the local wrapper is a descendant of the row, not a sibling — this is
+    // what lets plain text-align inheritance, rather than any CSS-specificity
+    // trick, decide the winner
+    expect(row?.contains(localOverride as Node)).toBe(true);
+  });
+
+  it('align on a row keeps its ordinary meaning: the generic wrapper div, no content alignment', () => {
+    const { container } = render(
+      renderMark(
+        ':::row{cols=2 align=center}\ncell one\n\ncell two\n:::',
+        defaultRegistry,
+      ),
+    );
+    const outer = container.firstElementChild;
+    expect(outer?.className).toBe('mk-align-center');
+    const row = outer?.querySelector('.mk-row.mk-row--cols-2');
+    expect(row).not.toBeNull();
+    // the row itself gets no text class — `align` no longer means "align the
+    // content inside the cells"; that job belongs to `text`
+    expect(row?.className).toBe('mk-row mk-row--cols-2');
   });
 });
 
-describe('doc.css — row align cascades via inheritance, scoped to .mk-row only', () => {
+describe('doc.css — text alignment is one class set, honored by the four text components', () => {
   const css = readFileSync(
     path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../doc.css'),
     'utf8',
   );
 
-  it('sets text-align on the row for each of the three align values, scoped to > .mk-row', () => {
-    expect(css).toContain('.mk-align-left > .mk-row {');
-    expect(css).toContain('.mk-align-center > .mk-row {');
-    expect(css).toContain('.mk-align-right > .mk-row {');
+  it('defines one rule per text value', () => {
+    expect(css).toContain('.mk-text-left {');
+    expect(css).toContain('.mk-text-center {');
+    expect(css).toContain('.mk-text-right {');
+  });
+
+  it('no longer overloads align on a row to mean content alignment', () => {
+    expect(css).not.toContain('.mk-align-left > .mk-row');
+    expect(css).not.toContain('.mk-align-center > .mk-row');
+    expect(css).not.toContain('.mk-align-right > .mk-row');
+  });
+
+  it('gives :::left its own declared text-align, so it can undo an inherited one', () => {
+    // Only a DECLARED value beats an inherited one, and `:::left` exists
+    // specifically to opt a cell back out of `:::row{text=center}`.
+    expect(css).toContain('.mk-layout.mk-align-left {');
   });
 });

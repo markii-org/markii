@@ -1,4 +1,5 @@
 import type { ReactElement } from 'react';
+import { withTextClass } from '../layout.js';
 import type { MarkComponentProps } from '../registry.js';
 
 /**
@@ -18,15 +19,21 @@ import type { MarkComponentProps } from '../registry.js';
  * `.mk-layout > * + *` does for the layout wrappers: `.doc > * + *` sees the
  * `cell` as one box and never reaches inside it.
  *
- * Deliberately never reads `attributes`: like the layout wrappers, this
- * container has no attribute-bearing form. Writing one anyway
- * (`:::cell{foo=bar}`) is valid directive syntax and is simply never looked
- * at. Never throws, and an empty body is not an error — an empty `<div>`
- * renders fine.
+ * Its one attribute is `text` (`left | center | right`), which aligns the
+ * content inside this cell and overrides the enclosing `:::row{text=...}`
+ * by declaring a value where the row only offered an inherited one. Any
+ * other attribute (`:::cell{foo=bar}`) is valid directive syntax and is
+ * simply never looked at. Never throws, and an empty body is not an
+ * error — an empty `<div>` renders fine.
  *
  * Outside a `:::row` it is inert by construction: a plain unstyled `<div>`
  * in normal flow, which is what "transparent" means here.
  */
-export function Cell({ children }: MarkComponentProps): ReactElement {
-  return <div className="mk-cell">{children}</div>;
+export function Cell({
+  attributes,
+  children,
+}: MarkComponentProps): ReactElement {
+  return (
+    <div className={withTextClass('mk-cell', attributes.text)}>{children}</div>
+  );
 }

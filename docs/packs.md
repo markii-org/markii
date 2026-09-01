@@ -295,6 +295,43 @@ Do not inject a stylesheet from inside the component script. It works, but
 the host can no longer remove it or order it against the theme, so the pack
 leaks style into notes that are no longer using it.
 
+## Sizing and alignment
+
+Authors place a pack component with the same two attributes they use on
+every block: `width` sizes its box, `align` places the box. Neither reaches
+the component; the renderer applies both around it. Two rules on the pack's
+side keep that predictable.
+
+The first is how wide a component is by default. A component with a visible
+frame, such as a card or a panel, fills the column, the way a standard card
+does. A component with no visible frame and content-sized insides, such as
+a table, a grid, a ring, or a chip, sizes to its own content:
+
+```css
+.mk-ana_grid {
+  width: fit-content;
+  max-width: 100%;
+}
+```
+
+Without this, a frameless component looks left-aligned while its invisible
+box fills the column, and an author who wraps it in `:::center` sees
+nothing move. Either default is correct for the right component; the rule
+is to choose deliberately rather than inherit block behavior by accident.
+
+The second is naming. When a component lets an author align something
+inside it, the attribute is named after the thing that moves, never
+`align`. The standard set uses `text` for the text inside a block and
+`label-align` for a divider's label. A pack aligning its own contents
+follows the same pattern, so `align` keeps one meaning everywhere.
+
+A container that wants to hand a setting to its children does so through
+an attribute of its own and passes it down explicitly, the way the
+standard row passes `text` to its cells. A child overrides with the same
+attribute. There is no inherited scope for component attributes, on
+purpose; the reasons are in [format.md](format.md) under what layout
+deliberately cannot do.
+
 ## Exporting a pack for distribution
 
 Once a pack works from source, VS Code's "Markii: Export Pack" command

@@ -1,3 +1,4 @@
+import { withTextClass } from '../layout.js';
 import type { HtmlComponent } from '../registry.js';
 
 export type CalloutType = 'info' | 'warning' | 'danger';
@@ -17,7 +18,8 @@ function isCalloutType(value: string): value is CalloutType {
 /**
  * `:::callout{type=info|warning|danger title="..."}` — a colored box for an
  * aside, warning, or danger note. Unknown/missing `type` falls back to
- * `info` rather than throwing. Matches `@markii/react`'s `Callout` markup
+ * `info` rather than throwing. `text` (`left | center | right`) aligns the
+ * box's own text, header and body alike. Matches `@markii/react`'s `Callout` markup
  * byte-for-byte so one stylesheet covers both renderers. No outer margin:
  * the document stylesheet owns spacing between this and its siblings.
  */
@@ -31,7 +33,7 @@ export const Callout: HtmlComponent = (attributes, childrenHtml, ctx) => {
     : '';
 
   return (
-    `<div class="mk-callout mk-callout--${type}" role="note">` +
+    `<div class="${withTextClass(`mk-callout mk-callout--${type}`, attributes.text)}" role="note">` +
     `<div class="mk-callout__header">` +
     `<span class="mk-callout__icon" aria-hidden="true">${CALLOUT_ICONS[type]}</span>` +
     `${titleHtml}</div>` +

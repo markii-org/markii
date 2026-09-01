@@ -16,7 +16,11 @@ import type {
   HtmlRenderContext,
   ValueResolution,
 } from './registry.js';
-import { readRegistryComponent, resolveDirectiveAlias } from './registry.js';
+import {
+  readRegistryComponent,
+  registryLayoutAxis,
+  resolveDirectiveAlias,
+} from './registry.js';
 import { resolveLayoutAttributes } from './layout.js';
 import { escapeHtml } from './escape.js';
 import { resolveScopedPath, type ValueScope } from './resolve.js';
@@ -109,6 +113,21 @@ function createBaseContext(scope: ValueScope): HtmlRenderContext {
       return buildValueMarker(trimmed, resolved);
     },
   };
+}
+
+/**
+ * `ctx` with one layout scope's resolved open-axis class attached, for the
+ * single component invocation it belongs to. `undefined` (every ordinary
+ * directive) returns `ctx` untouched, so a component that is not a layout
+ * scope can never observe the field at all, matching how `@markii/react`
+ * only spreads the `layoutClassName` prop when it has one.
+ */
+function withLayoutClass(
+  ctx: HtmlRenderContext,
+  layoutClassName: string | undefined,
+): HtmlRenderContext {
+  if (layoutClassName === undefined) return ctx;
+  return { ...ctx, layoutClassName };
 }
 
 /** `ctx` with one directive's resolved `data=` binding attached, for the single component invocation that binding belongs to. */
@@ -400,6 +419,7 @@ function renderDirectiveContent(
   registry: HtmlRegistry,
   ctx: HtmlRenderContext,
   scope: ValueScope,
+  layoutClassName: string | undefined,
 ): string {
   if (name === VALUE_DIRECTIVE_NAME) return ctx.valueMarker(plainLabel);
 
@@ -430,7 +450,7 @@ function renderDirectiveContent(
     rendered = component(
       binding.attributes,
       childrenHtml,
-      withDataBinding(ctx, binding),
+      withLayoutClass(withDataBinding(ctx, binding), layoutClassName),
     );
   } catch {
     return componentError(name || '(unnamed)', inline, childrenHtml);
@@ -470,8 +490,16 @@ function renderDirective(
       ? { name: written, attributes: rawAttributes }
       : resolveDirectiveAlias(registry, written, rawAttributes);
 
+  // A LAYOUT SCOPE (an entry registered with `layout`, such as the standard
+  // `:::center`) already sets one axis by its own name: that axis's
+  // attribute is dropped without effect, and the other axis's class goes to
+  // the component through `ctx` rather than onto a wrapper `<div>`, so
+  // `:::center{width=fit}` comes out as one element carrying both classes.
+  // Mirrors `@markii/react`'s `createDirectiveElement` exactly.
   const isBlock = kind !== TEXT_DIRECTIVE_KIND;
-  const { attributes, className } = resolveLayoutAttributes(aliased);
+  const ownedAxis = registryLayoutAxis(registry, name);
+  const { attributes, className } = resolveLayoutAttributes(aliased, ownedAxis);
+  const isLayoutScope = ownedAxis !== undefined && isBlock;
   const content = renderDirectiveContent(
     name,
     kind,
@@ -481,9 +509,10 @@ function renderDirective(
     registry,
     ctx,
     scope,
+    isLayoutScope ? className : undefined,
   );
 
-  return isBlock && className
+  return isBlock && className && !isLayoutScope
     ? `<div class="${escapeHtml(className)}">${content}</div>`
     : content;
 }

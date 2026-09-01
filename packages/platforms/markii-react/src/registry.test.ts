@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { createRegistry, mergeRegistries } from './registry';
+import {
+  createRegistry,
+  mergeRegistries,
+  readRegistryLayoutAxis,
+  registryLayoutAxis,
+} from './registry';
 import type { Registry, MarkComponentProps } from './registry';
 
 function stubComponent(_props: MarkComponentProps): null {
@@ -74,5 +79,66 @@ describe('mergeRegistries', () => {
       { shared: { component: third } },
     );
     expect(merged.shared?.component).toBe(third);
+  });
+});
+
+describe('readRegistryLayoutAxis', () => {
+  it('reads a declared axis', () => {
+    expect(
+      readRegistryLayoutAxis({ component: stubComponent, layout: 'align' }),
+    ).toBe('align');
+    expect(
+      readRegistryLayoutAxis({ component: stubComponent, layout: 'width' }),
+    ).toBe('width');
+  });
+
+  it('returns undefined for an entry that declares none, or no entry at all', () => {
+    expect(
+      readRegistryLayoutAxis({ component: stubComponent }),
+    ).toBeUndefined();
+    expect(readRegistryLayoutAxis(undefined)).toBeUndefined();
+  });
+
+  it('ignores a value that is not one of the two axis names', () => {
+    // Same posture as an invalid `width=`: a mistake reads as "ordinary
+    // component", never as an arbitrary string reaching the renderer.
+    const entry = { component: stubComponent, layout: 'sideways' } as unknown;
+    expect(
+      readRegistryLayoutAxis(entry as { component: typeof stubComponent }),
+    ).toBeUndefined();
+  });
+
+  it('degrades to undefined when the read itself throws (hostile registry configuration)', () => {
+    const entry = { component: stubComponent };
+    Object.defineProperty(entry, 'layout', {
+      get() {
+        throw new Error('hostile getter');
+      },
+    });
+    expect(() => readRegistryLayoutAxis(entry)).not.toThrow();
+    expect(readRegistryLayoutAxis(entry)).toBeUndefined();
+  });
+});
+
+describe('registryLayoutAxis', () => {
+  it('finds a layout scope by name', () => {
+    const registry = createRegistry({
+      scope: { component: stubComponent, layout: 'align' },
+    });
+    expect(registryLayoutAxis(registry, 'scope')).toBe('align');
+  });
+
+  it('misses a prototype member name rather than resolving through the chain', () => {
+    const registry: Registry = { real: { component: stubComponent } };
+    for (const name of ['constructor', '__proto__', 'toString', 'valueOf']) {
+      expect(registryLayoutAxis(registry, name), name).toBeUndefined();
+    }
+  });
+
+  it('a broken entry is not a layout scope, so its width/align still reach the ordinary wrapper', () => {
+    const registry = {
+      broken: { component: undefined, layout: 'align' },
+    } as unknown as Registry;
+    expect(registryLayoutAxis(registry, 'broken')).toBeUndefined();
   });
 });

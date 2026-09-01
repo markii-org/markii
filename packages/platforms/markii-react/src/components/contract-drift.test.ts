@@ -2,7 +2,12 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { STANDARD_COMPONENTS, getContract } from '@markii/stdlib';
+import {
+  STANDARD_COMPONENTS,
+  getContract,
+  layoutWrapperAxis,
+  otherLayoutAxis,
+} from '@markii/stdlib';
 import type { ComponentContract } from '@markii/stdlib';
 import { defaultRegistry } from './index.js';
 
@@ -88,7 +93,12 @@ function extractMatches(source: string, pattern: RegExp): Set<string> {
  * The layout wrappers (`center`/`left`/`right`/`wide`/`narrow`/`full`/`fit`)
  * all share `layout-wrapper.tsx`, which never reads `attributes` at all —
  * scanning it for every one of them is expected to yield the empty set.
- * `tabs`, `cell`, and `kbd` likewise read no attributes of their own.
+ * Their contracts still declare one attribute each (the layout axis the
+ * wrapper's name did not decide), because `render.tsx` resolves that
+ * attribute on the wrapper's behalf and hands the result down as
+ * `layoutClassName`; `rendererHandledAttributes` below adds it back, derived
+ * from `@markii/stdlib` rather than written out per wrapper.
+ * `tabs` and `kbd` likewise read no attributes of their own.
  */
 interface AttributeReadSpec {
   /** Files scanned with `OWN_ATTRIBUTE_READ`. */
@@ -122,6 +132,27 @@ const ATTRIBUTE_READ_SOURCES: Record<string, AttributeReadSpec> = {
   fit: { own: ['layout-wrapper.tsx'] },
 };
 
+/**
+ * The attribute keys a component's contract declares that the RENDERER
+ * satisfies on its behalf, rather than the component reading them off
+ * `attributes`.
+ *
+ * Exactly one case exists: a layout wrapper declares the axis its own name
+ * did not decide (`:::center` declares `width`), and `render.tsx` strips
+ * both reserved keys, resolves that one, and passes the resulting class down
+ * as `layoutClassName` — so the wrapper never reads `attributes` at all
+ * while still honoring the attribute. Derived from `@markii/stdlib`'s
+ * classification, so this exemption can only ever cover the one key the
+ * spec says a wrapper takes; a wrapper contract that grew a second
+ * attribute would still fail the drift check below.
+ */
+function rendererHandledAttributes(name: string): Set<string> {
+  const ownAxis = layoutWrapperAxis(name);
+  return ownAxis === undefined
+    ? new Set<string>()
+    : new Set([otherLayoutAxis(ownAxis)]);
+}
+
 /** The set of attribute keys `name`'s implementation actually reads, per `ATTRIBUTE_READ_SOURCES`. */
 function actualAttributeReads(name: string): Set<string> {
   const spec = ATTRIBUTE_READ_SOURCES[name];
@@ -152,6 +183,7 @@ function actualAttributeReads(name: string): Set<string> {
       reads.add(key);
     }
   }
+  for (const key of rendererHandledAttributes(name)) reads.add(key);
   return reads;
 }
 
@@ -256,23 +288,50 @@ describe('STANDARD_COMPONENTS vs component implementations — attribute-name dr
   // Components genuinely expected to read NO attributes: confirms the
   // empty result for these is deliberate (per ATTRIBUTE_READ_SOURCES'
   // comment), not a byproduct of the regex failing to match.
-  it('kbd, tabs, cell, and every layout wrapper read no attributes', () => {
-    for (const name of [
-      'kbd',
-      'tabs',
-      'cell',
-      'center',
-      'left',
-      'right',
-      'wide',
-      'narrow',
-      'full',
-      'fit',
-    ]) {
+  it('kbd and tabs read no attributes', () => {
+    for (const name of ['kbd', 'tabs']) {
       expect(actualAttributeReads(name), name).toEqual(new Set());
       expect(contractAttributeKeys(STANDARD_COMPONENTS[name]!), name).toEqual(
         new Set(),
       );
+    }
+  });
+
+  // The layout wrappers are the one place the check above is relaxed, so
+  // the relaxation gets its own guard: the shared implementation must read
+  // NOTHING off `attributes`, or a real read would be silently absorbed by
+  // `rendererHandledAttributes` and never compared against anything.
+  it('the shared layout-wrapper implementation reads no attributes at all, which is what the renderer-handled exemption assumes', () => {
+    const source = readSource('layout-wrapper.tsx');
+    expect(extractMatches(source, OWN_ATTRIBUTE_READ)).toEqual(new Set());
+    expect(extractMatches(source, OWN_ATTRIBUTE_HAS_OWN_READ)).toEqual(
+      new Set(),
+    );
+    expect(extractMatches(source, OWN_ATTRIBUTE_BRACKET_READ)).toEqual(
+      new Set(),
+    );
+  });
+
+  it('each layout wrapper is credited with exactly the axis its name did not decide', () => {
+    expect(actualAttributeReads('center')).toEqual(new Set(['width']));
+    expect(actualAttributeReads('right')).toEqual(new Set(['width']));
+    expect(actualAttributeReads('left')).toEqual(new Set(['width']));
+    expect(actualAttributeReads('fit')).toEqual(new Set(['align']));
+    expect(actualAttributeReads('narrow')).toEqual(new Set(['align']));
+    expect(actualAttributeReads('wide')).toEqual(new Set(['align']));
+    expect(actualAttributeReads('full')).toEqual(new Set(['align']));
+  });
+
+  it('the renderer-handled exemption applies to layout wrappers only', () => {
+    for (const name of Object.keys(STANDARD_COMPONENTS)) {
+      if (layoutWrapperAxis(name) !== undefined) continue;
+      expect(rendererHandledAttributes(name), name).toEqual(new Set());
+    }
+  });
+
+  it('the four text-accepting components really read the text attribute', () => {
+    for (const name of ['row', 'cell', 'card', 'callout']) {
+      expect(actualAttributeReads(name).has('text'), name).toBe(true);
     }
   });
 

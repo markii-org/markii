@@ -8,6 +8,42 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A layout wrapper now takes the other axis as an attribute**
+  (`@markii/react`, `@markii/html`, `@markii/stdlib`). `width` sizes a
+  block's box and `align` places that box in the column, and each of the
+  seven wrappers already sets one of those two by its name. It now accepts
+  the other one as an attribute, so `:::center{width=fit}` and
+  `:::fit{align=center}` say the same thing and render as ONE element
+  carrying both classes (`mk-layout mk-align-center mk-width-fit`), not two
+  nested wrappers. An attribute for the wrapper's own axis is ignored,
+  because the name already decided it: `:::center{align=right}` is simply
+  centered. Invalid values are ignored as before. Nesting two wrappers still
+  works and still means the same thing. Directive completion follows the
+  same rule: an alignment wrapper offers `width` only, a width wrapper
+  offers `align` only.
+- **`text` aligns the content inside a component** (`@markii/stdlib`,
+  `@markii/react`, `@markii/html`). `row`, `cell`, `card`, and `callout`
+  accept `text=left|center|right`. On a row it reaches every cell; a cell
+  with its own `text` overrides it, and an alignment wrapper written inside
+  a cell wins over both. `text` is an ordinary per-component attribute, not
+  a reserved layout key: it reaches the component like any other. It is
+  rendered through one new class set (`mk-text-left`/`mk-text-center`/
+  `mk-text-right`) defined once in `doc.css`, and it is offered by directive
+  completion and hover on those four components.
+- **`@markii/stdlib`: `layoutWrapperAxis`, `otherLayoutAxis`, and the
+  `LayoutAxis` type**, the one classification of which axis each wrapper
+  name decides, plus `TEXT_ALIGN_PRESETS`, `TEXT_ALIGN_ATTRIBUTE`, and
+  `TEXT_ALIGN_COMPONENTS` for the `text` attribute. Both renderers and the
+  completion layer read these instead of keeping their own copies.
+- **`@markii/react`: `RegistryEntry.layout` and the `layoutClassName`
+  prop**; **`@markii/html`: `HtmlRegistryEntry.layout` and
+  `HtmlRenderContext.layoutClassName`**. An entry that declares `layout`
+  is a scope that already sets that axis by its name: the renderer drops
+  that axis's attribute, resolves the other one, and hands the resulting
+  class to the component instead of wrapping it in a second `<div>`. A
+  component still never receives `width` or `align` among its attributes.
+  Every entry without `layout` behaves exactly as before.
+
 - VS Code: Export as HTML opens the preview itself when pack folders are
   configured and no panel is open, and reveals a hidden one, so pack
   components render in the export without a manual step. The static engine
@@ -160,6 +196,27 @@ HTML` is now contributed to the editor's overflow menu for a `.mk.md`
   diagnostics surface.
 
 ### Changed
+
+- **BREAKING (`@markii/react`, `@markii/html`, `@markii/stdlib`): `align`
+  on a `:::row` no longer means "align the content inside the cells".** It
+  now means what it means on every other block, placing the row's own box,
+  which a full-width grid has no room to act on, so writing it on a row is a
+  visible no-op. The three `doc.css` rules that gave it the old meaning
+  (`.mk-align-left > .mk-row` and its two siblings) are gone. Use
+  `text=` instead: `:::row{cols=4 text=center}` does what
+  `:::row{cols=4 align=center}` used to do. A note that still writes
+  `align=` on a row keeps rendering, it simply stops centering.
+- **The seven layout-wrapper contracts declare one attribute each**
+  (`@markii/stdlib`), the axis their name did not decide, where they
+  previously declared none. `cell` declares `text` where it previously
+  declared nothing. `row`, `card`, and `callout` each gain `text`.
+- **`resolveLayoutAttributes` takes an optional owned-axis argument**
+  (`@markii/html`, and the same internal helper in `@markii/react`).
+  Existing one-argument calls are unaffected.
+- **`:::left` now declares its own text alignment** in `doc.css`
+  (`.mk-layout.mk-align-left`). Only a declared value beats an inherited
+  one, and `:::left` exists to opt one scope back out of an alignment it
+  inherited, such as a cell of a `:::row{text=center}`.
 
 - **Export confirmations say the same thing on both hosts.** The VS Code
   popup no longer counts the script values baked into the file. Both hosts

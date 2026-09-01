@@ -13,6 +13,12 @@
  * `inline` -> `:name[...]`, `leaf` -> `::name{...}`, `container` ->
  * `:::name{...} ... :::`) and what attributes it accepts.
  */
+import {
+  LAYOUT_ATTRIBUTES,
+  layoutWrapperAxis,
+  otherLayoutAxis,
+} from './layout.js';
+import { TEXT_ALIGN_ATTRIBUTE } from './text-align.js';
 
 /**
  * Which of the three directive forms a component is written as. Matches
@@ -52,35 +58,49 @@ export interface ComponentContract {
 
 /**
  * Builds one of docs/format.md's layout-wrapper container contracts,
- * `center`/`left`/`right`/`wide`/`narrow`/`full`/`fit`, which are otherwise identical in
- * shape (`kind: 'container'`, no attributes) and differ only in `name` and
- * the preset-specific half of `description`. A tiny helper rather than one
- * hand-copied literal per preset, since a typo in one copy's
- * `kind`/`attributes` would otherwise be easy to miss across a run of
- * near-duplicate blocks.
+ * `center`/`left`/`right`/`wide`/`narrow`/`full`/`fit`, which are otherwise
+ * identical in shape and differ only in `name`, the preset-specific half of
+ * `description`, and which of the two layout axes they leave open. A tiny
+ * helper rather than one hand-copied literal per preset, since a typo in
+ * one copy's `kind`/`attributes` would otherwise be easy to miss across a
+ * run of near-duplicate blocks.
+ *
+ * A wrapper decides ONE axis by its name and accepts the OTHER as an
+ * attribute (docs/spec.md §3), so an alignment wrapper declares `width` and
+ * a width wrapper declares `align`, taken from `./layout.ts`'s one
+ * definition of those two schemas. An attribute for the wrapper's own axis
+ * is deliberately absent from the contract: the name already decided it,
+ * and writing it is ignored rather than an error.
  *
  * `whatItDoes` is the preset-specific clause (e.g. "Centers narrower-than-
  * column plain markdown..."); the shared clause about why these exist (the
- * attribute mechanism cannot reach plain markdown) and about composing with
- * a nested wrapper is appended identically for all of them.
+ * attribute mechanism cannot reach plain markdown) is appended identically
+ * for all of them.
  */
 function layoutWrapperContract(
   name: string,
   whatItDoes: string,
 ): ComponentContract {
+  const ownAxis = layoutWrapperAxis(name);
+  if (ownAxis === undefined) {
+    throw new Error(`"${name}" is not a layout-wrapper name`);
+  }
+  const openAxis = otherLayoutAxis(ownAxis);
+
   return {
     name,
     kind: 'container',
-    attributes: {},
+    attributes: { [openAxis]: LAYOUT_ATTRIBUTES[openAxis] },
     description:
-      `${whatItDoes} Takes no attributes — docs/format.md gives these ` +
-      'wrapper names a closed, attribute-free form; unlike a `width`/`align` ' +
-      'attribute on a directive, a wrapper also reaches plain markdown a ' +
-      'directive attribute mechanism structurally cannot (a GFM table or a ' +
-      'bare image has no `{...}` to write `width=`/`align=` into). Nesting a ' +
-      'width wrapper (`wide`/`narrow`/`full`) inside an alignment wrapper ' +
-      '(`center`/`right`) composes, e.g. `::::center :::narrow ... ::: ::::` ' +
-      '(the outer fence needs more colons than the inner one).',
+      `${whatItDoes} A wrapper reaches plain markdown that a directive ` +
+      'attribute structurally cannot: a GFM table or a bare image has no ' +
+      '`{...}` to write `width=`/`align=` into. It sets one of the two ' +
+      `layout axes by its name and takes the other, \`${openAxis}\`, as an ` +
+      `attribute, so \`:::${name}{${openAxis}=...}\` applies both to the ` +
+      `one scope. An \`${ownAxis}\` attribute is ignored here, since the ` +
+      'name already decided that axis. Nesting two wrappers composes the ' +
+      'same way, e.g. `::::center :::narrow ... ::: ::::` (the outer fence ' +
+      'needs more colons than the inner one).',
   };
 }
 
@@ -114,6 +134,7 @@ export const STANDARD_COMPONENTS: Record<string, ComponentContract> = {
         description:
           'Optional header text shown above the body. Absent means no header line is rendered.',
       },
+      text: TEXT_ALIGN_ATTRIBUTE,
     },
     description:
       "A colored box for an aside, warning, or danger note. Body is the directive's inner markdown, rendered as-is.",
@@ -203,6 +224,7 @@ export const STANDARD_COMPONENTS: Record<string, ComponentContract> = {
         description:
           'Optional header text shown above the body. Absent means no title line is rendered.',
       },
+      text: TEXT_ALIGN_ATTRIBUTE,
     },
     description:
       'A titled panel, e.g. `:::card{title="Notes"} ... :::`. Body is the directive\'s inner markdown, rendered as-is.',
@@ -354,16 +376,17 @@ export const STANDARD_COMPONENTS: Record<string, ComponentContract> = {
         description:
           'Fixed column count for the row. Defaults to auto-fit (a responsive number of equal-width columns) when absent or not one of the allowed values — an invalid `cols` is never an error.',
       },
+      text: TEXT_ALIGN_ATTRIBUTE,
     },
     description:
-      "docs/format.md's one layout container, e.g. `:::row{cols=3} ... :::`. Its block children become equal-width cells that wrap responsively and stack on narrow viewports — and simply stack in a plain markdown viewer. No spans, no per-cell sizing, no other knobs.",
+      "docs/format.md's one layout container, e.g. `:::row{cols=3} ... :::`. Its block children become equal-width cells that wrap responsively and stack on narrow viewports — and simply stack in a plain markdown viewer. No spans, no per-cell sizing, no other knobs. A row always fills the column, so the reserved `align` has nothing to place on it; `text` is what aligns the content inside its cells.",
   },
   cell: {
     name: 'cell',
     kind: 'container',
-    attributes: {},
+    attributes: { text: TEXT_ALIGN_ATTRIBUTE },
     description:
-      "A transparent grouping container, e.g. `:::cell ... :::`. Its only job is making several blocks count as ONE cell of a `row`: a row's cells are its direct block children, so two blocks are two cells unless a `cell` groups them — and two adjacent task lists, which markdown merges into a single list, can only become two cells by putting one `cell` around each. Takes no attributes and adds no look of its own; outside a `row` it is inert. The enclosing `row` fence must use MORE colons than its `cell` children (directive container nesting rule), hence `::::row` wrapping `:::cell`.",
+      "A transparent grouping container, e.g. `:::cell ... :::`. Its only job is making several blocks count as ONE cell of a `row`: a row's cells are its direct block children, so two blocks are two cells unless a `cell` groups them — and two adjacent task lists, which markdown merges into a single list, can only become two cells by putting one `cell` around each. Its only presentation of its own is `text`, which overrides the enclosing row's; outside a `row` it is inert. The enclosing `row` fence must use MORE colons than its `cell` children (directive container nesting rule), hence `::::row` wrapping `:::cell`.",
   },
   center: layoutWrapperContract(
     'center',
@@ -371,7 +394,7 @@ export const STANDARD_COMPONENTS: Record<string, ComponentContract> = {
   ),
   left: layoutWrapperContract(
     'left',
-    'Left-aligns plain markdown within its scope and sets text alignment for everything in scope, e.g. `:::left ... :::`. Mostly matches the ambient default; it exists to override an alignment inherited from an enclosing scope, such as opting one cell back out of `:::row{align=center}`.',
+    'Left-aligns plain markdown within its scope and sets text alignment for everything in scope, e.g. `:::left ... :::`. Mostly matches the ambient default; it exists to override an alignment inherited from an enclosing scope, such as opting one cell back out of `:::row{text=center}`.',
   ),
   right: layoutWrapperContract(
     'right',
@@ -391,7 +414,7 @@ export const STANDARD_COMPONENTS: Record<string, ComponentContract> = {
   ),
   fit: layoutWrapperContract(
     'fit',
-    'Shrinks its scope to the width of its own content rather than filling the column, e.g. `:::fit ... :::`. Pair it with an alignment wrapper to place the result, as in `::::right :::fit ... ::: ::::`.',
+    'Shrinks its scope to the width of its own content rather than filling the column, e.g. `:::fit ... :::`. Pair it with an alignment to place the result, as in `:::fit{align=right} ... :::`.',
   ),
 };
 

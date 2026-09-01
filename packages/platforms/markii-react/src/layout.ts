@@ -1,8 +1,10 @@
 import {
   ALIGN_PRESETS,
   LAYOUT_ATTRIBUTE_KEYS,
+  TEXT_ALIGN_PRESETS,
   WIDTH_PRESETS,
 } from '@markii/stdlib';
+import type { LayoutAxis } from '@markii/stdlib';
 import type { DirectiveAttributes } from './registry.js';
 
 /**
@@ -56,6 +58,56 @@ const ALIGN_CLASSES: Record<string, string> = Object.assign(
   ),
 );
 
+/**
+ * `text` value -> class, derived mechanically from `@markii/stdlib`'s
+ * `TEXT_ALIGN_PRESETS` as `mk-text-<preset>`. Same null-prototype defense as
+ * the two maps above. `doc.css` defines `.mk-text-left`/`.mk-text-center`/
+ * `.mk-text-right` to match.
+ *
+ * `text` is NOT one of the reserved layout attributes: it is an ordinary
+ * per-component attribute of `row`/`cell`/`card`/`callout` (docs/spec.md
+ * §3), stripped by nothing and read by those four components themselves.
+ * Its class map lives here only because this module is already the one home
+ * of "preset value -> class" in this renderer, and keeping it beside
+ * `ALIGN_CLASSES` is what stops the two from drifting into different
+ * spellings of the same three words.
+ */
+const TEXT_CLASSES: Record<string, string> = Object.assign(
+  Object.create(null) as Record<string, string>,
+  Object.fromEntries(
+    TEXT_ALIGN_PRESETS.map((preset) => [preset, `mk-text-${preset}`]),
+  ),
+);
+
+/**
+ * Resolves a `text` attribute value to its class, or `undefined` for
+ * anything outside the closed `left | center | right` vocabulary (including
+ * a bare/empty/hostile value) — the same defensive shape as
+ * `alignClassFor`. The class name is always one of the fixed literals in
+ * `TEXT_CLASSES`; an author-supplied value is never interpolated into a
+ * class name. Never throws.
+ */
+export function textClassFor(
+  value: string | null | undefined,
+): string | undefined {
+  if (value === null || value === undefined || value === '') return undefined;
+  return TEXT_CLASSES[value];
+}
+
+/**
+ * Joins a component's own base class with the `text` class its `text`
+ * attribute resolves to, if any. The one helper the four `text`-accepting
+ * components (`row`, `cell`, `card`, `callout`) share, so none of them
+ * hand-rolls the same conditional concatenation.
+ */
+export function withTextClass(
+  baseClassName: string,
+  value: string | null | undefined,
+): string {
+  const textClass = textClassFor(value);
+  return textClass ? `${baseClassName} ${textClass}` : baseClassName;
+}
+
 export interface ResolvedLayoutAttributes {
   /** `attributes` with every reserved layout key (present, valid or not) removed. */
   attributes: DirectiveAttributes;
@@ -108,9 +160,18 @@ function alignClassFor(value: string | null | undefined): string | undefined {
  * containing `"`, `;`, `{`, `}`, a `javascript:` URI, `<script>`, ...) never
  * produces a class — it is dropped silently, exactly like an absent
  * attribute. This function never throws.
+ *
+ * `ownedAxis` names an axis the DIRECTIVE'S NAME already decided, which
+ * only a layout wrapper has (`:::center` owns `align`, `:::fit` owns
+ * `width` — see `@markii/stdlib`'s `layoutWrapperAxis`). That axis's
+ * attribute is still stripped, exactly like any reserved key, but produces
+ * no class: the name wins, so `:::center{align=right}` is simply centered.
+ * The other axis resolves normally, which is what lets a wrapper carry it
+ * (`:::center{width=fit}`).
  */
 export function resolveLayoutAttributes(
   attributes: DirectiveAttributes,
+  ownedAxis?: LayoutAxis,
 ): ResolvedLayoutAttributes {
   let rest = attributes;
   const classes: string[] = [];
@@ -118,14 +179,14 @@ export function resolveLayoutAttributes(
   if (Object.hasOwn(rest, 'width')) {
     const { width, ...remainder } = rest;
     rest = remainder;
-    const widthClass = widthClassFor(width);
+    const widthClass = ownedAxis === 'width' ? undefined : widthClassFor(width);
     if (widthClass) classes.push(widthClass);
   }
 
   if (Object.hasOwn(rest, 'align')) {
     const { align, ...remainder } = rest;
     rest = remainder;
-    const alignClass = alignClassFor(align);
+    const alignClass = ownedAxis === 'align' ? undefined : alignClassFor(align);
     if (alignClass) classes.push(alignClass);
   }
 

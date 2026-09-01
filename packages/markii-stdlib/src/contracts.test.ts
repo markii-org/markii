@@ -5,6 +5,24 @@ import {
   type ComponentContract,
   type ComponentKind,
 } from './contracts';
+import {
+  ALIGN_PRESETS,
+  LAYOUT_ATTRIBUTES,
+  WIDTH_PRESETS,
+  layoutWrapperAxis,
+  otherLayoutAxis,
+} from './layout';
+import {
+  TEXT_ALIGN_ATTRIBUTE,
+  TEXT_ALIGN_COMPONENTS,
+  TEXT_ALIGN_PRESETS,
+} from './text-align';
+
+/** The seven wrapper names, derived from the preset vocabularies rather than re-listed. */
+const LAYOUT_WRAPPER_NAMES: readonly string[] = [
+  ...ALIGN_PRESETS,
+  ...WIDTH_PRESETS.filter((preset) => preset !== 'normal'),
+];
 
 const KINDS: readonly ComponentKind[] = ['inline', 'leaf', 'container'];
 
@@ -212,43 +230,75 @@ describe('STANDARD_COMPONENTS', () => {
     expect(STANDARD_COMPONENTS.row?.kind).toBe('container');
   });
 
-  it("row's only attribute is cols, optional, a closed enum of 2/3/4", () => {
+  it("row's attributes are cols and text, both optional closed enums", () => {
     const attrs = STANDARD_COMPONENTS.row?.attributes ?? {};
-    expect(Object.keys(attrs)).toEqual(['cols']);
+    expect(Object.keys(attrs)).toEqual(['cols', 'text']);
     expect(attrs.cols?.required).toBeFalsy();
     expect(attrs.cols?.enum).toEqual(['2', '3', '4']);
+    expect(attrs.text?.required).toBeFalsy();
+    expect(attrs.text?.enum).toEqual(TEXT_ALIGN_PRESETS);
   });
-  it('marks cell as an attribute-free container directive, matching its :::cell ... ::: form', () => {
+  it('marks cell as a container directive whose one attribute is text', () => {
     expect(STANDARD_COMPONENTS.cell?.kind).toBe('container');
-    expect(STANDARD_COMPONENTS.cell?.attributes).toEqual({});
+    expect(Object.keys(STANDARD_COMPONENTS.cell?.attributes ?? {})).toEqual([
+      'text',
+    ]);
   });
 
   it("cell's description explains that it groups several blocks into one row cell", () => {
     const description = STANDARD_COMPONENTS.cell?.description ?? '';
     expect(description).toContain('row');
     expect(description).toContain('ONE cell');
-    expect(description).toContain('Takes no attributes');
   });
 
-  it.each(['center', 'left', 'right', 'wide', 'narrow', 'full'] as const)(
-    'marks the %s layout wrapper as a container directive with no attributes',
+  it.each(TEXT_ALIGN_COMPONENTS)(
+    '%s accepts the one shared text attribute, identical on all four',
     (name) => {
-      const contract = STANDARD_COMPONENTS[name];
-      expect(contract?.kind).toBe('container');
-      expect(contract?.attributes).toEqual({});
+      expect(STANDARD_COMPONENTS[name]?.attributes.text).toBe(
+        TEXT_ALIGN_ATTRIBUTE,
+      );
     },
   );
 
-  it("each layout wrapper's description notes it takes no attributes and reaches plain markdown the attribute mechanism cannot", () => {
-    for (const name of ['center', 'left', 'right', 'wide', 'narrow', 'full']) {
+  it('no component outside that set declares a text attribute', () => {
+    const declaring = Object.values(STANDARD_COMPONENTS)
+      .filter((contract) => Object.hasOwn(contract.attributes, 'text'))
+      .map((contract) => contract.name)
+      .sort();
+    expect(declaring).toEqual([...TEXT_ALIGN_COMPONENTS].sort());
+  });
+
+  it.each(LAYOUT_WRAPPER_NAMES)(
+    'marks the %s layout wrapper as a container directive declaring only its open axis',
+    (name) => {
+      const contract = STANDARD_COMPONENTS[name];
+      expect(contract?.kind).toBe('container');
+      const ownAxis = layoutWrapperAxis(name);
+      if (ownAxis === undefined) {
+        throw new Error(`"${name}" is not a layout-wrapper name`);
+      }
+      const openAxis = otherLayoutAxis(ownAxis);
+      expect(contract?.attributes).toEqual({
+        [openAxis]: LAYOUT_ATTRIBUTES[openAxis],
+      });
+    },
+  );
+
+  it("each layout wrapper's description names the axis it takes as an attribute and says its own axis is ignored", () => {
+    for (const name of LAYOUT_WRAPPER_NAMES) {
       const description = STANDARD_COMPONENTS[name]?.description ?? '';
-      expect(description).toContain('Takes no attributes');
+      const ownAxis = layoutWrapperAxis(name);
+      if (ownAxis === undefined) {
+        throw new Error(`"${name}" is not a layout-wrapper name`);
+      }
       expect(description).toContain('plain markdown');
+      expect(description).toContain(`:::${name}{${otherLayoutAxis(ownAxis)}=`);
+      expect(description).toContain(`An \`${ownAxis}\` attribute is ignored`);
     }
   });
 
-  it("each layout wrapper's description documents that nesting a width wrapper inside an alignment wrapper composes", () => {
-    for (const name of ['center', 'left', 'right', 'wide', 'narrow', 'full']) {
+  it("each layout wrapper's description documents that nesting two wrappers composes", () => {
+    for (const name of LAYOUT_WRAPPER_NAMES) {
       const description = STANDARD_COMPONENTS[name]?.description ?? '';
       expect(description).toContain('composes');
     }

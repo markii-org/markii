@@ -13,7 +13,10 @@ import {
   LAYOUT_ATTRIBUTES,
   LAYOUT_ATTRIBUTE_KEYS,
   getContract,
+  layoutWrapperAxis,
+  otherLayoutAxis,
 } from '@markii/stdlib';
+import type { LayoutAxis } from '@markii/stdlib';
 import { componentSkeleton } from '../insert/component-skeleton.js';
 import type { ComponentSkeleton } from '../insert/component-skeleton.js';
 import type { InsertableComponent } from '../insert/component-catalog.js';
@@ -251,6 +254,30 @@ const LAYOUT_ATTRIBUTE_NAME_SET: ReadonlySet<string> = new Set(
   LAYOUT_ATTRIBUTE_NAMES,
 );
 
+/**
+ * Which reserved layout attributes to offer on `directiveName`, written in
+ * directive `form`.
+ *
+ * An inline directive gets none: the two keys are stripped there and have
+ * no effect, so offering them would be offering a no-op. A layout WRAPPER
+ * gets exactly one, the axis its own name did not already decide
+ * (docs/spec.md §3): `:::center` is already centered, so it offers `width`
+ * and not `align`, and `:::fit` offers `align` and not `width`. Writing the
+ * wrapper's own axis is ignored by both renderers, so completing it would
+ * be inviting the author to type something that does nothing. Every other
+ * block directive gets both.
+ */
+function layoutAttributesFor(
+  directiveName: string,
+  form: DirectiveForm,
+): readonly LayoutAxis[] {
+  if (form === 'inline') return [];
+  const ownAxis = layoutWrapperAxis(directiveName);
+  return ownAxis === undefined
+    ? LAYOUT_ATTRIBUTE_NAMES
+    : [otherLayoutAxis(ownAxis)];
+}
+
 function attributeNameCompletionContext(
   ctx: AttributeNameParseResult,
   catalog: readonly InsertableComponent[],
@@ -283,11 +310,9 @@ function attributeNameCompletionContext(
     }
   }
 
-  if (ctx.form !== 'inline') {
-    for (const name of LAYOUT_ATTRIBUTE_NAMES) {
-      if (ctx.presentNames.has(name) || offered.has(name)) continue;
-      items.push(attributeNameItem(name, LAYOUT_ATTRIBUTES[name]));
-    }
+  for (const name of layoutAttributesFor(ctx.directiveName, ctx.form)) {
+    if (ctx.presentNames.has(name) || offered.has(name)) continue;
+    items.push(attributeNameItem(name, LAYOUT_ATTRIBUTES[name]));
   }
 
   return {
@@ -302,9 +327,13 @@ function resolveValueEnum(
   ctx: AttributeValueParseResult,
   catalog: readonly InsertableComponent[],
 ): readonly string[] | undefined {
+  // The same axis filter the attribute-NAME context applies, so the two can
+  // never disagree: a name that is not offered here never gets values
+  // either, and `:::center{align=` completes nothing rather than offering
+  // three values the renderer will ignore.
   if (
-    ctx.form !== 'inline' &&
-    (ctx.attributeName === 'width' || ctx.attributeName === 'align')
+    (ctx.attributeName === 'width' || ctx.attributeName === 'align') &&
+    layoutAttributesFor(ctx.directiveName, ctx.form).includes(ctx.attributeName)
   ) {
     return LAYOUT_ATTRIBUTES[ctx.attributeName].enum;
   }

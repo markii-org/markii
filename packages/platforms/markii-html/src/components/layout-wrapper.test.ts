@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { renderMarkToHtml } from '../render.js';
 import { createTestContext } from '../test/html-context.js';
+import { defaultHtmlRegistry } from './index.js';
 import {
   createLayoutWrapper,
   LAYOUT_WRAPPER_PRESETS,
@@ -41,9 +43,77 @@ describe('createLayoutWrapper', () => {
     );
   });
 
-  it('ignores attributes entirely', () => {
-    expect(createLayoutWrapper('center')({ foo: 'bar' }, 'x', ctx)).toBe(
-      '<div class="mk-layout mk-align-center">x</div>',
+  it('fit adds the matching mk-width-fit class', () => {
+    expect(createLayoutWrapper('fit')({}, 'x', ctx)).toBe(
+      '<div class="mk-layout mk-width-fit">x</div>',
     );
+  });
+
+  it('ignores attributes entirely: the reserved keys are stripped before a component sees them', () => {
+    expect(
+      createLayoutWrapper('center')({ foo: 'bar', width: 'fit' }, 'x', ctx),
+    ).toBe('<div class="mk-layout mk-align-center">x</div>');
+  });
+
+  it('appends ctx.layoutClassName to its own classes on the SAME div', () => {
+    const withLayout = createTestContext({ layoutClassName: 'mk-width-fit' });
+    expect(createLayoutWrapper('center')({}, 'x', withLayout)).toBe(
+      '<div class="mk-layout mk-align-center mk-width-fit">x</div>',
+    );
+  });
+});
+
+describe('renderMarkToHtml — layout wrappers take the other axis as an attribute', () => {
+  it('an alignment wrapper takes width, emitting ONE div with both classes', () => {
+    const html = renderMarkToHtml(
+      ':::center{width=fit}\ncontent\n:::',
+      defaultHtmlRegistry,
+    );
+    expect(html).toContain(
+      '<div class="mk-layout mk-align-center mk-width-fit">',
+    );
+    // no outer attribute-interception div wrapped around it
+    expect(html).not.toContain('<div class="mk-width-fit"><div');
+  });
+
+  it('a width wrapper takes align, the same way round', () => {
+    const html = renderMarkToHtml(
+      ':::fit{align=center}\ncontent\n:::',
+      defaultHtmlRegistry,
+    );
+    expect(html).toContain(
+      '<div class="mk-layout mk-width-fit mk-align-center">',
+    );
+  });
+
+  it.each([
+    [':::center{align=right}', 'mk-layout mk-align-center'],
+    [':::fit{width=full}', 'mk-layout mk-width-fit'],
+  ])(
+    '%s ignores the attribute for the wrapper own axis',
+    (source, expected) => {
+      const html = renderMarkToHtml(
+        `${source}\ncontent\n:::`,
+        defaultHtmlRegistry,
+      );
+      expect(html).toContain(`<div class="${expected}">`);
+    },
+  );
+
+  it('an invalid value on the open axis is ignored as if absent', () => {
+    const html = renderMarkToHtml(
+      ':::center{width=diagonal}\ncontent\n:::',
+      defaultHtmlRegistry,
+    );
+    expect(html).toContain('<div class="mk-layout mk-align-center">');
+  });
+
+  it('never emits an author-supplied layout value into the markup', () => {
+    const html = renderMarkToHtml(
+      ":::center{width='javascript:alert(1)'}\ncontent\n:::",
+      defaultHtmlRegistry,
+    );
+    expect(html).not.toContain('javascript:');
+    expect(html).toContain('<div class="mk-layout mk-align-center">');
   });
 });

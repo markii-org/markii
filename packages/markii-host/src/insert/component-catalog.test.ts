@@ -3,6 +3,8 @@ import {
   ALIGN_PRESETS,
   STANDARD_COMPONENTS,
   WIDTH_PRESETS,
+  layoutWrapperAxis,
+  otherLayoutAxis,
 } from '@markii/stdlib';
 import type { PackComponentEntry } from '@markii/pack';
 import {
@@ -243,7 +245,11 @@ describe('buildComponentCatalog', () => {
 });
 
 describe('LAYOUT_WRAPPER_NAMES', () => {
-  it('names exactly seven wrappers, each a real container-kind, attribute-free standard component', () => {
+  it('names exactly seven wrappers, each a real container-kind standard component declaring only its open axis', () => {
+    // A wrapper sets one layout axis by its NAME and takes the other as an
+    // attribute (docs/spec.md §3), so its contract declares exactly one
+    // attribute: the axis its name did not decide. Declaring its own axis
+    // would advertise something both renderers ignore.
     expect(LAYOUT_WRAPPER_NAMES).toHaveLength(7);
     for (const name of LAYOUT_WRAPPER_NAMES) {
       const contract = STANDARD_COMPONENTS[name];
@@ -252,7 +258,13 @@ describe('LAYOUT_WRAPPER_NAMES', () => {
         `expected "${name}" in STANDARD_COMPONENTS`,
       ).toBeDefined();
       expect(contract?.kind).toBe('container');
-      expect(Object.keys(contract?.attributes ?? {})).toEqual([]);
+      const ownAxis = layoutWrapperAxis(name);
+      if (ownAxis === undefined) {
+        throw new Error(`"${name}" is not a layout-wrapper name`);
+      }
+      expect(Object.keys(contract?.attributes ?? {})).toEqual([
+        otherLayoutAxis(ownAxis),
+      ]);
     }
   });
 

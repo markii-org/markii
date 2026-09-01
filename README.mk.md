@@ -82,6 +82,27 @@ That table is centered because of the wrapper, not because of anything in
 the table. There is deliberately nothing else to learn here: no style
 attributes, no pixel values.
 
+A wrapper sets one of the two layout axes, size or place, and takes the
+other as an attribute, so one fence can do both:
+
+:::center{width=fit}
+| build  | status  |
+| ------ | ------- |
+| `main` | passing |
+:::
+
+Aligning the text inside a component is a different job, and it has its own
+attribute named after what moves. `row`, `cell`, `card`, and `callout` take
+`text`, and a row hands it to every cell:
+
+:::row{cols=3 text=center}
+Centered.
+
+Also centered.
+
+And this one too.
+:::
+
 A `card` is the other half of the same idea. It draws a raised surface
 around whatever you put in it, and it holds ordinary markdown:
 

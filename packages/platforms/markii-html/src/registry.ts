@@ -8,6 +8,7 @@
  */
 
 import type { FailureKind, ValueStatus } from '@markii/runtime';
+import type { LayoutAxis } from '@markii/stdlib';
 
 /**
  * Attributes parsed off a directive, e.g. `{type=warning title="Careful"}`. A
@@ -66,6 +67,17 @@ export interface HtmlRenderContext {
   dataStatus?: ValueStatus;
   dataError?: string;
   dataFailureKind?: FailureKind;
+  /**
+   * The layout class the directive's reserved `width`/`align` attributes
+   * resolved to, handed to the component instead of being applied to a
+   * wrapper `<div>` around it. Present ONLY for an entry registered with
+   * `layout` (a scope component, such as the standard `:::center`), and only
+   * for the axis that entry does not already own. Mirrors
+   * `@markii/react`'s `layoutClassName` prop, carried on `ctx` for the same
+   * reason the data-binding fields are: `HtmlComponent` takes three
+   * arguments and has no room for a fourth.
+   */
+  layoutClassName?: string;
 }
 
 /**
@@ -90,6 +102,17 @@ export type HtmlComponent = (
 export interface HtmlRegistryEntry {
   component: HtmlComponent;
   inline?: boolean;
+  /**
+   * Declares this component a LAYOUT SCOPE that already sets one of the two
+   * layout axes by its own name, the way the standard `:::center` (align)
+   * and `:::fit` (width) wrappers do. The reserved attribute for that axis
+   * is dropped without effect; the other axis resolves and arrives as
+   * `ctx.layoutClassName` instead of on a wrapper `<div>`, so the scope
+   * emits one element carrying both classes. Either way a component never
+   * receives `width` or `align` among its attributes (docs/spec.md §2).
+   * Mirrors `@markii/react`'s `RegistryEntry.layout`.
+   */
+  layout?: LayoutAxis;
 }
 
 /** One alias: a second name for an existing component, optionally carrying preset attributes. */
@@ -191,6 +214,33 @@ export function readRegistryComponent(
   if (!entry) return undefined;
   try {
     return entry.component ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The layout axis the component registered under `name` owns, or
+ * `undefined` when there is no such entry, it has no usable component, or it
+ * is not a layout scope. Reads `entry.layout` behind the same try/catch
+ * `readRegistryComponent` uses, so a hostile throwing getter degrades to
+ * "not a layout scope"; a value that is not one of the two axis names is
+ * ignored the same way an invalid `width=` is.
+ *
+ * A broken entry is deliberately NOT a layout scope: it renders the
+ * unknown-directive fallback, which has no root element to hand a class to,
+ * so the directive keeps the ordinary wrapper `<div>` and its `width`/
+ * `align` still show. Mirrors `@markii/react`'s `registryLayoutAxis`.
+ */
+export function registryLayoutAxis(
+  registry: HtmlRegistry,
+  name: string,
+): LayoutAxis | undefined {
+  const entry = Object.hasOwn(registry, name) ? registry[name] : undefined;
+  if (readRegistryComponent(entry) == null) return undefined;
+  try {
+    const axis = entry?.layout;
+    return axis === 'width' || axis === 'align' ? axis : undefined;
   } catch {
     return undefined;
   }

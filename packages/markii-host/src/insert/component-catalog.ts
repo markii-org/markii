@@ -22,10 +22,10 @@ import type { DiscoveredPack } from '../packs/discover.js';
 import { firstSentence } from './first-sentence.js';
 
 /**
- * The six layout-wrapper container directive names (docs/format.md):
- * alignment (`center`, `left`, `right`) and width presets (`wide`,
- * `narrow`, `full`). `left` is real — it exists in `@markii/stdlib`'s
- * `STANDARD_COMPONENTS` alongside the other five — even though issue #18's
+ * The seven layout-wrapper container directive names (docs/format.md):
+ * alignment (`center`, `left`, `right`) and width presets (`fit`, `narrow`,
+ * `wide`, `full`). `left` is real — it exists in `@markii/stdlib`'s
+ * `STANDARD_COMPONENTS` alongside the others — even though issue #18's
  * prose names only five; this constant is the complete, executable set, so
  * a picker's "layout" section can never silently drop or gain a member as
  * the standard set evolves. Exported so a picker UI can render this group

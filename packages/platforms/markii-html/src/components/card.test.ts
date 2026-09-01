@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { TEXT_ALIGN_PRESETS } from '@markii/stdlib';
 import { renderMarkToHtml } from '../render.js';
 import { createTestContext } from '../test/html-context.js';
 import { Card } from './card.js';
@@ -30,5 +31,22 @@ describe('Card', () => {
     );
     expect(html).toContain('<li>one</li>');
     expect(html).toContain('<li>two</li>');
+  });
+});
+
+describe('Card — text', () => {
+  it.each(TEXT_ALIGN_PRESETS)(
+    'text=%s appends the matching mk-text-* class to the panel, covering title and body alike',
+    (text) => {
+      const html = Card({ title: 'T', text }, '<p>b</p>', ctx);
+      expect(html).toContain(`<div class="mk-card mk-text-${text}">`);
+      expect(html).toContain('<div class="mk-card__title">T</div>');
+    },
+  );
+
+  it('ignores an invalid text value', () => {
+    expect(Card({ text: 'diagonal' }, 'x', ctx)).toContain(
+      '<div class="mk-card">',
+    );
   });
 });

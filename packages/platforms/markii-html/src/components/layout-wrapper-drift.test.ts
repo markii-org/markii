@@ -1,9 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { ALIGN_PRESETS, WIDTH_PRESETS } from '@markii/stdlib';
+import {
+  ALIGN_PRESETS,
+  TEXT_ALIGN_PRESETS,
+  WIDTH_PRESETS,
+  layoutWrapperAxis,
+  otherLayoutAxis,
+} from '@markii/stdlib';
 import { resolveLayoutAttributes } from '../layout.js';
 import { createTestContext } from '../test/html-context.js';
+import { withTextClass } from '../layout.js';
 import {
   createLayoutWrapper,
+  layoutWrapperPresetAxis,
   LAYOUT_WRAPPER_PRESETS,
 } from './layout-wrapper.js';
 
@@ -47,6 +55,42 @@ describe('layout wrappers compose from the layout attribute classes', () => {
       ...WIDTH_PRESETS.filter((preset) => preset !== 'normal'),
     ].sort();
     expect([...LAYOUT_WRAPPER_PRESETS].sort()).toEqual(expected);
+  });
+
+  it.each(LAYOUT_WRAPPER_PRESETS)(
+    ':::%s composed with its open axis is its own class plus the attribute class, on one element',
+    (preset) => {
+      const own = layoutWrapperPresetAxis(preset);
+      const open = otherLayoutAxis(own);
+      const openValue = open === 'align' ? 'center' : 'fit';
+      const ownClass = attributeClass(own, preset);
+      const openClass = attributeClass(open, openValue);
+      const withLayout = createTestContext({ layoutClassName: openClass });
+      expect(createLayoutWrapper(preset)({}, 'x', withLayout)).toBe(
+        `<div class="mk-layout ${ownClass} ${openClass}">x</div>`,
+      );
+    },
+  );
+
+  it('layoutWrapperPresetAxis agrees with @markii/stdlib for every preset', () => {
+    for (const preset of LAYOUT_WRAPPER_PRESETS) {
+      expect(layoutWrapperPresetAxis(preset), preset).toBe(
+        layoutWrapperAxis(preset),
+      );
+    }
+  });
+
+  it('withTextClass maps every text preset to mk-text-<value> and nothing else', () => {
+    // The `text` classes are a second copy in this engine, exactly like
+    // `WRAPPER_CLASSES` is, so they get the same drift guard: derived from
+    // `@markii/stdlib`'s vocabulary, compared against what the component
+    // helper actually emits.
+    for (const preset of TEXT_ALIGN_PRESETS) {
+      expect(withTextClass('base', preset)).toBe(`base mk-text-${preset}`);
+    }
+    expect(withTextClass('base', 'diagonal')).toBe('base');
+    expect(withTextClass('base', undefined)).toBe('base');
+    expect(withTextClass('base', null)).toBe('base');
   });
 
   it('sanity: the comparison is not vacuous', () => {

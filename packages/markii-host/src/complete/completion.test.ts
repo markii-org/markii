@@ -177,6 +177,40 @@ describe('completionAt — attribute-name context', () => {
     expect(names).not.toContain('align');
   });
 
+  it('offers a layout wrapper only the axis its name did not decide', () => {
+    // `:::center` is already centered, so completing `align` would invite
+    // the author to type something both renderers ignore (docs/spec.md §3).
+    for (const name of ['center', 'left', 'right']) {
+      const line = `:::${name}{`;
+      const ctx = completionAt(line, line.length, STANDARD_CATALOG);
+      expect(labels(ctx.items), name).toEqual(['width']);
+    }
+    for (const name of ['fit', 'narrow', 'wide', 'full']) {
+      const line = `:::${name}{`;
+      const ctx = completionAt(line, line.length, STANDARD_CATALOG);
+      expect(labels(ctx.items), name).toEqual(['align']);
+    }
+  });
+
+  it('offers a wrapper open axis exactly once, not twice from contract and layout source', () => {
+    const line = ':::center{';
+    const ctx = completionAt(line, line.length, STANDARD_CATALOG);
+    expect(ctx.items.filter((item) => item.label === 'width')).toHaveLength(1);
+  });
+
+  it('offers text on each of the four components that accept it', () => {
+    for (const name of ['row', 'cell', 'card', 'callout']) {
+      const line = `:::${name}{`;
+      const ctx = completionAt(line, line.length, STANDARD_CATALOG);
+      expect(labels(ctx.items), name).toContain('text');
+    }
+  });
+
+  it('does not offer text on a component that has no such attribute', () => {
+    const ctx = completionAt(':::details{', 11, STANDARD_CATALOG);
+    expect(labels(ctx.items)).not.toContain('text');
+  });
+
   it('offers only width/align for a pack component (no contract)', () => {
     const catalog = buildComponentCatalog([
       pack('cat', { card: './Card.tsx' }),
@@ -210,6 +244,28 @@ describe('completionAt — attribute-value context', () => {
     const ctx = completionAt('::callout{type=', 15, STANDARD_CATALOG);
     expect(ctx.kind).toBe('attribute-value');
     expect(labels(ctx.items)).toEqual(['danger', 'info', 'warning']);
+  });
+
+  it('offers the open axis values on a wrapper, and nothing for its own axis', () => {
+    const openLine = ':::center{width=';
+    const open = completionAt(openLine, openLine.length, STANDARD_CATALOG);
+    expect(open.kind).toBe('attribute-value');
+    expect(open.items.map((item) => item.label)).toEqual([...WIDTH_PRESETS]);
+
+    const ownLine = ':::center{align=';
+    const own = completionAt(ownLine, ownLine.length, STANDARD_CATALOG);
+    expect(own.kind).toBe('none');
+    expect(own.items).toEqual([]);
+  });
+
+  it('offers the three text values on a component that accepts text', () => {
+    const line = ':::row{text=';
+    const ctx = completionAt(line, line.length, STANDARD_CATALOG);
+    expect(ctx.items.map((item) => item.label)).toEqual([
+      'left',
+      'center',
+      'right',
+    ]);
   });
 
   it('offers the width preset enum on a block form', () => {

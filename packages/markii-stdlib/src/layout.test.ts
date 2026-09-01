@@ -4,6 +4,8 @@ import {
   LAYOUT_ATTRIBUTE_KEYS,
   LAYOUT_ATTRIBUTES,
   WIDTH_PRESETS,
+  layoutWrapperAxis,
+  otherLayoutAxis,
 } from './layout.js';
 
 describe('LAYOUT_ATTRIBUTE_KEYS', () => {
@@ -48,5 +50,65 @@ describe('LAYOUT_ATTRIBUTES', () => {
 
   it('has exactly the two reserved keys', () => {
     expect(Object.keys(LAYOUT_ATTRIBUTES).sort()).toEqual(['align', 'width']);
+  });
+});
+
+describe('otherLayoutAxis', () => {
+  it('pairs the two axes both ways', () => {
+    expect(otherLayoutAxis('width')).toBe('align');
+    expect(otherLayoutAxis('align')).toBe('width');
+  });
+
+  it('is its own inverse, so a wrapper round-trips back to its own axis', () => {
+    for (const axis of LAYOUT_ATTRIBUTE_KEYS) {
+      expect(otherLayoutAxis(otherLayoutAxis(axis))).toBe(axis);
+    }
+  });
+});
+
+describe('layoutWrapperAxis', () => {
+  it.each(ALIGN_PRESETS)(
+    'classifies the %s wrapper as an align wrapper',
+    (preset) => {
+      expect(layoutWrapperAxis(preset)).toBe('align');
+    },
+  );
+
+  it.each(WIDTH_PRESETS.filter((preset) => preset !== 'normal'))(
+    'classifies the %s wrapper as a width wrapper',
+    (preset) => {
+      expect(layoutWrapperAxis(preset)).toBe('width');
+    },
+  );
+
+  it('has no wrapper for the classless default width', () => {
+    // `normal` is the explicit default, so there is nothing for a wrapper
+    // to apply — a `:::normal` scope would be a no-op with a name.
+    expect(layoutWrapperAxis('normal')).toBeUndefined();
+  });
+
+  it('returns undefined for an ordinary component name', () => {
+    expect(layoutWrapperAxis('callout')).toBeUndefined();
+    expect(layoutWrapperAxis('row')).toBeUndefined();
+    expect(layoutWrapperAxis('')).toBeUndefined();
+  });
+
+  it('returns undefined for an Object.prototype member name, never a truthy prototype hit', () => {
+    for (const name of [
+      '__proto__',
+      'constructor',
+      'toString',
+      'hasOwnProperty',
+      'valueOf',
+    ]) {
+      expect(layoutWrapperAxis(name), name).toBeUndefined();
+    }
+  });
+
+  it('classifies exactly seven names, one per align preset and per non-default width preset', () => {
+    const classified = [...ALIGN_PRESETS, ...WIDTH_PRESETS].filter(
+      (preset) => layoutWrapperAxis(preset) !== undefined,
+    );
+    expect(classified).toHaveLength(7);
   });
 });

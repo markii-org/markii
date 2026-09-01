@@ -195,40 +195,36 @@ deliberately no freeform styling: no `style=` attribute, no pixel values, no
 arbitrary CSS. Freeform layout is how documents rot; a fixed set of presets
 is how they stay consistent as themes and component sets evolve.
 
-### Width and alignment on a directive
+### Two axes: size and place
 
-Any block directive can carry the two reserved attributes:
+Every block has two layout settings, and a plain viewer never sees either
+of them.
+
+`width` says how much of the column the block's box takes. The default is
+`normal`: the box fills the column, up to the document's reading width.
+`fit` is the one preset that shrinks the box to its own content. The scale
+runs `fit`, `narrow`, `normal`, `wide`, `full`.
+
+`align` says where that box sits in the column: `left`, `center`, or
+`right`. The default is `left`. Alignment moves the box and nothing inside
+it, so it only shows on a box that is narrower than the column. A card that
+fills the column has nowhere to go; a chart shrunk to `fit` does.
+
+Both are written as attributes on any block directive:
 
 ```
-:::chart{width=wide}       fit | narrow | normal | wide | full
-::figure{width=fit align=right}        left | center | right
+:::chart{width=wide}
+::figure{width=fit align=right}
 ```
-
-`width` runs narrowest to widest: `fit`, `narrow`, `normal`, `wide`, `full`.
-`normal` is the default and the same as leaving `width` off. Every preset
-except `fit` caps how wide the block may grow; `fit` shrinks the block to
-the width of its own content instead.
-
-`align` places the block within the column, so it only shows on a block
-that is narrower than the column; a full-width block has nothing to align.
-That is why it pairs naturally with a width:
-
-```
-::chart{width=fit align=right}
-```
-
-hugs its content and sits against the right edge. `align` moves the box,
-never its contents. To align the text inside a full-width block, wrap the
-content in an alignment wrapper, or use the component's own attribute when
-it offers one, the way the divider's `label-align` places its label.
 
 An invalid value is ignored as if it were absent; nothing errors. Inline
-directives ignore both attributes entirely.
+directives ignore both attributes.
 
-### Layout wrappers for plain markdown
+### The same presets as wrappers
 
-Ordinary markdown has nowhere to write attributes: a table or an image has no
-`{...}`. Seven wrapper containers carry the same presets to any content:
+Ordinary markdown has nowhere to write attributes: a table or an image has
+no `{...}`. Each preset also exists as a wrapper container that applies it
+to everything in its scope:
 
 ```
 :::center
@@ -238,18 +234,63 @@ Ordinary markdown has nowhere to write attributes: a table or an image has no
 :::
 ```
 
-The seven names are `:::center`, `:::right`, `:::left`, `:::wide`,
-`:::narrow`, `:::fit`, and `:::full`. Each applies its preset to everything in its
-scope. The alignment wrappers also align text lines, and place any block
-that is narrower than the column, which tables and images naturally are.
-`:::left` matches the default, so it is rarely written on its own; it
+The seven wrappers are `:::center`, `:::right`, `:::left` for alignment
+and `:::fit`, `:::narrow`, `:::wide`, `:::full` for width. There is no
+`:::normal`, because the default needs no wrapper. In a plain viewer a
+wrapper is two extra fence lines around readable markdown.
+
+A wrapper is the scoped form of the attribute, not a different feature.
+`:::center` around a directive and `{align=center}` on it come out the
+same. The wrapper additionally centers plain text lines and any block
+narrower than the column, which a table or an image naturally is.
+
+When one scope needs both axes, the wrapper takes the other axis as an
+attribute:
+
+```
+:::center{width=fit}
+| goals | scored |
+|-------|--------|
+| home  | 3      |
+:::
+```
+
+This reads as "centered, sized to fit". `:::fit{align=center}` means the
+same thing said the other way round; pick the order that reads best. A
+wrapper ignores an attribute for its own axis, so `:::center{align=right}`
+is simply centered. Nesting two wrappers still works and means the same.
+
+`:::left` matches the default, so it is rarely written on its own. It
 exists to opt one scope back out of an alignment inherited from a
-surrounding container, such as one cell of a centered row. `:::fit` shrinks its
-contents to their own width, which is how a table or an image narrower than
-the column gets sized when there is no `{...}` to carry the attribute; nest
-it inside a `::::right` to place the result. There is no
-`:::normal`, because the width default needs no wrapper. In a plain
-viewer, a wrapper is just two extra fence lines around readable markdown.
+surrounding container, such as one cell of a centered row.
+
+### When alignment seems to do nothing
+
+If you center a component and it does not move, its box is already as wide
+as the column. A framed component (a card, a callout) shows this plainly.
+A frameless one (a table, a grid, a row of chips) can look left-aligned
+while its invisible box fills the column. The standard set and the packs
+that follow the pack guidelines size frameless components to their content
+so this does not happen; for one that does not, `{width=fit}` on the
+directive, or `:::center{width=fit}` around it, gives the box an edge to
+move.
+
+### Aligning text inside a component
+
+`align` never reaches inside a component. When a component offers control
+over its own contents, it does so through an attribute named after what
+moves. The standard set uses `text` for the text alignment inside a block:
+
+```
+:::callout{type=info text=center}
+Centered note text.
+:::
+```
+
+`text` takes `left`, `center`, or `right` and is accepted by `row`, `cell`,
+`card`, and `callout`. The divider's `label-align` places its label the
+same way. A pack component that aligns something inside itself follows the
+same rule and names the attribute after the thing it moves.
 
 ### Side-by-side content
 
@@ -269,12 +310,21 @@ narrow screens or in plain viewers.
 There are no spans, no per-cell sizes, and no other knobs. It exists so a
 dashboard of stats and charts can share a line, and nothing more.
 
-On a row, `align` means something slightly different than on other blocks.
-A row always spans the full column, so there is nothing to place; instead,
-`:::row{cols=4 align=center}` aligns the content inside every cell. Before
-this, centering a row of stats meant wrapping each cell's content in its
-own `:::center`. A wrapper written inside one cell still wins over the
-row's setting, so `:::left` can opt a single cell back out.
+A row spans the full column, so `align` on it has nothing to place. To
+align the content inside every cell, use `text`:
+
+```
+:::row{cols=4 text=center}
+::stat{data=stars label="Stars"}
+::stat{data=forks label="Forks"}
+::stat{data=issues label="Issues"}
+::stat{data=prs label="PRs"}
+:::
+```
+
+A cell with its own `text` overrides the row's, and an alignment wrapper
+written inside a cell wins over both, so `:::left` can opt a single cell
+back out.
 
 A row counts its direct block children as its cells, so two paragraphs are
 two cells. When one cell needs more than one block, such as a heading and a list
@@ -309,6 +359,17 @@ cells when a `cell` stands around each.
 Text does not wrap around components. Floating content is the single largest
 source of layout pain in documents and reads badly at every width, so
 everything stacks, and side-by-side placement is what `:::row` is for.
+
+There is no scope that sets a component's own attributes for everything
+inside it. `width` and `align` can be applied to a whole scope because they
+mean the same thing on every block. A component's attributes do not: `type`
+on a citation card and `type` on a chart are unrelated, so a scope setting
+one would hit the other. It would also make a directive's rendering depend
+on something written far above it, and the format is held to a simpler
+test: a directive line explains its own rendering. When a container needs
+to hand a setting to its children, it does so through its own attribute,
+the way `:::row{text=center}` reaches its cells, and a child overrides with
+the same attribute.
 
 ## Live values in prose
 

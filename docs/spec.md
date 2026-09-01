@@ -68,21 +68,33 @@ they are stripped and have no effect.
 Layout controls form a closed set. There is no freeform styling attribute
 and no arbitrary values; an invalid value degrades to the default silently.
 
-- `width`: `fit | narrow | normal | wide | full`; `fit` sizes the block to
-  its own content, every other preset caps its maximum width
-- `align`: `left | center | right`; visible only when the block is narrower
-  than the column
+- `width`: `fit | narrow | normal | wide | full`; default `normal`. `fit`
+  sizes the block's box to its own content, every other preset caps its
+  maximum width
+- `align`: `left | center | right`; default `left`. Places the block's box
+  within the column and never affects the block's contents; visible only
+  when the box is narrower than the column
 - wrapper containers `:::center`, `:::right`, `:::left`, `:::wide`,
-  `:::narrow`, `:::fit`, `:::full`: apply the corresponding preset to their contents,
-  including plain markdown; the alignment wrappers also set text alignment
-  in scope
+  `:::narrow`, `:::fit`, `:::full`: apply the corresponding preset to their
+  contents, including plain markdown; the alignment wrappers also set text
+  alignment in scope. A wrapper accepts the attribute of the other axis
+  (`:::center{width=fit}`) and applies both to the one scope; an attribute
+  for the wrapper's own axis is ignored
+- `text`: `left | center | right`; a per-component attribute of the standard
+  `row`, `cell`, `card`, and `callout`, aligning the text inside. On a row
+  it applies to every cell; a cell's own `text` overrides it, and an
+  alignment wrapper written inside a cell takes precedence over both.
+  `text` is not a reserved attribute and reaches the component like any
+  other
 - `:::row{cols=2|3|4}`: the one multi-cell container; equal-width cells,
-  responsive wrap; invalid or absent `cols` degrades to auto-fit. On a row,
-  `align` sets the text alignment inside every cell rather than placing the
-  row; an alignment wrapper written inside a cell takes precedence over the
-  row's value
-- `:::cell`: groups several blocks into one `row` cell; attribute-free,
-  carries no presentation of its own, and is inert outside a row
+  responsive wrap; invalid or absent `cols` degrades to auto-fit. `align`
+  on a row has its ordinary meaning and therefore no visible effect
+- `:::cell`: groups several blocks into one `row` cell; carries no
+  presentation of its own beyond `text`, and is inert outside a row
+
+No scope sets a component's own attributes for its children. A container
+that passes a setting to its children does so through an attribute of its
+own.
 
 Components MUST NOT ship outer margins; the document stylesheet owns
 vertical rhythm. Block components are normal flow elements, never floated,

@@ -1,5 +1,5 @@
 import { getContract } from '@markii/stdlib';
-import type { Registry } from '../registry.js';
+import type { Registry, RegistryEntry } from '../registry.js';
 import { Badge } from './badge.js';
 import { Callout } from './callout.js';
 import { Card } from './card.js';
@@ -9,7 +9,11 @@ import { Details } from './details.js';
 import { Divider } from './divider.js';
 import { Figure } from './figure.js';
 import { Kbd } from './kbd.js';
-import { createLayoutWrapper } from './layout-wrapper.js';
+import {
+  createLayoutWrapper,
+  layoutWrapperPresetAxis,
+} from './layout-wrapper.js';
+import type { LayoutWrapperPreset } from './layout-wrapper.js';
 import { Progress } from './progress.js';
 import { Rating } from './rating.js';
 import { Row } from './row.js';
@@ -30,6 +34,7 @@ export { Figure } from './figure.js';
 export { Kbd } from './kbd.js';
 export {
   createLayoutWrapper,
+  layoutWrapperPresetAxis,
   LAYOUT_WRAPPER_PRESETS,
 } from './layout-wrapper.js';
 export type { LayoutWrapperPreset } from './layout-wrapper.js';
@@ -64,6 +69,23 @@ function inlineFromContract(name: string): boolean {
   return getContract(name)?.kind === 'inline';
 }
 
+/**
+ * One layout-wrapper registration: the shared wrapper component bound to
+ * `preset`, plus the `layout` axis that preset sets by its own name. The
+ * axis is what tells `render.tsx` to drop a same-axis attribute and hand the
+ * other axis down as `layoutClassName` instead of wrapping the component in
+ * a second `<div>` (see `RegistryEntry.layout`). Derived per preset rather
+ * than written out seven times, so a wrapper cannot be registered against
+ * the wrong axis.
+ */
+function layoutWrapperEntry(preset: LayoutWrapperPreset): RegistryEntry {
+  return {
+    component: createLayoutWrapper(preset),
+    inline: inlineFromContract(preset),
+    layout: layoutWrapperPresetAxis(preset),
+  };
+}
+
 /** The built-in demo components, pre-registered under their names. */
 export const defaultRegistry: Registry = {
   callout: { component: Callout, inline: inlineFromContract('callout') },
@@ -81,32 +103,11 @@ export const defaultRegistry: Registry = {
   chart: { component: Chart, inline: inlineFromContract('chart') },
   row: { component: Row, inline: inlineFromContract('row') },
   cell: { component: Cell, inline: inlineFromContract('cell') },
-  center: {
-    component: createLayoutWrapper('center'),
-    inline: inlineFromContract('center'),
-  },
-  left: {
-    component: createLayoutWrapper('left'),
-    inline: inlineFromContract('left'),
-  },
-  right: {
-    component: createLayoutWrapper('right'),
-    inline: inlineFromContract('right'),
-  },
-  wide: {
-    component: createLayoutWrapper('wide'),
-    inline: inlineFromContract('wide'),
-  },
-  narrow: {
-    component: createLayoutWrapper('narrow'),
-    inline: inlineFromContract('narrow'),
-  },
-  full: {
-    component: createLayoutWrapper('full'),
-    inline: inlineFromContract('full'),
-  },
-  fit: {
-    component: createLayoutWrapper('fit'),
-    inline: inlineFromContract('fit'),
-  },
+  center: layoutWrapperEntry('center'),
+  left: layoutWrapperEntry('left'),
+  right: layoutWrapperEntry('right'),
+  wide: layoutWrapperEntry('wide'),
+  narrow: layoutWrapperEntry('narrow'),
+  full: layoutWrapperEntry('full'),
+  fit: layoutWrapperEntry('fit'),
 };

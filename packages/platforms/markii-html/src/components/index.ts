@@ -1,5 +1,5 @@
 import { getContract } from '@markii/stdlib';
-import type { HtmlRegistry } from '../registry.js';
+import type { HtmlRegistry, HtmlRegistryEntry } from '../registry.js';
 import { createHtmlRegistry } from '../registry.js';
 import { Badge } from './badge.js';
 import { Callout } from './callout.js';
@@ -10,7 +10,11 @@ import { Details } from './details.js';
 import { Divider } from './divider.js';
 import { Figure } from './figure.js';
 import { Kbd } from './kbd.js';
-import { createLayoutWrapper } from './layout-wrapper.js';
+import {
+  createLayoutWrapper,
+  layoutWrapperPresetAxis,
+} from './layout-wrapper.js';
+import type { LayoutWrapperPreset } from './layout-wrapper.js';
 import { Progress } from './progress.js';
 import { Rating } from './rating.js';
 import { Row } from './row.js';
@@ -32,6 +36,7 @@ export { Figure } from './figure.js';
 export { Kbd } from './kbd.js';
 export {
   createLayoutWrapper,
+  layoutWrapperPresetAxis,
   LAYOUT_WRAPPER_PRESETS,
 } from './layout-wrapper.js';
 export type { LayoutWrapperPreset } from './layout-wrapper.js';
@@ -53,6 +58,21 @@ export { Tabs } from './tabs.js';
  */
 function inlineFromContract(name: string): boolean {
   return getContract(name)?.kind === 'inline';
+}
+
+/**
+ * One layout-wrapper registration: the shared wrapper component bound to
+ * `preset`, plus the `layout` axis that preset sets by its own name, which
+ * is what tells `render.ts` to drop a same-axis attribute and hand the other
+ * axis down through `ctx` instead of wrapping the component in a second
+ * `<div>`. Matches `@markii/react`'s `layoutWrapperEntry`.
+ */
+function layoutWrapperEntry(preset: LayoutWrapperPreset): HtmlRegistryEntry {
+  return {
+    component: createLayoutWrapper(preset),
+    inline: inlineFromContract(preset),
+    layout: layoutWrapperPresetAxis(preset),
+  };
 }
 
 /**
@@ -78,32 +98,11 @@ export const defaultHtmlRegistry: HtmlRegistry = createHtmlRegistry({
   stat: { component: Stat, inline: inlineFromContract('stat') },
   progress: { component: Progress, inline: inlineFromContract('progress') },
   chart: { component: Chart, inline: inlineFromContract('chart') },
-  center: {
-    component: createLayoutWrapper('center'),
-    inline: inlineFromContract('center'),
-  },
-  left: {
-    component: createLayoutWrapper('left'),
-    inline: inlineFromContract('left'),
-  },
-  right: {
-    component: createLayoutWrapper('right'),
-    inline: inlineFromContract('right'),
-  },
-  wide: {
-    component: createLayoutWrapper('wide'),
-    inline: inlineFromContract('wide'),
-  },
-  narrow: {
-    component: createLayoutWrapper('narrow'),
-    inline: inlineFromContract('narrow'),
-  },
-  full: {
-    component: createLayoutWrapper('full'),
-    inline: inlineFromContract('full'),
-  },
-  fit: {
-    component: createLayoutWrapper('fit'),
-    inline: inlineFromContract('fit'),
-  },
+  center: layoutWrapperEntry('center'),
+  left: layoutWrapperEntry('left'),
+  right: layoutWrapperEntry('right'),
+  wide: layoutWrapperEntry('wide'),
+  narrow: layoutWrapperEntry('narrow'),
+  full: layoutWrapperEntry('full'),
+  fit: layoutWrapperEntry('fit'),
 });

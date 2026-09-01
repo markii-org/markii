@@ -1,4 +1,5 @@
 import type { ReactElement } from 'react';
+import { withTextClass } from '../layout.js';
 import type { MarkComponentProps } from '../registry.js';
 
 export type CalloutType = 'info' | 'warning' | 'danger';
@@ -18,8 +19,9 @@ function isCalloutType(value: string): value is CalloutType {
 /**
  * `:::callout{type=info|warning|danger title="..."}` — a colored box for an
  * aside, warning, or danger note. Unknown/missing `type` falls back to
- * `info` rather than throwing. No outer margin: the document stylesheet
- * (`.doc > * + *`) owns spacing between this and its siblings.
+ * `info` rather than throwing. `text` (`left | center | right`) aligns the
+ * box's own text, header and body alike. No outer margin: the document
+ * stylesheet (`.doc > * + *`) owns spacing between this and its siblings.
  */
 export function Callout({
   attributes,
@@ -30,7 +32,13 @@ export function Callout({
   const title = attributes.title ?? null;
 
   return (
-    <div className={`mk-callout mk-callout--${type}`} role="note">
+    <div
+      className={withTextClass(
+        `mk-callout mk-callout--${type}`,
+        attributes.text,
+      )}
+      role="note"
+    >
       <div className="mk-callout__header">
         <span className="mk-callout__icon" aria-hidden="true">
           {CALLOUT_ICONS[type]}

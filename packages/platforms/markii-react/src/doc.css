@@ -823,7 +823,19 @@
   margin-block-start: 1rem;
 }
 
-/* `center`/`right` additionally set text alignment for everything in scope — not just the shrink-to-fit block alignment below. */
+/*
+ * An alignment wrapper additionally sets text alignment for everything in
+ * scope, not just the shrink-to-fit block alignment below. `left` carries
+ * its own rule for a reason: it is the one wrapper written specifically to
+ * opt a scope back OUT of an alignment it inherited (a cell of a
+ * `:::row{text=center}`), and only a DECLARED value beats an inherited one.
+ * Without this rule `:::left` would silently keep the centered text it was
+ * written to undo.
+ */
+.mk-layout.mk-align-left {
+  text-align: left;
+}
+
 .mk-layout.mk-align-center {
   text-align: center;
 }
@@ -863,6 +875,33 @@
 .mk-layout.mk-align-right > table {
   width: fit-content;
   max-width: 100%;
+}
+
+/* ---------- text alignment inside a component (docs/format.md) ---------- */
+
+/*
+ * The `text` attribute of `row`, `cell`, `card`, and `callout`. Deliberately
+ * separate from the `mk-align-*` classes above: those place a block's BOX
+ * within the column and never touch its contents, while these align the
+ * content inside one component and never move its box. Two different jobs,
+ * two different class names, so neither can be mistaken for the other.
+ *
+ * One rule per value, defined once and honored by all four components, which
+ * is what lets `:::row{text=center}` reach its cells through ordinary CSS
+ * inheritance: `.mk-cell` declares no `text-align` of its own, so the row's
+ * value flows in, and a cell that declares its own (or an alignment wrapper
+ * written inside it) wins simply by being declared.
+ */
+.mk-text-left {
+  text-align: left;
+}
+
+.mk-text-center {
+  text-align: center;
+}
+
+.mk-text-right {
+  text-align: right;
 }
 
 /* ---------- row ---------- */
@@ -907,36 +946,6 @@
   .mk-row--cols-4 {
     grid-template-columns: 1fr;
   }
-}
-
-/*
- * `:::row{align=...}` (docs/format.md): `align` is intercepted like on any
- * other block directive (`render.tsx`/`layout.ts`), wrapping `.mk-row` in
- * the same generic `mk-align-*` `<div>` every other directive gets — but
- * `margin-inline: auto` (the rule above, under "layout presets") has
- * nothing to move: a `.mk-row` grid already fills the document column, so
- * shrink-to-fit placement of the row itself is meaningless. These three
- * rules give `align` on a row its own, more useful meaning instead: they
- * set `text-align` on the row, which every cell's content INHERITS (plain
- * CSS inheritance — `.mk-cell` sets no `text-align` of its own, so nothing
- * blocks it). Scoped to `> .mk-row` specifically, so a non-row directive's
- * `align` wrapper is completely unaffected.
- *
- * Locality wins for free: a more local `:::center`/`:::left`/`:::right`
- * wrapper written inside one cell (`.mk-layout.mk-align-*` above) sets
- * `text-align` directly on itself, and an element's own declared value
- * always wins over one it only inherited — no specificity fight needed.
- */
-.mk-align-left > .mk-row {
-  text-align: left;
-}
-
-.mk-align-center > .mk-row {
-  text-align: center;
-}
-
-.mk-align-right > .mk-row {
-  text-align: right;
 }
 
 /* ---------- cell ---------- */

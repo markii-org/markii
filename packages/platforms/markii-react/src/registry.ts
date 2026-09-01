@@ -1,5 +1,6 @@
 import type { ComponentType, ReactNode } from 'react';
 import type { FailureKind, ValueStatus } from '@markii/runtime';
+import type { LayoutAxis } from '@markii/stdlib';
 
 /**
  * Attributes parsed off a directive, e.g. `{type=warning title="Careful"}`.
@@ -47,6 +48,20 @@ export interface MarkComponentProps {
   dataStatus?: ValueStatus;
   dataError?: string;
   dataFailureKind?: FailureKind;
+  /**
+   * The layout class the directive's reserved `width`/`align` attributes
+   * resolved to, handed to the component instead of being applied to a
+   * wrapper `<div>` around it. Supplied ONLY to an entry registered with
+   * `layout` (a scope component, such as the standard `:::center`), and
+   * only for the axis that entry does not already own; every other
+   * component keeps getting the wrapper `<div>` and never sees this prop.
+   *
+   * A component that receives it puts it on its own root element, which is
+   * the whole point: `:::center{width=fit}` must come out as one
+   * `<div class="mk-layout mk-align-center mk-width-fit">`, not two nested
+   * divs. Absent when the directive carried no usable layout attribute.
+   */
+  layoutClassName?: string;
 }
 
 /**
@@ -60,6 +75,23 @@ export interface MarkComponentProps {
 export interface RegistryEntry {
   component: ComponentType<MarkComponentProps>;
   inline?: boolean;
+  /**
+   * Declares this component a LAYOUT SCOPE that already sets one of the two
+   * layout axes by its own name, the way the standard `:::center` (align)
+   * and `:::fit` (width) wrappers do.
+   *
+   * Two things follow, both handled by the renderer. The reserved attribute
+   * for the named axis is dropped without effect, since the name already
+   * decided it. The other axis still resolves, and its class arrives as the
+   * `layoutClassName` prop instead of on a wrapper `<div>`, so the scope
+   * emits exactly one element carrying both classes. The reserved keys
+   * themselves are stripped either way: a component never receives `width`
+   * or `align` among its attributes (docs/spec.md §2).
+   *
+   * Absent on every ordinary component, which is the common case: its
+   * layout attributes resolve to a wrapper `<div>` around it as before.
+   */
+  layout?: LayoutAxis;
 }
 
 /**
@@ -219,6 +251,53 @@ export function readRegistryComponent(
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Reads `entry.layout`, or `undefined` if `entry` is nullish, declares no
+ * layout axis, or the read itself throws.
+ *
+ * Same hostile-configuration guard as `readRegistryComponent`: a hand-built
+ * registry can define `layout` as a throwing getter, and that must degrade
+ * to "this is not a layout scope" rather than let an exception escape
+ * React's render phase. A value that is not one of the two axis names is
+ * ignored for the same reason an invalid `width=` is: it can only have come
+ * from a mistake, and the safe reading of a mistake here is "ordinary
+ * component".
+ */
+export function readRegistryLayoutAxis(
+  entry: RegistryEntry | undefined,
+): LayoutAxis | undefined {
+  if (!entry) return undefined;
+  try {
+    const axis = entry.layout;
+    return axis === 'width' || axis === 'align' ? axis : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The layout axis the component registered under `name` owns, or
+ * `undefined` when there is no such entry, it has no usable component, or
+ * it is not a layout scope. `Object.hasOwn` for the same reason every other
+ * registry lookup uses it: a directive named `constructor` must miss rather
+ * than resolve through the prototype chain.
+ *
+ * A broken entry (no component, or one whose read throws) is deliberately
+ * NOT a layout scope: it renders the unknown-directive fallback, which has
+ * no root element of its own to hand a layout class to, so the directive
+ * keeps the ordinary wrapper `<div>` and its `width`/`align` still show.
+ * Dropping the class there would be a silent layout loss on top of an
+ * already-visible failure.
+ */
+export function registryLayoutAxis(
+  registry: Registry,
+  name: string,
+): LayoutAxis | undefined {
+  const entry = Object.hasOwn(registry, name) ? registry[name] : undefined;
+  if (readRegistryComponent(entry) == null) return undefined;
+  return readRegistryLayoutAxis(entry);
 }
 
 /**

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { TEXT_ALIGN_PRESETS } from '@markii/stdlib';
 import { renderMarkToHtml } from '../render.js';
 import { createTestContext } from '../test/html-context.js';
 import { Callout } from './callout.js';
@@ -41,5 +42,22 @@ describe('Callout', () => {
     expect(html).toContain('mk-callout--warning');
     expect(html).toContain('role="note"');
     expect(html).toContain('<p>Mind the gap.</p>');
+  });
+});
+
+describe('Callout — text', () => {
+  it.each(TEXT_ALIGN_PRESETS)(
+    'text=%s appends the matching mk-text-* class after the type class',
+    (text) => {
+      expect(Callout({ type: 'warning', text }, 'x', ctx)).toContain(
+        `<div class="mk-callout mk-callout--warning mk-text-${text}" role="note">`,
+      );
+    },
+  );
+
+  it('ignores an invalid text value, leaving the type class alone', () => {
+    expect(Callout({ text: 'diagonal' }, 'x', ctx)).toContain(
+      '<div class="mk-callout mk-callout--info" role="note">',
+    );
   });
 });

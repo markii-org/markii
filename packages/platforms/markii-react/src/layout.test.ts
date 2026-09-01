@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { LAYOUT_ATTRIBUTE_KEYS, resolveLayoutAttributes } from './layout';
+import { TEXT_ALIGN_PRESETS } from '@markii/stdlib';
+import {
+  LAYOUT_ATTRIBUTE_KEYS,
+  resolveLayoutAttributes,
+  textClassFor,
+  withTextClass,
+} from './layout';
 
 describe('LAYOUT_ATTRIBUTE_KEYS', () => {
   it('is exactly width and align', () => {
@@ -155,5 +161,72 @@ describe('resolveLayoutAttributes — width=fit with an alignment', () => {
       align: 'right;color:red',
     });
     expect(result.className).toBe('mk-width-fit');
+  });
+});
+
+describe('resolveLayoutAttributes — a layout scope owns one axis', () => {
+  it('drops the owned axis without a class, keeping the other', () => {
+    expect(
+      resolveLayoutAttributes({ align: 'right', width: 'fit' }, 'align'),
+    ).toEqual({ attributes: {}, className: 'mk-width-fit' });
+    expect(
+      resolveLayoutAttributes({ align: 'right', width: 'fit' }, 'width'),
+    ).toEqual({ attributes: {}, className: 'mk-align-right' });
+  });
+
+  it('strips both reserved keys either way, so a scope never sees them', () => {
+    const { attributes } = resolveLayoutAttributes(
+      { align: 'center', width: 'fit', title: 'kept' },
+      'align',
+    );
+    expect(attributes).toEqual({ title: 'kept' });
+  });
+
+  it('returns no className at all when only the owned axis was written', () => {
+    expect(resolveLayoutAttributes({ align: 'center' }, 'align')).toEqual({
+      attributes: {},
+    });
+  });
+
+  it('is identical to the unowned call when neither axis is owned', () => {
+    expect(resolveLayoutAttributes({ width: 'wide', align: 'center' })).toEqual(
+      resolveLayoutAttributes({ width: 'wide', align: 'center' }, undefined),
+    );
+  });
+});
+
+describe('withTextClass', () => {
+  it.each(TEXT_ALIGN_PRESETS)(
+    'appends mk-text-%s for a valid value',
+    (value) => {
+      expect(withTextClass('mk-card', value)).toBe(`mk-card mk-text-${value}`);
+    },
+  );
+
+  it('leaves the base class alone for an absent, bare, empty, or unknown value', () => {
+    expect(withTextClass('mk-card', undefined)).toBe('mk-card');
+    expect(withTextClass('mk-card', null)).toBe('mk-card');
+    expect(withTextClass('mk-card', '')).toBe('mk-card');
+    expect(withTextClass('mk-card', 'diagonal')).toBe('mk-card');
+  });
+
+  it('never resolves a prototype member name to a class', () => {
+    for (const value of ['__proto__', 'constructor', 'toString', 'valueOf']) {
+      expect(withTextClass('mk-card', value), value).toBe('mk-card');
+    }
+  });
+
+  it('never interpolates author text into the class string', () => {
+    expect(withTextClass('mk-card', '" onload="alert(1)')).toBe('mk-card');
+  });
+});
+
+describe('textClassFor', () => {
+  it('maps each preset to its own class and nothing else to anything', () => {
+    for (const preset of TEXT_ALIGN_PRESETS) {
+      expect(textClassFor(preset)).toBe(`mk-text-${preset}`);
+    }
+    expect(textClassFor('Center')).toBeUndefined();
+    expect(textClassFor(undefined)).toBeUndefined();
   });
 });

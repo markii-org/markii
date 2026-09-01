@@ -22,7 +22,11 @@ import type {
   Registry,
   RegistryEntry,
 } from './registry.js';
-import { readRegistryComponent, resolveDirectiveAlias } from './registry.js';
+import {
+  readRegistryComponent,
+  registryLayoutAxis,
+  resolveDirectiveAlias,
+} from './registry.js';
 import { resolveLayoutAttributes } from './layout.js';
 import { ScriptMarker } from './components/script-marker.js';
 import { UnknownDirective } from './components/unknown-directive.js';
@@ -305,6 +309,7 @@ function renderDirectiveContent(
   registry: Registry,
   store: ValueStore | undefined,
   vault: VaultStore | undefined,
+  layoutClassName: string | undefined,
 ): ReactElement {
   // `:value[name]` (§8) is a renderer built-in, resolved before any
   // registry lookup — like the unknown-directive fallback, it is not
@@ -393,8 +398,15 @@ function renderDirectiveContent(
           dataFailureKind: binding.dataFailureKind,
         }
       : {};
+  // `layoutClassName` is spread in the same all-or-nothing way as the data
+  // props above, and for the same reason: a layout scope must be able to
+  // tell "no usable layout attribute was written" from "one was written and
+  // resolved to nothing", and every OTHER component must never see the prop
+  // at all. It is only ever non-undefined for an entry registered with
+  // `layout` (see `createDirectiveElement`).
+  const layoutProps = layoutClassName === undefined ? {} : { layoutClassName };
   const rendered = (
-    <Component attributes={binding.attributes} {...dataProps}>
+    <Component attributes={binding.attributes} {...dataProps} {...layoutProps}>
       {children}
     </Component>
   );
@@ -472,9 +484,23 @@ function createDirectiveElement(
     // inside `renderDirectiveContent`, so it applies identically to a
     // registered component, the unknown-directive fallback, and a directive
     // named `constructor`/`toString`/`__proto__`.
+    //
+    // A LAYOUT SCOPE (an entry registered with `layout`, such as the
+    // standard `:::center`) is the one directive whose own name already
+    // sets an axis. Its own axis is stripped without effect, and the class
+    // for the other axis goes to the component as a prop rather than onto a
+    // wrapper `<div>` — that is what makes `:::center{width=fit}` one
+    // element carrying both classes instead of two nested ones. The lookup
+    // is a plain registry read, so this stays registry-driven: the renderer
+    // learns which names are scopes from the registry, never from a list of
+    // component names of its own (Architecture rule 2).
     const isBlockDirective = kind !== TEXT_DIRECTIVE_KIND;
-    const { attributes, className: layoutClassName } =
-      resolveLayoutAttributes(aliasedAttributes);
+    const ownedAxis = registryLayoutAxis(registry, name);
+    const { attributes, className: layoutClassName } = resolveLayoutAttributes(
+      aliasedAttributes,
+      ownedAxis,
+    );
+    const isLayoutScope = ownedAxis !== undefined && isBlockDirective;
 
     const element = renderDirectiveContent(
       name,
@@ -484,6 +510,7 @@ function createDirectiveElement(
       registry,
       store,
       vault,
+      isLayoutScope ? layoutClassName : undefined,
     );
 
     // The wrapper `<div>` applies ONLY to block directives (leaf/container),
@@ -494,8 +521,9 @@ function createDirectiveElement(
     // discarded here; the reserved keys were already stripped above
     // regardless. This also keeps DOM output unchanged from before layout
     // presets existed for the overwhelmingly common case of a block
-    // directive with no width/align.
-    return isBlockDirective && layoutClassName ? (
+    // directive with no width/align. A layout scope is excluded too: it
+    // already received the class as a prop and put it on its own root.
+    return isBlockDirective && layoutClassName && !isLayoutScope ? (
       <div className={layoutClassName}>{element}</div>
     ) : (
       element

@@ -33,6 +33,10 @@ describe('createLayoutWrapper', () => {
   );
 
   it('never reads attributes: an attribute-bearing invocation renders identically to an attribute-free one', () => {
+    // The reserved keys are stripped by `render.tsx` before any component
+    // sees them, so a `width` left in `attributes` here is just an unknown
+    // attribute and must change nothing. The wrapper takes the other axis
+    // through `layoutClassName` instead (see the next test).
     const Wrapper = createLayoutWrapper('center');
     const { container: withAttrs } = render(
       <Wrapper attributes={{ foo: 'bar', width: 'narrow' }}>x</Wrapper>,
@@ -42,6 +46,27 @@ describe('createLayoutWrapper', () => {
     );
     expect(withAttrs.firstElementChild?.className).toBe(
       withoutAttrs.firstElementChild?.className,
+    );
+  });
+
+  it('appends layoutClassName to its own classes on the SAME div', () => {
+    const Wrapper = createLayoutWrapper('center');
+    const { container } = render(
+      <Wrapper attributes={{}} layoutClassName="mk-width-fit">
+        x
+      </Wrapper>,
+    );
+    expect(container.children).toHaveLength(1);
+    expect(container.firstElementChild?.className).toBe(
+      'mk-layout mk-align-center mk-width-fit',
+    );
+  });
+
+  it('an absent layoutClassName leaves the wrapper class untouched', () => {
+    const Wrapper = createLayoutWrapper('fit');
+    const { container } = render(<Wrapper attributes={{}}>x</Wrapper>);
+    expect(container.firstElementChild?.className).toBe(
+      'mk-layout mk-width-fit',
     );
   });
 
@@ -151,22 +176,96 @@ describe('renderMark — layout-wrapper container directives', () => {
     expect(wrapper?.getAttribute('foo')).toBeNull();
   });
 
-  it(
-    'documents the reserved-attribute behavior: :::center{width=narrow} produces an OUTER ' +
-      "mk-width-narrow div (render.tsx's existing reserved-attribute interception), " +
-      "wrapping the wrapper component's own mk-layout mk-align-center div — this is existing " +
-      'render.tsx behavior, not something layout-wrapper.tsx changes',
-    () => {
+  it('an alignment wrapper takes width as an attribute, on ONE div carrying both classes', () => {
+    const { container } = render(
+      renderMark(':::center{width=fit}\ncontent\n:::', defaultRegistry),
+    );
+    expect(container.children).toHaveLength(1);
+    const el = container.firstElementChild;
+    expect(el?.className).toBe('mk-layout mk-align-center mk-width-fit');
+    expect(el?.textContent).toContain('content');
+    // no second, nested layout div — that is the whole point of the change
+    expect(el?.querySelector('.mk-layout')).toBeNull();
+  });
+
+  it('a width wrapper takes align as an attribute, the same way round', () => {
+    const { container } = render(
+      renderMark(':::fit{align=center}\ncontent\n:::', defaultRegistry),
+    );
+    expect(container.children).toHaveLength(1);
+    expect(container.firstElementChild?.className).toBe(
+      'mk-layout mk-width-fit mk-align-center',
+    );
+  });
+
+  it.each([
+    [':::center{align=right}', 'mk-layout mk-align-center'],
+    [':::right{align=left}', 'mk-layout mk-align-right'],
+    [':::fit{width=full}', 'mk-layout mk-width-fit'],
+    [':::narrow{width=wide}', 'mk-layout mk-width-narrow'],
+  ])(
+    '%s ignores the attribute for the wrapper own axis: the name wins',
+    (source, expected) => {
       const { container } = render(
-        renderMark(':::center{width=narrow}\ncontent\n:::', defaultRegistry),
+        renderMark(`${source}\ncontent\n:::`, defaultRegistry),
       );
-      const outer = container.firstElementChild;
-      expect(outer?.className).toBe('mk-width-narrow');
-      const inner = outer?.firstElementChild;
-      expect(inner?.className).toBe('mk-layout mk-align-center');
-      expect(inner?.textContent).toContain('content');
+      expect(container.children).toHaveLength(1);
+      expect(container.firstElementChild?.className).toBe(expected);
     },
   );
+
+  it('an invalid value on the open axis is ignored as if absent, exactly like on any other directive', () => {
+    const { container } = render(
+      renderMark(':::center{width=diagonal}\ncontent\n:::', defaultRegistry),
+    );
+    expect(container.firstElementChild?.className).toBe(
+      'mk-layout mk-align-center',
+    );
+  });
+
+  it('width=normal, the classless default, adds nothing to a wrapper', () => {
+    const { container } = render(
+      renderMark(':::center{width=normal}\ncontent\n:::', defaultRegistry),
+    );
+    expect(container.firstElementChild?.className).toBe(
+      'mk-layout mk-align-center',
+    );
+  });
+
+  it('the reserved keys never reach the wrapper as DOM attributes', () => {
+    const { container } = render(
+      renderMark(
+        ':::center{width=fit align=right}\ncontent\n:::',
+        defaultRegistry,
+      ),
+    );
+    const el = container.firstElementChild;
+    expect(el?.getAttribute('width')).toBeNull();
+    expect(el?.getAttribute('align')).toBeNull();
+  });
+
+  it('nesting still means the same thing as the attribute form', () => {
+    const nested = render(
+      renderMark(
+        ['::::center', ':::fit', 'content', ':::', '::::'].join('\n'),
+        defaultRegistry,
+      ),
+    );
+    const attributeForm = render(
+      renderMark(':::center{width=fit}\ncontent\n:::', defaultRegistry),
+    );
+    // Two elements vs one: the nested spelling is not byte-identical, but
+    // both put `mk-align-center` and `mk-width-fit` over the same content.
+    expect(
+      nested.container.querySelector('.mk-layout.mk-align-center'),
+    ).not.toBeNull();
+    expect(
+      nested.container.querySelector('.mk-layout.mk-width-fit'),
+    ).not.toBeNull();
+    expect(attributeForm.container.firstElementChild?.className).toBe(
+      'mk-layout mk-align-center mk-width-fit',
+    );
+  });
 
   it(':::narrow with an empty body does not throw and renders an empty wrapper div', () => {
     expect(() =>
