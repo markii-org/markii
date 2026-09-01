@@ -6,6 +6,8 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-09-01
+
 ### Added
 
 - **A layout wrapper now takes the other axis as an attribute**
