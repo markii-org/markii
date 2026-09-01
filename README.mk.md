@@ -83,13 +83,15 @@ the table. There is deliberately nothing else to learn here: no style
 attributes, no pixel values.
 
 A wrapper sets one of the two layout axes, size or place, and takes the
-other as an attribute, so one fence can do both:
+other as an attribute, so one fence can do both. A table is already sized
+to its content, so `:::center` alone places it; a callout fills the column,
+so it needs `width=fit` before there is anything to center:
 
-:::center{width=fit}
-| build  | status  |
-| ------ | ------- |
-| `main` | passing |
+::::center{width=fit}
+:::callout{type=info}
+Sized to its text, then centered.
 :::
+::::
 
 Aligning the text inside a component is a different job, and it has its own
 attribute named after what moves. `row`, `cell`, `card`, and `callout` take
