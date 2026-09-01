@@ -730,6 +730,143 @@ describe('runOnce — value persistence (issue #11, gap 1)', () => {
   });
 });
 
+describe('runOnce — per-script values (GitHub issue #35)', () => {
+  it('forwards onValue to spawnRun, so each value reaches the host as it lands', async () => {
+    const memento = fakeMemento();
+    const seen: Array<[string, unknown]> = [];
+    const spawnRun = (options: SpawnRunOptions): Promise<RunResult> => {
+      options.onValue?.('a', { value: 1, status: 'fresh' }, 0);
+      options.onValue?.('b', { value: 2, status: 'fresh' }, 1);
+      return Promise.resolve(
+        fakeRunResult({
+          values: {
+            a: { value: 1, status: 'fresh' },
+            b: { value: 2, status: 'fresh' },
+          },
+        }),
+      );
+    };
+
+    await runOnce({
+      documentKey: 'file:///a.mk.md',
+      text: fence('a', 'return 1') + fence('b', 'return 2'),
+      memento,
+      promptHost: () => Promise.resolve(true),
+      promptUnknownHosts: () => Promise.resolve(true),
+      promptManyHosts: () => Promise.resolve(true),
+      spawnRun,
+      timeoutMs: 15000,
+      onValue: (name, value) => seen.push([name, value.value]),
+    });
+
+    expect(seen).toEqual([
+      ['a', 1],
+      ['b', 2],
+    ]);
+  });
+
+  it('scrubs the raw executor message off a failed value before it is reported (D-1)', async () => {
+    const memento = fakeMemento();
+    const seen: Array<Record<string, unknown>> = [];
+    const spawnRun = (options: SpawnRunOptions): Promise<RunResult> => {
+      options.onValue?.(
+        'a',
+        {
+          value: undefined,
+          status: 'error',
+          failureKind: 'capability-denied',
+          error: 'net denied: https://secret.example.com/token?k=abc',
+        },
+        0,
+      );
+      return Promise.resolve(fakeRunResult({ values: {}, failures: [] }));
+    };
+
+    await runOnce({
+      documentKey: 'file:///a.mk.md',
+      text: fence('a', 'return 1'),
+      memento,
+      promptHost: () => Promise.resolve(true),
+      promptUnknownHosts: () => Promise.resolve(true),
+      promptManyHosts: () => Promise.resolve(true),
+      spawnRun,
+      timeoutMs: 15000,
+      onValue: (_name, value) => seen.push({ ...value }),
+    });
+
+    expect(seen).toEqual([
+      {
+        value: undefined,
+        status: 'error',
+        failureKind: 'capability-denied',
+      },
+    ]);
+  });
+
+  it('does not pass onValue through when the caller supplied none', async () => {
+    const memento = fakeMemento();
+    const spawnRun = vi.fn((_options: SpawnRunOptions): Promise<RunResult> =>
+      Promise.resolve(fakeRunResult()),
+    );
+
+    await runOnce({
+      documentKey: 'file:///a.mk.md',
+      text: fence('a', 'return 1'),
+      memento,
+      promptHost: () => Promise.resolve(true),
+      promptUnknownHosts: () => Promise.resolve(true),
+      promptManyHosts: () => Promise.resolve(true),
+      spawnRun,
+      timeoutMs: 15000,
+    });
+
+    expect(spawnRun.mock.calls[0]?.[0].onValue).toBeUndefined();
+  });
+
+  it('persists ONCE, at the end: a run killed part-way still records the values that landed', async () => {
+    // `spawnRun` carries the values that already arrived into its synthetic
+    // failure result, so a killed run reaches this function with those
+    // values and persists exactly them — no per-value write, and therefore
+    // no half-written record if the host dies mid-run.
+    const documentKey = 'file:///a.mk.md';
+    const memento = fakeMemento();
+    const updates: string[] = [];
+    const watched: GrantMemento = {
+      get: <T>(key: string, defaultValue?: T): T =>
+        memento.get<T>(key, defaultValue as T),
+      update: (key, value) => {
+        if (key === valuesStorageKeyFor(documentKey)) updates.push(key);
+        return memento.update(key, value);
+      },
+    };
+    const spawnRun = (options: SpawnRunOptions): Promise<RunResult> => {
+      options.onValue?.('a', { value: 1, status: 'fresh' }, 0);
+      return Promise.resolve({
+        values: { a: { value: 1, status: 'fresh' } },
+        failures: [
+          { name: '<document>', message: 'watchdog', kind: 'limit' as const },
+        ],
+        cacheSnapshot: {},
+      });
+    };
+
+    await runOnce({
+      documentKey,
+      text: fence('a', 'return 1') + fence('b', 'while true do end'),
+      memento: watched,
+      promptHost: () => Promise.resolve(true),
+      promptUnknownHosts: () => Promise.resolve(true),
+      promptManyHosts: () => Promise.resolve(true),
+      spawnRun,
+      timeoutMs: 15000,
+      onValue: () => {},
+    });
+
+    expect(updates).toHaveLength(1);
+    expect(readPersistedValues(memento, documentKey).a?.value).toBe(1);
+  });
+});
+
 describe('mergePersistedValues', () => {
   it('a fresh value always wins', () => {
     const merged = mergePersistedValues(

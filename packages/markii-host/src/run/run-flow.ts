@@ -245,6 +245,19 @@ export interface RunOnceOptions {
   promptBundleAccess?: PromptBundleAccess;
   /** Injected so this function is testable with a fake worker runner — the real adapter passes `./run-host.ts`'s `spawnRun`. */
   spawnRun: (options: SpawnRunOptions) => Promise<RunResult>;
+  /**
+   * Called once per script as its value arrives, while the run is still
+   * going (GitHub issue #35) — a host uses it to un-stale one bound
+   * component at a time instead of waiting for the whole batch. The value
+   * handed over has already been through `scrubStoredValueForWire`, so it
+   * is safe to post straight to a renderer, exactly like the `values` this
+   * function finally returns.
+   *
+   * Purely a notification. Persistence is NOT done here: the merged value
+   * store is written once, at the end (see below), so a run killed
+   * half-way can never leave a half-written record behind.
+   */
+  onValue?: (name: string, value: StoredValue) => void;
   timeoutMs: number;
   /**
    * Slice 2 of the `.mkz` Run-path arc (GitHub issue #9): present only for a
@@ -375,6 +388,16 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
   const result = await options.spawnRun({
     text: options.text,
     trigger,
+    // GitHub issue #35: forwarded per script, scrubbed the same way the
+    // final `values` are (D-1) so a raw executor message can never reach a
+    // renderer through the faster path either.
+    ...(options.onValue
+      ? {
+          onValue: (name: string, value: StoredValue) => {
+            options.onValue?.(name, scrubStoredValueForWire(value));
+          },
+        }
+      : {}),
     netAllowlist: grant.allowedHosts,
     ...(options.netPolicy !== undefined
       ? { netPolicy: options.netPolicy }
@@ -411,6 +434,13 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
   // note's last-known values, merged onto the prior store so a failed
   // scheduled/auto run never wipes good numbers (`mergePersistedValues`).
   // Dropped whole, never partially, if it fails the size/serialize guard.
+  //
+  // GitHub issue #35 deliberately did NOT move this write per value. One
+  // write at the end is the only way a killed run cannot leave a partial
+  // record, and there is nothing to gain from the earlier writes: a run
+  // that dies half-way still arrives here, because `spawnRun` carries the
+  // values that already landed into its synthetic failure result, so the
+  // scripts that finished are persisted either way.
   const scrubbedValues = scrubValuesForWire(result.values);
   const valuesKey = valuesStorageKeyFor(options.documentKey);
   const mergedValues = mergePersistedValues(

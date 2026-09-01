@@ -11,13 +11,16 @@
 // it lives here instead of inside `apps/vscode`.
 
 export type { ValuesFailure } from './values-failure.js';
+export { mergeArrivingValue } from './values-merge.js';
 
 export type {
   RunJob,
   RunResult,
   RunFailure,
+  RunProgress,
   SpawnRunOptions,
 } from './run/run-host.js';
+export { isRunProgress } from './run/run-progress.js';
 export {
   defaultWorkerPath,
   spawnRun,

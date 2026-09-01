@@ -58,6 +58,7 @@ import type {
   ExportRequestMessage,
   HostToWebviewMessage,
   PackDiagnosticsMessage,
+  ValueMessage,
   ValuesMessage,
 } from './protocol.js';
 import { packExportStylesheets } from './packs/pack-export-styles.js';
@@ -1526,6 +1527,20 @@ async function runWithTrigger(
         ? { packModules: preview.packContext.packModules }
         : {}),
       ...(bundleOptions ? { bundle: bundleOptions } : {}),
+      // GitHub issue #35: each script's value is posted the moment it
+      // lands, so the component bound to it goes fresh while the rest of
+      // the note stays stale, instead of every value flipping at the end.
+      // Tagged with the SAME revision the final `values` message carries,
+      // so the webview drops these exactly when it would drop that one.
+      // Best-effort: a post that fails (a panel disposed mid-run) must not
+      // fail the run itself, whose real result is still on its way.
+      onValue: (name, value) => {
+        if (active !== preview) return;
+        const message: ValueMessage = { type: 'value', revision, name, value };
+        void preview.panel.webview
+          .postMessage(message)
+          .then(undefined, () => {});
+      },
     });
 
     // The panel may have been disposed (or replaced by a fresh one — see

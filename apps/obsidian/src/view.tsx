@@ -5,6 +5,7 @@ import { createValueStore } from '@markii/runtime';
 import type { RunTrigger, StoredValue } from '@markii/runtime';
 import {
   buildPackRegistrationScript,
+  mergeArrivingValue,
   readPersistedValues,
   runOnce,
   spawnRun as spawnRunHost,
@@ -465,6 +466,19 @@ export class MarkiiPreviewView extends ItemView {
           }),
         timeoutMs: RUN_TIMEOUT_MS,
         ...(packModules !== undefined ? { packModules } : {}),
+        // GitHub issue #35: each script's value is applied the moment it
+        // arrives, so its component goes fresh while the rest of the note
+        // stays stale, rather than every value flipping when the batch
+        // ends. The note being shown may have changed mid-run, which is
+        // the same check the completed run makes below. `refresh()` is
+        // re-entrant here: it reads `this.values` after its own await, and
+        // values only ever accumulate during a run, so whichever render
+        // lands last is the most complete one.
+        onValue: (name, value) => {
+          if (this.currentFile?.path !== documentKey) return;
+          this.values = mergeArrivingValue(this.values, name, value);
+          void this.refresh();
+        },
       });
 
       // The file shown may have changed while the run (grant prompts

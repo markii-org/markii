@@ -103,3 +103,8 @@ export {
 
 // Failure wording shared with the hosts' diagnostics surfaces.
 export type { ValuesFailure } from './values-failure.js';
+
+// GitHub issue #35: folding one arriving value into a preview's store. Pure
+// data work over `@markii/runtime` types, and the VS Code webview (a browser
+// bundle) is one of its two callers.
+export { mergeArrivingValue } from './values-merge.js';

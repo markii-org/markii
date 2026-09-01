@@ -200,6 +200,28 @@ export interface RunDocumentScriptsOptions {
    */
   vault?: VaultWriter;
   /**
+   * Called once per script, immediately after its `StoredValue` was written
+   * to `store` and in the same document order the scripts ran in (GitHub
+   * issue #35). This is the hook a host uses to show a value the moment it
+   * lands rather than at the end of the batch: `runDocumentScripts` runs
+   * scripts sequentially, so by the time the batch resolves, the first
+   * script's number has often been known for seconds.
+   *
+   * Purely observational. It cannot change what is stored, what is
+   * reported, or whether the batch continues: `entry` is a SHALLOW COPY of
+   * the summary entry (so a callback cannot mutate the run's own
+   * bookkeeping, and so it never later grows the publish fields, which are
+   * decided after this point), and anything this callback throws is
+   * swallowed — `runDocumentScripts` never throws, and a host's progress
+   * reporting failing must not cost the user the rest of the run.
+   *
+   * Called for a FAILED script too, with the error `StoredValue` that was
+   * stored for it: a failure is as much a result as a number, and a host
+   * that only heard about successes would leave that script's component
+   * looking like it was still running.
+   */
+  onValue?: (name: string, value: StoredValue, entry: RunSummaryEntry) => void;
+  /**
    * The note itself, for the `doc` view a script sees (`./doc.ts`). The
    * caller builds this once from the tree it already parsed to find
    * `scripts`; this package parses nothing.
@@ -370,7 +392,8 @@ async function runOne(
 export async function runDocumentScripts(
   options: RunDocumentScriptsOptions,
 ): Promise<RunSummary> {
-  const { scripts, executor, trigger, store, loadSource, vault } = options;
+  const { scripts, executor, trigger, store, loadSource, vault, onValue } =
+    options;
   const tier = tierForTrigger(trigger);
 
   // GitHub issue #33: one source of `doc` views for the whole batch. Built
@@ -400,6 +423,18 @@ export async function runDocumentScripts(
       docViews.viewFor(index),
     );
     store.set(script.name, outcome.storedValue);
+    // GitHub issue #35: the value is announced the instant it is stored,
+    // before publishing and before the batch moves on to the next script,
+    // so a host can render it while the rest of the run is still going.
+    // Guarded because this function's never-throws contract covers
+    // everything a caller supplies, this callback included.
+    if (onValue) {
+      try {
+        onValue(script.name, outcome.storedValue, { ...outcome.entry });
+      } catch {
+        // Deliberately ignored: see `onValue`'s doc comment.
+      }
+    }
     // Recorded AFTER the run, so a script can never see its own name, and
     // recorded for a failed run too (as `undefined`), so a later reader
     // gets nil rather than a refusal blaming it for someone else's error.

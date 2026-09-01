@@ -32,6 +32,7 @@ import { build } from 'esbuild';
 import { buildEmbeddedAssets, workerBuild } from '../../esbuild.options.mjs';
 import {
   isNetBridgeRequest,
+  isRunProgress,
   serveNetRequest,
   type NetBridgeReply,
 } from '@markii/host';
@@ -66,6 +67,12 @@ it('the built worker bundle loads and completes a Lua run under a worker-faithfu
   );
 
   const posted: unknown[] = [];
+  // GitHub issue #35: a run now posts one progress message per script
+  // ahead of its single result message. Collected separately here, so this
+  // probe also shows that the WEB WORKER entry emits them — the Node entry
+  // is covered by `@markii/host`'s own `run-progress.probe.test.ts`, and
+  // the two share the code that builds the message.
+  const progressed: { name: string; index: number }[] = [];
   let settleResult: (message: unknown) => void = () => {};
   const resultArrived = new Promise<unknown>((resolve) => {
     settleResult = resolve;
@@ -74,6 +81,10 @@ it('the built worker bundle loads and completes a Lua run under a worker-faithfu
   const workerScope = {
     postMessage: (message: unknown) => {
       posted.push(message);
+      if (isRunProgress(message)) {
+        progressed.push({ name: message.name, index: message.index });
+        return;
+      }
       settleResult(message);
     },
     addEventListener: (
@@ -145,6 +156,10 @@ it('the built worker bundle loads and completes a Lua run under a worker-faithfu
   expect(result.failures).toEqual([]);
   expect(result.values.greeting?.status).toBe('fresh');
   expect(result.values.greeting?.value).toBe('hello 3');
+  // The value was announced before the run finished, and the result still
+  // carries the complete store.
+  expect(progressed).toEqual([{ name: 'greeting', index: 0 }]);
+  expect(posted.indexOf(result as unknown)).toBe(posted.length - 1);
 }, 60_000);
 
 it('a net.fetch_json call crosses the net bridge and comes back as a value', async () => {
@@ -176,6 +191,7 @@ it('a net.fetch_json call crosses the net bridge and comes back as a value', asy
     }),
   };
 
+  const progressed: string[] = [];
   let settleResult: (message: unknown) => void = () => {};
   const resultArrived = new Promise<unknown>((resolve) => {
     settleResult = resolve;
@@ -195,6 +211,10 @@ it('a net.fetch_json call crosses the net bridge and comes back as a value', asy
             }, 0);
           },
         );
+        return;
+      }
+      if (isRunProgress(message)) {
+        progressed.push(message.name);
         return;
       }
       settleResult(message);
@@ -259,6 +279,9 @@ it('a net.fetch_json call crosses the net bridge and comes back as a value', asy
   expect(result.failures).toEqual([]);
   expect(result.values.fetched?.status).toBe('fresh');
   expect(result.values.fetched?.value).toBe('https://api.example.com/data');
+  // Progress survives a run whose script had to wait on the net bridge:
+  // the value is reported once, after the bridged call resolved.
+  expect(progressed).toEqual(['fetched']);
 }, 60_000);
 
 /**
@@ -414,11 +437,19 @@ it('base64 -> bytes -> blob URL -> a worker that actually starts and completes a
       '',
     ].join('\n');
 
+    const progressed: string[] = [];
     const resultArrived = new Promise<{
       values: Record<string, { value?: unknown; status?: string }>;
       failures: { name: string; message: string }[];
     }>((resolve) => {
       isolate.onMessage((message) => {
+        // The isolate seam forwards every worker message; progress
+        // messages (GitHub issue #35) travel the same path as the result,
+        // and `spawnRun` is what tells them apart in production.
+        if (isRunProgress(message)) {
+          progressed.push(message.name);
+          return;
+        }
         resolve(
           message as {
             values: Record<string, { value?: unknown; status?: string }>;
@@ -442,6 +473,7 @@ it('base64 -> bytes -> blob URL -> a worker that actually starts and completes a
     expect(result.failures).toEqual([]);
     expect(result.values.greeting?.status).toBe('fresh');
     expect(result.values.greeting?.value).toBe('hello 3');
+    expect(progressed).toEqual(['greeting']);
   } finally {
     globalThis.Worker = previousWorker;
     vi.doUnmock('./embedded-assets.js');

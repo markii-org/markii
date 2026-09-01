@@ -92,6 +92,13 @@ function start(scope: WorkerGlobal): void {
         result = await runJob(job, {
           createNet: () => bridge.provider,
           wasmUri: job.wasmUri,
+          // GitHub issue #35: the same per-script message the Node entry
+          // sends, on the same channel this worker posts its result on, so
+          // ordering (progress before result) holds here too. Built in
+          // `./run-job.ts`, never here.
+          postProgress: (progress) => {
+            scope.postMessage(progress);
+          },
         });
       } catch (err) {
         result = resultForInternalError(err, job.cacheSnapshot ?? {});

@@ -191,6 +191,24 @@ end)
 The TTL doubles as a rate limiter, even for manual runs. Consumers always
 see the usual freshness status: fresh, stale, or missing.
 
+A note's scripts run one after another, in the order they appear. Each
+value reaches the page as soon as its own script finishes, rather than all
+of them appearing together at the end. On a note with several scripts you
+see this directly: the first component switches from stale to fresh while
+the ones below it still show their previous figures, then the next, and so
+on down the note.
+
+That matters most for the case the freshness statuses exist for. A
+monitoring note reopened after a while shows its last data marked stale,
+and a re-run replaces those figures one by one instead of leaving the whole
+page stale until the slowest script returns.
+
+A run that is cut short keeps what it had already produced. If the host's
+wall-clock budget expires, or the run fails part way through, the values
+from the scripts that did finish stay on the page and are remembered for
+the next time the note is opened. The scripts that never ran keep their
+previous values, still marked stale.
+
 One habit is worth building early: validate inside the function you hand to
 `cache.get`. The cache stores whatever that function returns, and APIs
 sometimes return an error body with a 200 status. Stored once, a bad reply

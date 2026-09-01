@@ -180,6 +180,10 @@ importance:
 5. **Value persistence.** Keep last-run values in app storage keyed by note
    identity, so plain files reopen with data while the vault directory stays
    untouched; write a bundle's `.cache/` only for bundles.
+   Apply each script's value to the page as it arrives, and never treat a
+   progress message from the isolate as the run's result: only the final
+   settlement is. A run cut short by the watchdog still delivers the values
+   that landed before it.
 6. **The vault stores.** Enforce one writer per published name, and back the
    `@`-prefixed reads with your vault store implementation.
 7. **The require mappings.** Map vault-library namespaces to folders, and

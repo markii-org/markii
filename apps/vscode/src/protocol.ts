@@ -175,6 +175,27 @@ export interface ValuesMessage {
   readonly lastRun?: WireRunTrace;
 }
 
+/**
+ * Host -> webview (GitHub issue #35): ONE script's value, posted the moment
+ * it arrived from the isolate, while the run is still going. Scripts run
+ * sequentially, so the first value is often known seconds before the last;
+ * applying each one as it lands is what lets a bound component go fresh
+ * while every other component in the note stays visibly stale.
+ *
+ * `revision` carries the same meaning it does on `ValuesMessage`: the text
+ * revision the run was performed against, so the webview drops a value
+ * belonging to a document it is no longer showing. The run's completion is
+ * still reported by the `ValuesMessage` that follows at the end — this
+ * message never carries `lastRun`, because the run has not finished.
+ */
+export interface ValueMessage {
+  readonly type: 'value';
+  readonly revision: number;
+  /** The script's declared `name` — the key it occupies in the value store. */
+  readonly name: string;
+  readonly value: WireStoredValue;
+}
+
 /** Webview -> host: the webview's message listener has attached and it is ready to receive the first `update`. */
 export interface ReadyMessage {
   readonly type: 'ready';
@@ -243,7 +264,11 @@ export interface ExportResultMessage {
 }
 
 export type HostToWebviewMessage =
-  UpdateMessage | ValuesMessage | BundleErrorMessage | ExportRequestMessage;
+  | UpdateMessage
+  | ValuesMessage
+  | ValueMessage
+  | BundleErrorMessage
+  | ExportRequestMessage;
 export type WebviewToHostMessage =
   ReadyMessage | PackDiagnosticsMessage | ExportResultMessage;
 
@@ -575,6 +600,36 @@ function isValuesMessage(value: unknown): value is ValuesMessage {
 }
 
 /**
+ * A sane upper bound on a script name crossing the wire. Real names follow
+ * docs/spec.md's `[A-Za-z_][A-Za-z0-9_-]*`, which is short by construction;
+ * the cap is here so a corrupt or hostile message cannot carry a
+ * multi-megabyte key into the webview's value store. The GRAMMAR itself is
+ * deliberately not re-checked: a name that does not match it simply never
+ * matches a `:value[...]` binding either, so it renders as nothing, while
+ * re-deriving the grammar here would be a second copy to keep in step with
+ * the parser.
+ */
+const MAX_SCRIPT_NAME_LENGTH = 256;
+
+function isValueMessage(value: unknown): value is ValueMessage {
+  if (!isPlainObject(value)) return false;
+  if (!hasOwn(value, 'type') || value.type !== 'value') return false;
+  if (!hasOwn(value, 'revision') || !isValidRevision(value.revision)) {
+    return false;
+  }
+  if (
+    !hasOwn(value, 'name') ||
+    typeof value.name !== 'string' ||
+    value.name.length === 0 ||
+    value.name.length > MAX_SCRIPT_NAME_LENGTH
+  ) {
+    return false;
+  }
+  if (!hasOwn(value, 'value') || !isWireStoredValue(value.value)) return false;
+  return true;
+}
+
+/**
  * A valid `requestId`: a bounded, non-empty string drawn only from
  * letters, digits, and `-` — the same alphabet `webview-html.ts`'s
  * `createNonce` produces, which is what `preview-panel.ts` mints one from.
@@ -657,6 +712,7 @@ export function isHostToWebviewMessage(
   return (
     isUpdateMessage(value) ||
     isValuesMessage(value) ||
+    isValueMessage(value) ||
     isBundleErrorMessage(value) ||
     isExportRequestMessage(value)
   );

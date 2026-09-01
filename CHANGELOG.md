@@ -8,6 +8,24 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Values appear one at a time while a run is going** (VS Code extension,
+  Obsidian plugin). A note's scripts run one after another in a single
+  isolate, so the first number is often ready seconds before the last one
+  is. The preview now shows each value the moment its script finishes: that
+  component switches from stale to fresh while every other component in the
+  note stays stale until its own value lands. The run still reports its
+  completion at the end, exactly as before, and a run that is cut short by
+  the wall-clock watchdog now keeps the values that already arrived instead
+  of coming back empty and clearing the note's last-known figures.
+
+- **`@markii/runtime`: an `onValue` option on `runDocumentScripts`.** It is
+  called once per script, in document order, immediately after that
+  script's value is written to the store, and it is called for a failed
+  script as well as a successful one. The callback receives a copy of the
+  summary entry, cannot change what the run stores or reports, and anything
+  it throws is swallowed, so `runDocumentScripts` still never throws. A
+  caller that does not pass it behaves exactly as before.
+
 - **A script can read the note it runs in** (`@markii/runtime`,
   `@markii/lua`). A `doc` table is now in scope for every script block:
   `doc.directives(filter)` returns the note's directives in document order,

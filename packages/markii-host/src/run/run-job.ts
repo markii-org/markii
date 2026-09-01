@@ -28,6 +28,7 @@ import {
   type FailureKind,
   type RunSummaryEntry,
   type RunTrigger,
+  type StoredValue,
 } from '@markii/runtime';
 import {
   createLuaExecutor,
@@ -43,6 +44,13 @@ import { createSnapshotStorage } from './snapshot-storage.js';
 import { createPackModuleResolver } from './lua-resolver.js';
 import type { PackModulesMap } from './lua-resolver.js';
 import type { PinPolicy } from './net-pinning.js';
+// The message shape and its guard live apart from this module because a
+// host bundle must import the guard WITHOUT importing `@markii/lua` — see
+// `./run-progress.ts`'s doc comment.
+import type { RunProgress } from './run-progress.js';
+
+export type { RunProgress } from './run-progress.js';
+export { isRunProgress } from './run-progress.js';
 
 /**
  * What a runtime must supply for `runJob` to work there.
@@ -60,6 +68,18 @@ export interface RunJobDeps {
   ) => NetProvider;
   /** Where wasmoon should load `glue.wasm` from; `undefined` lets it use its own default resolution. */
   wasmUri: string | undefined;
+  /**
+   * Posts one per-script progress message back to the host (GitHub issue
+   * #35). Supplied by each worker entry so BOTH isolates emit the identical
+   * message: the shape, the ordinal, and the moment it is sent are decided
+   * here, and the entry only knows how to put a message on its own channel
+   * (`parentPort.postMessage` for the Node worker thread,
+   * `self.postMessage` for the Web Worker).
+   *
+   * Optional so an entry that has not been updated simply reports nothing
+   * during a run and its final result is unchanged.
+   */
+  postProgress?: (message: RunProgress) => void;
 }
 
 /** The one job message this worker ever receives, posted once by `run-host.ts`. */
@@ -143,7 +163,7 @@ export interface RunFailure {
 /** The one result message this worker ever posts back. Every field is structured-clone-safe. */
 export interface RunResult {
   /** `ValueStore.snapshot()` — every script's outcome, keyed by name. */
-  values: Record<string, import('@markii/runtime').StoredValue>;
+  values: Record<string, StoredValue>;
   failures: RunFailure[];
   /** The mutated cache state, to be persisted by the host for the next run. */
   cacheSnapshot: Record<string, CacheEntry>;
@@ -286,9 +306,28 @@ export async function runJob(
   });
 
   const store = createValueStore();
+  // GitHub issue #35: the ordinal is assigned HERE rather than by either
+  // worker entry, so the two hosts cannot number their runs differently.
+  let progressIndex = 0;
+  const postProgress = deps.postProgress;
   const summary = await runDocumentScripts({
     scripts,
     executor,
+    // Announced per script, in document order, as each value is stored —
+    // `runDocumentScripts` swallows anything this throws, so a failing
+    // channel costs the run nothing.
+    ...(postProgress
+      ? {
+          onValue: (name: string, value: StoredValue) => {
+            postProgress({
+              kind: 'markii:run-progress',
+              index: progressIndex++,
+              name,
+              value,
+            });
+          },
+        }
+      : {}),
     // GitHub issue #11: the trigger the host sent (default `'manual'`) — its
     // mapping to a capability tier (`tierForTrigger`) is the sandbox's own
     // read-only gate for auto/scheduled runs. Never note-influenced.
@@ -342,7 +381,7 @@ export async function runJob(
   // key), which a direct structured-clone of the store's own object would
   // not. The values are otherwise passed through verbatim — failure kinds
   // arrive already correct (see the failures comment above).
-  const values: Record<string, import('@markii/runtime').StoredValue> = {};
+  const values: Record<string, StoredValue> = {};
   for (const [name, entry] of Object.entries(store.snapshot())) {
     values[name] = entry;
   }

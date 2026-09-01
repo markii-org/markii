@@ -19,8 +19,13 @@ import { existsSync } from 'node:fs';
 import * as path from 'node:path';
 
 import type { CacheEntry } from '@markii/lua';
-import type { RunTrigger } from '@markii/runtime';
+import type { RunTrigger, StoredValue } from '@markii/runtime';
 import type { RunJob, RunResult } from './worker-entry.js';
+// From `./run-progress.ts`, NOT from `./run-job.ts`: that module imports
+// `@markii/lua`, and a value import of it here would drag a WebAssembly Lua
+// engine into every host bundle that runs a job (the Obsidian plugin's
+// renderer bundle above all, which never executes Lua itself).
+import { isRunProgress } from './run-progress.js';
 import type { IsolateSpawner, RunIsolate } from './isolate.js';
 
 export type {
@@ -30,6 +35,7 @@ export type {
 } from './isolate.js';
 
 export type { RunJob, RunResult, RunFailure } from './worker-entry.js';
+export type { RunProgress } from './run-progress.js';
 
 export interface SpawnRunOptions {
   text: string;
@@ -77,6 +83,19 @@ export interface SpawnRunOptions {
    * a kill switch.
    */
   spawnIsolate?: IsolateSpawner;
+  /**
+   * Called once per script as its value arrives from the isolate, in
+   * document order, while the run is still going (GitHub issue #35). This
+   * is what lets a preview un-stale one component at a time instead of
+   * waiting for the whole batch: scripts run sequentially in one isolate,
+   * so the first value is often known seconds before the last.
+   *
+   * Every message is validated (`isRunProgress`) and ordered before it
+   * reaches this callback, and anything it throws is swallowed — reporting
+   * progress must never be able to fail a run or break the never-rejects
+   * contract below. It is never called after the run has settled.
+   */
+  onValue?: (name: string, value: StoredValue, index: number) => void;
   /**
    * Overrides the worker entry file this run spawns. This package cannot
    * know how a given host bundles or lays out its own `dist/` (that is
@@ -139,6 +158,17 @@ function execArgvFor(workerPath: string): string[] | undefined {
 const WORKER_MAX_OLD_GENERATION_SIZE_MB = 128;
 
 /**
+ * How many per-script progress values one run may report (GitHub issue
+ * #35). A real note has a handful of script blocks; this cap exists only
+ * so a compromised or malfunctioning isolate cannot grow the host's memory
+ * by inventing names, since the accumulated map is what a killed run's
+ * synthetic result carries. Messages past the cap are dropped, and the run
+ * itself is unaffected — its own `RunResult.values` is the authority
+ * whenever the worker gets to send one.
+ */
+const MAX_PROGRESS_VALUES = 1000;
+
+/**
  * The default isolate: a `node:worker_threads` worker, which is what every
  * Node host (the VS Code extension host, this package's own tests) uses. It
  * is the only kind that accepts `resourceLimits`, so it is also the only
@@ -160,7 +190,12 @@ export const workerThreadIsolate: IsolateSpawner = (options): RunIsolate => {
       void worker.terminate();
     },
     onMessage: (listener) => {
-      worker.once('message', listener);
+      // `on`, not `once`: a run now sends one progress message per script
+      // (GitHub issue #35) ahead of its single result message, and
+      // `spawnRun` is what tells the two apart. Messages arriving after
+      // the run settles are harmless — `settled` guards every path — and
+      // the worker is terminated on settle anyway.
+      worker.on('message', listener);
     },
     onError: (listener) => {
       worker.once('error', listener);
@@ -210,6 +245,29 @@ export async function spawnRun(options: SpawnRunOptions): Promise<RunResult> {
   return new Promise<RunResult>((resolve) => {
     let settled = false;
     let watchdogFired = false;
+    // GitHub issue #35: every value the isolate has reported so far, in
+    // arrival order. A Map (not a plain object) because a script may
+    // legitimately be named `__proto__` (docs/spec.md's name grammar) and
+    // a plain assignment of that key sets a prototype instead of storing a
+    // value; `valuesSoFar` converts through `Object.fromEntries`, which
+    // defines it as an own property.
+    const progressValues = new Map<string, StoredValue>();
+    // The last ordinal accepted, so a duplicate or out-of-order message
+    // from a misbehaving isolate is dropped rather than overwriting a
+    // value that already arrived. -1 means "nothing accepted yet".
+    let lastProgressIndex = -1;
+
+    /**
+     * The values this run has seen so far — what a run that never gets to
+     * send its own `RunResult` (the watchdog fired, the isolate died) is
+     * settled with, so the scripts that DID finish keep the values they
+     * produced instead of the whole run coming back empty. A worker that
+     * does send a result supersedes this entirely: its own `values` is
+     * complete and authoritative.
+     */
+    function valuesSoFar(): Record<string, StoredValue> {
+      return Object.fromEntries(progressValues);
+    }
 
     const spawnIsolate = options.spawnIsolate ?? workerThreadIsolate;
     const worker = spawnIsolate({
@@ -220,7 +278,7 @@ export async function spawnRun(options: SpawnRunOptions): Promise<RunResult> {
 
     function watchdogFailure(): RunResult {
       return {
-        values: {},
+        values: valuesSoFar(),
         failures: [
           {
             name: '<document>',
@@ -266,13 +324,40 @@ export async function spawnRun(options: SpawnRunOptions): Promise<RunResult> {
       worker.kill();
     }
 
-    worker.onMessage((result) => {
-      settle(result as RunResult);
+    worker.onMessage((message) => {
+      // GitHub issue #35: progress first, result last. A message that
+      // passes the progress guard is never treated as a result, and one
+      // that does not is the run's single result message — the same
+      // message this handler has always received.
+      if (isRunProgress(message)) {
+        if (settled) return;
+        if (message.index <= lastProgressIndex) return;
+        lastProgressIndex = message.index;
+        // The cap bounds how many DISTINCT names are held; re-reporting a
+        // name already in the map is a legitimate run (two script blocks
+        // may share a name, and the last one wins in the store too), so it
+        // is never refused.
+        if (
+          !progressValues.has(message.name) &&
+          progressValues.size >= MAX_PROGRESS_VALUES
+        ) {
+          return;
+        }
+        progressValues.set(message.name, message.value);
+        try {
+          options.onValue?.(message.name, message.value, message.index);
+        } catch {
+          // Reporting a value must never be able to fail the run — see
+          // `SpawnRunOptions.onValue`.
+        }
+        return;
+      }
+      settle(message as RunResult);
     });
 
     worker.onError((err) => {
       settle({
-        values: {},
+        values: valuesSoFar(),
         failures: [
           {
             name: '<worker>',
@@ -302,7 +387,7 @@ export async function spawnRun(options: SpawnRunOptions): Promise<RunResult> {
       // never got a proper `RunResult` out of it). Resolve, never
       // reject -- see this function's doc comment.
       settle({
-        values: {},
+        values: valuesSoFar(),
         failures: [
           {
             name: '<worker>',

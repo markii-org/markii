@@ -889,3 +889,162 @@ describe('runDocumentScripts — the doc view a script receives', () => {
     expect(read).toEqual({ ok: true, value: undefined });
   });
 });
+
+describe('runDocumentScripts — onValue (GitHub issue #35)', () => {
+  it('fires once per script, in document order, with the value that was just stored', async () => {
+    const scripts = [
+      block({ name: 'a' }),
+      block({ name: 'b' }),
+      block({ name: 'c' }),
+    ];
+    const returns: Record<string, unknown> = { a: 1, b: 2, c: 3 };
+    let index = 0;
+    const executor: ScriptExecutor = () => {
+      const name = scripts[index++]?.name ?? '';
+      return Promise.resolve<ExecuteResult>({ ok: true, value: returns[name] });
+    };
+    const store = createValueStore();
+    const seen: Array<[string, unknown]> = [];
+
+    const summary = await runDocumentScripts({
+      scripts,
+      executor,
+      trigger: 'manual',
+      store,
+      onValue: (name, value) => {
+        seen.push([name, value.value]);
+      },
+    });
+
+    expect(seen).toEqual([
+      ['a', 1],
+      ['b', 2],
+      ['c', 3],
+    ]);
+    expect(summary.freshCount).toBe(3);
+  });
+
+  it('fires while the batch is still running, not in one burst at the end', async () => {
+    // Each callback records how many scripts the executor had STARTED by
+    // the time it fired. A callback that only ran at the end would see all
+    // three every time; firing per script means it sees exactly the count
+    // of scripts run so far, which is what a host needs for a value to
+    // reach the page before the run finishes.
+    const scripts = [
+      block({ name: 'a' }),
+      block({ name: 'b' }),
+      block({ name: 'c' }),
+    ];
+    let started = 0;
+    const executor: ScriptExecutor = async () => {
+      started++;
+      await Promise.resolve();
+      return { ok: true, value: started };
+    };
+    const startedAtCallback: number[] = [];
+
+    await runDocumentScripts({
+      scripts,
+      executor,
+      trigger: 'manual',
+      store: createValueStore(),
+      onValue: () => {
+        startedAtCallback.push(started);
+      },
+    });
+
+    expect(startedAtCallback).toEqual([1, 2, 3]);
+  });
+
+  it('reports the value the store holds at that moment — a reader inside the callback sees it', async () => {
+    const store = createValueStore();
+    const seenInStore: unknown[] = [];
+
+    await runDocumentScripts({
+      scripts: [block({ name: 'a' }), block({ name: 'b' })],
+      executor: () => Promise.resolve<ExecuteResult>({ ok: true, value: 'v' }),
+      trigger: 'manual',
+      store,
+      onValue: (name, value) => {
+        expect(store.get(name)).toBe(value);
+        seenInStore.push(store.get(name)?.value);
+      },
+    });
+
+    expect(seenInStore).toEqual(['v', 'v']);
+  });
+
+  it('fires for a FAILED script too, carrying its error status and failure kind', async () => {
+    const executor: ScriptExecutor = ({ code }) =>
+      Promise.resolve<ExecuteResult>(
+        code === 'bad'
+          ? { ok: false, error: { kind: 'capability-denied', message: 'nope' } }
+          : { ok: true, value: 1 },
+      );
+    const seen: Array<{ name: string; status: string; kind?: string }> = [];
+
+    await runDocumentScripts({
+      scripts: [block({ name: 'ok' }), block({ name: 'bad', code: 'bad' })],
+      executor,
+      trigger: 'manual',
+      store: createValueStore(),
+      onValue: (name, value, entry) => {
+        seen.push({
+          name,
+          status: value.status,
+          ...(entry.failureKind ? { kind: entry.failureKind } : {}),
+        });
+      },
+    });
+
+    expect(seen).toEqual([
+      { name: 'ok', status: 'fresh' },
+      { name: 'bad', status: 'error', kind: 'capability-denied' },
+    ]);
+  });
+
+  it('hands over a COPY of the summary entry: mutating it cannot corrupt the run summary', async () => {
+    const summary = await runDocumentScripts({
+      scripts: [block({ name: 'a' })],
+      executor: () => Promise.resolve<ExecuteResult>({ ok: true, value: 1 }),
+      trigger: 'manual',
+      store: createValueStore(),
+      onValue: (_name, _value, entry) => {
+        entry.name = 'hijacked';
+        entry.status = 'error';
+      },
+    });
+
+    expect(summary.results).toEqual([{ name: 'a', status: 'fresh' }]);
+    expect(summary.freshCount).toBe(1);
+  });
+
+  it('a throwing callback never aborts the batch or escapes runDocumentScripts', async () => {
+    const store = createValueStore();
+    const summary = await runDocumentScripts({
+      scripts: [block({ name: 'a' }), block({ name: 'b' })],
+      executor: () => Promise.resolve<ExecuteResult>({ ok: true, value: 7 }),
+      trigger: 'manual',
+      store,
+      onValue: () => {
+        throw new Error('host reporting blew up');
+      },
+    });
+
+    expect(summary.freshCount).toBe(2);
+    expect(store.get('b')?.value).toBe(7);
+  });
+
+  it('runs identically with no callback supplied (pure addition)', async () => {
+    const store = createValueStore();
+    const summary = await runDocumentScripts({
+      scripts: [block({ name: 'a' })],
+      executor: () => Promise.resolve<ExecuteResult>({ ok: true, value: 1 }),
+      trigger: 'manual',
+      store,
+    });
+
+    expect(summary.results).toEqual([{ name: 'a', status: 'fresh' }]);
+    expect(store.get('a')?.value).toBe(1);
+  });
+});

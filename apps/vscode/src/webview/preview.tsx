@@ -4,6 +4,7 @@ import { renderMark } from '@markii/react';
 import type { Registry } from '@markii/react';
 import { createValueStore } from '@markii/runtime';
 import type { StoredValue } from '@markii/runtime';
+import { mergeArrivingValue } from '@markii/host/browser';
 import { extractFrontmatterUses } from '@markii/core';
 import { resolveUses } from '@markii/pack';
 import { isHostToWebviewMessage, isNewerRevision } from '../protocol.js';
@@ -252,6 +253,31 @@ export function Preview({ registry }: PreviewProps): ReactElement {
         // listener's concern, not this component's — it carries no
         // `revision` and is never state this preview renders from.
         if (data.type === 'export-request') return previous;
+        if (data.type === 'value') {
+          // GitHub issue #35: ONE script's value, arriving mid-run. Same
+          // stale-revision rule as a whole `values` result below: a value
+          // computed against text this preview is no longer showing is
+          // dropped rather than applied.
+          if (data.revision !== previous.revision) return previous;
+          // Folded onto whatever store is already on screen — the previous
+          // run's values, or the stale rehydrated ones — so this name goes
+          // fresh and every other name keeps the status it had. That is
+          // the whole point: a running note shows its values filling in
+          // one at a time, not all at the end.
+          return {
+            ...previous,
+            runValues: {
+              revision: data.revision,
+              values: mergeArrivingValue(
+                previous.runValues?.revision === data.revision
+                  ? previous.runValues.values
+                  : undefined,
+                data.name,
+                data.value,
+              ),
+            },
+          };
+        }
         // A `values` result for anything other than the CURRENT text
         // revision is stale — e.g. the document kept changing while the
         // run was in flight — and is dropped rather than applied.

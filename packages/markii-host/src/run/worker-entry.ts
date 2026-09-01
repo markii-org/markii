@@ -12,7 +12,8 @@
  * The design (docs/security.md's isolate requirement) is "one ephemeral
  * worker per run": the host spawns a fresh thread, this file boots
  * `@markii/lua` + `@markii/runtime` once, runs exactly one batch, posts
- * back exactly one result message, and the whole thread is expected to be
+ * back one progress message per script and then exactly one result
+ * message, and the whole thread is expected to be
  * torn down by the host afterward (`run-host.ts`) regardless of how this
  * run went. That is what makes the external wall-clock watchdog
  * (`worker.terminate()`) an unconditional, always-available kill switch:
@@ -44,7 +45,7 @@ import { createNetProvider } from './net-provider.js';
 // comment). They are re-exported here because `run-host.ts` and both
 // worker entries have always imported them from this module, and a rename
 // would be churn with no reader benefit.
-export type { RunJob, RunFailure, RunResult } from './run-job.js';
+export type { RunJob, RunFailure, RunProgress, RunResult } from './run-job.js';
 import { isRunJob, resultForInternalError, runJob } from './run-job.js';
 
 /**
@@ -86,6 +87,14 @@ async function main(): Promise<void> {
       }
       try {
         const result = await runJob(message, {
+          // GitHub issue #35: one message per script, on the SAME port the
+          // final result goes out on, so the host receives them in order
+          // and always ahead of the result. Identical to what
+          // `./worker-entry-browser.ts` does; the message itself is built
+          // in `./run-job.ts` so the two cannot drift.
+          postProgress: (progress) => {
+            port.postMessage(progress);
+          },
           // The Lua brand is supplied HERE, where the runtime is already
           // present, rather than imported by the provider itself — see
           // `./net-provider.ts`'s doc comment.

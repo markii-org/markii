@@ -768,6 +768,84 @@ describe('isHostToWebviewMessage — values', () => {
   });
 });
 
+describe('isHostToWebviewMessage — value (one script, mid-run; GitHub issue #35)', () => {
+  function valueMessage(overrides: Record<string, unknown> = {}): unknown {
+    return {
+      type: 'value',
+      revision: 3,
+      name: 'temperature',
+      value: { value: 21, status: 'fresh', ranAt: 1 },
+      ...overrides,
+    };
+  }
+
+  it('accepts a well-formed single-value message', () => {
+    expect(isHostToWebviewMessage(valueMessage())).toBe(true);
+  });
+
+  it('accepts an error value: a failed script is a result too', () => {
+    expect(
+      isHostToWebviewMessage(
+        valueMessage({
+          value: {
+            value: undefined,
+            status: 'error',
+            failureKind: 'capability-denied',
+          },
+        }),
+      ),
+    ).toBe(true);
+  });
+
+  it('accepts a script legitimately named __proto__', () => {
+    expect(isHostToWebviewMessage(valueMessage({ name: '__proto__' }))).toBe(
+      true,
+    );
+  });
+
+  it.each([
+    ['a missing name', { name: undefined }],
+    ['a non-string name', { name: 7 }],
+    ['an empty name', { name: '' }],
+    ['an absurdly long name', { name: 'x'.repeat(257) }],
+    ['a missing revision', { revision: undefined }],
+    ['a negative revision', { revision: -1 }],
+    ['a non-integer revision', { revision: 1.5 }],
+    ['a missing value', { value: undefined }],
+    ['a non-object value', { value: 'fresh' }],
+    ['an unknown status', { value: { value: 1, status: 'cooked' } }],
+    [
+      'a forged failure kind',
+      { value: { value: 1, status: 'error', failureKind: 'admin' } },
+    ],
+    [
+      'a non-finite ranAt',
+      { value: { value: 1, status: 'fresh', ranAt: NaN } },
+    ],
+  ])('rejects %s', (_label, overrides) => {
+    expect(isHostToWebviewMessage(valueMessage(overrides))).toBe(false);
+  });
+
+  it('rejects a message whose `type` is only INHERITED, never owned', () => {
+    const hostile = Object.create({ type: 'value' }) as Record<string, unknown>;
+    hostile.revision = 1;
+    hostile.name = 'a';
+    hostile.value = { value: 1, status: 'fresh' };
+    expect(isHostToWebviewMessage(hostile)).toBe(false);
+  });
+
+  it('is not confused with the whole-run `values` message', () => {
+    expect(
+      isHostToWebviewMessage({
+        type: 'value',
+        revision: 1,
+        values: { a: { value: 1, status: 'fresh' } },
+        failures: [],
+      }),
+    ).toBe(false);
+  });
+});
+
 describe('isSafeBaseUri', () => {
   it('accepts the asWebviewUri https form', () => {
     expect(isSafeBaseUri(WEBVIEW_BASE)).toBe(true);
