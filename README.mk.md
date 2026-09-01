@@ -187,7 +187,25 @@ Not rendered, because it is inside a fence.
 ## Where to go next
 
 This playground is a demo, not the product. The format and its libraries
-live in the [repository](https://github.com/markii-org/markii); start with
-[the format guide](https://github.com/markii-org/markii/blob/main/docs/format.md)
-to learn everything a document can contain, or install the Markii VS Code
-extension to preview `.mk.md` files in your editor.
+live in the [repository](https://github.com/markii-org/markii). The
+documentation is written to be read in order, but each page stands on its
+own:
+
+| Page | Read it when you want to |
+| --- | --- |
+| [format.md](https://github.com/markii-org/markii/blob/main/docs/format.md) | Write documents: directives, components, layout, links |
+| [scripting.md](https://github.com/markii-org/markii/blob/main/docs/scripting.md) | Add live values with Lua: scripts, freshness, reading your own note |
+| [bundles.md](https://github.com/markii-org/markii/blob/main/docs/bundles.md) | Ship a note with its assets and scripts as one `.mkz` file |
+| [packs.md](https://github.com/markii-org/markii/blob/main/docs/packs.md) | Build your own components and share them as a pack |
+| [security.md](https://github.com/markii-org/markii/blob/main/docs/security.md) | Understand what a script can and cannot do, and why |
+| [integration.md](https://github.com/markii-org/markii/blob/main/docs/integration.md) | Embed Markii in your own app: rendering, theming, running scripts |
+| [spec.md](https://github.com/markii-org/markii/blob/main/docs/spec.md) | Check the normative rules of the format |
+
+Where to use it and what to use it with:
+
+| Project | What it is |
+| --- | --- |
+| [VS Code extension](https://marketplace.visualstudio.com/items?itemName=markii.markii-vscode) | Preview, run, complete, and export `.mk.md` files; where packs are developed |
+| [Obsidian plugin](https://github.com/markii-org/markii-obsidian) | The same preview, run, and export inside a vault, installed through BRAT |
+| [markii-packs](https://github.com/markii-org/markii-packs) | Ready-made component packs: blog, dash, data, fin, prep, read, tech, track |
+| [markii-vault](https://github.com/markii-org/markii-vault) | Example notes and a starter vault showing the pieces working together |
