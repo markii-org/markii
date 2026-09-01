@@ -6,6 +6,8 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-09-01
+
 ### Added
 
 - **VS Code writes a run's script failures to the Markii output channel**,
