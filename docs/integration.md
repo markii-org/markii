@@ -254,6 +254,19 @@ a standard one does in the editor. A pack that declares nothing keeps the
 earlier behavior: its name completes, and its description is all the
 documentation there is.
 
+A preview also resolves the images a note references. VS Code resolves a
+relative `src` against the note's folder. Obsidian tries the same
+note-relative path first, then the vault's own link resolution (the lookup a
+wikilink uses, so a bare file name found anywhere in the vault works), then
+the path as vault-relative. Absolute file-system paths and `obsidian://`
+URLs are not resolved by either host: a note that used them would only
+render on one machine.
+
+Resolution is not authorization. Each host reads an image through its own
+storage layer and never outside it, so a note cannot point the preview at a
+file the host would not otherwise open. The export path below reuses the
+same resolution, on purpose.
+
 ## Exporting a note
 
 A host can hand the reader a file rather than a view. Both reference hosts do:
@@ -301,8 +314,8 @@ Local images travel with the file. A host hands the exporter a reader for its
 own storage, and every local image a note references is embedded as a `data:`
 URI, so the exported file opens with its pictures intact anywhere. Remote
 `http` and `https` sources stay live URLs, because embedding them would change
-what the page fetches. Each host resolves an image the way its own preview
-resolves one and reads it under its own jail, so an export can never reach a
+what the page fetches. Each host resolves an image with the same code its preview
+uses and reads it under its own jail, so an export can never reach a
 file the preview itself could not show. An image above two megabytes keeps its
 original source rather than inflating the file, and so does one whose
 extension the embedder does not recognize, or one that could not be read. Each
