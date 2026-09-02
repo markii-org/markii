@@ -1,11 +1,12 @@
 /**
- * The archive-producing counterpart of `./pack-export.ts`'s `exportPack`
- * (GitHub issue #16): compiles a pack through the SAME build cache and
- * zips its distributable form (`pack.json`, `webview.js`, `webview.css`
- * when built, `scripts/*.lua`) into a single `.mkp` file's bytes, named
- * per `@markii/pack`'s `packArchiveFileName`. VS Code is the authoring
- * host and owns pack packaging; this is the second of the two shapes
- * "Markii: Export Pack" offers, `exportPack` above being the folder shape.
+ * Builds the one output shape "Markii: Export Pack" produces (GitHub issue
+ * #16): compiles a pack through the same build cache `./pack-export.ts`
+ * uses and zips its distributable form (`pack.json`, `webview.js`,
+ * `webview.css` when built, `scripts/*.lua`) into a single `.mkp` file's
+ * bytes, named per `@markii/pack`'s `packArchiveFileName`. VS Code is the
+ * authoring host and owns pack packaging; this module composes through
+ * `./pack-export.ts`'s `PackExportBuilder` and `PackExportFs` types rather
+ * than duplicating the compile step.
  *
  * Uses `fflate`'s `zipSync`, already a runtime dependency of this package
  * (`packages/markii-host/package.json`; `@markii/bundle`'s own zip reader

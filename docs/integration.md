@@ -93,6 +93,13 @@ detects which theme is active. Instead it supplies values for a small
 palette, and because the host's own theme variables already differ between
 light and dark, the document follows automatically.
 
+Where no host theme layer is present, which in practice means a document
+from the static HTML renderer, `doc.css` follows the reader's operating
+system dark preference on its own. Set `data-mk-theme="light"` on the `.doc`
+element to hold the light palette whatever the reader prefers, or
+`data-mk-theme="dark"` to hold the dark one, and the attribute wins over both
+the OS preference and a host's own palette mapping.
+
 The Tier 1 contract is nineteen custom properties declared on `.doc`:
 fifteen colors, and the four widths described after them.
 

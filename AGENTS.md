@@ -195,8 +195,9 @@ packages/markii-host    PRIVATE, never published (no npm presence, absent from
                      CSS) with esbuild-wasm's in-process wasm path, cached
                      outside the pack's own folder. See the Stack section for
                      why the in-process path is mandatory, not preferred
-  src/packs/pack-export-archive.ts  the .mkp half of Export Pack: zips the
-                     prebuilt form the folder export writes
+  src/packs/pack-export-archive.ts  what VS Code's Export Pack produces:
+                     the prebuilt form zipped as <name>-<version>.mkp. The
+                     command writes no folder form (user-set 2026-09-02)
   src/packs/pack-contract.test.ts  loads a hand-written webview.js built only
                      from docs/packs.md's registration contract, so the docs
                      cannot drift from the loader (markii-packs builds its
@@ -204,12 +205,13 @@ packages/markii-host    PRIVATE, never published (no npm presence, absent from
   src/packs/prebuilt.ts    the prebuilt-pack convention (issue #15): the
                      sibling webview.css next to webview.js, and detection
                      of a prebuilt script shadowing on-disk sources
-  src/packs/pack-export.ts  the compose half of VS Code's Export Pack
-                     command (issue #16): builds via the normal cache, then
-                     writes the distributable (pack.json, webview.js,
-                     webview.css, scripts/) into a caller-chosen destination
-                     behind resolveExportTarget's path jail. A pack's SOURCE
-                     folder is never written to
+  src/packs/pack-export.ts  the internal compose-and-write path (issue #16):
+                     builds via the normal cache, then writes the prebuilt
+                     form (pack.json, webview.js, webview.css, scripts/) into
+                     a caller-chosen destination behind resolveExportTarget's
+                     path jail. Used by the bundled-pack build and composed
+                     through by pack-export-archive.ts; not a user command on
+                     its own. A pack's SOURCE folder is never written to
   src/insert/        the insert-component seam (issue #17): skeleton builder
                      (container/leaf/inline forms per @markii/stdlib kind)
                      + catalog (stdlib + installed packs) both hosts consume
@@ -277,7 +279,8 @@ apps/vscode          the "Markii" VS Code extension (preview + Run + packs) — 
                      pre-reads each pack's scripts/*.lua; lua-resolver.ts is the
                      pure worker-side PackModuleResolver; pack-context.ts
                      composes them; export-pack.ts + discover-configured-packs.ts
-                     back the markii.exportPack command (issue #16);
+                     back the markii.exportPack command (issue #16), which
+                     writes a .mkp through a save dialog and nothing else;
                      bundled-packs.ts + build-bundled-packs.ts build packs/
                      into dist/packs at extension build time and register
                      that folder as the always-present pack root;

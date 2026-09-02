@@ -69,6 +69,18 @@ describe('exportHtmlDocument', () => {
     expect(doc).toContain('prefers-color-scheme: dark');
   });
 
+  it('sets no data-mk-theme attribute on the .doc wrapper, so an exported document keeps following the OS preference', () => {
+    const doc = exportHtmlDocument('<p>hi</p>', {
+      docClassName: 'mk-export--hide-scripts',
+    });
+    // doc.css's own selectors legitimately mention `data-mk-theme` (the
+    // opt-out/forced-theme attribute a host may set), and that text living
+    // in the embedded <style> block is expected. What must NOT happen is
+    // the exported document's own `.doc` wrapper carrying that attribute.
+    const bodyStart = doc.indexOf('<body>');
+    expect(doc.slice(bodyStart)).not.toContain('data-mk-theme');
+  });
+
   it('adds a docClassName alongside the doc class, leaving the default untouched when omitted', () => {
     const withoutClass = exportHtmlDocument('body');
     expect(withoutClass).toContain('<div class="doc">');

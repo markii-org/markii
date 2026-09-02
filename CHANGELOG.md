@@ -4,6 +4,34 @@ All notable changes to Markii and the `@markii/*` packages are recorded here. Th
 format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.12.1] - 2026-09-02
+
+### Added
+
+- **`doc.css`: a `data-mk-theme` override on `.doc`.** Setting
+  `data-mk-theme="light"` holds the light Tier 1 palette whatever the
+  reader's operating system prefers, and `data-mk-theme="dark"` holds the
+  dark one. Both are attribute selectors, so an explicit attribute wins over
+  the automatic `prefers-color-scheme` palette and over a host's own token
+  mapping. The automatic palette's own selector is unchanged, so a host that
+  never sets the attribute behaves exactly as before, and
+  `exportHtmlDocument` still emits no attribute and still follows the
+  reader's preference.
+
+### Changed
+
+- **VS Code: `Markii: Export Pack` writes a `.mkp` archive only.** The
+  folder output and the format quick pick are gone. The command asks which
+  pack when more than one is configured, builds the archive, then opens a
+  save dialog prefilled with `<name>-<version>.mkp`, or `<name>.mkp` when
+  the manifest declares no version. Building before asking means a build
+  failure never costs the user a destination they would have to pick again,
+  and the save dialog owns the overwrite confirmation. `@markii/host`'s
+  folder-writing `exportPack` stays: it is how the extension build lays out
+  its bundled packs, and the archive export composes through it.
+
 ## [0.12.0] - 2026-09-02
 
 The `@markii/*` packages and the VS Code extension ship this release as

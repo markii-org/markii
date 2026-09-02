@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import * as path from 'node:path';
 import {
   esbuildBrowserModulePath,
   esbuildWasmBinaryPath,
@@ -26,20 +25,11 @@ import {
 } from './packs/remove-installed-pack.js';
 import type { InstalledPackEntry } from './packs/remove-installed-pack.js';
 import {
-  archiveExportNameValidationMessage,
-  archiveFileExists,
   createNodePackExportFs,
-  exportNameValidationMessage,
   NO_PACKS_CONFIGURED_MESSAGE,
-  normalizeArchiveExportName,
   packArchiveExportDiagnosticLines,
   packArchiveExportResultMessage,
-  packArchiveOverwriteConfirmMessage,
-  PACK_EXPORT_FORMAT_ITEMS,
-  packExportDiagnosticLines,
-  packExportOverwriteConfirmMessage,
   packExportQuickPickItem,
-  packExportResultMessage,
   writePackArchiveFile,
 } from './packs/export-pack.js';
 import { discoverConfiguredPacks } from './packs/discover-configured-packs.js';
@@ -56,7 +46,6 @@ import {
   buildComponentCatalog,
   completionAt,
   componentSkeleton,
-  exportPack,
   exportPackArchive,
   hoverAt,
   offsetToLineColumn,
@@ -425,22 +414,25 @@ async function toggleScriptExecution(): Promise<void> {
   );
 }
 
+/** The save dialog's `.mkp` filter, matching this command's one output shape. */
+const PACK_EXPORT_ARCHIVE_FILTERS: Readonly<Record<string, readonly string[]>> =
+  { 'Markii pack archive': ['mkp'] };
+
 /**
  * The `markii.exportPack` command ("Markii: Export Pack", GitHub issue
- * #16): compiles a configured pack and writes a clean, distributable
- * folder — `pack.json`, `webview.js`, `webview.css` when the build emits
- * one, and any `scripts/*.lua` — at a location the user picks. VS Code is
- * the AUTHORING host and owns pack packaging; the pack's own source folder
- * is never written to (see `@markii/host`'s `packs/pack-export.ts`). All
- * the testable pieces (pack discovery, the `PackExportFs`, the quick-pick
- * item shape, the folder-name validator, every user-facing string) live in
- * `./packs/export-pack.ts`; this function is `vscode` wiring only: reads
- * `markii.packs`/the workspace root, offers a quick pick when more than one
- * pack is configured, asks where to export and what to name the folder,
- * and shows the resulting message. The build's warnings and any failure
- * reason are also written to `diagnosticsChannel`, this extension's one
- * diagnostics surface, so the full detail is never only in a transient
- * popup.
+ * #16): compiles a configured pack and writes it as a single `.mkp`
+ * archive at a location the user picks. VS Code is the AUTHORING host and
+ * owns pack packaging; the pack's own source folder is never written to
+ * (see `@markii/host`'s `packs/pack-export.ts`). All the testable pieces
+ * (pack discovery, the quick-pick item shape, every user-facing string)
+ * live in `./packs/export-pack.ts`; this function is `vscode` wiring only:
+ * reads `markii.packs`/the workspace root, offers a quick pick when more
+ * than one pack is configured, builds the archive, asks where to save it
+ * with a save dialog prefilled with the archive's own file name, writes
+ * the bytes, and shows the resulting message. The build's warnings and any
+ * failure reason are also written to `diagnosticsChannel`, this
+ * extension's one diagnostics surface, so the full detail is never only in
+ * a transient popup.
  */
 async function exportPackCommand(
   context: vscode.ExtensionContext,
@@ -471,18 +463,6 @@ async function exportPackCommand(
     chosen = packs[index]!;
   }
 
-  // The output SHAPE (GitHub issue #16): a folder, as before, or a single
-  // `.mkp` archive file. Always asked, even with one pack configured, since
-  // the format choice is independent of which pack is being exported.
-  const formatPicked = await vscode.window.showQuickPick(
-    [...PACK_EXPORT_FORMAT_ITEMS],
-    {
-      title: `Markii: Export the ${chosen.manifest.name} pack`,
-      placeHolder: 'Choose an export format',
-    },
-  );
-  if (!formatPicked) return; // cancelled
-
   const cacheDir = packCacheDir(context);
   const browserModulePath = esbuildBrowserModulePath(context);
   const wasmBinaryPath = esbuildWasmBinaryPath(context);
@@ -492,64 +472,8 @@ async function exportPackCommand(
       esbuildWasmBinaryPath: wasmBinaryPath,
     });
 
-  if (formatPicked.format === 'folder') {
-    // When only one pack is configured the pack quick pick above is
-    // skipped, so these prompts are the first thing the user sees: each
-    // names the chosen pack, or the silent auto-selection reads as
-    // "exporting everything".
-    const destinationPicked = await vscode.window.showOpenDialog({
-      canSelectFolders: true,
-      canSelectFiles: false,
-      canSelectMany: false,
-      openLabel: 'Export Here',
-      title: `Choose where to export the ${chosen.manifest.name} pack`,
-    });
-    const destinationDir = destinationPicked?.[0]?.fsPath;
-    if (!destinationDir) return; // cancelled
-
-    const exportName = await vscode.window.showInputBox({
-      title: `Markii: Export the ${chosen.manifest.name} pack`,
-      prompt: `Folder name to create for the ${chosen.manifest.name} pack at the chosen destination.`,
-      value: chosen.manifest.name,
-      validateInput: exportNameValidationMessage,
-    });
-    if (exportName === undefined) return; // cancelled
-
-    const outcome = await exportPack({
-      pack: chosen,
-      cacheDir,
-      destinationDir,
-      exportName,
-      build,
-      fs: createNodePackExportFs(),
-      confirmOverwrite: async (request) => {
-        const choice = await vscode.window.showWarningMessage(
-          packExportOverwriteConfirmMessage(request),
-          { modal: true },
-          'Overwrite',
-        );
-        return choice === 'Overwrite';
-      },
-    });
-
-    // Both homes of the outcome, always: the short popup, and the full
-    // detail (a failure's verbatim reason, the written paths and byte
-    // sizes, any pack-CSS lint warnings) on the diagnostics surface.
-    const message = packExportResultMessage(outcome);
-    for (const line of packExportDiagnosticLines(outcome)) {
-      diagnosticsChannel.appendLine(line);
-    }
-    if (outcome.kind === 'failed') {
-      void vscode.window.showWarningMessage(message);
-    } else {
-      void vscode.window.showInformationMessage(message);
-    }
-    return;
-  }
-
-  // The archive shape: build first (so a build failure never bothers the
-  // user with a destination/name they'd have to pick again), THEN ask
-  // where to save the single `.mkp` file.
+  // Build first, so a build failure never makes the user pick a
+  // destination they would only have to pick again.
   const fsReads = createNodePackExportFs();
   const archiveOutcome = await exportPackArchive({
     pack: chosen,
@@ -566,45 +490,22 @@ async function exportPackCommand(
     return;
   }
 
-  const destinationPicked = await vscode.window.showOpenDialog({
-    canSelectFolders: true,
-    canSelectFiles: false,
-    canSelectMany: false,
-    openLabel: 'Export Here',
-    title: `Choose where to export the ${chosen.manifest.name} pack archive`,
+  const defaultUri =
+    workspaceRoot !== undefined
+      ? vscode.Uri.joinPath(
+          vscode.Uri.file(workspaceRoot),
+          archiveOutcome.fileName,
+        )
+      : vscode.Uri.file(archiveOutcome.fileName);
+  const target = await vscode.window.showSaveDialog({
+    title: `Markii: Export the ${chosen.manifest.name} pack`,
+    saveLabel: 'Export',
+    filters: PACK_EXPORT_ARCHIVE_FILTERS as Record<string, string[]>,
+    defaultUri,
   });
-  const destinationDir = destinationPicked?.[0]?.fsPath;
-  if (!destinationDir) return; // cancelled
+  if (!target) return; // cancelled: the save dialog also owns overwrite confirmation
 
-  const fileNameInput = await vscode.window.showInputBox({
-    title: `Markii: Export the ${chosen.manifest.name} pack as an archive`,
-    prompt: `File name for the ${chosen.manifest.name} pack archive at the chosen destination.`,
-    value: archiveOutcome.fileName,
-    validateInput: archiveExportNameValidationMessage,
-  });
-  if (fileNameInput === undefined) return; // cancelled
-
-  const destinationPath = vscode.Uri.joinPath(
-    vscode.Uri.file(destinationDir),
-    normalizeArchiveExportName(fileNameInput),
-  ).fsPath;
-
-  if (await archiveFileExists(destinationPath)) {
-    const choice = await vscode.window.showWarningMessage(
-      packArchiveOverwriteConfirmMessage({
-        packName: chosen.manifest.name,
-        fileName: path.basename(destinationPath),
-      }),
-      { modal: true },
-      'Overwrite',
-    );
-    if (choice !== 'Overwrite') {
-      diagnosticsChannel.appendLine(
-        `Export cancelled for pack "${chosen.manifest.name}"; nothing was written.`,
-      );
-      return;
-    }
-  }
+  const destinationPath = target.fsPath;
 
   try {
     await writePackArchiveFile(destinationPath, archiveOutcome.bytes);

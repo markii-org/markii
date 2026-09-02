@@ -441,23 +441,24 @@ deliberately cannot do.
 ## Exporting a pack for distribution
 
 Once a pack works from source, VS Code's "Markii: Export Pack" command
-turns it into the prebuilt form and writes it somewhere else. It asks which
-pack when more than one is configured, then where to export it and what to
-name the folder there, prefilled with the pack's own name. It compiles the
-pack and writes `pack.json`, `webview.js`, `webview.css` when the pack has
-styles, and any `scripts/*.lua` into that new folder. If the destination
-already holds files from an earlier export, the command asks before
-replacing them, and it reports where it wrote and how large the result is.
+turns it into the prebuilt form as a single `.mkp` archive. It asks which
+pack when more than one is configured, compiles that pack, then opens a save
+dialog prefilled with the archive's own name, so where the file goes and what
+it is called are one step. The save dialog asks before replacing a file that
+is already there. The command reports where it wrote and how large the
+archive is. A build that fails reports its reason on the Markii output
+channel rather than in the popup, so the full compiler output is available
+without cluttering the notification.
 
 The pack's own source folder is never touched. Obsidian has no export
 command: VS Code is the authoring host and owns pack packaging, while
-Obsidian installs a pack another host produced, as a `.mkp` archive.
+Obsidian installs a pack another host produced. The section below describes
+what the archive holds and how its name is derived.
 
 ## A pack as a single file
 
-A pack can also travel as one file. A `.mkp` archive is a zip of the pack's
-prebuilt form, with the files at the root of the archive rather than inside a
-folder:
+A `.mkp` archive is a zip of the pack's prebuilt form, with the files at the
+root of the archive rather than inside a folder:
 
 ```
 pack.json

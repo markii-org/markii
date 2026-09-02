@@ -87,6 +87,19 @@ function customPropertyNames(body: string): string[] {
   return names;
 }
 
+/** Maps every `--mk-*` custom property declared directly in `body` to its (trimmed) value, for value-level comparison rather than just presence. */
+function customPropertyValues(body: string): Record<string, string> {
+  const values: Record<string, string> = {};
+  const pattern = /(--mk-[a-z0-9-]+)\s*:\s*([^;]+);/g;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(body)) !== null) {
+    const name = match[1];
+    const value = match[2];
+    if (name && value !== undefined) values[name] = value.trim();
+  }
+  return values;
+}
+
 /** `#rgb`/`#rrggbb`(`aa`), `rgb()`/`rgba()`, `hsl()`/`hsla()`, or a handful of common CSS named colors — deliberately excludes `transparent`/`currentColor`/`inherit`, which are theme-neutral keywords rather than colors needing remapping. */
 const RAW_COLOR_PATTERN =
   /#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(|:\s*(red|blue|green|yellow|black|white|gray|grey|orange|purple|pink|brown|cyan|magenta|navy|teal|maroon|olive|silver|gold|indigo|violet|coral|salmon)\b/i;
@@ -116,6 +129,12 @@ describe('doc.css token architecture', () => {
       b.selector.includes('prefers-color-scheme') &&
       /--mk-bg\s*:/.test(b.body),
   );
+  const forcedLightBlock = blocks.find(
+    (b) => b.selector === ".doc[data-mk-theme='light']",
+  );
+  const forcedDarkBlock = blocks.find(
+    (b) => b.selector === ".doc[data-mk-theme='dark']",
+  );
 
   it('finds the Tier 1 token-definition block', () => {
     expect(tier1Block).toBeDefined();
@@ -129,6 +148,11 @@ describe('doc.css token architecture', () => {
 
   it('finds the dark-mode Tier 1 override block', () => {
     expect(darkModeBlock).toBeDefined();
+  });
+
+  it('finds the data-mk-theme light and dark override blocks', () => {
+    expect(forcedLightBlock).toBeDefined();
+    expect(forcedDarkBlock).toBeDefined();
   });
 
   it('declares exactly the 19 Tier 1 tokens, no more, no fewer', () => {
@@ -162,16 +186,30 @@ describe('doc.css token architecture', () => {
     expect(fallbackBlock?.body).toMatch(/#[0-9a-fA-F]{6}\b/);
   });
 
-  it('contains no raw color literal anywhere outside the token-definition block, the @supports fallback block, and the dark-mode block', () => {
-    if (!tier1Block || !fallbackBlock || !supportsBlock || !darkModeBlock) {
+  it('contains no raw color literal anywhere outside the token-definition block, the @supports fallback block, the dark-mode block, and the data-mk-theme override blocks', () => {
+    if (
+      !tier1Block ||
+      !fallbackBlock ||
+      !supportsBlock ||
+      !darkModeBlock ||
+      !forcedLightBlock ||
+      !forcedDarkBlock
+    ) {
       throw new Error(
-        'expected token/fallback/@supports/dark-mode blocks to exist',
+        'expected token/fallback/@supports/dark-mode/data-mk-theme blocks to exist',
       );
     }
-    // Remove the four allowed spans (by descending start index, so earlier
+    // Remove the allowed spans (by descending start index, so earlier
     // removals don't shift the indices of ones still pending) and scan
     // whatever remains.
-    const spans = [tier1Block, fallbackBlock, supportsBlock, darkModeBlock]
+    const spans = [
+      tier1Block,
+      fallbackBlock,
+      supportsBlock,
+      darkModeBlock,
+      forcedLightBlock,
+      forcedDarkBlock,
+    ]
       .map((b) => [b.start, b.end] as const)
       .sort((a, b) => b[0] - a[0]);
     let remainder = stripped;
@@ -219,5 +257,64 @@ describe('doc.css token architecture', () => {
     expect(RAW_COLOR_PATTERN.test('color: red;')).toBe(true);
     expect(RAW_COLOR_PATTERN.test('color: var(--mk-fg);')).toBe(false);
     expect(RAW_COLOR_PATTERN.test('border-color: transparent;')).toBe(false);
+  });
+
+  /**
+   * The 15 Tier 1 color tokens (every Tier 1 token except the four width
+   * presets, which the dark palette and the `data-mk-theme` overrides never
+   * touch, per `doc.css`'s own "DARK MODE" comment).
+   */
+  const TIER1_COLOR_TOKENS = [
+    '--mk-bg',
+    '--mk-raised',
+    '--mk-fg',
+    '--mk-surface',
+    '--mk-surface-strong',
+    '--mk-border',
+    '--mk-muted',
+    '--mk-faint',
+    '--mk-accent',
+    '--mk-on-accent',
+    '--mk-info',
+    '--mk-success',
+    '--mk-warning',
+    '--mk-danger',
+    '--mk-limit',
+  ];
+
+  it("the .doc[data-mk-theme='light'] block restates the full light Tier 1 set, matching the plain .doc defaults exactly", () => {
+    if (!tier1Block || !forcedLightBlock) {
+      throw new Error('expected the Tier 1 and forced-light blocks to exist');
+    }
+    const lightDefaults = customPropertyValues(tier1Block.body);
+    const forcedLight = customPropertyValues(forcedLightBlock.body);
+    expect(new Set(Object.keys(forcedLight))).toEqual(
+      new Set(TIER1_COLOR_TOKENS),
+    );
+    for (const token of TIER1_COLOR_TOKENS) {
+      expect(forcedLight[token], token).toBe(lightDefaults[token]);
+    }
+  });
+
+  it("the .doc[data-mk-theme='dark'] block declares the full dark Tier 1 set", () => {
+    if (!forcedDarkBlock) {
+      throw new Error('expected the forced-dark block to exist');
+    }
+    const forcedDark = customPropertyValues(forcedDarkBlock.body);
+    expect(new Set(Object.keys(forcedDark))).toEqual(
+      new Set(TIER1_COLOR_TOKENS),
+    );
+  });
+
+  it('the automatic (media-guarded) dark block and the forced-dark block carry the exact same values, so they cannot drift apart', () => {
+    if (!darkModeBlock || !forcedDarkBlock) {
+      throw new Error('expected the dark-mode and forced-dark blocks to exist');
+    }
+    const automatic = customPropertyValues(darkModeBlock.body);
+    const forced = customPropertyValues(forcedDarkBlock.body);
+    expect(automatic).toEqual(forced);
+    expect(new Set(Object.keys(automatic))).toEqual(
+      new Set(TIER1_COLOR_TOKENS),
+    );
   });
 });

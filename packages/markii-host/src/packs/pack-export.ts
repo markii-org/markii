@@ -1,24 +1,25 @@
 /**
- * The compose-and-write half of the "export this pack" host command (issue
- * #16: VS Code is the AUTHORING host and owns pack packaging; Obsidian only
- * ever CONSUMES a pack another host produced). Compiles a pack with the
- * existing `./pack-build.ts` machinery — through its normal host-owned
- * cache, exactly like an ordinary preview build; only its OUTPUT is copied
- * — then writes a clean, distributable folder at a CALLER-CHOSEN
- * destination: `pack.json` (copied verbatim from the pack's own folder),
- * `webview.js`, `webview.css` when the build emitted one, and every
- * `*.lua` file the pack's own `scripts/` directory holds.
+ * The internal compose-and-write path pack packaging builds on (VS Code is
+ * the AUTHORING host and owns pack packaging; Obsidian only ever CONSUMES a
+ * pack another host produced). Compiles a pack with the existing
+ * `./pack-build.ts` machinery, through its normal host-owned cache, exactly
+ * like an ordinary preview build; only its OUTPUT is copied. Then writes a
+ * clean, distributable folder at a CALLER-CHOSEN destination: `pack.json`
+ * (copied verbatim from the pack's own folder), `webview.js`,
+ * `webview.css` when the build emitted one, and every `*.lua` file the
+ * pack's own `scripts/` directory holds.
  *
- * The pack's SOURCE folder is NEVER written to. This supersedes issue
- * #15's `./pack-distribute.ts`, which wrote the same prebuilt artifacts
- * INTO the pack's own folder — that in-folder behavior is removed
- * entirely; exporting a pack no longer touches the folder it was authored
- * in at all.
+ * The pack's SOURCE folder is NEVER written to. Two callers compose
+ * through this module: `apps/vscode/src/packs/build-bundled-packs.ts`
+ * writes a pack's build output into the extension's own `dist/packs` at
+ * build time, and `./pack-export-archive.ts` reuses its `PackExportBuilder`
+ * and `PackExportFs` types to build the ONE shape the "Markii: Export
+ * Pack" command itself produces, a single `.mkp` archive.
  *
  * Filesystem access is injected (`PackExportFs`), matching every other
  * module in this directory, so this module is testable with in-memory
  * fakes and carries no host-specific save-dialog/notification behavior of
- * its own — `confirmOverwrite` is the one piece of user interaction, and it
+ * its own; `confirmOverwrite` is the one piece of user interaction, and it
  * is injected too.
  */
 import * as path from 'node:path';

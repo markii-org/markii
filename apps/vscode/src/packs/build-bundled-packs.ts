@@ -9,10 +9,10 @@
  * `scripts/*.lua` when the pack ships any). `./bundled-packs.ts` is the
  * RUNTIME half that discovers and merges this output back in.
  *
- * Deliberately reuses `@markii/host`'s pack machinery end to end —
+ * Deliberately reuses `@markii/host`'s pack machinery end to end:
  * `discoverPacks` (manifest validation), `buildPackRegistrationScript`
  * (the esbuild-wasm compiler), and `exportPack` (the compile-then-write
- * path the `markii.exportPack` command already runs) — rather than a
+ * path that lays a pack's prebuilt form out on disk), rather than a
  * second pack compiler living only in the build script. `./export-pack.ts`'s
  * `createNodePackExportFs` is imported directly: it has no `vscode`
  * dependency of its own, so this module stays clean of one too.

@@ -66,7 +66,7 @@
 
 /*
  * ============================================================================
- * DARK MODE (exported documents only)
+ * DARK MODE (exported documents only) + the data-mk-theme override
  * ============================================================================
  * `@markii/html`'s `exportHtmlDocument` produces a standalone page with no
  * host page around it, so this is the one place `doc.css` picks a dark
@@ -84,6 +84,28 @@
  *
  * A viewer with no preference at all matches neither `light` nor `dark`
  * media features, so the Tier 1 defaults above stay exactly as they were.
+ *
+ * `data-mk-theme` lets a page or a host that manages its OWN theme opt out
+ * of, or force, this automatic palette: `data-mk-theme="light"` keeps the
+ * light Tier 1 defaults no matter what the OS prefers, and
+ * `data-mk-theme="dark"` applies the dark palette unconditionally, outside
+ * any media query. Both are attribute selectors on `.doc`
+ * (specificity 0,2,0), deliberately higher than the plain `.doc` this
+ * media block uses (0,1,0) and higher than the host theme layers above, so
+ * an explicit attribute always wins over both the OS preference and a
+ * host's own remap. The media block above is left at plain `.doc` on
+ * purpose, NOT `.doc:not([data-mk-theme="light"])`: raising ITS specificity
+ * to (0,2,0) would make it beat the host theme layers too (which redeclare
+ * on plain `.doc` and rely on winning by being later in the cascade at
+ * equal specificity), breaking both hosts on a dark-preference machine. A
+ * host that never sets `data-mk-theme` sees no change at all; the two
+ * attribute values are an opt-in a page reaches for deliberately.
+ *
+ * The dark values below are declared twice on purpose (media-guarded and
+ * forced), because `@media` cannot wrap only part of a selector list and
+ * the forced path must apply even when the OS prefers light. `doc-css-
+ * tokens.test.ts` asserts the two blocks carry identical values so they
+ * cannot drift apart under a one-sided edit.
  */
 @media (prefers-color-scheme: dark) {
   .doc {
@@ -104,6 +126,44 @@
     --mk-danger: #f87171;
     --mk-limit: #a78bfa;
   }
+}
+
+.doc[data-mk-theme='light'] {
+  --mk-bg: #fff;
+  --mk-raised: #fff;
+  --mk-fg: #1a1a1a;
+  --mk-surface: #f4f4f5;
+  --mk-surface-strong: #f0f0f2;
+  --mk-border: #e4e4e7;
+  --mk-muted: #52525b;
+  --mk-faint: #94a3b8;
+  --mk-accent: #3b82f6;
+  --mk-on-accent: #fff;
+
+  --mk-info: #3b82f6;
+  --mk-success: #15803d;
+  --mk-warning: #d97706;
+  --mk-danger: #dc2626;
+  --mk-limit: #7c3aed;
+}
+
+.doc[data-mk-theme='dark'] {
+  --mk-bg: #14161c;
+  --mk-raised: #1c1f28;
+  --mk-fg: #e5e7eb;
+  --mk-surface: #1e212b;
+  --mk-surface-strong: #262a36;
+  --mk-border: #333846;
+  --mk-muted: #a1a8ba;
+  --mk-faint: #6b7280;
+  --mk-accent: #60a5fa;
+  --mk-on-accent: #0b1220;
+
+  --mk-info: #60a5fa;
+  --mk-success: #4ade80;
+  --mk-warning: #fbbf24;
+  --mk-danger: #f87171;
+  --mk-limit: #a78bfa;
 }
 
 /*
