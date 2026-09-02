@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, Setting } from 'obsidian';
+import { App, MarkdownView, PluginSettingTab, Setting } from 'obsidian';
 import type MarkiiPlugin from './main.js';
 import type { PreviewPlacement, PreviewWidth } from './settings.js';
 import { MARKII_PREVIEW_VIEW_TYPE, MarkiiPreviewView } from './view.js';
@@ -78,6 +78,19 @@ export class MarkiiSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.hideScriptBlocks)
           .onChange((value) => {
             void this.applyHideScriptBlocks(value);
+          });
+      });
+
+    new Setting(containerEl)
+      .setName('Render components in Reading view')
+      .setDesc(
+        'Shows a .mk.md note’s components inline in Reading view, not only in the Markii Preview pane. Turning this off only stops that inline rendering; the preview pane keeps working.',
+      )
+      .addToggle((toggle) => {
+        toggle
+          .setValue(this.plugin.settings.inlineReadingView)
+          .onChange((value) => {
+            void this.applyInlineReadingView(value);
           });
       });
 
@@ -232,6 +245,29 @@ export class MarkiiSettingTab extends PluginSettingTab {
     )) {
       if (leaf.view instanceof MarkiiPreviewView) {
         leaf.view.applyScriptBlockVisibility();
+      }
+    }
+  }
+
+  /**
+   * Writes the inline-Reading-view preference and re-renders every open
+   * `.mk.md` note that is currently showing Reading view, so the toggle
+   * changes what a reader is looking at right away rather than only on the
+   * next time the note is opened. `MarkdownView.previewMode` is Reading
+   * view's own preview surface regardless of the plugin: calling its
+   * `rerender(true)` re-runs the registered post processors, this one
+   * (`src/reading-view.ts`) included, which reads the setting fresh.
+   */
+  private async applyInlineReadingView(value: boolean): Promise<void> {
+    this.plugin.settings = {
+      ...this.plugin.settings,
+      inlineReadingView: value,
+    };
+    await this.plugin.saveSettings();
+    for (const leaf of this.app.workspace.getLeavesOfType('markdown')) {
+      const view = leaf.view;
+      if (view instanceof MarkdownView) {
+        view.previewMode.rerender(true);
       }
     }
   }

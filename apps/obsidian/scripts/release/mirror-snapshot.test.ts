@@ -32,6 +32,14 @@ describe('isSnapshotSource', () => {
     expect(isSnapshotSource('src/styles.css')).toBe(true);
   });
 
+  it('excludes the authored root README, which mirrorReadme composes from', () => {
+    expect(isSnapshotSource('README.md')).toBe(false);
+  });
+
+  it('does not exclude a README nested elsewhere', () => {
+    expect(isSnapshotSource('src/README.md')).toBe(true);
+  });
+
   it('excludes .DS_Store anywhere', () => {
     expect(isSnapshotSource('.DS_Store')).toBe(false);
     expect(isSnapshotSource('src/.DS_Store')).toBe(false);
@@ -87,6 +95,22 @@ describe('mirrorReadme', () => {
     expect(readme).toContain('Hide script blocks');
     expect(readme).toContain('Turn off script execution on this device');
     expect(readme).toContain('stored on this device');
+  });
+
+  it('keeps the mirror-only sections around the authored body', () => {
+    const readme = mirrorReadme('0.2.0');
+    const intro = readme.indexOf('read-only release mirror');
+    const install = readme.indexOf('## Install');
+    const sourceNote = readme.indexOf('## About the source in this repository');
+    const license = readme.indexOf('## License');
+    expect(intro).toBeGreaterThanOrEqual(0);
+    expect(install).toBeGreaterThan(intro);
+    expect(sourceNote).toBeGreaterThan(install);
+    expect(license).toBeGreaterThan(sourceNote);
+  });
+
+  it('leaves no unsubstituted version placeholder', () => {
+    expect(mirrorReadme('0.2.0')).not.toContain('{{VERSION}}');
   });
 
   it('states the PDF command degrades to writing HTML rather than failing', () => {

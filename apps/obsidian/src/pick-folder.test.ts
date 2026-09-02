@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { folderPickerAvailable, pickFolder } from './pick-folder';
+import {
+  folderPickerAvailable,
+  packArchivePickerAvailable,
+  pickFolder,
+  pickPackArchiveFile,
+} from './pick-folder';
 
 const okDialog = (paths: string[], canceled = false) => ({
   dialog: {
@@ -65,5 +70,30 @@ describe('folderPickerAvailable', () => {
         throw new Error('boom');
       }),
     ).toBe(false);
+  });
+});
+
+describe('pickPackArchiveFile', () => {
+  it('returns the chosen archive path', async () => {
+    await expect(
+      pickPackArchiveFile(() => okDialog(['/home/u/ana.mkp'])),
+    ).resolves.toBe('/home/u/ana.mkp');
+  });
+
+  it('is undefined when the user cancels', async () => {
+    await expect(
+      pickPackArchiveFile(() => okDialog(['/ignored'], true)),
+    ).resolves.toBeUndefined();
+  });
+
+  it('degrades to undefined when no picker is available', async () => {
+    await expect(pickPackArchiveFile(() => undefined)).resolves.toBeUndefined();
+  });
+});
+
+describe('packArchivePickerAvailable', () => {
+  it('is true only when a usable dialog is present', () => {
+    expect(packArchivePickerAvailable(() => okDialog(['/x']))).toBe(true);
+    expect(packArchivePickerAvailable(() => ({}))).toBe(false);
   });
 });

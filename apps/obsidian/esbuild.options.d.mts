@@ -11,3 +11,7 @@ export declare function buildEmbeddedAssets(
   watchFiles: string[];
 }>;
 export declare function copyEsbuildWasm(): void;
+export declare function buildEmbeddedBundledPacks(): Promise<{
+  payloadBase64: string;
+  watchFiles: string[];
+}>;

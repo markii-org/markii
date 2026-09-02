@@ -159,8 +159,51 @@ describe('exportNoteCascade', () => {
     expect(archiveEntryNames(bytes!)).toEqual([
       'b.html',
       'c.html',
+      'index.html',
       'root.html',
     ]);
+  });
+
+  it('writes an index.html listing every exported note, linking to its file', async () => {
+    const vault = createFakeVault({
+      'root.mk.md': '# Root\n\nSee [[b.mk.md]].\n',
+      'b.mk.md': '# B\n\nEnd.\n',
+    });
+    const { fs, binary } = createFs();
+    await exportNoteCascade(baseRequest(vault, fs, 'root.mk.md'));
+
+    const bytes = binary.get('root.zip')!;
+    const indexHtml = readZipEntryText(bytes, 'index.html');
+    expect(indexHtml).toContain('<a href="root.html">root</a>');
+    expect(indexHtml).toContain('<a href="b.html">b</a>');
+    // Root first, matching the breadth-first walk order.
+    expect(indexHtml.indexOf('root.html')).toBeLessThan(
+      indexHtml.indexOf('b.html'),
+    );
+  });
+
+  it('suffixes a walked note literally named index rather than colliding with the index page', async () => {
+    const vault = createFakeVault({
+      'root.mk.md': '# Root\n\nSee [[index.mk.md]].\n',
+      'index.mk.md': '# Not the archive index\n',
+    });
+    const { fs, binary } = createFs();
+    const outcome = await exportNoteCascade(
+      baseRequest(vault, fs, 'root.mk.md'),
+    );
+    if (outcome.kind !== 'cascade') throw new Error('unreachable');
+
+    const noteEntry = outcome.notes.find((n) => n.path === 'index.mk.md');
+    expect(noteEntry?.entryName).not.toBe('index.html');
+    expect(noteEntry?.entryName).toBe('index-2.html');
+
+    const bytes = binary.get('root.zip')!;
+    // The archive's own index page still lists every exported note by
+    // title, including the one literally called "index", under ITS OWN
+    // suffixed file name.
+    const indexHtml = readZipEntryText(bytes, 'index.html');
+    expect(indexHtml).toContain('<a href="index-2.html">index</a>');
+    expect(archiveEntryNames(bytes)).toContain(noteEntry!.entryName);
   });
 
   it('does not loop forever on a cycle and exports each note once', async () => {
@@ -254,7 +297,9 @@ describe('exportNoteCascade', () => {
     expect(entryNames).toContain('dup-2.html');
 
     const bytes = binary.get('root.zip')!;
-    expect(archiveEntryNames(bytes)).toEqual([...entryNames].sort());
+    expect(archiveEntryNames(bytes)).toEqual(
+      [...entryNames, 'index.html'].sort(),
+    );
   });
 
   it('records a linked note that could not be read, without failing the export', async () => {
@@ -283,7 +328,7 @@ describe('exportNoteCascade', () => {
     expect(binary.has('root.zip')).toBe(true);
   });
 
-  it('one archive entry per exported note', async () => {
+  it('one archive entry per exported note, plus the index page', async () => {
     const vault = createFakeVault({
       'root.mk.md': '[[b.mk.md]]\n[[c.mk.md]]',
       'b.mk.md': 'leaf',
@@ -296,7 +341,7 @@ describe('exportNoteCascade', () => {
     if (outcome.kind !== 'cascade') throw new Error('unreachable');
 
     const entries = archiveEntryNames(binary.get('root.zip')!);
-    expect(entries.length).toBe(outcome.notes.length);
+    expect(entries.length).toBe(outcome.notes.length + 1);
   });
 
   it('reports a failed outcome, rather than throwing, when the root note cannot be read', async () => {
@@ -312,6 +357,27 @@ describe('exportNoteCascade', () => {
       baseRequest(vault, fs, 'root.mk.md'),
     );
     expect(outcome.kind).toBe('failed');
+  });
+
+  it('carries hideScriptBlocks into every exported note', async () => {
+    const vault = createFakeVault({
+      'root.mk.md':
+        '```lua {name=refresh}\nreturn 1\n```\n\nSee [[b.mk.md]].\n',
+      'b.mk.md': '```lua {name=other}\nreturn 2\n```\n',
+    });
+    const { fs, binary } = createFs();
+    await exportNoteCascade({
+      ...baseRequest(vault, fs, 'root.mk.md'),
+      hideScriptBlocks: true,
+    });
+
+    const bytes = binary.get('root.zip')!;
+    expect(readZipEntryText(bytes, 'root.html')).toContain(
+      'doc mk-export--hide-scripts',
+    );
+    expect(readZipEntryText(bytes, 'b.html')).toContain(
+      'doc mk-export--hide-scripts',
+    );
   });
 
   it('reports a failed outcome when writing the archive fails', async () => {

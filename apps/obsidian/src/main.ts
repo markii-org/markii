@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { readFile as nodeReadFile } from 'node:fs/promises';
 import {
   FileSystemAdapter,
   MarkdownView,
@@ -21,6 +22,7 @@ import type { LocalSettings } from './local-settings.js';
 import {
   DEFAULT_PACK_SETTINGS,
   PACK_SETTINGS_STORAGE_KEY,
+  appendPackFolder,
   normalizePackSettings,
 } from './packs/pack-settings.js';
 import type { PackSettings } from './packs/pack-settings.js';
@@ -42,6 +44,10 @@ import type {
   InsertableComponent,
 } from '@markii/host';
 import { discoverConfiguredPacks } from './packs/discover-configured-packs.js';
+import {
+  bundledDiscoveredPacks,
+  bundledPackAssets,
+} from './packs/bundled-packs.js';
 import { pickInsertableComponent } from './insert-modals.js';
 import { fenceEditorChanges } from './fence-edits.js';
 import { MarkiiCompletionSuggest } from './complete-suggest.js';
@@ -75,6 +81,17 @@ import { loadPackContext } from './packs/pack-context.js';
 import type { PackContext } from './packs/pack-context.js';
 import { createPackRegistrationBuilder } from './packs/pack-compilation.js';
 import { formatPackDiagnosticLines } from './packs/pack-diagnostics.js';
+import { registerReadingView } from './reading-view.js';
+import { pickPackArchiveFile } from './pick-folder.js';
+import { confirmModal } from './run-modals.js';
+import { createNodeArchiveExtractFs } from './packs/archive-packs.js';
+import {
+  installConsentMessage,
+  installPackDiagnosticLines,
+  installPackFromArchive,
+  installPackNoticeText,
+  installReplaceConfirmMessage,
+} from './packs/install-pack.js';
 
 /**
  * Imports `obsidian` — deliberately NOT unit-tested (Vitest cannot resolve
@@ -151,6 +168,14 @@ export default class MarkiiPlugin extends Plugin {
     );
 
     this.addSettingTab(new MarkiiSettingTab(this.app, this));
+
+    // Reading view (GitHub issue #36): renders a `.mk.md` note's components
+    // inline, wherever Obsidian already shows the note read-only, rather
+    // than only in the separate Markii Preview pane. `.mk.md` only, and
+    // gated by `settings.inlineReadingView` (checked inside the processor
+    // itself, so a later settings-tab toggle takes effect on the note's
+    // next render pass without re-registering anything here).
+    registerReadingView(this);
 
     this.addCommand({
       id: 'open-markii-preview',
@@ -244,6 +269,14 @@ export default class MarkiiPlugin extends Plugin {
         new Notice(
           next ? SCRIPTS_DISABLED_CONFIRMATION : SCRIPTS_ENABLED_CONFIRMATION,
         );
+      },
+    });
+
+    this.addCommand({
+      id: 'install-markii-pack-from-file',
+      name: 'Install Markii pack from file',
+      callback: () => {
+        void this.installPackFromFile();
       },
     });
 
@@ -356,7 +389,11 @@ export default class MarkiiPlugin extends Plugin {
     const preview = this.activePreviewView();
     const fromPreview = preview?.exportPackContext();
     if (fromPreview) return fromPreview;
-    if (preview || this.packSettings.packFolders.length === 0) {
+    const bundledAssets = bundledPackAssets();
+    if (
+      preview ||
+      (bundledAssets.length === 0 && this.packSettings.packFolders.length === 0)
+    ) {
       return undefined;
     }
 
@@ -370,6 +407,7 @@ export default class MarkiiPlugin extends Plugin {
         defaultRegistry,
         {
           cacheDir,
+          bundledPacks: bundledAssets,
           buildRegistrationScript:
             cacheDir === undefined
               ? undefined
@@ -627,6 +665,24 @@ export default class MarkiiPlugin extends Plugin {
   }
 
   /**
+   * The registry `src/reading-view.ts` renders a note's components with:
+   * the currently open Markii Preview's loaded pack registry, when one
+   * exists, so a note's namespaced directives resolve the same way in both
+   * surfaces; otherwise the plain standard set. Deliberately never triggers
+   * an on-demand pack load the way `exportRegistryContext` does for an
+   * export command: Reading view's post processor fires on every scroll
+   * and every edit, so paying a filesystem walk there would be far too
+   * eager. A note whose packs are not yet loaded anywhere still renders
+   * fully: its pack directives fall back to the standard unknown-component
+   * box, per architecture rule 3.
+   */
+  readingViewRegistry(): Registry {
+    return (
+      this.activePreviewView()?.exportPackContext()?.registry ?? defaultRegistry
+    );
+  }
+
+  /**
    * The "Insert Markii component" command (`insert-markii-component`,
    * GitHub issue #17, slice 1): offers every standard component plus every
    * configured pack's components, and inserts the chosen one's directive
@@ -655,7 +711,10 @@ export default class MarkiiPlugin extends Plugin {
       packs = [];
     }
 
-    const catalog = buildComponentCatalog(packs);
+    const catalog = buildComponentCatalog([
+      ...bundledDiscoveredPacks(),
+      ...packs,
+    ]);
     const chosen = await pickInsertableComponent(this.app, catalog);
     if (!chosen) return; // dismissed
 
@@ -731,7 +790,10 @@ export default class MarkiiPlugin extends Plugin {
     } catch {
       packs = [];
     }
-    this.completionCatalog = buildComponentCatalog(packs);
+    this.completionCatalog = buildComponentCatalog([
+      ...bundledDiscoveredPacks(),
+      ...packs,
+    ]);
   }
 
   /**
@@ -759,6 +821,87 @@ export default class MarkiiPlugin extends Plugin {
     return adapter instanceof FileSystemAdapter
       ? adapter.getBasePath()
       : undefined;
+  }
+
+  /**
+   * This plugin's own install destination for "Install Markii pack from
+   * file" (GitHub issue #16): a subdirectory of the plugin's own on-disk
+   * folder, never the workspace, never a folder the user chose, matching
+   * `packCacheDir`'s "plugin machinery, not the user's authored note tree"
+   * posture immediately below. Each installed pack lands under its own
+   * namespace (`./packs/install-pack.ts`), so a device that installs it can
+   * point a new pack-folder-list entry straight at the resulting directory.
+   */
+  private installedPacksDir(): string | undefined {
+    const dir = this.pluginDir();
+    return dir ? path.join(dir, 'installed-packs') : undefined;
+  }
+
+  /**
+   * The "Install Markii pack from file" command (GitHub issue #16): picks a
+   * `.mkp` archive, validates it, asks consent to run its code, asks before
+   * replacing an already-installed pack of the same namespace, and unzips
+   * it into `installedPacksDir()`. Every decision and every user-facing
+   * string lives in `./packs/install-pack.ts`; this method is wiring only.
+   * A successful install still adds the extracted directory to this
+   * device's pack-folder list, the same write `settings-tab.ts`'s "Add a
+   * pack folder" button makes, so the preview actually loads it on next
+   * open.
+   */
+  private async installPackFromFile(): Promise<void> {
+    const archivePath = await pickPackArchiveFile();
+    if (archivePath === undefined) return; // cancelled, or no picker available
+
+    const installRoot = this.installedPacksDir();
+    if (installRoot === undefined) {
+      new Notice('Markii: could not find a folder to install the pack into.');
+      console.error(
+        '[markii] Install Markii pack from file: no plugin directory is available on this install.',
+      );
+      return;
+    }
+
+    let archiveBytes: Uint8Array;
+    try {
+      archiveBytes = new Uint8Array(await nodeReadFile(archivePath));
+    } catch (err) {
+      new Notice(
+        `Markii: could not read "${archivePath}". Open the Markii diagnostics for details.`,
+      );
+      console.error(
+        `[markii] Install Markii pack from file could not read "${archivePath}": ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+      return;
+    }
+
+    const outcome = await installPackFromArchive({
+      archiveBytes,
+      archivePath,
+      installRoot,
+      exists: async (dir) => existsSync(dir),
+      extractFs: createNodeArchiveExtractFs(),
+      confirmConsent: (name) =>
+        confirmModal(this.app, installConsentMessage(name)),
+      confirmReplace: (name) =>
+        confirmModal(this.app, installReplaceConfirmMessage(name)),
+    });
+
+    for (const line of installPackDiagnosticLines(outcome, archivePath)) {
+      console.info(`[markii] ${line}`);
+    }
+    new Notice(installPackNoticeText(outcome, archivePath));
+
+    if (outcome.kind === 'installed') {
+      const nextFolders = appendPackFolder(
+        this.packSettings.packFolders,
+        outcome.installedDir,
+      );
+      if (nextFolders) {
+        this.savePackSettings({ packFolders: nextFolders });
+      }
+    }
   }
 
   /**

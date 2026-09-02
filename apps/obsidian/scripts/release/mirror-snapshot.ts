@@ -1,6 +1,12 @@
 // Builds the read-only source mirror published alongside a plugin release
 // (see mirrorReadme below for what that repository is and why it exists).
-import { copyFileSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
+import {
+  copyFileSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join, relative, sep } from 'node:path';
 
 // A POSIX-style path relative to apps/obsidian. Excludes build output,
@@ -20,14 +26,28 @@ export function isSnapshotSource(relPath: string): boolean {
   if (relPath === 'styles.css') {
     return false;
   }
+  // The root README is the authored source `mirrorReadme` composes the
+  // mirror's own README from, and that composed file is written separately.
+  // Copying it here too would place the monorepo wording in the mirror and
+  // list the path twice.
+  if (relPath === 'README.md') {
+    return false;
+  }
   if (relPath === '.DS_Store' || relPath.endsWith('/.DS_Store')) {
     return false;
   }
   return true;
 }
 
-export function mirrorReadme(version: string): string {
-  return `# Markii for Obsidian
+/**
+ * The mirror repository's README: the authored `apps/obsidian/README.md`,
+ * with `{{VERSION}}` filled in, wrapped in the two sections that only make
+ * sense in the mirror. One authored source, so the install steps, command
+ * list and settings rules cannot drift between the monorepo and the mirror.
+ */
+const README_PATH = new URL('../../README.md', import.meta.url);
+
+const MIRROR_INTRO = `# Markii for Obsidian
 
 This repository is a read-only release mirror. The source of truth is the main
 Markii repository at https://github.com/markii-org/markii, where the plugin
@@ -40,101 +60,40 @@ lost at the next release.
 Issues and pull requests belong on the main repository:
 https://github.com/markii-org/markii. Pull requests opened here cannot be
 merged.
+`;
 
-## Install
-
-Markii is not in the Obsidian community catalogue yet. Two routes install it
-from this repository's releases.
-
-### Zip (recommended)
-
-1. Download \`markii-${version}.zip\` from the Releases page of this repository.
-2. Extract it into your vault's plugin folder, \`<vault>/.obsidian/plugins/\`.
-   The archive holds a single \`markii/\` folder, so you should end up with
-   \`<vault>/.obsidian/plugins/markii/\`.
-3. Restart Obsidian, or reload the community plugin list.
-4. Open Settings, go to Community plugins, and enable Markii.
-
-To update, download the newer zip and extract it over the same folder, then
-reload Obsidian.
-
-This route includes the esbuild-wasm runtime that component packs need in
-order to compile from source, so it works out of the box for any component
-pack that does not ship a prebuilt \`webview.js\`.
-
-### BRAT
-
-1. Install the [obsidian42-BRAT](https://github.com/TfTHacker/obsidian42-brat)
-   plugin from the community catalogue.
-2. In BRAT's settings, add a beta plugin using this repository's URL,
-   \`https://github.com/markii-org/markii-obsidian\`.
-3. BRAT fetches \`manifest.json\`, \`main.js\`, and \`styles.css\` from the
-   latest release and keeps them updated automatically.
-
-With the BRAT install, note scripts and every built-in component work the
-same as the zip install. The one thing it cannot do is compile a component
-pack that ships source rather than a prebuilt \`webview.js\`: that needs the
-esbuild-wasm runtime, which BRAT does not fetch. Add it with the step below
-if you plan to install a pack like that.
-
-To add pack compilation to a BRAT install without reinstalling, download
-\`esbuild-wasm.zip\` from the release and extract it into your plugin folder
-next to \`main.js\`, then reload Obsidian. The plugin looks for that folder
-at load time, so this one extraction enables compiling every pack. BRAT
-updates leave the folder in place.
-
-Markii is desktop only. It runs note scripts inside a terminatable isolate and
-compiles component packs in process, and Obsidian on mobile supports neither.
-
-## Commands
-
-All of these are in the command palette.
-
-- **Open Markii Preview** renders the active \`.mk.md\` note in its own pane.
-- **Run Markii scripts** runs the note's named Lua script blocks and feeds the
-  data-bound components.
-- **Insert Markii component** inserts a chosen component's skeleton at the
-  cursor.
-- **Export Markii note as HTML** writes the note as one self-contained
-  \`.html\` file beside it in the vault, with the last run's values baked in.
-  The file carries its own styles, so it opens anywhere.
-- **Export Markii note as PDF** prints that same file to a \`.pdf\` beside the
-  note. If this device cannot print, the command writes the HTML file instead
-  and says so.
-- **Toggle Markii script execution** turns script execution on or off for this
-  device. While it is off, no note runs its scripts, whether you press Run,
-  open a note with run on open enabled, or wait for a scheduled refresh. Your
-  network and bundle grants are left exactly as they are.
-- **Show Markii diagnostics** prints the current preview's pack diagnostics to
-  the developer console.
-
-## Settings
-
-Open Settings, go to Community plugins, and click Markii.
-
-Preview placement, preview width, and **Hide script blocks** are ordinary
-plugin settings: they are cosmetic, and they travel with the vault. Hiding
-script blocks leaves the collapsed script markers out of the preview, for a
-note meant to be read rather than edited. It hides the source blocks only: a
-script that fails still marks the value it feeds, and a manual run still says
-that it failed.
-
-The settings under **Scripting**, run on open, the scheduled refresh interval,
-and **Turn off script execution on this device**, are stored on this device
-only. They are never synced and never shared, because each of them decides
-whether code runs.
-
-## About the source in this repository
+const MIRROR_SOURCE_NOTE = `## About the source in this repository
 
 The files beside this README are the plugin's TypeScript sources, copied from
 \`apps/obsidian\` in the main repository. They are here to read. They do not
 build on their own: the plugin is built from the monorepo, where its workspace
 dependencies live.
-
-## License
-
-MIT, the same as the main repository. See LICENSE.
 `;
+
+export function mirrorReadme(version: string): string {
+  const authored = readFileSync(README_PATH, 'utf8');
+
+  // Drop the authored title and its lead paragraphs: the mirror opens with
+  // its own explanation of what the repository is. Everything from the first
+  // `## ` heading onward is shared text.
+  const bodyStart = authored.indexOf('\n## ');
+  const body = bodyStart === -1 ? authored : authored.slice(bodyStart + 1);
+
+  const licenseStart = body.indexOf('## License');
+  const beforeLicense =
+    licenseStart === -1 ? body : body.slice(0, licenseStart);
+  const license = licenseStart === -1 ? '' : body.slice(licenseStart);
+
+  return [
+    MIRROR_INTRO,
+    beforeLicense.trimEnd(),
+    '',
+    MIRROR_SOURCE_NOTE,
+    license.trimEnd(),
+    '',
+  ]
+    .join('\n')
+    .replace(/\{\{VERSION\}\}/g, version);
 }
 
 // Directory names that are never descended into. This is a prune during the

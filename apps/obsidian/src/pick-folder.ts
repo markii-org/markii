@@ -5,6 +5,10 @@
  * a shell-escaped path like `Obsidian\ Github` ends up in the list, naming
  * a folder that does not exist; picking one cannot produce that.
  *
+ * `pickPackArchiveFile` (GitHub issue #16) is the same reach, aimed at a
+ * single `.mkp` file instead of a folder, for "Install Markii pack from
+ * file" (`../main.ts`).
+ *
  * Obsidian's own API has no folder picker, so this reaches for Electron's
  * dialog, which the desktop app's renderer exposes. That reach is
  * DEFENSIVE on purpose: the module is resolved at call time, every shape it
@@ -22,6 +26,7 @@ interface OpenDialogLike {
   showOpenDialog(options: {
     properties: string[];
     title?: string;
+    filters?: { name: string; extensions: string[] }[];
   }): Promise<{ canceled: boolean; filePaths: string[] }>;
 }
 
@@ -90,4 +95,42 @@ export function folderPickerAvailable(
   } catch {
     return false;
   }
+}
+
+/**
+ * Opens a native file chooser filtered to `.mkp` pack archives, and
+ * resolves with the absolute path picked, or `undefined` when the user
+ * cancelled or no picker is available. Same never-throw, never-reject
+ * contract as `pickFolder`.
+ */
+export async function pickPackArchiveFile(
+  load: () => unknown = loadElectron,
+): Promise<string | undefined> {
+  let dialog: OpenDialogLike | undefined;
+  try {
+    dialog = dialogFrom(load());
+  } catch {
+    return undefined;
+  }
+  if (!dialog) return undefined;
+
+  try {
+    const result = await dialog.showOpenDialog({
+      properties: ['openFile'],
+      title: 'Choose a Markii pack archive',
+      filters: [{ name: 'Markii pack', extensions: ['mkp'] }],
+    });
+    if (result.canceled) return undefined;
+    const first = result.filePaths[0];
+    return typeof first === 'string' && first.length > 0 ? first : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Whether a native file picker is available at all — same purpose as `folderPickerAvailable`, for the "Install Markii pack from file" command. */
+export function packArchivePickerAvailable(
+  load: () => unknown = loadElectron,
+): boolean {
+  return folderPickerAvailable(load);
 }

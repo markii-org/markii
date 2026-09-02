@@ -177,6 +177,12 @@ export interface NoteExportRequest {
    * as the author wrote it.
    */
   readonly embedImages?: ExportImageReader;
+  /**
+   * Hides the collapsed script marker in the exported file, mirroring the
+   * "Hide script blocks" setting (`../settings.ts`'s `hideScriptBlocks`)
+   * this vault's preview was showing. Defaults to `false`.
+   */
+  readonly hideScriptBlocks?: boolean;
 }
 
 /** `exportNoteAsPdf`'s extra inputs: the printer, and the folder it may print from. */
@@ -212,6 +218,9 @@ async function buildDocument(request: NoteExportRequest): Promise<{
       : {}),
     ...(request.embedImages !== undefined
       ? { embedImages: request.embedImages }
+      : {}),
+    ...(request.hideScriptBlocks !== undefined
+      ? { hideScriptBlocks: request.hideScriptBlocks }
       : {}),
   });
   return {

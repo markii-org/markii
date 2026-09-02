@@ -2,9 +2,11 @@ import { describe, expect, it, afterEach } from 'vitest';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
+import { zipSync } from 'fflate';
 import { createRegistry } from '@markii/react';
 import { loadPackContext } from './pack-context.js';
 import type { PackCompileBuilder } from './pack-context.js';
+import type { BundledPackAsset } from './bundled-packs.js';
 
 const tempDirs: string[] = [];
 
@@ -365,5 +367,290 @@ describe('loadPackContext — namespace collision', () => {
 
     expect(context.packs).toEqual([]); // discover.ts itself already rejects the collision
     expect(context.skipped).toHaveLength(2);
+  });
+});
+
+function bundledManifest(name: string): string {
+  return JSON.stringify({
+    name,
+    engine: 'react',
+    components: { widget: './Widget.tsx' },
+  });
+}
+
+function bundledAsset(
+  name: string,
+  overrides: Partial<BundledPackAsset> = {},
+): BundledPackAsset {
+  return {
+    name,
+    manifestJson: bundledManifest(name),
+    scriptText: registeringScript(name),
+    luaModules: {},
+    ...overrides,
+  };
+}
+
+describe('loadPackContext — bundled packs (docs/packs.md, issue #15)', () => {
+  it('folds a bundled pack in even with no user pack folders configured, ahead of the base registry', async () => {
+    const context = await loadPackContext([], undefined, createRegistry(), {
+      bundledPacks: [bundledAsset('read')],
+    });
+
+    expect(context.namespaces).toEqual(['read']);
+    expect(context.packs).toHaveLength(1);
+    expect(context.packs[0]!.folder).toBe('bundled:read');
+    expect(context.registry['read_widget']).toBeDefined();
+    expect(context.skipped).toEqual([]);
+  });
+
+  it('registers bundled packs before user-configured packs — bundled first in packs/namespaces order', async () => {
+    const root = await makeTempDir();
+    await writePackManifest(path.join(root, 'demo'), 'demo');
+    await writeFile(
+      path.join(root, 'demo', 'webview.js'),
+      registeringScript('demo'),
+    );
+
+    const context = await loadPackContext(['demo'], root, createRegistry(), {
+      bundledPacks: [bundledAsset('read'), bundledAsset('dash')],
+    });
+
+    expect(context.namespaces).toEqual(['read', 'dash', 'demo']);
+    expect(context.packs.map((pack) => pack.manifest.name)).toEqual([
+      'read',
+      'dash',
+      'demo',
+    ]);
+    expect(context.registry['read_widget']).toBeDefined();
+    expect(context.registry['dash_widget']).toBeDefined();
+    expect(context.registry['demo_widget']).toBeDefined();
+  });
+
+  it('a user pack claiming a namespace a bundled pack already holds is skipped, with a reason, and the bundled pack still loads', async () => {
+    const root = await makeTempDir();
+    await writePackManifest(path.join(root, 'user-read'), 'read');
+    await writeFile(
+      path.join(root, 'user-read', 'webview.js'),
+      // A registering script for a DIFFERENT component name, so a test
+      // assertion that this script never ran can't be confused with the
+      // bundled pack's own "widget" component.
+      `window.__markiiRegisterPack(
+        JSON.stringify({ name: 'read', engine: 'react', components: { impostor: './Impostor.tsx' } }),
+        { impostor: { component: function () { return null; }, inline: false } },
+      );`,
+    );
+
+    const context = await loadPackContext(
+      ['user-read'],
+      root,
+      createRegistry(),
+      { bundledPacks: [bundledAsset('read')] },
+    );
+
+    // Bundled pack wins the namespace outright.
+    expect(context.packs).toHaveLength(1);
+    expect(context.packs[0]!.folder).toBe('bundled:read');
+    expect(context.registry['read_widget']).toBeDefined();
+    expect(context.registry['read_impostor']).toBeUndefined();
+
+    // The user pack is skipped with a locatable reason naming the real folder.
+    expect(context.skipped).toHaveLength(1);
+    expect(context.skipped[0]!.folder).toBe(path.join(root, 'user-read'));
+    expect(context.skipped[0]!.reason).toContain(
+      'already used by a bundled pack',
+    );
+  });
+
+  it("merges a bundled pack's Lua modules into packModules alongside user packs'", async () => {
+    const root = await makeTempDir();
+    await writePackManifest(path.join(root, 'demo'), 'demo');
+    await mkdir(path.join(root, 'demo', 'scripts'), { recursive: true });
+    await writeFile(
+      path.join(root, 'demo', 'scripts', 'a.lua'),
+      'return "user"',
+    );
+
+    const context = await loadPackContext(['demo'], root, createRegistry(), {
+      bundledPacks: [
+        bundledAsset('read', { luaModules: { 'b.lua': 'return "bundled"' } }),
+      ],
+    });
+
+    expect(context.packModules.read).toEqual({ 'b.lua': 'return "bundled"' });
+    expect(context.packModules.demo).toEqual({ 'a.lua': 'return "user"' });
+  });
+
+  it("a bundled pack whose stylesheet is present contributes it to stylesheets, ahead of user packs'", async () => {
+    const root = await makeTempDir();
+    await writePackManifest(path.join(root, 'demo'), 'demo');
+    await writeFile(
+      path.join(root, 'demo', 'webview.js'),
+      registeringScript('demo'),
+    );
+
+    const context = await loadPackContext(['demo'], root, createRegistry(), {
+      bundledPacks: [bundledAsset('read', { cssText: '.mk-read_widget {}' })],
+    });
+
+    expect(context.stylesheets).toEqual([
+      { namespace: 'read', cssText: '.mk-read_widget {}' },
+    ]);
+  });
+
+  it('a bundled pack whose script throws is skipped, with a reason, and never crashes the load', async () => {
+    const context = await loadPackContext([], undefined, createRegistry(), {
+      bundledPacks: [
+        bundledAsset('read', { scriptText: 'throw new Error("boom");' }),
+      ],
+    });
+
+    expect(context.packs).toHaveLength(1); // still discovered
+    expect(context.skipped).toHaveLength(1);
+    expect(context.skipped[0]!.reason).toContain('boom');
+    expect(Object.keys(context.registry)).not.toContain('read_widget');
+  });
+
+  it('a malformed bundled manifest is recorded as invalid rather than crashing the load', async () => {
+    const context = await loadPackContext([], undefined, createRegistry(), {
+      bundledPacks: [bundledAsset('bad', { manifestJson: 'not json' })],
+    });
+
+    expect(context.packs).toEqual([]);
+    expect(context.skipped).toHaveLength(1);
+    expect(context.skipped[0]!.reason).toContain('invalid');
+  });
+
+  it('with no bundledPacks option at all, behaves exactly as before (backward compatible default)', async () => {
+    const root = await makeTempDir();
+    await writePackManifest(path.join(root, 'demo'), 'demo');
+
+    const context = await loadPackContext(['demo'], root, createRegistry());
+
+    expect(context.packs).toHaveLength(1);
+    expect(context.packs[0]!.manifest.name).toBe('demo');
+  });
+});
+
+/** Builds a well-formed `.mkp` archive's bytes for a pack of `name` (GitHub issue #16). */
+function archiveBytes(options: {
+  name: string;
+  withStylesheet?: boolean;
+  withScript?: boolean;
+  scriptText?: string;
+}): Uint8Array {
+  const encoder = new TextEncoder();
+  const files: Record<string, Uint8Array> = {
+    'pack.json': encoder.encode(
+      JSON.stringify({
+        name: options.name,
+        engine: 'react',
+        components: { widget: './Widget.tsx' },
+      }),
+    ),
+    'webview.js': encoder.encode(
+      options.scriptText ?? registeringScript(options.name),
+    ),
+  };
+  if (options.withStylesheet) {
+    files['webview.css'] = encoder.encode(`.${options.name}_widget {}`);
+  }
+  if (options.withScript) {
+    files['scripts/util.lua'] = encoder.encode('return "archived"');
+  }
+  return zipSync(files);
+}
+
+describe('loadPackContext — a configured entry naming a .mkp archive file', () => {
+  it('loads a valid .mkp entirely from the archive: registers its component, its stylesheet, and its Lua module, never compiling anything', async () => {
+    const root = await makeTempDir();
+    const archivePath = path.join(root, 'ana.mkp');
+    await writeFile(
+      archivePath,
+      archiveBytes({ name: 'ana', withStylesheet: true, withScript: true }),
+    );
+
+    const context = await loadPackContext(['ana.mkp'], root, createRegistry());
+
+    expect(context.namespaces).toEqual(['ana']);
+    expect(context.packs).toHaveLength(1);
+    expect(context.skipped).toEqual([]);
+    expect(context.registry['ana_widget']).toBeDefined();
+    expect(context.stylesheets).toEqual([
+      { namespace: 'ana', cssText: '.ana_widget {}' },
+    ]);
+    expect(context.packModules.ana).toEqual({
+      'util.lua': 'return "archived"',
+    });
+  });
+
+  it('a folder pack and a .mkp archive pack both load in the same pass', async () => {
+    const root = await makeTempDir();
+    const packDir = path.join(root, 'demo');
+    await writePackManifest(packDir, 'demo');
+    await writeFile(
+      path.join(packDir, 'webview.js'),
+      registeringScript('demo'),
+    );
+    const archivePath = path.join(root, 'ana.mkp');
+    await writeFile(archivePath, archiveBytes({ name: 'ana' }));
+
+    const context = await loadPackContext(
+      ['demo', 'ana.mkp'],
+      root,
+      createRegistry(),
+    );
+
+    expect(context.namespaces.slice().sort()).toEqual(['ana', 'demo']);
+    expect(context.registry['demo_widget']).toBeDefined();
+    expect(context.registry['ana_widget']).toBeDefined();
+    expect(context.skipped).toEqual([]);
+  });
+
+  it('an invalid .mkp is skipped with a reason, and never crashes the load', async () => {
+    const root = await makeTempDir();
+    const archivePath = path.join(root, 'bad.mkp');
+    await writeFile(archivePath, new TextEncoder().encode('not a zip'));
+
+    const context = await loadPackContext(['bad.mkp'], root, createRegistry());
+
+    expect(context.packs).toEqual([]);
+    expect(context.skipped).toHaveLength(1);
+  });
+
+  it('a .mkp archive pack sharing a namespace with a folder pack drops both, with a diagnostics line for each', async () => {
+    const root = await makeTempDir();
+    const packDir = path.join(root, 'ana');
+    await writePackManifest(packDir, 'ana');
+    const archivePath = path.join(root, 'ana.mkp');
+    await writeFile(archivePath, archiveBytes({ name: 'ana' }));
+
+    const context = await loadPackContext(
+      ['ana', 'ana.mkp'],
+      root,
+      createRegistry(),
+    );
+
+    expect(context.packs).toEqual([]);
+    expect(context.skipped).toHaveLength(2);
+    expect(context.registry['ana_widget']).toBeUndefined();
+  });
+
+  it('a .mkp claiming a namespace a bundled pack already holds is skipped, and the bundled pack wins', async () => {
+    const root = await makeTempDir();
+    const archivePath = path.join(root, 'read.mkp');
+    await writeFile(archivePath, archiveBytes({ name: 'read' }));
+
+    const context = await loadPackContext(
+      ['read.mkp'],
+      root,
+      createRegistry(),
+      { bundledPacks: [bundledAsset('read')] },
+    );
+
+    expect(context.namespaces).toEqual(['read']);
+    expect(context.skipped.some((s) => s.reason.includes('bundled'))).toBe(
+      true,
+    );
   });
 });

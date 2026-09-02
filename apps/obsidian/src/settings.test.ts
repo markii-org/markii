@@ -25,6 +25,7 @@ describe('normalizeSettings', () => {
       previewPlacement: 'main',
       previewWidth: 'normal',
       hideScriptBlocks: false,
+      inlineReadingView: true,
     });
   });
 
@@ -33,11 +34,13 @@ describe('normalizeSettings', () => {
       previewPlacement: 'right-sidebar',
       previewWidth: 'normal',
       hideScriptBlocks: false,
+      inlineReadingView: true,
     });
     expect(normalizeSettings({ previewPlacement: 'main' })).toEqual({
       previewPlacement: 'main',
       previewWidth: 'normal',
       hideScriptBlocks: false,
+      inlineReadingView: true,
     });
   });
 
@@ -59,6 +62,7 @@ describe('normalizeSettings', () => {
         previewPlacement: 'main',
         previewWidth,
         hideScriptBlocks: false,
+        inlineReadingView: true,
       });
     }
   });
@@ -96,6 +100,7 @@ describe('hideScriptBlocks (issue #34)', () => {
       previewPlacement: 'main',
       previewWidth: 'normal',
       hideScriptBlocks: true,
+      inlineReadingView: true,
     });
     expect(normalizeSettings({ hideScriptBlocks: 'yes' })).toEqual(
       DEFAULT_SETTINGS,
@@ -133,5 +138,30 @@ describe('hideScriptBlocks (issue #34)', () => {
       ),
     ].map((match) => match[0]);
     expect(selectors).toHaveLength(1);
+  });
+});
+
+describe('inlineReadingView', () => {
+  it('defaults to on, so Reading view renders components without any setup', () => {
+    expect(DEFAULT_SETTINGS.inlineReadingView).toBe(true);
+    expect(normalizeSettings({}).inlineReadingView).toBe(true);
+  });
+
+  it('accepts a real boolean and falls back on anything else', () => {
+    expect(normalizeSettings({ inlineReadingView: false })).toEqual({
+      previewPlacement: 'main',
+      previewWidth: 'normal',
+      hideScriptBlocks: false,
+      inlineReadingView: false,
+    });
+    expect(normalizeSettings({ inlineReadingView: 'no' })).toEqual(
+      DEFAULT_SETTINGS,
+    );
+    expect(normalizeSettings({ inlineReadingView: 0 })).toEqual(
+      DEFAULT_SETTINGS,
+    );
+    expect(normalizeSettings({ inlineReadingView: null })).toEqual(
+      DEFAULT_SETTINGS,
+    );
   });
 });

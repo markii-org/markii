@@ -27,11 +27,14 @@
  * and nothing in this module or `main.ts`'s wiring of it produces one.
  */
 import {
+  CASCADE_INDEX_FILE_NAME,
   DEFAULT_CASCADE_MAX_DEPTH,
   DEFAULT_CASCADE_MAX_NOTES,
   assignCascadeFileNames,
+  buildCascadeIndexHtml,
   buildNoteExport,
   exportBaseName,
+  exportDocumentTitle,
   rewriteCascadeLinks,
   walkNoteCascade,
   zipExportArchive,
@@ -69,6 +72,13 @@ export interface CascadeExportRequest {
   readonly packCount?: number;
   /** Builds the image reader for one note, bound to that note's own path so a relative image source resolves against the note that wrote it. Omitted embeds no images. */
   readonly embedImagesFor?: (notePath: string) => ExportImageReader;
+  /**
+   * Hides the collapsed script marker in every exported note, mirroring
+   * the "Hide script blocks" setting (`../settings.ts`'s
+   * `hideScriptBlocks`) this vault's preview was showing. Defaults to
+   * `false`.
+   */
+  readonly hideScriptBlocks?: boolean;
 }
 
 /** One note the cascade exported, for the diagnostics surface. */
@@ -154,6 +164,7 @@ export async function exportNoteCascade(
 
     const fileNames = assignCascadeFileNames(
       walk.notes.map((note) => note.path),
+      [CASCADE_INDEX_FILE_NAME],
     );
 
     const exportedNotes: CascadeExportedNote[] = [];
@@ -184,6 +195,9 @@ export async function exportNoteCascade(
         ...(request.embedImagesFor !== undefined
           ? { embedImages: request.embedImagesFor(note.path) }
           : {}),
+        ...(request.hideScriptBlocks !== undefined
+          ? { hideScriptBlocks: request.hideScriptBlocks }
+          : {}),
       });
 
       const entryName =
@@ -197,6 +211,20 @@ export async function exportNoteCascade(
         images: document.images,
       });
     }
+
+    // The archive's entry file (issue #28 slice 3, part 3): a reader who
+    // unzips a cascade has no single note to open first otherwise, so this
+    // lists every exported note by title, in the same breadth-first order
+    // the walk reached them, each linking to its own file.
+    entries.push({
+      name: CASCADE_INDEX_FILE_NAME,
+      text: buildCascadeIndexHtml(
+        exportedNotes.map((note) => ({
+          title: exportDocumentTitle(note.path),
+          fileName: note.entryName,
+        })),
+      ),
+    });
 
     const archivePath = cascadeArchivePath(request.rootPath);
     const archiveBytes = zipExportArchive(entries);

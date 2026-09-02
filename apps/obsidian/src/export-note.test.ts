@@ -111,6 +111,29 @@ describe('exportNoteAsHtml', () => {
     const outcome = await exportNoteAsHtml({ ...NOTE, fs });
     expect(outcome).toEqual({ kind: 'failed', reason: 'disk is full' });
   });
+
+  it('carries hideScriptBlocks into the exported file when the setting is on', async () => {
+    const { fs, text } = createFs();
+    await exportNoteAsHtml({
+      ...NOTE,
+      text: '```lua {name=refresh}\nreturn 1\n```\n',
+      fs,
+      hideScriptBlocks: true,
+    });
+    const written = text.get('reports/week 32.html') ?? '';
+    expect(written).toContain('doc mk-export--hide-scripts');
+  });
+
+  it('leaves the file plain when hideScriptBlocks is omitted', async () => {
+    const { fs, text } = createFs();
+    await exportNoteAsHtml({
+      ...NOTE,
+      text: '```lua {name=refresh}\nreturn 1\n```\n',
+      fs,
+    });
+    const written = text.get('reports/week 32.html') ?? '';
+    expect(written).not.toContain('doc mk-export--hide-scripts');
+  });
 });
 
 describe('exportNoteAsPdf', () => {

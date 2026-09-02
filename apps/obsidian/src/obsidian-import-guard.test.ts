@@ -38,6 +38,14 @@ import { describe, expect, it } from 'vitest';
  * `insert-modals.ts` is. Every piece worth testing in isolation (the row
  * shape, the query slice, the filter, the wording) lives in
  * `./complete-component.ts`.
+ *
+ * `reading-view.ts` was added to this allowlist deliberately when Reading
+ * view rendering landed (GitHub issue #36): it registers a real
+ * `MarkdownPostProcessor` and a `MarkdownRenderChild`, neither of which can
+ * exist without importing `obsidian`, and is untestable regardless of
+ * which file it lives in. Every piece worth testing in isolation (which
+ * section renders, and the wikilink-to-markdown text surgery) lives in
+ * `./reading-view/section-coordinator.ts` and `./reading-view/wikilinks.ts`.
  */
 const ALLOWED_FILES = new Set([
   'main.ts',
@@ -46,6 +54,7 @@ const ALLOWED_FILES = new Set([
   'run-modals.ts',
   'insert-modals.ts',
   'complete-suggest.ts',
+  'reading-view.ts',
 ]);
 
 const IMPORT_PATTERN =

@@ -53,9 +53,16 @@
  * repeated below; keep this in sync with `scripts/workspace-aliases.config.ts`
  * if a package this plugin uses changes location.
  */
-import { copyFileSync, mkdirSync, readFileSync } from 'node:fs';
+import {
+  copyFileSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -99,6 +106,12 @@ const shared = {
 };
 
 const embeddedAssetsFile = path.join(here, 'src', 'run', 'embedded-assets.ts');
+const bundledPacksEmbeddedFile = path.join(
+  here,
+  'src',
+  'packs',
+  'bundled-packs-embedded.ts',
+);
 
 /** @type {import('esbuild').BuildOptions} */
 /**
@@ -239,6 +252,222 @@ export async function buildEmbeddedAssets(overrides = {}) {
 }
 
 /**
+ * The three bundled packs (docs/packs.md's "Bundled packs" section, GitHub
+ * issue #15): plain sources at the repo root's `packs/<name>/`, compiled
+ * into the prebuilt form and embedded into `main.js` the same way the
+ * worker bundle above is, so a 3-file BRAT install carries them without
+ * any esbuild-wasm runtime of its own having to run inside Obsidian.
+ */
+const bundledPackFolders = ['read', 'dash', 'prep'].map((name) =>
+  path.join(repoRoot, 'packs', name),
+);
+
+/** A plugin-owned scratch directory for both the compiled pack cache (`@markii/host`'s `buildPackRegistrationScript`) and the throwaway entry module below — never a pack's own folder (AGENTS.md's cleanliness rule), and already covered by the repo's `dist/` ignore pattern. */
+const bundledPacksCacheDir = path.join(here, 'dist', '.bundled-packs-cache');
+
+/**
+ * Source for a tiny ESM module, compiled and then actually EXECUTED (not
+ * just embedded) at build time — the difference from `workerBuild` above,
+ * which is compiled and shipped to run LATER, inside a Web Worker. This
+ * one needs to run NOW, in this Node build process, because building a
+ * pack's registration script (`@markii/host`'s `buildPackRegistrationScript`)
+ * is what actually produces the `webview.js`/`webview.css` bytes to embed.
+ *
+ * It cannot be `node`-executed directly the way `scripts/generate-doc-css.ts`
+ * is (Node's built-in TypeScript stripping resolves bare `@markii/*`
+ * specifiers to that package's `package.json#main`, `./src/index.ts` for
+ * `@markii/host` — but that file's own relative imports use `.js`
+ * specifiers for sibling `.ts` files, a bundler convention Node's plain
+ * ESM resolver does not follow). Bundling it with esbuild first, through
+ * the same `markiiSrcRoots` alias every other build in this file already
+ * uses, sidesteps that entirely — exactly how `main.js`/`worker.browser.js`
+ * themselves resolve `@markii/*`.
+ */
+const bundledPacksEntrySource = `
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import * as path from 'node:path';
+import { parsePackManifest, packComponents } from '@markii/pack';
+import { buildPackRegistrationScript } from '@markii/host';
+
+function collectLuaModules(scriptsDir) {
+  const modules = {};
+  function walk(dir, rel) {
+    if (!existsSync(dir)) return;
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const relPath = rel ? rel + '/' + entry.name : entry.name;
+      const abs = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(abs, relPath);
+        continue;
+      }
+      if (!entry.name.endsWith('.lua')) continue;
+      modules[relPath] = readFileSync(abs, 'utf8');
+    }
+  }
+  walk(scriptsDir, '');
+  return modules;
+}
+
+export async function buildBundledPackAssets(packFolders, cacheDir) {
+  const assets = [];
+  for (const folder of packFolders) {
+    const manifestJson = readFileSync(path.join(folder, 'pack.json'), 'utf8');
+    const parsed = parsePackManifest(manifestJson);
+    if (!parsed.ok) {
+      throw new Error(
+        'markii: bundled pack at ' + folder + ' has an invalid manifest: ' +
+          parsed.errors.join('; '),
+      );
+    }
+    const manifest = parsed.manifest;
+    const componentPaths = {};
+    for (const listing of packComponents(manifest)) {
+      componentPaths[listing.localName] = path.join(folder, listing.source);
+    }
+    const outcome = await buildPackRegistrationScript(
+      { folder, manifest, componentPaths },
+      cacheDir,
+    );
+    if (outcome.kind !== 'built') {
+      const reason =
+        outcome.kind === 'failed'
+          ? outcome.reason
+          : 'the pack declares no components';
+      throw new Error(
+        'markii: bundled pack "' + manifest.name + '" failed to build: ' + reason,
+      );
+    }
+    const scriptText = readFileSync(outcome.scriptPath, 'utf8');
+    const cssText =
+      outcome.stylesheetPath !== undefined
+        ? readFileSync(outcome.stylesheetPath, 'utf8')
+        : undefined;
+    const luaModules = collectLuaModules(path.join(folder, 'scripts'));
+    assets.push({ name: manifest.name, manifestJson, scriptText, cssText, luaModules });
+  }
+  return assets;
+}
+`;
+
+/** Every file under `dir`, recursively — the bundled packs' own sources, for watch mode: editing `packs/read/source.tsx` must invalidate the embed the same way editing a worker source file already does. */
+function collectFilesRecursive(dir, out) {
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    const abs = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      collectFilesRecursive(abs, out);
+    } else {
+      out.push(abs);
+    }
+  }
+}
+
+/**
+ * Builds and compiles the three bundled packs, returning the base64 payload
+ * `embed-bundled-packs` (below) substitutes into
+ * `src/packs/bundled-packs-embedded.ts`, plus the full set of source files
+ * to watch.
+ *
+ * Throws — refusing the build, the same posture `buildEmbeddedAssets` takes
+ * for an empty worker payload — when a pack fails to compile, or when the
+ * result does not cover all three configured pack folders: a `main.js`
+ * that silently ships fewer bundled packs than the repo actually has is
+ * exactly the "clean is not silent" violation this pattern exists to
+ * prevent for the worker bundle, and the same standard applies here.
+ */
+export async function buildEmbeddedBundledPacks() {
+  const entryBuild = await build({
+    stdin: {
+      contents: bundledPacksEntrySource,
+      resolveDir: here,
+      sourcefile: 'bundled-packs-entry.js',
+      loader: 'ts',
+    },
+    bundle: true,
+    write: false,
+    platform: 'node',
+    // CommonJS, not ESM: `@markii/host`'s `pack-build.ts` picks HOW to load
+    // esbuild-wasm by checking `typeof require === 'function'` and calling
+    // it with a runtime-computed specifier (`resolveRequire`'s doc
+    // comment). Bundled to ESM, esbuild synthesizes a `require` shim that
+    // satisfies that `typeof` check but throws "Dynamic require ... is not
+    // supported" the moment it is actually called with a non-literal
+    // specifier — confirmed empirically. `.cjs` gives the executed entry a
+    // REAL, ambient Node `require`, so `resolveRequire` takes its normal
+    // branch and the dynamic `require('esbuild-wasm/lib/browser.js')`
+    // resolves exactly the way it already does when this same code runs
+    // inside a packaged VS Code extension's CJS bundle.
+    format: 'cjs',
+    target: 'node22',
+    alias: markiiSrcRoots,
+    external: ['esbuild-wasm'],
+    logLevel: 'silent',
+  });
+  const output = entryBuild.outputFiles?.[0];
+  if (!output) {
+    throw new Error(
+      'markii: buildEmbeddedBundledPacks produced no output for the bundled-packs build entry.',
+    );
+  }
+
+  mkdirSync(bundledPacksCacheDir, { recursive: true });
+  const tempEntryPath = path.join(
+    bundledPacksCacheDir,
+    `entry-${String(process.pid)}-${String(Date.now())}.cjs`,
+  );
+  writeFileSync(tempEntryPath, output.text, 'utf8');
+
+  let assets;
+  try {
+    const mod = await import(pathToFileURL(tempEntryPath).href);
+    const buildBundledPackAssets =
+      mod.buildBundledPackAssets ?? mod.default?.buildBundledPackAssets;
+    if (typeof buildBundledPackAssets !== 'function') {
+      throw new Error(
+        'markii: the bundled-packs build entry did not export buildBundledPackAssets.',
+      );
+    }
+    assets = await buildBundledPackAssets(
+      bundledPackFolders,
+      bundledPacksCacheDir,
+    );
+  } finally {
+    try {
+      unlinkSync(tempEntryPath);
+    } catch {
+      // Best-effort cleanup only; a leftover temp file under the ignored
+      // dist/ cache directory is harmless.
+    }
+  }
+
+  if (!Array.isArray(assets) || assets.length !== bundledPackFolders.length) {
+    throw new Error(
+      'markii: buildEmbeddedBundledPacks did not produce all three bundled packs — refusing to embed a partial set.',
+    );
+  }
+
+  const payloadJson = JSON.stringify(assets);
+  const payloadBase64 = Buffer.from(payloadJson, 'utf8').toString('base64');
+  if (payloadBase64 === '') {
+    throw new Error(
+      'markii: buildEmbeddedBundledPacks produced an empty bundled-packs payload.',
+    );
+  }
+
+  const watchFiles = [];
+  for (const folder of bundledPackFolders) {
+    collectFilesRecursive(folder, watchFiles);
+  }
+
+  return { payloadBase64, watchFiles };
+}
+
+/**
  * Builds the `dist/main.js` options object fresh each call, with an
  * esbuild plugin (`embed-runtime-assets`) spliced in that swaps
  * `src/run/embedded-assets.ts`'s placeholder exports for the real,
@@ -327,6 +556,66 @@ export function createMainBuild() {
     },
   };
 
+  /**
+   * Whether `onLoad` substituted `src/packs/bundled-packs-embedded.ts` this
+   * build — the same silent-failure guard `embedRuntimeAssets` above takes
+   * for the worker bundle, applied to the bundled packs' embed instead: a
+   * `main.js` shipping with `EMBEDDED_BUNDLED_PACKS_BASE64` still empty
+   * would silently drop `read`/`dash`/`prep` from every install with no
+   * build error to show for it.
+   */
+  let bundledPacksSubstituted = false;
+  /** @type {{ payloadBase64: string; watchFiles: string[] } | undefined} */
+  let bundledPacksEmbedded;
+
+  /** @type {import('esbuild').Plugin} */
+  const embedBundledPacks = {
+    name: 'embed-bundled-packs',
+    setup(pluginBuild) {
+      pluginBuild.onStart(async () => {
+        bundledPacksSubstituted = false;
+        bundledPacksEmbedded = await buildEmbeddedBundledPacks();
+      });
+      pluginBuild.onLoad(
+        { filter: /bundled-packs-embedded\.ts$/, namespace: 'file' },
+        (args) => {
+          if (args.path !== bundledPacksEmbeddedFile) return undefined;
+          if (!bundledPacksEmbedded) {
+            throw new Error(
+              'markii: embed-bundled-packs onLoad ran before onStart populated the embedded bytes.',
+            );
+          }
+          const contents = [
+            `export const EMBEDDED_BUNDLED_PACKS_BASE64 = ${JSON.stringify(
+              bundledPacksEmbedded.payloadBase64,
+            )};`,
+            '',
+          ].join('\n');
+          bundledPacksSubstituted = true;
+          return {
+            contents,
+            loader: 'ts',
+            watchFiles: bundledPacksEmbedded.watchFiles,
+          };
+        },
+      );
+      pluginBuild.onEnd((result) => {
+        if (result.errors.length > 0) return;
+        if (bundledPacksSubstituted) return;
+        return {
+          errors: [
+            {
+              text:
+                'markii: the embed-bundled-packs plugin never substituted src/packs/bundled-packs-embedded.ts, ' +
+                'so main.js would ship with no bundled read/dash/prep packs. Check that the file still exists ' +
+                'at that path and that the onLoad filter matches it.',
+            },
+          ],
+        };
+      });
+    },
+  };
+
   return {
     ...shared,
     entryPoints: [path.join(here, 'src', 'main.ts')],
@@ -364,7 +653,7 @@ export function createMainBuild() {
     // dev-and-Vitest half of that check; the CJS bundle this build produces
     // never evaluates it. esbuild's warning here is accurate but inert.
     logOverride: { 'empty-import-meta': 'silent' },
-    plugins: [embedRuntimeAssets],
+    plugins: [embedRuntimeAssets, embedBundledPacks],
   };
 }
 

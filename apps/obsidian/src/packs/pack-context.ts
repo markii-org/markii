@@ -49,6 +49,15 @@ import {
   evaluatePackScript,
   installPackRuntime,
 } from './pack-runtime.js';
+import { resolveBundledPacks } from './bundled-packs.js';
+import type { BundledPackAsset } from './bundled-packs.js';
+import {
+  createNodePackBytesReader,
+  mergeArchiveAndFolderPacks,
+  partitionConfiguredPackPaths,
+  resolveArchivePacks,
+} from './archive-packs.js';
+import type { PackBytesReader, ResolvedArchivePack } from './archive-packs.js';
 
 /** One pack stylesheet ready to inject (`../packs/pack-styles.ts`), keyed by the pack's namespace so it can be removed again by the same key. */
 export interface PackStylesheet {
@@ -129,6 +138,31 @@ export interface LoadPackContextOptions {
   readonly readArtifact?: PackArtifactReader;
   /** Whether an absolute path exists on disk — used to detect a prebuilt `webview.js`/`webview.css` (`@markii/host`'s `resolvePrebuiltPack`). Defaults to real `node:fs`'s `existsSync`. Injected so this module stays testable without disk, matching `readArtifact`/`buildRegistrationScript` above. */
   readonly pathExists?: PackPathExists;
+  /**
+   * The three bundled packs (docs/packs.md's "Bundled packs" section,
+   * issue #15), already decoded from `./bundled-packs-embedded.ts`'s
+   * base64 payload. Defaults to `[]` — every existing caller and test that
+   * never passed this keeps working unchanged, seeing no bundled packs
+   * (exactly what a dev/Vitest run's empty placeholder embed already
+   * decodes to). `../view.tsx`/`../main.ts` pass `bundledPackAssets()`.
+   *
+   * Registered BEFORE any user-configured pack (docs/packs.md): evaluated
+   * first, so their entries land first in the registration queue
+   * `buildRenderRegistry` folds left-to-right, and any user pack whose
+   * namespace a bundled pack already claims is dropped from discovery
+   * before it is ever compiled or evaluated, with a line recorded in
+   * `skipped` — the bundled pack wins the namespace outright rather than
+   * the two rejecting each other the way two colliding user packs would.
+   */
+  readonly bundledPacks?: readonly BundledPackAsset[];
+  /**
+   * Reads a `.mkp` archive's raw bytes (`./archive-packs.ts`'s
+   * `PackBytesReader`), for a configured pack-folder-list entry that names
+   * a `.mkp` FILE directly rather than a folder (GitHub issue #16). Defaults
+   * to real `node:fs`. Injected for testability, matching `readArtifact`/
+   * `pathExists` above.
+   */
+  readonly readArchiveBytes?: PackBytesReader;
 }
 
 /** One compiled pack's script text plus, if it has one, its stylesheet text — read once so evaluation and stylesheet collection do not each hit disk separately. */
@@ -244,31 +278,145 @@ export async function loadPackContext(
     buildRegistrationScript = noopBuilder,
     readArtifact = defaultArtifactReader,
     pathExists = existsSync,
+    bundledPacks: bundledAssets = [],
+    readArchiveBytes = createNodePackBytesReader(),
   } = options;
   const homeDir = homedir();
   const folders = resolvePackPaths(configuredFolders, vaultRoot, homeDir);
   const relativeEntries = relativePackEntries(configuredFolders, homeDir);
+  // A configured entry may name a `.mkp` FILE directly rather than a folder
+  // (docs/packs.md's "A pack as a single file", GitHub issue #16): it loads
+  // read-only from the archive, prebuilt form only, and is never compiled.
+  const { folderPaths, archivePaths } = partitionConfiguredPackPaths(folders);
 
-  const discovery = await discoverPacks(folders, createNodeFileReader());
-  const packModules = await loadPackModules(discovery.packs);
+  // Bundled packs (docs/packs.md's "Bundled packs" section) resolve first,
+  // and never touch disk or the esbuild-wasm builder — they arrive already
+  // compiled, embedded into `main.js` at build time. `skipped` starts from
+  // whatever `resolveBundledPacks` itself rejected (a malformed embed, or
+  // two bundled assets sharing a namespace — should never happen from this
+  // repo's own build, but validated rather than trusted).
+  const { resolved: bundledResolved, invalid: bundledInvalid } =
+    resolveBundledPacks(bundledAssets);
+  const bundledNamespaces = new Set(
+    bundledResolved.map((entry) => entry.pack.manifest.name),
+  );
+  const skipped: SkippedPackFolder[] = [...bundledInvalid];
 
-  const skipped: SkippedPackFolder[] = [...discovery.skipped];
+  const discovery = await discoverPacks(folderPaths, createNodeFileReader());
+  skipped.push(...discovery.skipped);
+
+  // `.mkp` archives (docs/packs.md's "A pack as a single file"): resolved
+  // entirely in memory, never compiled — see `./archive-packs.ts`'s top
+  // doc comment for why this plugin needs no on-disk extraction for the
+  // preview path, unlike `apps/vscode`'s equivalent.
+  const { resolved: archiveResolved, skipped: archiveSkipped } =
+    await resolveArchivePacks(archivePaths, readArchiveBytes);
+  skipped.push(...archiveSkipped);
+  const archiveResolvedByFolder = new Map<string, ResolvedArchivePack>(
+    archiveResolved.map((entry) => [entry.pack.folder, entry]),
+  );
+
+  // Folder discovery and archive resolution each check for collisions only
+  // WITHIN their own source, so a namespace shared BETWEEN the two would
+  // otherwise go undetected — `mergeArchiveAndFolderPacks` applies the same
+  // "both claimants dropped" rule across the combined set.
+  const merged = mergeArchiveAndFolderPacks(
+    discovery.packs,
+    archiveResolved.map((entry) => entry.pack),
+  );
+  skipped.push(...merged.skipped);
+
+  // A user-configured pack claiming a namespace a bundled pack already
+  // holds is skipped outright, before it is ever compiled or evaluated —
+  // the bundled pack wins the namespace (docs/packs.md: "This follows the
+  // ordinary collision rule above rather than making an exception to it").
+  // Filtering here, rather than letting both flow into the shared
+  // registration queue, matters because `buildRenderRegistry`'s own
+  // namespace-collision rule rejects BOTH claimants and falls back to
+  // `defaultRegistry` alone — which would also cost the bundled pack its
+  // slot, the opposite of "bundled wins".
+  const userPacks: DiscoveredPack[] = [];
+  for (const pack of merged.packs) {
+    if (bundledNamespaces.has(pack.manifest.name)) {
+      skipped.push({
+        folder: pack.folder,
+        reason: `pack namespace "${pack.manifest.name}" is already used by a bundled pack and was not installed`,
+      });
+      continue;
+    }
+    userPacks.push(pack);
+  }
+
+  // Archive packs never need `loadPackModules`'s directory read (their Lua
+  // modules were already decoded from the archive in memory) or
+  // `resolveCompiledPacks`'s prebuilt/build resolution (their script and
+  // stylesheet text are already decoded too) — only the folder-discovered
+  // packs go through either step.
+  const folderUserPacks = userPacks.filter(
+    (pack) => !archiveResolvedByFolder.has(pack.folder),
+  );
+  const archiveUserPacks = userPacks.filter((pack) =>
+    archiveResolvedByFolder.has(pack.folder),
+  );
+
+  const userPackModules = await loadPackModules(folderUserPacks);
+  const packModules: PackModulesMap = {
+    ...Object.fromEntries(
+      bundledResolved.map((entry) => [
+        entry.pack.manifest.name,
+        entry.luaModules,
+      ]),
+    ),
+    ...Object.fromEntries(
+      archiveUserPacks.map((pack) => [
+        pack.manifest.name,
+        archiveResolvedByFolder.get(pack.folder)!.luaModules,
+      ]),
+    ),
+    ...userPackModules,
+  };
+
   const prebuiltShadowedPacks: {
     readonly name: string;
     readonly folder: string;
   }[] = [];
-  const { compiled: compiledPacks, cssWarnings } = await resolveCompiledPacks(
-    discovery.packs,
-    skipped,
-    prebuiltShadowedPacks,
-    cacheDir,
-    buildRegistrationScript,
-    readArtifact,
-    pathExists,
-  );
+  const { compiled: folderCompiledPacks, cssWarnings } =
+    await resolveCompiledPacks(
+      folderUserPacks,
+      skipped,
+      prebuiltShadowedPacks,
+      cacheDir,
+      buildRegistrationScript,
+      readArtifact,
+      pathExists,
+    );
+  const compiledPacks: CompiledPack[] = [
+    ...archiveUserPacks.map((pack) => {
+      const archived = archiveResolvedByFolder.get(pack.folder)!;
+      return {
+        pack,
+        scriptText: archived.scriptText,
+        cssText: archived.cssText,
+      };
+    }),
+    ...folderCompiledPacks,
+  ];
 
   installPackRuntime();
   const evalFailureNames = new Set<string>();
+  // Bundled packs evaluate FIRST, so their registrations land first in the
+  // queue `buildRenderRegistry` folds left-to-right (docs/packs.md: "They
+  // are registered before any pack a user configured").
+  for (const { pack, scriptText } of bundledResolved) {
+    const result = evaluatePackScript(scriptText);
+    if (!result.ok) {
+      skipped.push({
+        folder: pack.folder,
+        reason: `bundled pack "${pack.manifest.name}" registration script failed to run (${result.reason})`,
+      });
+      evalFailureNames.add(pack.manifest.name);
+    }
+  }
   for (const { pack, scriptText } of compiledPacks) {
     const result = evaluatePackScript(scriptText);
     if (!result.ok) {
@@ -281,26 +429,43 @@ export async function loadPackContext(
   }
   const registrations = collectPackRegistrations();
 
-  const stylesheets: PackStylesheet[] = compiledPacks
-    .filter(
-      (entry) =>
-        entry.cssText !== undefined &&
-        !evalFailureNames.has(entry.pack.manifest.name),
-    )
-    .map((entry) => ({
-      namespace: entry.pack.manifest.name,
-      cssText: entry.cssText!,
-    }));
+  const stylesheets: PackStylesheet[] = [
+    ...bundledResolved
+      .filter(
+        (entry) =>
+          entry.cssText !== undefined &&
+          !evalFailureNames.has(entry.pack.manifest.name),
+      )
+      .map((entry) => ({
+        namespace: entry.pack.manifest.name,
+        cssText: entry.cssText!,
+      })),
+    ...compiledPacks
+      .filter(
+        (entry) =>
+          entry.cssText !== undefined &&
+          !evalFailureNames.has(entry.pack.manifest.name),
+      )
+      .map((entry) => ({
+        namespace: entry.pack.manifest.name,
+        cssText: entry.cssText!,
+      })),
+  ];
 
   const { registry, invalidReasons, collisions, duplicateComposedNames } =
     buildRenderRegistry(registrations, defaultRegistry);
 
+  const packs: DiscoveredPack[] = [
+    ...bundledResolved.map((entry) => entry.pack),
+    ...userPacks,
+  ];
+
   return {
-    packs: discovery.packs,
+    packs,
     packModules,
     registry,
     stylesheets,
-    namespaces: installedNamespaces(discovery.packs),
+    namespaces: installedNamespaces(packs),
     skipped,
     relativeEntries,
     cssWarnings,

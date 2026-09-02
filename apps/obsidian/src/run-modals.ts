@@ -22,6 +22,11 @@ import {
  * `ALLOW_LABEL`/`DONT_ALLOW_LABEL` button labels — the same ones
  * `apps/vscode/src/preview-panel.ts`'s prompt adapters use, so the wording
  * lives in exactly one place regardless of host.
+ *
+ * `confirmModal` (GitHub issue #16) is the same Allow/Don't allow shape,
+ * exported for `../main.ts`'s "Install Markii pack from file" command,
+ * whose consent and replace-confirmation wording lives in
+ * `./packs/install-pack.ts` rather than in a `@markii/host` builder.
  */
 
 /**
@@ -79,6 +84,11 @@ class ConfirmModal extends Modal {
       this.open();
     });
   }
+}
+
+/** A generic Allow/Don't allow confirmation built from a plain message, for a caller that supplies its own wording rather than one of `@markii/host`'s prompt builders. */
+export function confirmModal(app: App, message: string): Promise<boolean> {
+  return new ConfirmModal(app, message).ask();
 }
 
 /** Prompts once for a specific host, worded exactly as `@markii/host`'s `hostPromptMessage`. */

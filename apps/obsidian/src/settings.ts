@@ -69,12 +69,26 @@ export interface MarkiiSettings {
    * unchanged.
    */
   previewWidth: PreviewWidth;
+  /**
+   * Renders a `.mk.md` note's Markii components inline in Obsidian's own
+   * Reading view (`src/reading-view.ts`), not only in the separate Markii
+   * Preview pane. On by default: once installed, a note's callouts,
+   * cards, and other components show up wherever the note is already read,
+   * with no extra step.
+   *
+   * Cosmetic, which is why it belongs in this vault-synced file: it only
+   * decides which view renders components, never whether a script runs.
+   * The `MarkiiPreviewView` pane stays available regardless of this
+   * setting; turning it off only stops the SECOND, inline rendering.
+   */
+  inlineReadingView: boolean;
 }
 
 export const DEFAULT_SETTINGS: MarkiiSettings = {
   previewPlacement: 'main',
   previewWidth: 'normal',
   hideScriptBlocks: false,
+  inlineReadingView: true,
 };
 
 /**
@@ -158,5 +172,9 @@ export function normalizeSettings(data: unknown): MarkiiSettings {
       typeof raw.hideScriptBlocks === 'boolean'
         ? raw.hideScriptBlocks
         : DEFAULT_SETTINGS.hideScriptBlocks,
+    inlineReadingView:
+      typeof raw.inlineReadingView === 'boolean'
+        ? raw.inlineReadingView
+        : DEFAULT_SETTINGS.inlineReadingView,
   };
 }

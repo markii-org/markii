@@ -28,8 +28,10 @@ import {
   promptUnknownHostsModal,
 } from './run-modals.js';
 import { refreshIntervalMsFromSeconds } from './local-settings.js';
+import { emitValuesChanged } from './run/run-events.js';
 import { loadPackContext } from './packs/pack-context.js';
 import type { PackContext } from './packs/pack-context.js';
+import { bundledPackAssets } from './packs/bundled-packs.js';
 import {
   PACK_COMPILATION_UNAVAILABLE_NOTICE,
   compilationUnavailableSkipCount,
@@ -308,6 +310,7 @@ export class MarkiiPreviewView extends ItemView {
       defaultRegistry,
       {
         cacheDir,
+        bundledPacks: bundledPackAssets(),
         // Not `buildPackRegistrationScript` directly: on a three-file
         // install (BRAT, later the community catalogue) the esbuild-wasm
         // runtime is simply not there, since it is deliberately not
@@ -533,6 +536,11 @@ export class MarkiiPreviewView extends ItemView {
           if (this.currentFile?.path !== documentKey) return;
           this.values = mergeArrivingValue(this.values, name, value);
           void this.refresh();
+          // Reading view (`src/reading-view.ts`) has no run of its own to
+          // watch; this is how it learns a value it is already showing
+          // just changed, the same moment this pane's own render picks it
+          // up.
+          emitValuesChanged(documentKey);
         },
       });
 
@@ -545,6 +553,7 @@ export class MarkiiPreviewView extends ItemView {
       this.lastRunFailures = result.failureDetails;
       this.reportRunOutcome(trigger, result.failureDetails);
       await this.refresh();
+      emitValuesChanged(documentKey);
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err);
       console.error('Markii: runScripts failed:', detail);
