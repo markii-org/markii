@@ -1,0 +1,30 @@
+/*
+ * `:read_mark`, a highlighter-style inline marker. Sits inline with
+ * surrounding text, so no outer margin.
+ */
+
+.mk-read_mark {
+  color: var(--mk-fg);
+  border-radius: 2px;
+  padding: 0 0.05em;
+}
+
+.mk-read_mark--insight {
+  background: color-mix(in srgb, var(--mk-info) 26%, var(--mk-bg));
+}
+
+.mk-read_mark--question {
+  background: color-mix(in srgb, var(--mk-warning) 26%, var(--mk-bg));
+}
+
+.mk-read_mark--disagree {
+  background: color-mix(in srgb, var(--mk-danger) 26%, var(--mk-bg));
+}
+
+.mk-read_mark--todo {
+  background: color-mix(in srgb, var(--mk-success) 26%, var(--mk-bg));
+}
+
+.mk-read_mark--neutral {
+  background: color-mix(in srgb, var(--mk-faint) 26%, var(--mk-bg));
+}

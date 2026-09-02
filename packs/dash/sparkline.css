@@ -1,0 +1,55 @@
+/*
+ * `::dash_sparkline` — a compact trend line. A leaf directive, so it sits
+ * on its own line or inside a `:::row` cell; its root is inline-flex so it
+ * hugs the SVG rather than stretching. No outer margin: the document owns
+ * vertical rhythm.
+ */
+
+.mk-dash_sparkline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  vertical-align: middle;
+}
+
+.mk-dash_sparkline__svg {
+  display: block;
+}
+
+.mk-dash_sparkline__line {
+  fill: none;
+  stroke: var(--mk-accent);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.mk-dash_sparkline__label {
+  font-size: 0.85rem;
+  color: var(--mk-muted);
+  white-space: nowrap;
+}
+
+.mk-dash_sparkline__value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--mk-fg);
+}
+
+.mk-dash_sparkline--empty {
+  color: var(--mk-faint);
+}
+
+.mk-dash_sparkline__placeholder {
+  display: inline-block;
+  min-width: 2rem;
+  text-align: center;
+}
+
+.mk-dash_sparkline--stale {
+  opacity: 0.7;
+}
+
+.mk-dash_sparkline--error {
+  opacity: 0.5;
+}

@@ -1,0 +1,66 @@
+{
+  "name": "prep",
+  "version": "1.0.0",
+  "engine": "react",
+  "components": {
+    "q": {
+      "source": "./q.tsx",
+      "description": "A question card whose answer stays hidden behind a collapsed \"Answer\" region, with an optional difficulty level and topic tag.",
+      "kind": "container",
+      "attributes": [
+        {
+          "name": "q",
+          "description": "The question, shown in the card header above the collapsed answer."
+        },
+        {
+          "name": "level",
+          "description": "The difficulty tag. An unrecognized value shows as written, styled neutral.",
+          "values": ["easy", "medium", "hard"]
+        },
+        {
+          "name": "topic",
+          "description": "A small neutral tag next to the level."
+        }
+      ]
+    },
+    "topic": {
+      "source": "./topic.tsx",
+      "description": "A topic header row with a one-to-five confidence rating drawn as filled and empty dots.",
+      "kind": "leaf",
+      "attributes": [
+        {
+          "name": "name",
+          "description": "The topic, for when bracket content is not used."
+        },
+        {
+          "name": "confidence",
+          "description": "A confidence rating from 1 to 5, drawn as filled and empty dots."
+        }
+      ]
+    },
+    "quiz": {
+      "source": "./quiz.tsx",
+      "description": "The questions a note already contains, collected by a script into one worked-through list with each answer behind a click-to-reveal region.",
+      "kind": "leaf",
+      "attributes": [
+        {
+          "name": "data",
+          "description": "The bound quiz: an object with a questions array of {q, topic, level, answer}.",
+          "required": true
+        }
+      ]
+    },
+    "pitfall": {
+      "source": "./pitfall.tsx",
+      "description": "A common-mistake callout with its own marker and accent, separate from the standard callout styling.",
+      "kind": "container",
+      "attributes": [
+        {
+          "name": "title",
+          "description": "The heading above the note.",
+          "default": "Common mistake"
+        }
+      ]
+    }
+  }
+}

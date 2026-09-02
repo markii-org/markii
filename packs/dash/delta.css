@@ -1,0 +1,65 @@
+/*
+ * `:dash_delta` — an inline change indicator. Sits inline with
+ * surrounding text, so no outer margin. Triangles are plain CSS borders,
+ * no SVG needed for a shape this simple.
+ */
+
+.mk-dash_delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  vertical-align: middle;
+  font-variant-numeric: tabular-nums;
+}
+
+.mk-dash_delta__arrow {
+  display: inline-block;
+  width: 0;
+  height: 0;
+  border-left: 0.32rem solid transparent;
+  border-right: 0.32rem solid transparent;
+}
+
+.mk-dash_delta__arrow--up {
+  border-bottom: 0.45rem solid var(--mk-success);
+}
+
+.mk-dash_delta__arrow--down {
+  border-top: 0.45rem solid var(--mk-danger);
+}
+
+.mk-dash_delta__arrow--flat {
+  width: 0.5rem;
+  height: 2px;
+  background: var(--mk-muted);
+}
+
+.mk-dash_delta__value {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.mk-dash_delta__label {
+  font-size: 0.85rem;
+  color: var(--mk-muted);
+}
+
+.mk-dash_delta__value--up {
+  color: var(--mk-success);
+}
+
+.mk-dash_delta__value--down {
+  color: var(--mk-danger);
+}
+
+.mk-dash_delta__value--flat {
+  color: var(--mk-muted);
+}
+
+.mk-dash_delta--stale {
+  opacity: 0.7;
+}
+
+.mk-dash_delta--error {
+  opacity: 0.5;
+}

@@ -1,0 +1,35 @@
+/*
+ * `:::read_quote`, a cited passage. No outer margin; the document owns
+ * vertical rhythm.
+ */
+
+.mk-read_quote {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.75rem 1rem;
+  border-left: 3px solid var(--mk-border);
+  background: var(--mk-surface);
+  border-radius: 0 8px 8px 0;
+}
+
+.mk-read_quote__passage {
+  margin: 0;
+  color: var(--mk-fg);
+  font-style: italic;
+}
+
+.mk-read_quote__citation {
+  align-self: flex-end;
+  font-size: 0.8rem;
+  font-style: normal;
+  color: var(--mk-muted);
+}
+
+.mk-read_quote__note {
+  font-size: 0.85rem;
+  font-style: normal;
+  color: var(--mk-muted);
+  border-top: 1px solid var(--mk-border);
+  padding-top: 0.35rem;
+}

@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "../tsconfig.dev.json",
+  "compilerOptions": {
+    // A pack imports its own CSS (`import './q.css'`), which esbuild-wasm
+    // resolves at load time. `tsc` needs to be told those are not modules
+    // it must resolve types for.
+    "allowArbitraryExtensions": true,
+    "noEmit": true
+  },
+  "include": ["**/*.ts", "**/*.tsx"]
+}

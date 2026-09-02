@@ -1,0 +1,126 @@
+/*
+ * `:::prep_q`, a question card. No outer margin; the document owns
+ * vertical rhythm between cards.
+ */
+
+.mk-prep_q {
+  border: 1px solid var(--mk-border);
+  border-radius: 8px;
+  background: var(--mk-raised);
+  overflow: hidden;
+}
+
+.mk-prep_q__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.6rem 0.9rem;
+  background: var(--mk-surface);
+  border-bottom: 1px solid var(--mk-border);
+}
+
+.mk-prep_q__question {
+  flex: 1 1 12rem;
+  min-width: 0;
+  font-weight: 600;
+  color: var(--mk-fg);
+}
+
+.mk-prep_q__tags {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  flex: none;
+}
+
+.mk-prep_q__level {
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.mk-prep_q__level--easy {
+  color: var(--mk-success-ink);
+  background: var(--mk-success-strong-fill);
+}
+
+.mk-prep_q__level--medium {
+  color: var(--mk-warning-ink);
+  background: var(--mk-warning-strong-fill);
+}
+
+.mk-prep_q__level--hard {
+  color: var(--mk-danger-ink);
+  background: var(--mk-danger-strong-fill);
+}
+
+.mk-prep_q__level--other {
+  color: var(--mk-muted);
+  background: var(--mk-surface-strong);
+}
+
+.mk-prep_q__topic {
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  color: var(--mk-muted);
+  background: var(--mk-surface-strong);
+}
+
+.mk-prep_q__summary {
+  cursor: pointer;
+  padding: 0.45rem 0.9rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--mk-muted);
+  list-style: none;
+}
+
+.mk-prep_q__summary::-webkit-details-marker {
+  display: none;
+}
+
+.mk-prep_q__summary::before {
+  content: '';
+  display: inline-block;
+  width: 0.4rem;
+  height: 0.4rem;
+  margin-inline-end: 0.45rem;
+  border-inline-end: 1.5px solid var(--mk-faint);
+  border-block-end: 1.5px solid var(--mk-faint);
+  transform: rotate(-45deg);
+  vertical-align: 0.1rem;
+}
+
+.mk-prep_q__reveal[open] .mk-prep_q__summary::before {
+  transform: rotate(45deg);
+}
+
+.mk-prep_q__summary:focus-visible {
+  outline: 1px solid var(--mk-accent);
+  outline-offset: -2px;
+}
+
+.mk-prep_q__body {
+  padding: 0 0.9rem 0.75rem;
+  color: var(--mk-fg);
+}
+
+.mk-prep_q__body--open {
+  padding-block-start: 0.75rem;
+}
+
+.mk-prep_q__body > :first-child {
+  margin-block-start: 0;
+}
+
+.mk-prep_q__body ul,
+.mk-prep_q__body ol {
+  margin: 0;
+  padding-inline-start: 1.25rem;
+}

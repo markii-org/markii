@@ -10,7 +10,8 @@
   ],
   "scripts": {
     "test": "npm run test --workspaces --if-present",
-    "build": "npm run build --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present && npm run typecheck:packs",
+    "typecheck:packs": "tsc -p packs/tsconfig.json",
     "build:dist": "npm run build:dist -w @markii/core && npm run build:dist -w @markii/stdlib && npm run build:dist -w @markii/bundle && npm run build:dist -w @markii/pack && npm run build:dist -w @markii/runtime && npm run build:dist -w @markii/lua && npm run build:dist -w @markii/react && npm run build:dist -w @markii/html",
     "lint": "eslint . && prettier --check .",
     "dev": "npm run dev --workspace apps/playground"

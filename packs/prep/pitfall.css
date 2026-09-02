@@ -1,0 +1,51 @@
+/*
+ * `:::prep_pitfall`, a common-mistake block. Kept visually apart from the
+ * standard `callout`: an inset accent edge on the danger token, a rotated
+ * square marker, and a small uppercase heading. No outer margin; the
+ * document owns vertical rhythm.
+ */
+
+.mk-prep_pitfall {
+  padding: 0.6rem 0.9rem;
+  border-radius: 6px;
+  border-inline-start: 4px solid var(--mk-danger);
+  background: color-mix(in srgb, var(--mk-danger) 8%, var(--mk-surface));
+}
+
+.mk-prep_pitfall__head {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-block-end: 0.35rem;
+}
+
+.mk-prep_pitfall__marker {
+  display: inline-block;
+  width: 0.45rem;
+  height: 0.45rem;
+  flex: none;
+  background: var(--mk-danger);
+  transform: rotate(45deg);
+}
+
+.mk-prep_pitfall__title {
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--mk-danger-ink);
+}
+
+.mk-prep_pitfall__body {
+  color: var(--mk-fg);
+}
+
+.mk-prep_pitfall__body > :first-child {
+  margin-block-start: 0;
+}
+
+.mk-prep_pitfall__body ul,
+.mk-prep_pitfall__body ol {
+  margin: 0;
+  padding-inline-start: 1.25rem;
+}

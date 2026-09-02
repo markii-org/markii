@@ -1,0 +1,23 @@
+/*
+ * `:read_at`, an inline timestamp chip. Sits inline with surrounding
+ * text, so no outer margin.
+ */
+
+.mk-read_at {
+  display: inline-block;
+  padding: 0.05rem 0.4rem;
+  border-radius: 4px;
+  background: var(--mk-surface);
+  color: var(--mk-fg);
+  font-family: ui-monospace, monospace;
+  font-size: 0.85em;
+  text-decoration: none;
+}
+
+a.mk-read_at {
+  color: var(--mk-accent);
+}
+
+a.mk-read_at:hover {
+  text-decoration: underline;
+}

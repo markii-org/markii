@@ -1,0 +1,46 @@
+/*
+ * `:read_term`, an inline term with an optional focus-revealed
+ * definition. Sits inline with surrounding text, so no outer margin.
+ */
+
+.mk-read_term {
+  position: relative;
+  text-decoration: underline dotted var(--mk-muted);
+  text-underline-offset: 2px;
+  cursor: help;
+}
+
+.mk-read_term:focus-visible {
+  outline: 1px solid var(--mk-accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.mk-read_term--plain {
+  text-decoration: underline dotted var(--mk-muted);
+  text-underline-offset: 2px;
+}
+
+.mk-read_term__def {
+  position: absolute;
+  left: 0;
+  bottom: 100%;
+  margin-bottom: 0.3rem;
+  display: none;
+  width: max-content;
+  max-width: 22rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--mk-border);
+  border-radius: 6px;
+  background: var(--mk-raised);
+  color: var(--mk-fg);
+  font-size: 0.8rem;
+  font-style: normal;
+  font-weight: 400;
+  text-decoration: none;
+  z-index: 1;
+}
+
+.mk-read_term:focus-within .mk-read_term__def {
+  display: block;
+}

@@ -1,0 +1,131 @@
+/*
+ * `::read_source`, a compact citation card. No outer margin; the document
+ * owns vertical rhythm.
+ */
+
+.mk-read_source {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--mk-border);
+  border-radius: 8px;
+  background: var(--mk-raised);
+}
+
+.mk-read_source__head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.mk-read_source__badge {
+  flex: none;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: var(--mk-surface-strong);
+  color: var(--mk-muted);
+}
+
+.mk-read_source__badge--book {
+  background: var(--mk-info-strong-fill);
+  color: var(--mk-info-ink);
+}
+
+.mk-read_source__badge--article {
+  background: var(--mk-success-strong-fill);
+  color: var(--mk-success-ink);
+}
+
+.mk-read_source__badge--paper {
+  background: var(--mk-warning-strong-fill);
+  color: var(--mk-warning-ink);
+}
+
+.mk-read_source__badge--podcast,
+.mk-read_source__badge--video,
+.mk-read_source__badge--course,
+.mk-read_source__badge--other {
+  background: var(--mk-surface-strong);
+  color: var(--mk-muted);
+}
+
+.mk-read_source__title {
+  font-weight: 600;
+  color: var(--mk-fg);
+}
+
+.mk-read_source__title--placeholder {
+  font-style: italic;
+  font-weight: 400;
+  color: var(--mk-faint);
+}
+
+.mk-read_source__title-link {
+  color: var(--mk-accent);
+  text-decoration: none;
+}
+
+.mk-read_source__title-link:hover {
+  text-decoration: underline;
+}
+
+.mk-read_source__byline {
+  font-size: 0.85rem;
+  color: var(--mk-muted);
+}
+
+.mk-read_source__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--mk-muted);
+}
+
+.mk-read_source__status-dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  flex: none;
+}
+
+.mk-read_source__status-dot--queued {
+  background: var(--mk-faint);
+}
+
+.mk-read_source__status-dot--reading {
+  background: var(--mk-accent);
+}
+
+.mk-read_source__status-dot--done {
+  background: var(--mk-success);
+}
+
+.mk-read_source__progress-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--mk-surface-strong);
+  overflow: hidden;
+}
+
+.mk-read_source__progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--mk-accent);
+  transition: width 0.2s ease;
+}
+
+.mk-read_source--stale {
+  opacity: 0.7;
+}
+
+.mk-read_source--error {
+  opacity: 0.5;
+}

@@ -1,0 +1,50 @@
+/*
+ * `::dash_gauge` — a semi-circular arc gauge. No outer margin; the
+ * document owns vertical rhythm.
+ */
+
+.mk-dash_gauge {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.mk-dash_gauge__svg {
+  display: block;
+}
+
+.mk-dash_gauge__track {
+  fill: none;
+  stroke: var(--mk-surface-strong);
+  stroke-width: 8;
+  stroke-linecap: round;
+}
+
+.mk-dash_gauge__fill {
+  fill: none;
+  stroke: var(--mk-accent);
+  stroke-width: 8;
+  stroke-linecap: round;
+  transition: stroke-dasharray 0.2s ease;
+}
+
+.mk-dash_gauge__value {
+  fill: var(--mk-fg);
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.mk-dash_gauge__label {
+  font-size: 0.8rem;
+  color: var(--mk-muted);
+}
+
+.mk-dash_gauge--stale {
+  opacity: 0.7;
+}
+
+.mk-dash_gauge--error {
+  opacity: 0.5;
+}

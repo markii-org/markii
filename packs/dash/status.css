@@ -1,0 +1,48 @@
+/*
+ * `:dash_status` — an inline status dot. Sits inline with surrounding
+ * text, so no outer margin.
+ */
+
+.mk-dash_status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  vertical-align: middle;
+}
+
+.mk-dash_status__dot {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  flex: none;
+}
+
+.mk-dash_status__dot--ok {
+  background: var(--mk-success);
+}
+
+.mk-dash_status__dot--warn {
+  background: var(--mk-warning);
+}
+
+.mk-dash_status__dot--down {
+  background: var(--mk-danger);
+}
+
+.mk-dash_status__dot--unknown {
+  background: var(--mk-faint);
+}
+
+.mk-dash_status__label {
+  font-size: 0.9rem;
+  color: var(--mk-fg);
+}
+
+.mk-dash_status--stale {
+  opacity: 0.7;
+}
+
+.mk-dash_status--error {
+  opacity: 0.5;
+}

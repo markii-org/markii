@@ -1,0 +1,118 @@
+{
+  "name": "read",
+  "version": "1.0.0",
+  "engine": "react",
+  "components": {
+    "source": {
+      "source": "./source.tsx",
+      "description": "A compact citation card for a book, article, or other source: type badge, title, author/year, status, and an optional progress bar.",
+      "kind": "leaf",
+      "attributes": [
+        {
+          "name": "data",
+          "description": "A bound progress value: a number, or an object with a progress or value field."
+        },
+        {
+          "name": "title",
+          "description": "The source's title. Without one the card is headed Untitled source."
+        },
+        {
+          "name": "author",
+          "description": "Shown in the byline."
+        },
+        {
+          "name": "year",
+          "description": "Shown in the byline, next to the author."
+        },
+        {
+          "name": "url",
+          "description": "A safe http or https URL, which turns the title into a link."
+        },
+        {
+          "name": "type",
+          "description": "The kind of source. An unrecognized value shows as a neutral badge carrying that text.",
+          "values": ["book", "article", "paper", "podcast", "video", "course"],
+          "default": "book"
+        },
+        {
+          "name": "status",
+          "description": "Where the source stands. Anything else is omitted rather than guessed at.",
+          "values": ["queued", "reading", "done"]
+        },
+        {
+          "name": "progress",
+          "description": "Percent read, 0 to 100. Wins over the pages pair and over the binding."
+        },
+        {
+          "name": "pages-read",
+          "description": "Pages read so far. With pages, it becomes the progress bar."
+        },
+        {
+          "name": "pages",
+          "description": "The total page count. With pages-read, it becomes the progress bar."
+        }
+      ]
+    },
+    "quote": {
+      "source": "./quote.tsx",
+      "description": "A cited passage: the quoted markdown, a right-aligned citation line, and an optional commentary line.",
+      "kind": "container",
+      "attributes": [
+        {
+          "name": "source",
+          "description": "A short citation, such as a title or an author."
+        },
+        {
+          "name": "page",
+          "description": "A page number, rendered as p. 152."
+        },
+        {
+          "name": "loc",
+          "description": "An ebook location, rendered as loc. 240."
+        },
+        {
+          "name": "at",
+          "description": "A timestamp such as 12:34, rendered as given."
+        },
+        {
+          "name": "note",
+          "description": "A short commentary line under the citation."
+        }
+      ]
+    },
+    "term": {
+      "source": "./term.tsx",
+      "description": "An inline term with an optional tooltip and keyboard-focusable definition.",
+      "kind": "inline",
+      "attributes": [
+        {
+          "name": "def",
+          "description": "The definition, shown as a tooltip and a focus-reachable panel."
+        }
+      ]
+    },
+    "at": {
+      "source": "./at.tsx",
+      "description": "A monospace timestamp or page chip, optionally linked to a source with that position appended to the URL.",
+      "kind": "inline",
+      "attributes": [
+        {
+          "name": "href",
+          "description": "A link target. A safe http or https URL gets the timestamp or page appended."
+        }
+      ]
+    },
+    "mark": {
+      "source": "./mark.tsx",
+      "description": "A highlighter-style inline marker, tinted by kind: insight, question, disagree, or todo.",
+      "kind": "inline",
+      "attributes": [
+        {
+          "name": "kind",
+          "description": "The tint of the highlight. A missing or unrecognized value falls back to neutral.",
+          "values": ["insight", "question", "disagree", "todo"]
+        }
+      ]
+    }
+  }
+}

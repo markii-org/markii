@@ -1,0 +1,107 @@
+{
+  "name": "dash",
+  "version": "1.0.0",
+  "engine": "react",
+  "components": {
+    "sparkline": {
+      "source": "./sparkline.tsx",
+      "description": "Inline SVG trend line for a bound series of numbers, auto-scaled with an optional last-value label.",
+      "kind": "leaf",
+      "attributes": [
+        {
+          "name": "data",
+          "description": "The bound numeric series: an array of numbers, or an object with a values array.",
+          "required": true
+        },
+        {
+          "name": "label",
+          "description": "Caption shown next to the last value."
+        }
+      ]
+    },
+    "gauge": {
+      "source": "./gauge.tsx",
+      "description": "Semi-circular arc gauge for a single value against a min/max range.",
+      "kind": "leaf",
+      "attributes": [
+        {
+          "name": "data",
+          "description": "The bound value: a number, or an object with a value field."
+        },
+        {
+          "name": "value",
+          "description": "The value to show. Wins over the binding."
+        },
+        {
+          "name": "min",
+          "description": "Range minimum.",
+          "default": "0"
+        },
+        {
+          "name": "max",
+          "description": "Range maximum.",
+          "default": "100"
+        },
+        {
+          "name": "label",
+          "description": "Caption below the arc."
+        },
+        {
+          "name": "unit",
+          "description": "Suffix appended to the value, such as a percent sign."
+        }
+      ]
+    },
+    "status": {
+      "source": "./status.tsx",
+      "description": "A colored status dot next to a label: ok, warn, or down.",
+      "kind": "inline",
+      "attributes": [
+        {
+          "name": "data",
+          "description": "A bound state string, which overrides the state attribute."
+        },
+        {
+          "name": "state",
+          "description": "The state the dot shows. Anything else renders a neutral unknown dot.",
+          "values": ["ok", "warn", "down"]
+        }
+      ]
+    },
+    "uptime": {
+      "source": "./uptime.tsx",
+      "description": "Segmented bar showing a history of ok/warn/down states, oldest first.",
+      "kind": "leaf",
+      "attributes": [
+        {
+          "name": "data",
+          "description": "The bound history: an array of ok, warn, or down strings, oldest first.",
+          "required": true
+        },
+        {
+          "name": "label",
+          "description": "Caption above the bar."
+        }
+      ]
+    },
+    "delta": {
+      "source": "./delta.tsx",
+      "description": "An up or down triangle with a formatted change value.",
+      "kind": "inline",
+      "attributes": [
+        {
+          "name": "data",
+          "description": "The bound change: a number, or an object with a value field."
+        },
+        {
+          "name": "value",
+          "description": "The change to show. Wins over the binding."
+        },
+        {
+          "name": "unit",
+          "description": "Suffix appended to the value, such as a percent sign."
+        }
+      ]
+    }
+  }
+}
