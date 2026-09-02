@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { conformanceDir, listCorpusNames } from '@markii/core/corpus';
@@ -53,6 +53,9 @@ const FIXTURE_NAMES = [
   '26-container-same-colon-nesting.mk.md',
   '27-row-align-left-wrapper.mk.md',
   '28-text-directive-word-start.mk.md',
+  '29-raw-html.mk.md',
+  '30-directive-name-colon-rejected.mk.md',
+  '31-malformed-leaf-attributes.mk.md',
 ];
 
 describe('conformance corpus renders through @markii/html', () => {
@@ -153,4 +156,71 @@ describe('conformance corpus renders through @markii/html', () => {
     expect(html).not.toContain('title: Release notes');
     expect(html).toContain('mk-callout');
   });
+});
+
+/**
+ * The RENDER-level fixture set (`conformance/render/`, issue-driven by this
+ * change): unlike the parser-level corpus above, these pairs commit the
+ * exact expected HTML string `@markii/html` emits, not an mdast AST — so a
+ * markup/class regression in the fallback boxes, the layout wrapper, the
+ * missing-value marker, or `::table`'s empty state fails a byte-level diff
+ * here, not just a "did it throw" smoke check. Every fixture renders with
+ * NO value store (matching how `04-value-failure`/`05-table` were
+ * authored): a `data=`/`:value[...]` binding is deliberately left unbound so
+ * the fixture captures the quiet MISSING/empty presentation, which is
+ * itself part of what this set is guarding.
+ *
+ * Naming/loading follows `@markii/core`'s top-level corpus convention
+ * (`corpus.ts`'s `<name>.mk.md` + sibling, sorted, nothing silently
+ * skipped) — just with an `.html` sibling extension instead of `.json`,
+ * since the expected artifact here is rendered markup, not an AST.
+ *
+ * Normalization: NONE beyond stripping a single trailing newline from each
+ * side, so the `.html` fixture files can end (or not end) in a newline
+ * without that being part of the comparison. No HTML parsing, attribute
+ * reordering, or whitespace collapsing is applied — the fixtures are
+ * expected to match byte-for-byte otherwise, and `@markii/react`'s own test
+ * (`render.test.tsx`'s "render fixtures" suite) asserts the same class
+ * names and structure for the identical inputs so the two engines cannot
+ * drift apart unnoticed.
+ */
+describe('render-level conformance fixtures (conformance/render/)', () => {
+  const renderFixturesDir = join(conformanceDir(), 'render');
+  const RENDER_FIXTURE_EXTENSION = '.mk.md';
+
+  function listRenderFixtureNames(): string[] {
+    return readdirSync(renderFixturesDir)
+      .filter((entry) => entry.endsWith(RENDER_FIXTURE_EXTENSION))
+      .map((entry) => entry.slice(0, -RENDER_FIXTURE_EXTENSION.length))
+      .sort();
+  }
+
+  const RENDER_FIXTURE_NAMES = [
+    '01-unknown-component',
+    '02-form-mismatch',
+    '03-layout-attributes',
+    '04-value-failure',
+    '05-table',
+  ];
+
+  it('the fixture list above accounts for every *.mk.md file in conformance/render/ (nothing silently skipped)', () => {
+    expect(listRenderFixtureNames()).toEqual(RENDER_FIXTURE_NAMES);
+  });
+
+  for (const name of RENDER_FIXTURE_NAMES) {
+    it(`${name}: renders exactly the committed expected HTML`, () => {
+      const input = readFileSync(
+        join(renderFixturesDir, `${name}.mk.md`),
+        'utf8',
+      );
+      const expectedHtml = readFileSync(
+        join(renderFixturesDir, `${name}.html`),
+        'utf8',
+      );
+      const html = renderMarkToHtml(input, defaultHtmlRegistry);
+      // The only normalization applied — see this describe block's doc
+      // comment.
+      expect(html.replace(/\n$/, '')).toBe(expectedHtml.replace(/\n$/, ''));
+    });
+  }
 });

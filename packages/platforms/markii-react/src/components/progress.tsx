@@ -1,4 +1,5 @@
 import type { ReactElement } from 'react';
+import { formatValue } from '@markii/stdlib';
 import type { MarkComponentProps } from '../registry.js';
 import { safeRead } from '../safe-data.js';
 import { dataStateClassName, failureTitle } from './failure-presentation.js';
@@ -67,6 +68,12 @@ function readProgressFields(data: unknown): ProgressFields {
  * clamped to `[0, max]` and `max` is guarded to be positive. Missing/error
  * binding renders a `0%` bar rather than crashing.
  *
+ * `format`/`decimals` (docs/format.md), when present, format the fraction
+ * `value/max` through `@markii/stdlib`'s `formatValue` for the percent
+ * readout instead of the default rounded integer (e.g.
+ * `::progress{value=1 max=3 format=percent decimals=1}` shows `33.3%`
+ * rather than `33%`); absent `format` keeps exactly today's behavior.
+ *
  * Failure presentation mirrors `ValueDirective` exactly (docs/scripting.md,
  * AGENTS.md's cleanliness principle): the BODY stays quiet — the ordinary
  * bar, at `0%` when nothing resolved — and a failed/stale binding surfaces
@@ -105,6 +112,16 @@ export function Progress({
   const percent = clamp((value / max) * 100, 0, 100);
   const label = attributes.label ?? null;
 
+  // `format`/`decimals` (docs/format.md) format the fraction `value/max`
+  // (e.g. `format=percent decimals=1` -> `42.3%`) in place of the default
+  // rounded integer percent; absent `format` keeps today's exact behavior
+  // rather than adopting `formatValue`'s own default decimal count, so
+  // this attribute pair only ever changes output when an author asks.
+  const rawFormat = attributes.format ?? undefined;
+  const percentText = rawFormat
+    ? formatValue(percent / 100, rawFormat, attributes.decimals ?? undefined)
+    : `${String(Math.round(percent))}%`;
+
   return (
     <div
       className={dataStateClassName('mk-progress', dataStatus, dataFailureKind)}
@@ -121,7 +138,7 @@ export function Progress({
           style={{ width: `${String(percent)}%` }}
         />
       </div>
-      <span className="mk-progress__percent">{Math.round(percent)}%</span>
+      <span className="mk-progress__percent">{percentText}</span>
     </div>
   );
 }

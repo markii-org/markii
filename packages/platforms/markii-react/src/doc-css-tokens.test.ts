@@ -22,6 +22,10 @@ const DOC_CSS_PATH = path.resolve(here, 'doc.css');
  *      `color-mix` support gets today's real light-mode colors instead of
  *      an invalid, vanished declaration (see the file's own comment on
  *      this).
+ *   3. The `@media (prefers-color-scheme: dark)` block, which remaps the
+ *      same Tier 1 tokens to a dark palette for a standalone exported
+ *      document (see the file's own "DARK MODE" comment). These are Tier 1
+ *      values too, just the dark variant, so the same exception applies.
  * Everywhere else, a color must be a `var(--mk-*)` reference (directly or
  * through a component-local `--mk-*-bg`/`--mk-*-fg` variable), never a
  * literal.
@@ -106,6 +110,12 @@ describe('doc.css token architecture', () => {
       !/--mk-bg\s*:/.test(b.body),
   );
   const supportsBlock = blocks.find((b) => b.selector.startsWith('@supports'));
+  const darkModeBlock = blocks.find(
+    (b) =>
+      b.selector.startsWith('@media') &&
+      b.selector.includes('prefers-color-scheme') &&
+      /--mk-bg\s*:/.test(b.body),
+  );
 
   it('finds the Tier 1 token-definition block', () => {
     expect(tier1Block).toBeDefined();
@@ -117,7 +127,11 @@ describe('doc.css token architecture', () => {
     expect(supportsBlock?.selector).toContain('color-mix');
   });
 
-  it('declares exactly the 14 Tier 1 tokens, no more, no fewer', () => {
+  it('finds the dark-mode Tier 1 override block', () => {
+    expect(darkModeBlock).toBeDefined();
+  });
+
+  it('declares exactly the 19 Tier 1 tokens, no more, no fewer', () => {
     const names = tier1Block ? customPropertyNames(tier1Block.body) : [];
     expect(new Set(names)).toEqual(
       new Set([
@@ -136,6 +150,10 @@ describe('doc.css token architecture', () => {
         '--mk-warning',
         '--mk-danger',
         '--mk-limit',
+        '--mk-width-fit',
+        '--mk-width-narrow',
+        '--mk-width-wide',
+        '--mk-width-full',
       ]),
     );
   });
@@ -144,14 +162,16 @@ describe('doc.css token architecture', () => {
     expect(fallbackBlock?.body).toMatch(/#[0-9a-fA-F]{6}\b/);
   });
 
-  it('contains no raw color literal anywhere outside the token-definition block and the @supports fallback block', () => {
-    if (!tier1Block || !fallbackBlock || !supportsBlock) {
-      throw new Error('expected token/fallback/@supports blocks to exist');
+  it('contains no raw color literal anywhere outside the token-definition block, the @supports fallback block, and the dark-mode block', () => {
+    if (!tier1Block || !fallbackBlock || !supportsBlock || !darkModeBlock) {
+      throw new Error(
+        'expected token/fallback/@supports/dark-mode blocks to exist',
+      );
     }
-    // Remove the three allowed spans (by descending start index, so earlier
+    // Remove the four allowed spans (by descending start index, so earlier
     // removals don't shift the indices of ones still pending) and scan
     // whatever remains.
-    const spans = [tier1Block, fallbackBlock, supportsBlock]
+    const spans = [tier1Block, fallbackBlock, supportsBlock, darkModeBlock]
       .map((b) => [b.start, b.end] as const)
       .sort((a, b) => b[0] - a[0]);
     let remainder = stripped;

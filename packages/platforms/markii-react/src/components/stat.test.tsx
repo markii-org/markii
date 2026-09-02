@@ -119,4 +119,52 @@ describe('Stat', () => {
     expect(delta).not.toHaveClass('mk-stat__delta--down');
     expect(delta).not.toHaveClass('mk-stat__delta--flat');
   });
+
+  describe('format/decimals (docs/format.md)', () => {
+    it('formats the headline value with format=compact', () => {
+      const { container } = render(
+        renderMark('::stat{value=2301234 format=compact}', defaultRegistry),
+      );
+      expect(container.querySelector('.mk-stat__value')).toHaveTextContent(
+        '2.3M',
+      );
+    });
+
+    it('formats a bound numeric data value with format=number and decimals', () => {
+      const store = createValueStore({
+        stars: { value: 2301234, status: 'fresh', ranAt: 1 },
+      });
+      const { container } = render(
+        renderMark(
+          '::stat{data=stars format=number decimals=2}',
+          defaultRegistry,
+          store,
+        ),
+      );
+      expect(container.querySelector('.mk-stat__value')).toHaveTextContent(
+        '2,301,234.00',
+      );
+    });
+
+    it('leaves a non-numeric value unchanged under a numeric format', () => {
+      const { container } = render(
+        renderMark(
+          '::stat{value="not a number" format=percent}',
+          defaultRegistry,
+        ),
+      );
+      expect(container.querySelector('.mk-stat__value')).toHaveTextContent(
+        'not a number',
+      );
+    });
+
+    it('an absent format keeps exactly the unformatted value', () => {
+      const { container } = render(
+        renderMark('::stat{value=2301234}', defaultRegistry),
+      );
+      expect(container.querySelector('.mk-stat__value')).toHaveTextContent(
+        '2301234',
+      );
+    });
+  });
 });

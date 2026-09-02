@@ -1,5 +1,6 @@
 import type { ReactElement, ReactNode } from 'react';
 import type { ValueStore, VaultStore } from '@markii/runtime';
+import { formatValue } from '@markii/stdlib';
 import { resolveScopedPath } from '../store-path.js';
 import { failureKindClass, failureTitle } from './failure-presentation.js';
 
@@ -7,6 +8,10 @@ export interface ValueDirectiveProps {
   store: ValueStore | undefined;
   vault?: VaultStore;
   children?: ReactNode;
+  /** `:value[name]{format=...}` (docs/format.md) — the closed `format=` vocabulary; an absent/invalid name behaves as `plain`. */
+  format?: string | null;
+  /** `:value[name]{decimals=N}` — an integer `0`-`6` for `number`/`compact`/`percent`; ignored otherwise. */
+  decimals?: string | null;
 }
 
 /**
@@ -23,50 +28,6 @@ function extractPlainText(node: ReactNode): string {
   if (typeof node === 'number') return String(node);
   if (Array.isArray(node)) return node.map(extractPlainText).join('');
   return '';
-}
-
-/**
- * `String(value)` for a value that may be actively hostile — a revoked
- * `Proxy`, an object with a throwing `toString`/`Symbol.toPrimitive`, an
- * `Object.create(null)` with no `toString` at all. All of those make plain
- * `String(...)` throw; an unrenderable value degrades to the empty string
- * instead, which is what a `null`/`undefined` value already renders as.
- */
-function safeString(value: unknown): string {
-  try {
-    return String(value);
-  } catch {
-    return '';
-  }
-}
-
-/**
- * Coerces a stored value to display text. Objects/arrays render as JSON;
- * `null`/`undefined` render as an empty string.
- *
- * Never throws, for ANY stored value. The `typeof`/`=== null` checks above
- * the `try` are the only operators safe to run unguarded on an untrusted
- * value (a `Proxy` can intercept neither), and the values they accept are
- * primitives `String` can never fail on. Everything below is guarded twice:
- * `JSON.stringify` can throw (a cycle, a `BigInt`, a throwing `toJSON`, a
- * `Proxy` trap) AND can legitimately return `undefined` (a function, a
- * symbol) despite its `string` type signature — which renders as nothing,
- * as it always has — and the `String(value)` fallback can throw for exactly
- * the same value that made `JSON.stringify` throw, so it goes through
- * `safeString` rather than being the last unguarded step.
- */
-function stringifyStoredValue(value: unknown): string {
-  if (typeof value === 'string') return value;
-  if (value === null || value === undefined) return '';
-  if (typeof value === 'number' || typeof value === 'boolean') {
-    return String(value);
-  }
-  try {
-    const json: string | undefined = JSON.stringify(value);
-    return json ?? '';
-  } catch {
-    return safeString(value);
-  }
 }
 
 /**
@@ -89,6 +50,8 @@ export function ValueDirective({
   store,
   vault,
   children,
+  format,
+  decimals,
 }: ValueDirectiveProps): ReactElement {
   const name = extractPlainText(children).trim();
   const resolved = name ? resolveScopedPath({ store, vault }, name) : undefined;
@@ -129,6 +92,8 @@ export function ValueDirective({
   const className =
     resolved.status === 'stale' ? 'mk-value mk-value--stale' : 'mk-value';
   return (
-    <span className={className}>{stringifyStoredValue(resolved.value)}</span>
+    <span className={className}>
+      {formatValue(resolved.value, format ?? undefined, decimals ?? undefined)}
+    </span>
   );
 }

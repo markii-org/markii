@@ -21,6 +21,7 @@ import { Row } from './row.js';
 import { Stat } from './stat.js';
 import { Tab } from './tab.js';
 import { Tabs } from './tabs.js';
+import { Table } from './table.js';
 
 export { Badge } from './badge.js';
 export type { BadgeVariant } from './badge.js';
@@ -46,6 +47,7 @@ export { Row } from './row.js';
 export { Stat } from './stat.js';
 export { Tab, DEFAULT_TAB_LABEL, tabPanel } from './tab.js';
 export { Tabs } from './tabs.js';
+export { Table } from './table.js';
 
 /**
  * Derives a registry entry's `inline` flag from `@markii/stdlib`'s standard
@@ -95,6 +97,7 @@ export const defaultHtmlRegistry: HtmlRegistry = createHtmlRegistry({
   tab: { component: Tab, inline: inlineFromContract('tab') },
   row: { component: Row, inline: inlineFromContract('row') },
   cell: { component: Cell, inline: inlineFromContract('cell') },
+  table: { component: Table, inline: inlineFromContract('table') },
   stat: { component: Stat, inline: inlineFromContract('stat') },
   progress: { component: Progress, inline: inlineFromContract('progress') },
   chart: { component: Chart, inline: inlineFromContract('chart') },

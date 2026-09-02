@@ -61,8 +61,15 @@ export interface HtmlRenderContext {
   esc(value: string): string;
   /** Resolves a `data=`/`:value[...]` name against the current render's store/vault. Never throws. */
   resolve(name: string): ValueResolution;
-  /** The quiet missing/stale/failure-tinted marker for `name`, matching `@markii/react`'s `ValueDirective` markup exactly. Never throws. */
-  valueMarker(name: string): string;
+  /**
+   * The quiet missing/stale/failure-tinted marker for `name`, matching
+   * `@markii/react`'s `ValueDirective` markup exactly. `format`/`decimals`
+   * mirror `:value[name]{format=... decimals=...}` (docs/format.md) and are
+   * threaded through to `@markii/stdlib`'s `formatValue` for a resolved
+   * value; both are optional, defaulting to plain (unformatted) display.
+   * Never throws.
+   */
+  valueMarker(name: string, format?: string, decimals?: string): string;
   data?: unknown;
   dataStatus?: ValueStatus;
   dataError?: string;

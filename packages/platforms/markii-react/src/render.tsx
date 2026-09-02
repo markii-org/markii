@@ -317,7 +317,12 @@ function renderDirectiveContent(
   // interpolation contract itself.
   if (name === VALUE_DIRECTIVE_NAME) {
     return (
-      <ValueDirective store={store} vault={vault}>
+      <ValueDirective
+        store={store}
+        vault={vault}
+        format={attributes.format ?? undefined}
+        decimals={attributes.decimals ?? undefined}
+      >
         {children}
       </ValueDirective>
     );

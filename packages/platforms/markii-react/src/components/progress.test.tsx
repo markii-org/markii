@@ -133,4 +133,27 @@ describe('Progress', () => {
     );
     expect(bar(errored)).toHaveStyle({ width: '0%' });
   });
+
+  describe('format/decimals (docs/format.md)', () => {
+    it('an absent format keeps the default rounded integer percent', () => {
+      const { container } = render(
+        renderMark('::progress{value=1 max=3}', defaultRegistry),
+      );
+      expect(
+        container.querySelector('.mk-progress__percent'),
+      ).toHaveTextContent('33%');
+    });
+
+    it('format=percent with decimals shows fractional percent', () => {
+      const { container } = render(
+        renderMark(
+          '::progress{value=1 max=3 format=percent decimals=1}',
+          defaultRegistry,
+        ),
+      );
+      expect(
+        container.querySelector('.mk-progress__percent'),
+      ).toHaveTextContent('33.3%');
+    });
+  });
 });

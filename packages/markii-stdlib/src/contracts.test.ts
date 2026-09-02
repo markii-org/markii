@@ -64,7 +64,7 @@ describe('STANDARD_COMPONENTS', () => {
     }
   });
 
-  it('seeds exactly the twenty-two components that exist in @markii/react today', () => {
+  it('seeds exactly the twenty-three components that exist in @markii/react today', () => {
     expect(Object.keys(STANDARD_COMPONENTS).sort()).toEqual([
       'badge',
       'callout',
@@ -86,6 +86,7 @@ describe('STANDARD_COMPONENTS', () => {
       'row',
       'stat',
       'tab',
+      'table',
       'tabs',
       'wide',
     ]);
@@ -182,10 +183,12 @@ describe('STANDARD_COMPONENTS', () => {
     expect(STANDARD_COMPONENTS.chart?.kind).toBe('leaf');
   });
 
-  it("stat's attributes are exactly value, label, delta, and trend, all optional", () => {
+  it("stat's attributes are exactly value, label, delta, trend, format, and decimals, all optional", () => {
     const attrs = STANDARD_COMPONENTS.stat?.attributes ?? {};
     expect(Object.keys(attrs).sort()).toEqual([
+      'decimals',
       'delta',
+      'format',
       'label',
       'trend',
       'value',
@@ -203,9 +206,15 @@ describe('STANDARD_COMPONENTS', () => {
     ]);
   });
 
-  it("progress's attributes are exactly value, max, and label, all optional", () => {
+  it("progress's attributes are exactly value, max, label, format, and decimals, all optional", () => {
     const attrs = STANDARD_COMPONENTS.progress?.attributes ?? {};
-    expect(Object.keys(attrs).sort()).toEqual(['label', 'max', 'value']);
+    expect(Object.keys(attrs).sort()).toEqual([
+      'decimals',
+      'format',
+      'label',
+      'max',
+      'value',
+    ]);
     for (const schema of Object.values(attrs)) {
       expect(schema.required).toBeFalsy();
     }

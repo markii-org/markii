@@ -294,6 +294,45 @@ describe(':value[...] built-in', () => {
   });
 });
 
+describe(':value[...]{format=...} (docs/format.md)', () => {
+  it('formats a resolved value with format=compact', () => {
+    const store = createValueStore({
+      stars: { value: 2301234, status: 'fresh' },
+    });
+    const html = renderMarkToHtml(
+      ':value[stars]{format=compact}\n',
+      empty,
+      store,
+    );
+    expect(html).toContain('<span class="mk-value">2.3M</span>');
+  });
+
+  it('formats with decimals applied', () => {
+    const store = createValueStore({
+      ratio: { value: 0.12345, status: 'fresh' },
+    });
+    const html = renderMarkToHtml(
+      ':value[ratio]{format=percent decimals=1}\n',
+      empty,
+      store,
+    );
+    expect(html).toContain('<span class="mk-value">12.3%</span>');
+  });
+
+  it('an absent format keeps the default plain rendering', () => {
+    const store = createValueStore({
+      stars: { value: 2301234, status: 'fresh' },
+    });
+    const html = renderMarkToHtml(':value[stars]\n', empty, store);
+    expect(html).toContain('<span class="mk-value">2301234</span>');
+  });
+
+  it('a missing value still renders the missing marker with format present', () => {
+    const html = renderMarkToHtml(':value[nope]{format=number}\n', empty);
+    expect(html).toContain('mk-value mk-value--missing');
+  });
+});
+
 describe('data= attribute binding', () => {
   const echo: HtmlComponent = (_attrs, _children, ctx) =>
     JSON.stringify({

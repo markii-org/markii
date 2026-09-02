@@ -30,7 +30,7 @@ import {
   EMPTY_INLINE_MARKER_CLASS,
   emptyInlineTitle,
 } from './failure-presentation.js';
-import { stringifyStoredValue } from './value-format.js';
+import { formatValue } from '@markii/stdlib';
 
 /** The hast tag name `@markii/core`'s `toHast` marks every directive with (`to-hast.ts`'s `DIRECTIVE_TAG`). */
 const DIRECTIVE_TAG = 'mk-directive';
@@ -71,7 +71,12 @@ function serialize(children: RootContent[]): string {
  * label when nothing resolved; `mk-value` (+ `mk-value--stale`) with the
  * stringified value otherwise. Never throws.
  */
-function buildValueMarker(name: string, resolved: ValueResolution): string {
+function buildValueMarker(
+  name: string,
+  resolved: ValueResolution,
+  format: string | undefined,
+  decimals: string | undefined,
+): string {
   if (resolved.status === 'missing' || resolved.status === 'error') {
     const failureKind =
       resolved.status === 'error' ? resolved.failureKind : undefined;
@@ -87,7 +92,7 @@ function buildValueMarker(name: string, resolved: ValueResolution): string {
 
   const className =
     resolved.status === 'stale' ? 'mk-value mk-value--stale' : 'mk-value';
-  return `<span class="${className}">${escapeHtml(stringifyStoredValue(resolved.value))}</span>`;
+  return `<span class="${className}">${escapeHtml(formatValue(resolved.value, format, decimals))}</span>`;
 }
 
 /**
@@ -105,12 +110,12 @@ function createBaseContext(scope: ValueScope): HtmlRenderContext {
       if (!trimmed) return { value: undefined, status: 'missing' };
       return resolveScopedPath(scope, trimmed);
     },
-    valueMarker(name: string): string {
+    valueMarker(name: string, format?: string, decimals?: string): string {
       const trimmed = name.trim();
       const resolved = trimmed
         ? resolveScopedPath(scope, trimmed)
         : ({ value: undefined, status: 'missing' } as ValueResolution);
-      return buildValueMarker(trimmed, resolved);
+      return buildValueMarker(trimmed, resolved, format, decimals);
     },
   };
 }
@@ -421,7 +426,13 @@ function renderDirectiveContent(
   scope: ValueScope,
   layoutClassName: string | undefined,
 ): string {
-  if (name === VALUE_DIRECTIVE_NAME) return ctx.valueMarker(plainLabel);
+  if (name === VALUE_DIRECTIVE_NAME) {
+    return ctx.valueMarker(
+      plainLabel,
+      attributes.format ?? undefined,
+      attributes.decimals ?? undefined,
+    );
+  }
 
   const inline = kind === TEXT_DIRECTIVE_KIND;
   const entry = Object.hasOwn(registry, name) ? registry[name] : undefined;

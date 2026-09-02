@@ -1,3 +1,4 @@
+import { formatValue } from '@markii/stdlib';
 import type { HtmlComponent } from '../registry.js';
 import { safeRead } from '../resolve.js';
 import { dataStateClassName, failureTitle } from '../failure-presentation.js';
@@ -88,6 +89,11 @@ export const Stat: HtmlComponent = (attributes, _childrenHtml, ctx) => {
   const fromData = bound.fields;
 
   const value = pick(attributes.value, fromData.value);
+  const formattedValue = formatValue(
+    value,
+    attributes.format ?? undefined,
+    attributes.decimals ?? undefined,
+  );
   const label = pick(attributes.label, fromData.label);
   const delta = pick(attributes.delta, fromData.delta);
   const rawTrend = pick(attributes.trend, fromData.trend);
@@ -109,7 +115,7 @@ export const Stat: HtmlComponent = (attributes, _childrenHtml, ctx) => {
 
   return (
     `<div class="${className}"${titleAttr}>` +
-    `<div class="mk-stat__value">${ctx.esc(value || EMPTY_VALUE)}</div>` +
+    `<div class="mk-stat__value">${ctx.esc(formattedValue || EMPTY_VALUE)}</div>` +
     `${labelHtml}${deltaHtml}</div>`
   );
 };

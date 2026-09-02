@@ -63,4 +63,46 @@ describe('exportHtmlDocument', () => {
     expect(doc).toContain('<h1>Title</h1>');
     expect(doc).toContain('mk-callout--warning');
   });
+
+  it('carries the embedded doc.css dark-mode block, so a viewer with a dark OS preference gets a themed page', () => {
+    const doc = exportHtmlDocument('body');
+    expect(doc).toContain('prefers-color-scheme: dark');
+  });
+
+  it('adds a docClassName alongside the doc class, leaving the default untouched when omitted', () => {
+    const withoutClass = exportHtmlDocument('body');
+    expect(withoutClass).toContain('<div class="doc">');
+
+    const withClass = exportHtmlDocument('body', {
+      docClassName: 'mk-export--hide-scripts',
+    });
+    expect(withClass).toContain('<div class="doc mk-export--hide-scripts">');
+  });
+});
+
+describe('exportHtmlDocument: the exported page carries its own dark palette', () => {
+  it('ships a dark palette, so an exported file follows the reader system setting', () => {
+    const doc = exportHtmlDocument('<p>hi</p>');
+    expect(doc).toContain('@media (prefers-color-scheme: dark)');
+    const dark = doc.slice(doc.indexOf('@media (prefers-color-scheme: dark)'));
+    expect(dark).toContain('--mk-bg:');
+    expect(dark).toContain('--mk-fg:');
+  });
+
+  it('defines that palette exactly once, in doc.css, rather than again in the shell', () => {
+    const doc = exportHtmlDocument('<p>hi</p>');
+    const blocks = doc.match(/@media \(prefers-color-scheme: dark\)\s*\{/g);
+    // Two palettes would mean two things to keep in step, with the later one
+    // silently winning. doc.css already carries one for standalone files.
+    expect(blocks).toHaveLength(1);
+  });
+
+  it('puts host extraCss last, so a host still wins over doc.css', () => {
+    const doc = exportHtmlDocument('<p>hi</p>', {
+      extraCss: '.doc { --mk-accent: hotpink; }',
+    });
+    expect(doc.indexOf('prefers-color-scheme: dark')).toBeLessThan(
+      doc.indexOf('hotpink'),
+    );
+  });
 });

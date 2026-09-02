@@ -1021,6 +1021,83 @@ describe('renderMark — backward compatibility and render purity', () => {
   });
 });
 
+/**
+ * The same `conformance/render/` fixtures `@markii/html`'s
+ * `conformance.test.ts` diffs byte-for-byte against a committed HTML
+ * string. This engine renders to a React tree rather than an HTML string,
+ * so there is no byte-level comparison to make here — instead, this suite
+ * asserts the SAME class names and DOM structure `@markii/html` commits to,
+ * for the identical input, so the two engines cannot drift apart on a
+ * fallback box, a layout wrapper, the missing-value marker, or `::table`'s
+ * empty state without a test failing on at least one side. Every fixture
+ * renders with no value store, matching how `04-value-failure`/`05-table`
+ * were authored (an intentionally unbound `data=`/`:value[...]`).
+ */
+describe('renderMark — render-level conformance fixtures (conformance/render/), cross-engine class/structure parity', () => {
+  function readRenderFixture(name: string): string {
+    return readFileSync(
+      join(conformanceDir(), 'render', `${name}.mk.md`),
+      'utf8',
+    );
+  }
+
+  it('01-unknown-component: the unregistered-name fallback box', () => {
+    const { container } = render(
+      renderMark(readRenderFixture('01-unknown-component'), defaultRegistry),
+    );
+    const box = container.querySelector('.mk-unknown.mk-unknown--block');
+    expect(box).not.toBeNull();
+    expect(box?.querySelector('.mk-unknown__label')).toHaveTextContent(
+      'unknown component totally-unknown',
+    );
+  });
+
+  it('02-form-mismatch: a block component written as an inline directive', () => {
+    const { container } = render(
+      renderMark(readRenderFixture('02-form-mismatch'), defaultRegistry),
+    );
+    const marker = container.querySelector(
+      '.mk-unknown.mk-unknown--inline.mk-unknown--mismatch',
+    );
+    expect(marker).not.toBeNull();
+    expect(marker?.querySelector('.mk-unknown__label')).toHaveTextContent(
+      'block component callout written inline',
+    );
+    expect(marker).toHaveTextContent('oops');
+  });
+
+  it('03-layout-attributes: width/align classes on the wrapper div', () => {
+    const { container } = render(
+      renderMark(readRenderFixture('03-layout-attributes'), defaultRegistry),
+    );
+    const wrapper = container.querySelector('.mk-width-narrow.mk-align-right');
+    expect(wrapper).not.toBeNull();
+    expect(wrapper?.querySelector('.mk-divider')).not.toBeNull();
+  });
+
+  it('04-value-failure: the missing-value marker', () => {
+    const { container } = render(
+      renderMark(readRenderFixture('04-value-failure'), defaultRegistry),
+    );
+    const marker = container.querySelector('.mk-value.mk-value--missing');
+    expect(marker).toHaveTextContent('{repo.stars}');
+  });
+
+  it('05-table: the quiet empty state with caption', () => {
+    const { container } = render(
+      renderMark(readRenderFixture('05-table'), defaultRegistry),
+    );
+    const table = container.querySelector('.mk-table.mk-table--empty');
+    expect(table).not.toBeNull();
+    expect(table?.querySelector('.mk-table__caption')).toHaveTextContent(
+      'Team',
+    );
+    expect(table?.querySelector('.mk-table__empty')).toHaveTextContent(
+      'no data',
+    );
+  });
+});
+
 // URL-sanitization behavior is a `toHast` (@markii/core) concern and is tested
 // at the hast level in @markii/core's `to-hast.test.ts` — no React/jsdom
 // involved there. This file only covers React-facing rendering behavior.

@@ -11,7 +11,7 @@
  * those components' contracts.
  *
  * This module carries values only: the closed value list and the schema
- * four contracts share. It says nothing about markup or classes; each
+ * five contracts share. It says nothing about markup or classes; each
  * renderer's own `layout.ts` maps a value to a class.
  */
 import type { AttributeSchema } from './contracts.js';
@@ -24,7 +24,7 @@ export type TextAlignPreset = (typeof TEXT_ALIGN_PRESETS)[number];
 
 /**
  * The standard components that accept `text` (docs/spec.md §3). Listed here
- * so `./contracts.ts` builds all four from one source, and so a test can
+ * so `./contracts.ts` builds all five from one source, and so a test can
  * assert the set both renderers honor is exactly this one.
  */
 export const TEXT_ALIGN_COMPONENTS = [
@@ -32,10 +32,11 @@ export const TEXT_ALIGN_COMPONENTS = [
   'cell',
   'card',
   'callout',
+  'table',
 ] as const;
 
 /**
- * The shared `text` schema. Identical wording on all four components on
+ * The shared `text` schema. Identical wording on all five components on
  * purpose: the attribute means the same thing everywhere, and a reader who
  * learned it on `callout` should not have to re-read it on `card`. The
  * row-specific cascade is spelled out because it is the one place `text`

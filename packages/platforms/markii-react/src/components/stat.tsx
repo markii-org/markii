@@ -1,4 +1,5 @@
 import type { ReactElement, ReactNode } from 'react';
+import { formatValue } from '@markii/stdlib';
 import type { MarkComponentProps } from '../registry.js';
 import { safeRead } from '../safe-data.js';
 import { dataStateClassName, failureTitle } from './failure-presentation.js';
@@ -75,6 +76,13 @@ function pick(
  * value (from either source) renders `—` rather than a blank box; a missing
  * or errored binding degrades the same way. Never throws.
  *
+ * `format`/`decimals` (docs/format.md) format the headline value through
+ * `@markii/stdlib`'s `formatValue` before display — e.g.
+ * `::stat{value=2301234 format=compact}` shows `2.3M`. Non-numeric `value`
+ * under a numeric format renders unchanged (`formatValue` falls back to the
+ * plain stringified value), and an absent/invalid `format` behaves as
+ * `plain`, i.e. exactly today's behavior.
+ *
  * Failure presentation mirrors `ValueDirective` exactly (docs/scripting.md,
  * AGENTS.md's cleanliness principle): the BODY stays quiet — `—`, or
  * whatever static attributes supplied — and a failed/stale binding surfaces
@@ -105,6 +113,11 @@ export function Stat({
   const fromData = bound.fields;
 
   const value = pick(attributes.value, fromData.value);
+  const formattedValue = formatValue(
+    value,
+    attributes.format ?? undefined,
+    attributes.decimals ?? undefined,
+  );
   const label = pick(attributes.label, fromData.label);
   const delta = pick(attributes.delta, fromData.delta);
   const rawTrend = pick(attributes.trend, fromData.trend);
@@ -126,7 +139,7 @@ export function Stat({
       className={dataStateClassName('mk-stat', dataStatus, dataFailureKind)}
       title={failureTitle(dataError ?? bound.fault, dataFailureKind)}
     >
-      <div className="mk-stat__value">{value || EMPTY_VALUE}</div>
+      <div className="mk-stat__value">{formattedValue || EMPTY_VALUE}</div>
       {label ? <div className="mk-stat__label">{label}</div> : null}
       {deltaNode}
     </div>

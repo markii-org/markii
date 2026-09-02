@@ -73,4 +73,22 @@ describe('Progress', () => {
       renderMarkToHtml('::progress{data=done}\n', defaultHtmlRegistry, store),
     ).not.toThrow();
   });
+
+  describe('format/decimals (docs/format.md)', () => {
+    it('an absent format keeps the default rounded integer percent', () => {
+      const html = renderMarkToHtml(
+        '::progress{value=1 max=3}\n',
+        defaultHtmlRegistry,
+      );
+      expect(html).toContain('<span class="mk-progress__percent">33%</span>');
+    });
+
+    it('format=percent with decimals shows fractional percent', () => {
+      const html = renderMarkToHtml(
+        '::progress{value=1 max=3 format=percent decimals=1}\n',
+        defaultHtmlRegistry,
+      );
+      expect(html).toContain('<span class="mk-progress__percent">33.3%</span>');
+    });
+  });
 });

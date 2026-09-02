@@ -18,6 +18,14 @@ export interface ExportHtmlDocumentOptions {
    * trusted host-authored CSS, not user content, so it is never escaped.
    */
   extraCss?: string;
+  /**
+   * One or more space-separated classes appended to the `.doc` wrapper
+   * (e.g. `@markii/host`'s hide-script-blocks class). A caller opts a
+   * preference INTO the page by pairing a class here with a matching rule
+   * in `extraCss`, so this function never has to know what any given class
+   * means. Host-authored, inserted verbatim, never escaped.
+   */
+  docClassName?: string;
 }
 
 const DEFAULT_TITLE = 'Markii document';
@@ -53,6 +61,7 @@ export function exportHtmlDocument(
   const title = options.title ?? DEFAULT_TITLE;
   const lang = options.lang ?? DEFAULT_LANG;
   const css = options.extraCss ? `${DOC_CSS}\n${options.extraCss}` : DOC_CSS;
+  const docClass = options.docClassName ? `doc ${options.docClassName}` : 'doc';
 
   return (
     `<!doctype html>\n` +
@@ -64,7 +73,7 @@ export function exportHtmlDocument(
     `<style>\n${css}\n</style>\n` +
     `</head>\n` +
     `<body>\n` +
-    `<div class="doc">\n${body}\n</div>\n` +
+    `<div class="${docClass}">\n${body}\n</div>\n` +
     `</body>\n` +
     `</html>\n`
   );

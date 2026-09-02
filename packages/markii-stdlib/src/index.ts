@@ -22,3 +22,13 @@ export {
   TEXT_ALIGN_PRESETS,
   type TextAlignPreset,
 } from './text-align.js';
+
+export {
+  formatValue,
+  isNumericLike,
+  FORMAT_ATTRIBUTE,
+  DECIMALS_ATTRIBUTE,
+  type ValueFormat,
+} from './value-format.js';
+
+export { deriveTableShape, type TableShape } from './table-shape.js';

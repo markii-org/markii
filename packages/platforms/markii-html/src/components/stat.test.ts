@@ -114,4 +114,32 @@ describe('Stat', () => {
     );
     expect(html).toContain('<div class="mk-stat__value">—</div>');
   });
+
+  describe('format/decimals (docs/format.md)', () => {
+    it('formats the headline value with format=compact', () => {
+      const html = renderMarkToHtml(
+        '::stat{value=2301234 format=compact}\n',
+        defaultHtmlRegistry,
+      );
+      expect(html).toContain('<div class="mk-stat__value">2.3M</div>');
+    });
+
+    it('an absent format keeps exactly the unformatted value', () => {
+      const html = renderMarkToHtml(
+        '::stat{value=2301234}\n',
+        defaultHtmlRegistry,
+      );
+      expect(html).toContain('<div class="mk-stat__value">2301234</div>');
+    });
+
+    it("matches @markii/react's formatting for the same input (round-trip guard)", () => {
+      // Both engines route through @markii/stdlib's formatValue, so a
+      // number/percent/date reads identically in both — see stat.test.tsx.
+      const html = renderMarkToHtml(
+        '::stat{value=0.123 format=percent decimals=1}\n',
+        defaultHtmlRegistry,
+      );
+      expect(html).toContain('<div class="mk-stat__value">12.3%</div>');
+    });
+  });
 });

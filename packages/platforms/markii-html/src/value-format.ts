@@ -1,39 +1,19 @@
-/**
- * Ported from `@markii/react`'s `components/value-directive.tsx`: coerces a
- * resolved store value to display text for `:value[...]`. Kept as its own
- * tiny module because it has no dependency on hast/registry types and is
- * useful in isolation (colocated test).
- */
+import { formatValue } from '@markii/stdlib';
 
 /**
- * `String(value)` for a value that may be actively hostile — a revoked
- * `Proxy`, an object with a throwing `toString`/`Symbol.toPrimitive`, an
- * `Object.create(null)` with no `toString` at all. Degrades to the empty
- * string rather than throwing.
- */
-function safeString(value: unknown): string {
-  try {
-    return String(value);
-  } catch {
-    return '';
-  }
-}
-
-/**
- * Coerces a stored value to display text. Objects/arrays render as JSON;
- * `null`/`undefined` render as an empty string. Never throws for any stored
- * value.
+ * `stringifyStoredValue` is kept as a thin, unformatted wrapper around
+ * `@markii/stdlib`'s `formatValue` (called with no `format`, i.e. `'plain'`)
+ * rather than removed outright: it is this engine's existing name for "the
+ * :value[...] default coercion", used wherever a caller has no `format=`/
+ * `decimals=` attribute to thread through (e.g. a data-bound component's
+ * unformatted fields). Both engines' `:value[...]` and every `format=`-aware
+ * component (`stat`, `progress`, `table`) call `formatValue` directly so a
+ * number, date, or percentage reads identically in both — see
+ * `docs/format.md`.
+ *
+ * Never throws for any stored value, for the same reason `formatValue`
+ * itself never throws.
  */
 export function stringifyStoredValue(value: unknown): string {
-  if (typeof value === 'string') return value;
-  if (value === null || value === undefined) return '';
-  if (typeof value === 'number' || typeof value === 'boolean') {
-    return String(value);
-  }
-  try {
-    const json: string | undefined = JSON.stringify(value);
-    return json ?? '';
-  } catch {
-    return safeString(value);
-  }
+  return formatValue(value);
 }

@@ -243,3 +243,46 @@ describe('ValueDirective — stringifying a hostile stored value', () => {
     expect(renderValue(() => 1).textContent).toBe('');
   });
 });
+
+describe(':value[...]{format=...} (docs/format.md)', () => {
+  it('formats a resolved value with format=compact', () => {
+    const store = createValueStore({
+      stars: { value: 2301234, status: 'fresh', ranAt: 1 },
+    });
+    const { container } = render(
+      renderMark(':value[stars]{format=compact}', defaultRegistry, store),
+    );
+    expect(container.querySelector('.mk-value')).toHaveTextContent('2.3M');
+  });
+
+  it('formats with decimals applied', () => {
+    const store = createValueStore({
+      ratio: { value: 0.12345, status: 'fresh', ranAt: 1 },
+    });
+    const { container } = render(
+      renderMark(
+        ':value[ratio]{format=percent decimals=1}',
+        defaultRegistry,
+        store,
+      ),
+    );
+    expect(container.querySelector('.mk-value')).toHaveTextContent('12.3%');
+  });
+
+  it('an absent format keeps the default plain rendering', () => {
+    const store = createValueStore({
+      stars: { value: 2301234, status: 'fresh', ranAt: 1 },
+    });
+    const { container } = render(
+      renderMark(':value[stars]', defaultRegistry, store),
+    );
+    expect(container.querySelector('.mk-value')).toHaveTextContent('2301234');
+  });
+
+  it('a missing value still renders the missing marker with format present', () => {
+    const { container } = render(
+      renderMark(':value[nope]{format=number}', defaultRegistry),
+    );
+    expect(container.querySelector('.mk-value--missing')).not.toBeNull();
+  });
+});

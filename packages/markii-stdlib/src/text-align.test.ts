@@ -35,12 +35,13 @@ describe('TEXT_ALIGN_ATTRIBUTE', () => {
 });
 
 describe('TEXT_ALIGN_COMPONENTS', () => {
-  it('is exactly row, cell, card, callout', () => {
+  it('is exactly row, cell, card, callout, table', () => {
     expect([...TEXT_ALIGN_COMPONENTS]).toEqual([
       'row',
       'cell',
       'card',
       'callout',
+      'table',
     ]);
   });
 

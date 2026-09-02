@@ -20,6 +20,7 @@ import { Row } from './row.js';
 import { Stat } from './stat.js';
 import { Tab } from './tab.js';
 import { Tabs } from './tabs.js';
+import { Table } from './table.js';
 
 export { Badge } from './badge.js';
 export type { BadgeVariant } from './badge.js';
@@ -44,6 +45,7 @@ export { Row } from './row.js';
 export { Stat } from './stat.js';
 export { Tab, DEFAULT_TAB_LABEL } from './tab.js';
 export { Tabs } from './tabs.js';
+export { Table } from './table.js';
 export { ScriptMarker } from './script-marker.js';
 export type { ScriptMarkerProps } from './script-marker.js';
 export { UnknownDirective } from './unknown-directive.js';
@@ -103,6 +105,7 @@ export const defaultRegistry: Registry = {
   chart: { component: Chart, inline: inlineFromContract('chart') },
   row: { component: Row, inline: inlineFromContract('row') },
   cell: { component: Cell, inline: inlineFromContract('cell') },
+  table: { component: Table, inline: inlineFromContract('table') },
   center: layoutWrapperEntry('center'),
   left: layoutWrapperEntry('left'),
   right: layoutWrapperEntry('right'),

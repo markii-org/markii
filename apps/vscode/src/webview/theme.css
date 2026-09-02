@@ -35,6 +35,12 @@
   --mk-warning: #d97706;
   --mk-danger: #dc2626;
   --mk-limit: #7c3aed;
+
+  /* Width-preset sizing hooks (docs/format.md) — kept at doc.css's own defaults; nothing about the editor's theme should change a layout preset's size. */
+  --mk-width-fit: fit-content;
+  --mk-width-narrow: 30rem;
+  --mk-width-wide: 64rem;
+  --mk-width-full: 100%;
 }
 
 body {

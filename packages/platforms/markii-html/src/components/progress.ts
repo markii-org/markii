@@ -1,3 +1,4 @@
+import { formatValue } from '@markii/stdlib';
 import type { HtmlComponent } from '../registry.js';
 import { safeRead } from '../resolve.js';
 import { dataStateClassName, failureTitle } from '../failure-presentation.js';
@@ -84,6 +85,15 @@ export const Progress: HtmlComponent = (attributes, _childrenHtml, ctx) => {
   const percent = clamp((value / max) * 100, 0, 100);
   const label = attributes.label ?? null;
 
+  // `format`/`decimals` (docs/format.md) — mirrors `@markii/react`'s
+  // `Progress` exactly: absent `format` keeps today's rounded integer
+  // percent; a supplied `format` routes the fraction `value/max` through
+  // `formatValue` instead.
+  const rawFormat = attributes.format ?? undefined;
+  const percentText = rawFormat
+    ? formatValue(percent / 100, rawFormat, attributes.decimals ?? undefined)
+    : `${String(Math.round(percent))}%`;
+
   const className = dataStateClassName(
     'mk-progress',
     dataStatus,
@@ -102,7 +112,7 @@ export const Progress: HtmlComponent = (attributes, _childrenHtml, ctx) => {
     `<div class="mk-progress__track">` +
     `<div class="mk-progress__bar" style="width: ${String(percent)}%"></div>` +
     `</div>` +
-    `<span class="mk-progress__percent">${String(Math.round(percent))}%</span>` +
+    `<span class="mk-progress__percent">${ctx.esc(percentText)}</span>` +
     `</div>`
   );
 };

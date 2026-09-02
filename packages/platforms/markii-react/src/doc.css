@@ -46,6 +46,64 @@
   --mk-warning: #d97706;
   --mk-danger: #dc2626;
   --mk-limit: #7c3aed; /* the purple, used for the "hit a resource limit" failure kind */
+
+  /* ---------- width presets (docs/format.md) ---------- */
+  /*
+   * The sizing half of the `width=`/`:::wide` etc. layout presets, as
+   * hooks a host theme layer can override (AGENTS.md's "New Tier 1 token"
+   * rule) — e.g. a host with a narrower reading column can shrink
+   * `--mk-width-wide` without touching any selector below. `fit` and
+   * `full` are exposed too even though their current values are a keyword
+   * and `100%` respectively, so all four sized presets are equally
+   * themeable; `normal` (the explicit default) produces no class and no
+   * box to size, so it has no token — there is nothing for a host to hook.
+   */
+  --mk-width-fit: fit-content;
+  --mk-width-narrow: 30rem;
+  --mk-width-wide: 64rem;
+  --mk-width-full: 100%;
+}
+
+/*
+ * ============================================================================
+ * DARK MODE (exported documents only)
+ * ============================================================================
+ * `@markii/html`'s `exportHtmlDocument` produces a standalone page with no
+ * host page around it, so this is the one place `doc.css` picks a dark
+ * palette for itself, guarded by `prefers-color-scheme: dark` rather than a
+ * class, since a standalone file has nothing to put a class on.
+ *
+ * This does not touch how a HOST theme layer works. `apps/vscode/src/
+ * webview/theme.css` and `apps/obsidian/src/obsidian-theme.css` are loaded
+ * AFTER `doc.css` and redeclare these same tokens on a plain `.doc`
+ * selector, unconditionally. At equal specificity the later, unconditional
+ * rule always wins the cascade over this earlier, media-guarded one,
+ * regardless of the reader's OS preference, so a themed host's own
+ * light/dark handling is unaffected either way. Only a page with no such
+ * layer after it, an exported document, ever resolves these.
+ *
+ * A viewer with no preference at all matches neither `light` nor `dark`
+ * media features, so the Tier 1 defaults above stay exactly as they were.
+ */
+@media (prefers-color-scheme: dark) {
+  .doc {
+    --mk-bg: #14161c;
+    --mk-raised: #1c1f28;
+    --mk-fg: #e5e7eb;
+    --mk-surface: #1e212b;
+    --mk-surface-strong: #262a36;
+    --mk-border: #333846;
+    --mk-muted: #a1a8ba;
+    --mk-faint: #6b7280;
+    --mk-accent: #60a5fa;
+    --mk-on-accent: #0b1220;
+
+    --mk-info: #60a5fa;
+    --mk-success: #4ade80;
+    --mk-warning: #fbbf24;
+    --mk-danger: #f87171;
+    --mk-limit: #a78bfa;
+  }
 }
 
 /*
@@ -711,6 +769,36 @@
   border-radius: 6px;
 }
 
+/* ---------- table (data-bound) ---------- */
+
+/*
+ * `.mk-table` is the ROOT wrapper `Table` renders (docs/format.md's
+ * `::table`), holding an optional `.mk-table__caption` and the real
+ * `<table class="mk-table__table">`. The `<table>`/`<th>`/`<td>` elements
+ * inside it are deliberately left to `.doc table`/`.doc th`/`.doc td`
+ * above — the same rules a bare GFM table already gets — so `mk-table`
+ * never forks or duplicates that styling; only the wrapper and its two
+ * non-`<table>` children need rules of their own.
+ */
+.mk-table {
+  display: block;
+}
+
+.mk-table__caption {
+  font-size: 0.85em;
+  color: var(--mk-muted);
+  margin-block-end: 0.4rem;
+}
+
+.mk-table--empty .mk-table__empty {
+  font-size: 0.85em;
+  font-style: italic;
+  color: var(--mk-faint);
+  border: 1px dashed var(--mk-border);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+}
+
 /* ---------- data-binding state (docs/scripting.md) ---------- */
 
 /*
@@ -727,31 +815,36 @@
  */
 .mk-stat--stale,
 .mk-progress--stale,
-.mk-chart--stale {
+.mk-chart--stale,
+.mk-table--stale {
   opacity: 0.8;
 }
 
 .mk-stat--script-error,
 .mk-progress--script-error,
-.mk-chart--script-error {
+.mk-chart--script-error,
+.mk-table--script-error {
   border-bottom: 2px solid var(--mk-danger-ink);
 }
 
 .mk-stat--capability-denied,
 .mk-progress--capability-denied,
-.mk-chart--capability-denied {
+.mk-chart--capability-denied,
+.mk-table--capability-denied {
   border-bottom: 2px solid var(--mk-warning-ink);
 }
 
 .mk-stat--tier-blocked,
 .mk-progress--tier-blocked,
-.mk-chart--tier-blocked {
+.mk-chart--tier-blocked,
+.mk-table--tier-blocked {
   border-bottom: 2px solid var(--mk-info-ink);
 }
 
 .mk-stat--limit,
 .mk-progress--limit,
-.mk-chart--limit {
+.mk-chart--limit,
+.mk-table--limit {
   border-bottom: 2px solid var(--mk-limit-ink);
 }
 
@@ -767,16 +860,16 @@
  * viewport where the size below is wider than the column itself.
  */
 .mk-width-narrow {
-  max-width: min(30rem, 100%);
+  max-width: min(var(--mk-width-narrow), 100%);
 }
 
 .mk-width-wide {
-  max-width: min(64rem, 100%);
+  max-width: min(var(--mk-width-wide), 100%);
 }
 
 /* "full" is the full available column width — not a viewport-bleed hack with negative margins. */
 .mk-width-full {
-  max-width: 100%;
+  max-width: var(--mk-width-full);
 }
 
 /*
@@ -788,7 +881,7 @@
  * makes `{width=fit align=right}` hug the content AND sit right.
  */
 .mk-width-fit {
-  width: fit-content;
+  width: var(--mk-width-fit);
   max-width: 100%;
 }
 

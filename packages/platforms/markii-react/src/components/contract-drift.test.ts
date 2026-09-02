@@ -123,6 +123,7 @@ const ATTRIBUTE_READ_SOURCES: Record<string, AttributeReadSpec> = {
   chart: { own: ['chart.tsx'] },
   row: { own: ['row.tsx'] },
   cell: { own: ['cell.tsx'] },
+  table: { own: ['table.tsx'] },
   center: { own: ['layout-wrapper.tsx'] },
   left: { own: ['layout-wrapper.tsx'] },
   right: { own: ['layout-wrapper.tsx'] },
@@ -213,7 +214,7 @@ describe('STANDARD_COMPONENTS vs defaultRegistry — coverage', () => {
     );
   });
 
-  it('covers exactly the 22 standard components (the 20 audited for issue #17 slice 2, plus divider and the fit layout wrapper)', () => {
+  it('covers exactly the 23 standard components (the 20 audited for issue #17 slice 2, plus divider, the fit layout wrapper, and table)', () => {
     // Not a load-bearing count on its own — the two tests above already
     // prove the sets are equal both ways — but pins the number so a
     // component silently added to one side and removed from the other
@@ -222,7 +223,7 @@ describe('STANDARD_COMPONENTS vs defaultRegistry — coverage', () => {
     expect(Object.keys(defaultRegistry).sort()).toEqual(
       Object.keys(STANDARD_COMPONENTS).sort(),
     );
-    expect(Object.keys(defaultRegistry)).toHaveLength(22);
+    expect(Object.keys(defaultRegistry)).toHaveLength(23);
   });
 });
 
@@ -329,8 +330,8 @@ describe('STANDARD_COMPONENTS vs component implementations — attribute-name dr
     }
   });
 
-  it('the four text-accepting components really read the text attribute', () => {
-    for (const name of ['row', 'cell', 'card', 'callout']) {
+  it('the five text-accepting components really read the text attribute', () => {
+    for (const name of ['row', 'cell', 'card', 'callout', 'table']) {
       expect(actualAttributeReads(name).has('text'), name).toBe(true);
     }
   });

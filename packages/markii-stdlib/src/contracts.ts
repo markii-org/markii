@@ -19,6 +19,7 @@ import {
   otherLayoutAxis,
 } from './layout.js';
 import { TEXT_ALIGN_ATTRIBUTE } from './text-align.js';
+import { DECIMALS_ATTRIBUTE, FORMAT_ATTRIBUTE } from './value-format.js';
 
 /**
  * Which of the three directive forms a component is written as. Matches
@@ -314,9 +315,11 @@ export const STANDARD_COMPONENTS: Record<string, ComponentContract> = {
         description:
           "Colors/annotates `delta` as an increase, decrease, or no change. Overridden by a bound `data=` object's `trend` field when both are present; absent/invalid means no trend styling.",
       },
+      format: FORMAT_ATTRIBUTE,
+      decimals: DECIMALS_ATTRIBUTE,
     },
     description:
-      'A leaf directive rendering a big value plus label, e.g. `::stat{value=42 label="stars" trend=up}`. Data binding (§8): `data=name` resolves against the value store — a number/string value supplies `value` directly; an object may supply `value`/`label`/`delta`/`trend` fields (explicit attributes on the directive always take precedence over the bound object\'s fields). Degrades to `—` when both the attribute and the bound value are absent — never throws.',
+      'A leaf directive rendering a big value plus label, e.g. `::stat{value=42 label="stars" trend=up}`. Data binding (§8): `data=name` resolves against the value store — a number/string value supplies `value` directly; an object may supply `value`/`label`/`delta`/`trend` fields (explicit attributes on the directive always take precedence over the bound object\'s fields). Degrades to `—` when both the attribute and the bound value are absent — never throws. `format`/`decimals` (docs/format.md) format the headline value before display.',
   },
   progress: {
     name: 'progress',
@@ -340,9 +343,11 @@ export const STANDARD_COMPONENTS: Record<string, ComponentContract> = {
         description:
           'Optional caption shown above/alongside the bar. Absent means no caption line is rendered.',
       },
+      format: FORMAT_ATTRIBUTE,
+      decimals: DECIMALS_ATTRIBUTE,
     },
     description:
-      'A leaf directive rendering a meter bar, e.g. `::progress{value=3 max=5 label="tasks"}`. Data binding (§8): `data=name` resolves against the value store — a bare number supplies `value` directly; an object may supply `value`/`max` fields (explicit attributes take precedence). Parses defensively and clamps rather than throwing; missing/invalid input renders an empty (0%) bar.',
+      'A leaf directive rendering a meter bar, e.g. `::progress{value=3 max=5 label="tasks"}`. Data binding (§8): `data=name` resolves against the value store — a bare number supplies `value` directly; an object may supply `value`/`max` fields (explicit attributes take precedence). Parses defensively and clamps rather than throwing; missing/invalid input renders an empty (0%) bar. `format`/`decimals` (docs/format.md), when present, format the fraction `value/max` for the percent readout in place of the default rounded integer percent; absent means the unchanged default (`42%`).',
   },
   chart: {
     name: 'chart',
@@ -364,6 +369,35 @@ export const STANDARD_COMPONENTS: Record<string, ComponentContract> = {
     },
     description:
       'A leaf directive rendering a minimal hand-rolled inline SVG chart, e.g. `::chart{kind=line values="1,3,2,5"}`. Sizes to its container — use docs/format.md\'s `width`/`align` layout presets to control its footprint, not a pixel attribute. Data binding (§8): `data=name` resolves against the value store — expects an array of numbers (typically a Lua script returning a table), or an array of `{value}` objects. Non-finite/non-numeric entries are filtered out and the point count is capped; an empty or all-invalid series renders a small neutral empty state rather than a broken chart. Never throws, and never places unescaped text into the emitted SVG markup.',
+  },
+  table: {
+    name: 'table',
+    kind: 'leaf',
+    attributes: {
+      columns: {
+        type: 'string',
+        required: false,
+        description:
+          "Comma-separated key list, shown in that order instead of the bound data's own key order. A key no row has renders an empty cell for that column. Only meaningful for an array-of-objects or single-object binding.",
+      },
+      caption: {
+        type: 'string',
+        required: false,
+        description:
+          'Optional caption text shown with the table. Absent means no caption.',
+      },
+      limit: {
+        type: 'string',
+        required: false,
+        description:
+          'Maximum number of rows shown, as a positive integer. An absent, non-integer, or non-positive value is ignored and every row is shown.',
+      },
+      text: TEXT_ALIGN_ATTRIBUTE,
+      format: FORMAT_ATTRIBUTE,
+      decimals: DECIMALS_ATTRIBUTE,
+    },
+    description:
+      'A leaf directive rendering a data-bound table, e.g. `::table{data=users columns="name,role" limit=10}`. Data binding (§8): `data=name` resolves against the value store — an array of objects becomes columns from the union of keys in first-seen order (or `columns=`, when given); an array of arrays becomes rows as given; an array of primitives becomes a single column; a single object becomes key/value rows. `format`/`decimals` (docs/format.md) apply to numeric cells only; non-numeric cells render as plain text regardless. Degrades to the same quiet empty/stale/failure presentation as `stat` for a missing, stale, or failed binding — never throws.',
   },
   row: {
     name: 'row',
