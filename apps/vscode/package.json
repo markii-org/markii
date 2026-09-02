@@ -62,6 +62,11 @@
         "category": "Markii"
       },
       {
+        "command": "markii.installPack",
+        "title": "Install Pack from File…",
+        "category": "Markii"
+      },
+      {
         "command": "markii.enableScheduledRefresh",
         "title": "Enable Scheduled Refresh…",
         "category": "Markii"
@@ -147,6 +152,9 @@
         },
         {
           "command": "markii.addPackFolder"
+        },
+        {
+          "command": "markii.installPack"
         },
         {
           "command": "markii.enableScheduledRefresh"

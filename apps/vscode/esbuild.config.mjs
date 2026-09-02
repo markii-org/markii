@@ -33,6 +33,8 @@
  */
 import { build, context } from 'esbuild';
 import { copyFileSync, mkdirSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -202,6 +204,63 @@ function copyEsbuildWasm() {
   }
 }
 
+/**
+ * GitHub issue #15's "Bundled packs": the extension always ships the three
+ * packs at the repo root (`packs/read`, `packs/dash`, `packs/prep`),
+ * compiled at extension build time into `dist/packs/<name>/` (`pack.json`,
+ * `webview.js`, `webview.css` when the pack has CSS, `scripts/` when it
+ * has Lua). `extension.ts`'s pack loading treats `dist/packs` as an
+ * always-present pack root ordered ahead of `markii.packs`
+ * (`./src/packs/bundled-packs.ts`).
+ *
+ * The actual compiler (`./src/packs/build-bundled-packs.ts`) reuses
+ * `@markii/host`'s pack machinery — `discoverPacks`,
+ * `buildPackRegistrationScript`, `exportPack` — the same path the
+ * `markii.exportPack` command runs, so there is exactly one pack compiler
+ * rather than a second one living only in this build script. That module
+ * is TypeScript, so it is bundled here to a throwaway CJS file (the same
+ * `@markii/*` -> `src/` alias every other bundle in this file uses) and
+ * `require()`d once, synchronously, to run it — a plain `import()` of a
+ * dynamically produced CJS file is more fragile across Node versions than
+ * an ordinary CJS `require`, and this script already has a real `require`
+ * available via `createRequire`.
+ */
+async function buildBundledPacks() {
+  const builderOutfile = path.join(here, 'dist', '.bundled-packs-builder.cjs');
+  const builderCacheDir = path.join(here, 'dist', '.bundled-packs-cache');
+
+  await build({
+    bundle: true,
+    alias: markiiSrcRoots,
+    entryPoints: [path.join(here, 'src', 'packs', 'build-bundled-packs.ts')],
+    outfile: builderOutfile,
+    platform: 'node',
+    format: 'cjs',
+    target: 'node18',
+    // Same reasoning as `extensionBuild`'s own `external`: `pack-build.ts`
+    // (reached transitively via `@markii/host`) `require()`s esbuild-wasm
+    // itself at runtime rather than importing it normally, so it must stay
+    // resolvable via plain Node module resolution against this repo's own
+    // `node_modules` rather than being inlined here.
+    external: ['esbuild-wasm'],
+    logLevel: 'silent',
+    logOverride: { 'empty-import-meta': 'silent' },
+  });
+
+  const req = createRequire(import.meta.url);
+  const { buildBundledPacks: runBuilder } = req(builderOutfile);
+  try {
+    await runBuilder({
+      repoRoot,
+      outDir: path.join(here, 'dist', 'packs'),
+      cacheDir: builderCacheDir,
+    });
+  } finally {
+    await rm(builderOutfile, { force: true });
+    await rm(builderCacheDir, { recursive: true, force: true });
+  }
+}
+
 if (watch) {
   const contexts = await Promise.all([
     context(extensionBuild),
@@ -210,6 +269,7 @@ if (watch) {
   ]);
   copyWasmGlue();
   copyEsbuildWasm();
+  await buildBundledPacks();
   await Promise.all(contexts.map((ctx) => ctx.watch()));
 } else {
   await Promise.all([
@@ -219,4 +279,5 @@ if (watch) {
   ]);
   copyWasmGlue();
   copyEsbuildWasm();
+  await buildBundledPacks();
 }

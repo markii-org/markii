@@ -2,11 +2,7 @@ import * as vscode from 'vscode';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import * as path from 'node:path';
-import type {
-  BundleFsGrant,
-  BundleManifest,
-  BundleStorage,
-} from '@markii/bundle';
+import type { BundleManifest, BundleStorage } from '@markii/bundle';
 import { openZipBundle } from '@markii/bundle';
 import { openDirBundle } from '@markii/bundle/fs';
 import {
@@ -72,7 +68,6 @@ import {
   ALLOW_LABEL,
   DONT_ALLOW_LABEL,
   UNKNOWN_HOSTS_PROMPT_MESSAGE,
-  bundleAccessPromptMessage,
   clearGrantForDocument,
   hostPromptMessage,
   manyHostsPromptMessage,
@@ -462,6 +457,19 @@ export function packCacheDir(context: vscode.ExtensionContext): string {
 }
 
 /**
+ * Where "Markii: Install Pack from File" (GitHub issue #16) unzips a
+ * validated `.mkp` archive: this extension's own `globalStorageUri`, never
+ * a folder the user chose and never the workspace. A sibling of
+ * `packCacheDir` rather than a subdirectory of it, since this directory's
+ * contents are a durable install (survives across sessions, added to
+ * `markii.packs`) rather than a rebuildable cache the extension can wipe
+ * at will.
+ */
+export function installedPacksDir(context: vscode.ExtensionContext): string {
+  return path.join(context.globalStorageUri.fsPath, 'installed-packs');
+}
+
+/**
  * Absolute path to a REAL, unbundled `esbuild-wasm/lib/browser.js` next to
  * the packaged extension (`esbuild.config.mjs` copies it there — see that
  * file's doc comment), or `undefined` if it is not present (dev/Vitest,
@@ -588,7 +596,9 @@ function refreshIntervalMs(): number | undefined {
 }
 
 /**
- * Loads the current `markii.packs` install state (GitHub issue #3 slice 5):
+ * Loads the current `markii.packs` install state (GitHub issue #3 slice 5),
+ * merged with the extension's own bundled packs (GitHub issue #15,
+ * `./packs/bundled-packs.ts`, always ahead of the configured ones):
  * resolves the setting's entries against the open workspace root, discovers
  * and validates each folder's `pack.json`, pre-reads every discovered
  * pack's `scripts/*.lua` for the Run path, and — for a pack with no
@@ -611,6 +621,7 @@ function loadCurrentPackContext(
         esbuildBrowserModulePath: browserModulePath,
         esbuildWasmBinaryPath: wasmBinaryPath,
       }),
+    extensionPath: context.extensionUri.fsPath,
   });
 }
 
@@ -675,6 +686,29 @@ function logRunFailures(
   if (lines.length === 0) return;
   diagnosticsChannel.appendLine(
     `Markii: ${trigger} run at ${new Date().toISOString()}, ${String(lines.length)} script failure(s)`,
+  );
+  for (const line of lines) diagnosticsChannel.appendLine(`  ${line}`);
+}
+
+/**
+ * Writes a run's net-declaration mismatch lines to the "Markii" output
+ * channel (consent unification, SECURITY-RELEVANT: `@markii/host`'s
+ * `RunOnceResult.netDeclarationDiagnostics`, built by
+ * `netDeclarationDiagnostics` in `packages/markii-host/src/run/bundle-run.ts`).
+ * A bundle manifest's `permissions.net` is declared intent only — it never
+ * widens or narrows what a run is prompted for — so a mismatch between the
+ * declaration and what the run's scripts actually reach is never silent;
+ * it lands here. A bare `.mk.md` run, or a bundle whose declaration and
+ * scan agree, writes nothing.
+ */
+function logNetDeclarationDiagnostics(
+  trigger: RunTrigger,
+  lines: readonly string[],
+): void {
+  if (!diagnosticsChannel) return;
+  if (lines.length === 0) return;
+  diagnosticsChannel.appendLine(
+    `Markii: ${trigger} run at ${new Date().toISOString()}, net declaration mismatch`,
   );
   for (const line of lines) diagnosticsChannel.appendLine(`  ${line}`);
 }
@@ -1420,19 +1454,6 @@ async function promptManyHostsAdapter(hostCount: number): Promise<boolean> {
   return choice === ALLOW_LABEL;
 }
 
-/** Prompts once, all-or-nothing, for a bundle's declared bundle-fs grants (`run/grant-flow.ts`'s `bundleAccessPromptMessage`). */
-async function promptBundleAccessAdapter(
-  grants: readonly BundleFsGrant[],
-): Promise<boolean> {
-  const choice = await vscode.window.showInformationMessage(
-    bundleAccessPromptMessage(grants),
-    { modal: true },
-    ALLOW_LABEL,
-    DONT_ALLOW_LABEL,
-  );
-  return choice === ALLOW_LABEL;
-}
-
 /**
  * The `markii.runScripts` command handler: runs the currently previewed
  * document's scripts once (grant flow, then `spawnRun`) and posts the
@@ -1615,7 +1636,6 @@ async function runWithTrigger(
       promptHost: promptHostAdapter,
       promptUnknownHosts: promptUnknownHostsAdapter,
       promptManyHosts: promptManyHostsAdapter,
-      promptBundleAccess: promptBundleAccessAdapter,
       spawnRun,
       timeoutMs: RUN_TIMEOUT_MS,
       // Omitted entirely (not an empty object) when no packs are
@@ -1656,6 +1676,7 @@ async function runWithTrigger(
     // attached to its `values` message so the marker updates immediately —
     // see `./run/run-trace.ts`'s doc comment and `ValuesMessage.lastRun`'s.
     logRunFailures(trigger, result.failureDetails);
+    logNetDeclarationDiagnostics(trigger, result.netDeclarationDiagnostics);
 
     const lastRun = { trigger, ranAt: Date.now(), ok: true as const };
     const message: ValuesMessage = {
@@ -1946,6 +1967,7 @@ export async function exportHtml(
         packStylesheets,
         packCount: preview.packContext.webviewPacks.length,
         embedImages,
+        hideScriptBlocks: configuredHideScriptBlocks(),
       };
     } else {
       // No panel open at all -> 'no-renderer' when at least one pack folder
@@ -1963,6 +1985,7 @@ export async function exportHtml(
         values,
         staticReason,
         embedImages,
+        hideScriptBlocks: configuredHideScriptBlocks(),
       };
     }
 

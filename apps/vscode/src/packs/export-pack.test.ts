@@ -1,13 +1,28 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, afterEach } from 'vitest';
+import { mkdtemp, readFile, rm, access } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import * as path from 'node:path';
 import {
+  archiveExportNameValidationMessage,
+  archiveFileExists,
   exportNameValidationMessage,
   NO_PACKS_CONFIGURED_MESSAGE,
+  normalizeArchiveExportName,
+  packArchiveExportDiagnosticLines,
+  packArchiveExportResultMessage,
+  packArchiveOverwriteConfirmMessage,
+  PACK_EXPORT_FORMAT_ITEMS,
   packExportDiagnosticLines,
   packExportOverwriteConfirmMessage,
   packExportQuickPickItem,
   packExportResultMessage,
+  writePackArchiveFile,
 } from './export-pack.js';
-import type { DiscoveredPack, PackExportOutcome } from '@markii/host';
+import type {
+  DiscoveredPack,
+  PackExportArchiveOutcome,
+  PackExportOutcome,
+} from '@markii/host';
 
 function pack(name: string, folder: string): DiscoveredPack {
   return {
@@ -222,5 +237,121 @@ describe('packExportDiagnosticLines', () => {
 describe('NO_PACKS_CONFIGURED_MESSAGE', () => {
   it('names the Add Pack Folder command', () => {
     expect(NO_PACKS_CONFIGURED_MESSAGE).toContain('Add Pack Folder');
+  });
+});
+
+describe('PACK_EXPORT_FORMAT_ITEMS', () => {
+  it('offers exactly a folder choice and an archive choice', () => {
+    expect(PACK_EXPORT_FORMAT_ITEMS.map((item) => item.format)).toEqual([
+      'folder',
+      'archive',
+    ]);
+  });
+});
+
+describe('normalizeArchiveExportName / archiveExportNameValidationMessage', () => {
+  it('appends .mkp when the user left it off', () => {
+    expect(normalizeArchiveExportName('ana')).toBe('ana.mkp');
+  });
+
+  it('leaves an already-.mkp name alone, case-insensitively', () => {
+    expect(normalizeArchiveExportName('ana.MKP')).toBe('ana.MKP');
+  });
+
+  it('rejects an empty name, ".", "..", and a path separator', () => {
+    expect(archiveExportNameValidationMessage('')).toBeDefined();
+    expect(archiveExportNameValidationMessage('.')).toBeDefined();
+    expect(archiveExportNameValidationMessage('..')).toBeDefined();
+    expect(archiveExportNameValidationMessage('sub/ana.mkp')).toBeDefined();
+    expect(archiveExportNameValidationMessage('sub\\ana.mkp')).toBeDefined();
+  });
+
+  it('accepts a plain name', () => {
+    expect(archiveExportNameValidationMessage('ana.mkp')).toBeUndefined();
+  });
+});
+
+describe('packArchiveOverwriteConfirmMessage', () => {
+  it('names both the existing file and the pack', () => {
+    const message = packArchiveOverwriteConfirmMessage({
+      packName: 'ana',
+      fileName: 'ana-1.0.0.mkp',
+    });
+    expect(message).toContain('ana-1.0.0.mkp');
+    expect(message).toContain('ana');
+  });
+});
+
+describe('packArchiveExportResultMessage / packArchiveExportDiagnosticLines', () => {
+  const built: PackExportArchiveOutcome = {
+    kind: 'built',
+    packName: 'ana',
+    fileName: 'ana-1.0.0.mkp',
+    bytes: new Uint8Array(2048),
+    scriptBytes: 1500,
+    stylesheetBytes: 400,
+    scriptFilesCopied: 1,
+    warnings: ['ana: raw color literal'],
+  };
+  const failed: PackExportArchiveOutcome = {
+    kind: 'failed',
+    packName: 'ana',
+    reason: 'esbuild exploded in a very long multi-line way',
+  };
+
+  it('a successful result names the destination and size, without the failure reason ever appearing', () => {
+    const message = packArchiveExportResultMessage(
+      built,
+      '/dest/ana-1.0.0.mkp',
+    );
+    expect(message).toContain('/dest/ana-1.0.0.mkp');
+    expect(message).not.toContain('—');
+    expect(message).not.toContain('(');
+  });
+
+  it('a failure keeps its reason out of the popup and directs to the output channel', () => {
+    const message = packArchiveExportResultMessage(failed, '/dest/ana.mkp');
+    expect(message).not.toContain('esbuild exploded');
+    expect(message).toContain('Markii output');
+  });
+
+  it('diagnostics carry the failure reason verbatim and the archive byte sizes', () => {
+    const failLines = packArchiveExportDiagnosticLines(failed, '/dest/ana.mkp');
+    expect(failLines.join('\n')).toContain(
+      'esbuild exploded in a very long multi-line way',
+    );
+
+    const builtLines = packArchiveExportDiagnosticLines(
+      built,
+      '/dest/ana-1.0.0.mkp',
+    );
+    expect(builtLines.join('\n')).toContain('/dest/ana-1.0.0.mkp');
+    expect(builtLines.join('\n')).toContain('webview.js 1500 bytes');
+    expect(builtLines.join('\n')).toContain('webview.css 400 bytes');
+    expect(builtLines).toContain('ana: raw color literal');
+  });
+});
+
+describe('writePackArchiveFile / archiveFileExists', () => {
+  const tempDirs: string[] = [];
+  afterEach(async () => {
+    await Promise.all(
+      tempDirs
+        .splice(0)
+        .map((dir) => rm(dir, { recursive: true, force: true })),
+    );
+  });
+
+  it('writes bytes to a nested destination and reports existence correctly', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'markii-export-archive-'));
+    tempDirs.push(dir);
+    const target = path.join(dir, 'nested', 'ana-1.0.0.mkp');
+
+    expect(await archiveFileExists(target)).toBe(false);
+    await writePackArchiveFile(target, new Uint8Array([1, 2, 3]));
+    expect(await archiveFileExists(target)).toBe(true);
+    const written = await readFile(target);
+    expect([...written]).toEqual([1, 2, 3]);
+    await expect(access(target)).resolves.toBeUndefined();
   });
 });

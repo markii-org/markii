@@ -66,31 +66,31 @@ function manifestJson(manifest: BundleManifest): string {
 
 describe('resolveBundleDocumentPath', () => {
   it('defaults to note.mk.md when the manifest names no document', () => {
-    expect(resolveBundleDocumentPath({ mark: '0.1.0' })).toBe('note.mk.md');
+    expect(resolveBundleDocumentPath({ spec: '0.1.0' })).toBe('note.mk.md');
   });
 
   it('uses the manifest-named document when it is a valid bundle-relative path', () => {
     expect(
-      resolveBundleDocumentPath({ mark: '0.1.0', document: 'main.mk.md' }),
+      resolveBundleDocumentPath({ spec: '0.1.0', document: 'main.mk.md' }),
     ).toBe('main.mk.md');
   });
 
   it('rejects a non-string document field', () => {
     expect(
-      resolveBundleDocumentPath({ mark: '0.1.0', document: 42 as never }),
+      resolveBundleDocumentPath({ spec: '0.1.0', document: 42 as never }),
     ).toBeUndefined();
   });
 
   it('fails closed on a traversal attempt in the document field', () => {
     expect(
       resolveBundleDocumentPath({
-        mark: '0.1.0',
+        spec: '0.1.0',
         document: '../outside.mk.md',
       }),
     ).toBeUndefined();
     expect(
       resolveBundleDocumentPath({
-        mark: '0.1.0',
+        spec: '0.1.0',
         document: '../'.repeat(5) + 'etc/passwd',
       }),
     ).toBeUndefined();
@@ -98,7 +98,7 @@ describe('resolveBundleDocumentPath', () => {
 
   it('rejects an absolute path in the document field', () => {
     expect(
-      resolveBundleDocumentPath({ mark: '0.1.0', document: '/etc/passwd' }),
+      resolveBundleDocumentPath({ spec: '0.1.0', document: '/etc/passwd' }),
     ).toBeUndefined();
   });
 });
@@ -106,13 +106,13 @@ describe('resolveBundleDocumentPath', () => {
 describe('resolveBundleDocument', () => {
   it('resolves the conventional note.mk.md', async () => {
     const storage = zipStorage({
-      'manifest.json': manifestJson({ mark: '0.1.0' }),
+      'manifest.json': manifestJson({ spec: '0.1.0' }),
       'note.mk.md': '# Hello',
     });
     const result = await resolveBundleDocument(storage);
     expect(result).toEqual({
       ok: true,
-      manifest: { mark: '0.1.0' },
+      manifest: { spec: '0.1.0' },
       documentPath: 'note.mk.md',
       text: '# Hello',
     });
@@ -120,7 +120,7 @@ describe('resolveBundleDocument', () => {
 
   it('resolves a manifest-named document', async () => {
     const storage = zipStorage({
-      'manifest.json': manifestJson({ mark: '0.1.0', document: 'main.mk.md' }),
+      'manifest.json': manifestJson({ spec: '0.1.0', document: 'main.mk.md' }),
       'main.mk.md': '# Main',
     });
     const result = await resolveBundleDocument(storage);
@@ -147,7 +147,7 @@ describe('resolveBundleDocument', () => {
     if (!result.ok) expect(result.reason).toBe('manifest-invalid');
   });
 
-  it('degrades quietly on a manifest missing the required "mark" field', async () => {
+  it('degrades quietly on a manifest missing the required "spec" field', async () => {
     const storage = zipStorage({
       'manifest.json': '{}',
       'note.mk.md': '# Hello',
@@ -169,7 +169,7 @@ describe('resolveBundleDocument', () => {
 
   it('degrades quietly when the resolved document is missing', async () => {
     const storage = zipStorage({
-      'manifest.json': manifestJson({ mark: '0.1.0' }),
+      'manifest.json': manifestJson({ spec: '0.1.0' }),
     });
     const result = await resolveBundleDocument(storage);
     expect(result).toEqual({
@@ -182,7 +182,7 @@ describe('resolveBundleDocument', () => {
   it('degrades quietly when a manifest-named document traverses outside the bundle', async () => {
     const storage = zipStorage({
       'manifest.json': manifestJson({
-        mark: '0.1.0',
+        spec: '0.1.0',
         document: '../outside.mk.md',
       }),
       'note.mk.md': '# Hello',
@@ -206,7 +206,7 @@ describe('resolveBundleDocument', () => {
 
   it('C-1: refuses an over-budget document without ever reading it', async () => {
     const { storage, readCalls } = storageWithOversizedPath(
-      { 'manifest.json': manifestJson({ mark: '0.1.0' }) },
+      { 'manifest.json': manifestJson({ spec: '0.1.0' }) },
       'note.mk.md',
       MAX_BUNDLE_TEXT_FILE_BYTES + 1,
     );
@@ -219,11 +219,11 @@ describe('resolveBundleDocument', () => {
   it('accepts a manifest/document exactly at the size limit', async () => {
     const { storage } = storageWithOversizedPath(
       {
-        'manifest.json': manifestJson({ mark: '0.1.0' }),
+        'manifest.json': manifestJson({ spec: '0.1.0' }),
         'note.mk.md': '# Hello',
       },
       'manifest.json',
-      manifestJson({ mark: '0.1.0' }).length,
+      manifestJson({ spec: '0.1.0' }).length,
     );
     const result = await resolveBundleDocument(storage);
     expect(result.ok).toBe(true);
@@ -253,7 +253,7 @@ describe('bundleResolutionFailureMessage', () => {
 describe('extractAssetsAsDataUris', () => {
   it('extracts recognized image types under assets/ as data URIs', async () => {
     const storage = zipStorage({
-      'manifest.json': manifestJson({ mark: '0.1.0' }),
+      'manifest.json': manifestJson({ spec: '0.1.0' }),
       'note.mk.md': '# Hello',
       'assets/nice.png': new Uint8Array([1, 2, 3, 4]),
       'assets/readme.txt': 'not an image',
@@ -265,7 +265,7 @@ describe('extractAssetsAsDataUris', () => {
 
   it('returns an empty map when there is no assets/ directory', async () => {
     const storage = zipStorage({
-      'manifest.json': manifestJson({ mark: '0.1.0' }),
+      'manifest.json': manifestJson({ spec: '0.1.0' }),
       'note.mk.md': '# Hello',
     });
     expect(await extractAssetsAsDataUris(storage)).toEqual({});
@@ -274,7 +274,7 @@ describe('extractAssetsAsDataUris', () => {
   it('stops extracting once the total budget would be exceeded, quietly', async () => {
     const big = new Uint8Array(10);
     const storage = zipStorage({
-      'manifest.json': manifestJson({ mark: '0.1.0' }),
+      'manifest.json': manifestJson({ spec: '0.1.0' }),
       'note.mk.md': '# Hello',
       'assets/a.png': big,
       'assets/b.png': big,

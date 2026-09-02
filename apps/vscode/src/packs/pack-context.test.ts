@@ -339,3 +339,87 @@ describe('loadPackContext — prebuilt pack sibling stylesheet and shadowed sour
     expect(context.prebuiltShadowedPacks).toEqual([]);
   });
 });
+
+describe('loadPackContext — bundled packs (GitHub issue #15)', () => {
+  async function makeBundledPack(
+    extensionPath: string,
+    name: string,
+  ): Promise<void> {
+    const packDir = path.join(extensionPath, 'dist', 'packs', name);
+    await mkdir(packDir, { recursive: true });
+    await writeFile(
+      path.join(packDir, 'pack.json'),
+      JSON.stringify({
+        name,
+        engine: 'react',
+        components: { widget: './Widget.tsx' },
+      }),
+    );
+    await writeFile(path.join(packDir, 'webview.js'), '// prebuilt bundled');
+  }
+
+  it('is absent with no extensionPath given (unchanged default behavior)', async () => {
+    const root = await makeTempDir();
+    const context = await loadPackContext([], root);
+    expect(context.packs).toEqual([]);
+  });
+
+  it('loads a bundled pack even with no markii.packs configured, and it is namespaced and in webviewPacks', async () => {
+    const extensionPath = await makeTempDir();
+    await makeBundledPack(extensionPath, 'read');
+
+    const context = await loadPackContext([], undefined, { extensionPath });
+
+    expect(context.namespaces).toEqual(['read']);
+    expect(context.packs).toHaveLength(1);
+    expect(context.webviewPacks).toHaveLength(1);
+  });
+
+  it('orders bundled packs ahead of the user-configured ones', async () => {
+    const extensionPath = await makeTempDir();
+    await makeBundledPack(extensionPath, 'read');
+    const root = await makeTempDir();
+    const packDir = path.join(root, 'demo');
+    await mkdir(packDir, { recursive: true });
+    await writeFile(
+      path.join(packDir, 'pack.json'),
+      JSON.stringify({
+        name: 'demo',
+        engine: 'react',
+        components: { widget: './Widget.tsx' },
+      }),
+    );
+
+    const context = await loadPackContext(['demo'], root, { extensionPath });
+
+    expect(context.namespaces).toEqual(['read', 'demo']);
+  });
+
+  it('a user pack claiming a bundled namespace is skipped with a diagnostics reason, bundled wins', async () => {
+    const extensionPath = await makeTempDir();
+    await makeBundledPack(extensionPath, 'read');
+    const root = await makeTempDir();
+    const packDir = path.join(root, 'my-read');
+    await mkdir(packDir, { recursive: true });
+    await writeFile(
+      path.join(packDir, 'pack.json'),
+      JSON.stringify({
+        name: 'read',
+        engine: 'react',
+        components: { widget: './Widget.tsx' },
+      }),
+    );
+
+    const context = await loadPackContext(['my-read'], root, {
+      extensionPath,
+    });
+
+    expect(context.packs).toHaveLength(1);
+    expect(context.packs[0]!.folder).toBe(
+      path.join(extensionPath, 'dist', 'packs', 'read'),
+    );
+    expect(context.skipped).toHaveLength(1);
+    expect(context.skipped[0]!.folder).toBe(packDir);
+    expect(context.skipped[0]!.reason).toContain('bundled pack');
+  });
+});

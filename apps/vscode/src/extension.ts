@@ -1,9 +1,11 @@
 import * as vscode from 'vscode';
+import * as path from 'node:path';
 import {
   esbuildBrowserModulePath,
   esbuildWasmBinaryPath,
   exportHtml,
   exportHtmlCascade,
+  installedPacksDir,
   openPreview,
   packCacheDir,
   resetScriptGrants,
@@ -12,21 +14,38 @@ import {
 } from './preview-panel.js';
 import { appendPackFolder } from './packs/add-pack-folder.js';
 import {
+  archiveExportNameValidationMessage,
+  archiveFileExists,
   createNodePackExportFs,
   exportNameValidationMessage,
   NO_PACKS_CONFIGURED_MESSAGE,
+  normalizeArchiveExportName,
+  packArchiveExportDiagnosticLines,
+  packArchiveExportResultMessage,
+  packArchiveOverwriteConfirmMessage,
+  PACK_EXPORT_FORMAT_ITEMS,
   packExportDiagnosticLines,
   packExportOverwriteConfirmMessage,
   packExportQuickPickItem,
   packExportResultMessage,
+  writePackArchiveFile,
 } from './packs/export-pack.js';
 import { discoverConfiguredPacks } from './packs/discover-configured-packs.js';
+import { createNodeArchiveExtractFs } from './packs/archive-packs.js';
+import {
+  installConsentMessage,
+  installPackDiagnosticLines,
+  installPackFromArchive,
+  installPackResultMessage,
+  installReplaceConfirmMessage,
+} from './packs/install-pack.js';
 import {
   buildPackRegistrationScript,
   buildComponentCatalog,
   completionAt,
   componentSkeleton,
   exportPack,
+  exportPackArchive,
   hoverAt,
   offsetToLineColumn,
 } from '@markii/host';
@@ -101,6 +120,104 @@ async function addPackFolder(): Promise<void> {
   void vscode.window.showInformationMessage(
     'Markii: pack folder added. Reopen the preview to load it.',
   );
+}
+
+/**
+ * The `markii.installPack` command ("Markii: Install Pack from File…",
+ * GitHub issue #16): picks a `.mkp` file, validates it, asks for consent
+ * (its code will run in the preview), asks before replacing an
+ * already-installed pack of the same namespace, unzips it into this
+ * extension's own `installedPacksDir`, then adds that directory to
+ * `markii.packs`, the same GLOBAL, user-scoped write `addPackFolder`
+ * already makes, and for the same reason: a workspace can never install a
+ * pack on the reader's behalf. Every decision worth testing (validation,
+ * the collision check, the wording) lives in `./packs/install-pack.ts`;
+ * this function is `vscode` wiring only.
+ */
+async function installPackCommand(
+  context: vscode.ExtensionContext,
+  diagnosticsChannel: vscode.OutputChannel,
+): Promise<void> {
+  const picked = await vscode.window.showOpenDialog({
+    canSelectFolders: false,
+    canSelectFiles: true,
+    canSelectMany: false,
+    filters: { 'Markii pack archive': ['mkp'] },
+    openLabel: 'Install',
+    title: 'Select a Markii pack archive (.mkp) to install',
+  });
+  const chosen = picked?.[0];
+  if (!chosen) return;
+
+  const archivePath = chosen.fsPath;
+  let archiveBytes: Uint8Array;
+  try {
+    archiveBytes = await readVscodeFileBytes(archivePath);
+  } catch (err) {
+    diagnosticsChannel.appendLine(
+      `Install Pack from File: could not read "${archivePath}": ${err instanceof Error ? err.message : String(err)}`,
+    );
+    void vscode.window.showWarningMessage(
+      `Markii: could not read "${archivePath}".`,
+    );
+    return;
+  }
+
+  const outcome = await installPackFromArchive({
+    archiveBytes,
+    archivePath,
+    installRoot: installedPacksDir(context),
+    exists: async (absolutePath) => {
+      try {
+        await vscode.workspace.fs.stat(vscode.Uri.file(absolutePath));
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    extractFs: createNodeArchiveExtractFs(),
+    confirmConsent: async (packName) => {
+      const choice = await vscode.window.showWarningMessage(
+        installConsentMessage(packName),
+        { modal: true },
+        'Install',
+      );
+      return choice === 'Install';
+    },
+    confirmReplace: async (packName) => {
+      const choice = await vscode.window.showWarningMessage(
+        installReplaceConfirmMessage(packName),
+        { modal: true },
+        'Replace',
+      );
+      return choice === 'Replace';
+    },
+  });
+
+  for (const line of installPackDiagnosticLines(outcome, archivePath)) {
+    diagnosticsChannel.appendLine(line);
+  }
+  const message = installPackResultMessage(outcome, archivePath);
+  if (outcome.kind === 'rejected') {
+    void vscode.window.showWarningMessage(message);
+    return;
+  }
+  if (outcome.kind === 'declined') {
+    return; // the cancel itself is feedback enough; nothing changed
+  }
+
+  const config = vscode.workspace.getConfiguration('markii');
+  const existing = config.get<string[]>('packs', []);
+  const next = appendPackFolder(existing, outcome.installedDir);
+  if (next) {
+    await config.update('packs', next, vscode.ConfigurationTarget.Global);
+  }
+  void vscode.window.showInformationMessage(message);
+}
+
+/** Reads a `.mkp` file's raw bytes via `vscode.workspace.fs`, so a remote/virtual workspace file system is honored the same way every other file read in this extension is. */
+async function readVscodeFileBytes(archivePath: string): Promise<Uint8Array> {
+  return vscode.workspace.fs.readFile(vscode.Uri.file(archivePath));
 }
 
 /**
@@ -232,64 +349,164 @@ async function exportPackCommand(
     chosen = packs[index]!;
   }
 
-  // When only one pack is configured the quick pick above is skipped, so
-  // these prompts are the first thing the user sees: each names the chosen
-  // pack, or the silent auto-selection reads as "exporting everything".
+  // The output SHAPE (GitHub issue #16): a folder, as before, or a single
+  // `.mkp` archive file. Always asked, even with one pack configured, since
+  // the format choice is independent of which pack is being exported.
+  const formatPicked = await vscode.window.showQuickPick(
+    [...PACK_EXPORT_FORMAT_ITEMS],
+    {
+      title: `Markii: Export the ${chosen.manifest.name} pack`,
+      placeHolder: 'Choose an export format',
+    },
+  );
+  if (!formatPicked) return; // cancelled
+
+  const cacheDir = packCacheDir(context);
+  const browserModulePath = esbuildBrowserModulePath(context);
+  const wasmBinaryPath = esbuildWasmBinaryPath(context);
+  const build = (pack: DiscoveredPack, dir: string) =>
+    buildPackRegistrationScript(pack, dir, {
+      esbuildBrowserModulePath: browserModulePath,
+      esbuildWasmBinaryPath: wasmBinaryPath,
+    });
+
+  if (formatPicked.format === 'folder') {
+    // When only one pack is configured the pack quick pick above is
+    // skipped, so these prompts are the first thing the user sees: each
+    // names the chosen pack, or the silent auto-selection reads as
+    // "exporting everything".
+    const destinationPicked = await vscode.window.showOpenDialog({
+      canSelectFolders: true,
+      canSelectFiles: false,
+      canSelectMany: false,
+      openLabel: 'Export Here',
+      title: `Choose where to export the ${chosen.manifest.name} pack`,
+    });
+    const destinationDir = destinationPicked?.[0]?.fsPath;
+    if (!destinationDir) return; // cancelled
+
+    const exportName = await vscode.window.showInputBox({
+      title: `Markii: Export the ${chosen.manifest.name} pack`,
+      prompt: `Folder name to create for the ${chosen.manifest.name} pack at the chosen destination.`,
+      value: chosen.manifest.name,
+      validateInput: exportNameValidationMessage,
+    });
+    if (exportName === undefined) return; // cancelled
+
+    const outcome = await exportPack({
+      pack: chosen,
+      cacheDir,
+      destinationDir,
+      exportName,
+      build,
+      fs: createNodePackExportFs(),
+      confirmOverwrite: async (request) => {
+        const choice = await vscode.window.showWarningMessage(
+          packExportOverwriteConfirmMessage(request),
+          { modal: true },
+          'Overwrite',
+        );
+        return choice === 'Overwrite';
+      },
+    });
+
+    // Both homes of the outcome, always: the short popup, and the full
+    // detail (a failure's verbatim reason, the written paths and byte
+    // sizes, any pack-CSS lint warnings) on the diagnostics surface.
+    const message = packExportResultMessage(outcome);
+    for (const line of packExportDiagnosticLines(outcome)) {
+      diagnosticsChannel.appendLine(line);
+    }
+    if (outcome.kind === 'failed') {
+      void vscode.window.showWarningMessage(message);
+    } else {
+      void vscode.window.showInformationMessage(message);
+    }
+    return;
+  }
+
+  // The archive shape: build first (so a build failure never bothers the
+  // user with a destination/name they'd have to pick again), THEN ask
+  // where to save the single `.mkp` file.
+  const fsReads = createNodePackExportFs();
+  const archiveOutcome = await exportPackArchive({
+    pack: chosen,
+    cacheDir,
+    build,
+    fs: fsReads,
+  });
+  if (archiveOutcome.kind === 'failed') {
+    const message = packArchiveExportResultMessage(archiveOutcome, '');
+    for (const line of packArchiveExportDiagnosticLines(archiveOutcome, '')) {
+      diagnosticsChannel.appendLine(line);
+    }
+    void vscode.window.showWarningMessage(message);
+    return;
+  }
+
   const destinationPicked = await vscode.window.showOpenDialog({
     canSelectFolders: true,
     canSelectFiles: false,
     canSelectMany: false,
     openLabel: 'Export Here',
-    title: `Choose where to export the ${chosen.manifest.name} pack`,
+    title: `Choose where to export the ${chosen.manifest.name} pack archive`,
   });
   const destinationDir = destinationPicked?.[0]?.fsPath;
   if (!destinationDir) return; // cancelled
 
-  const exportName = await vscode.window.showInputBox({
-    title: `Markii: Export the ${chosen.manifest.name} pack`,
-    prompt: `Folder name to create for the ${chosen.manifest.name} pack at the chosen destination.`,
-    value: chosen.manifest.name,
-    validateInput: exportNameValidationMessage,
+  const fileNameInput = await vscode.window.showInputBox({
+    title: `Markii: Export the ${chosen.manifest.name} pack as an archive`,
+    prompt: `File name for the ${chosen.manifest.name} pack archive at the chosen destination.`,
+    value: archiveOutcome.fileName,
+    validateInput: archiveExportNameValidationMessage,
   });
-  if (exportName === undefined) return; // cancelled
+  if (fileNameInput === undefined) return; // cancelled
 
-  const cacheDir = packCacheDir(context);
-  const browserModulePath = esbuildBrowserModulePath(context);
-  const wasmBinaryPath = esbuildWasmBinaryPath(context);
+  const destinationPath = vscode.Uri.joinPath(
+    vscode.Uri.file(destinationDir),
+    normalizeArchiveExportName(fileNameInput),
+  ).fsPath;
 
-  const outcome = await exportPack({
-    pack: chosen,
-    cacheDir,
-    destinationDir,
-    exportName,
-    build: (pack, dir) =>
-      buildPackRegistrationScript(pack, dir, {
-        esbuildBrowserModulePath: browserModulePath,
-        esbuildWasmBinaryPath: wasmBinaryPath,
+  if (await archiveFileExists(destinationPath)) {
+    const choice = await vscode.window.showWarningMessage(
+      packArchiveOverwriteConfirmMessage({
+        packName: chosen.manifest.name,
+        fileName: path.basename(destinationPath),
       }),
-    fs: createNodePackExportFs(),
-    confirmOverwrite: async (request) => {
-      const choice = await vscode.window.showWarningMessage(
-        packExportOverwriteConfirmMessage(request),
-        { modal: true },
-        'Overwrite',
+      { modal: true },
+      'Overwrite',
+    );
+    if (choice !== 'Overwrite') {
+      diagnosticsChannel.appendLine(
+        `Export cancelled for pack "${chosen.manifest.name}"; nothing was written.`,
       );
-      return choice === 'Overwrite';
-    },
-  });
+      return;
+    }
+  }
 
-  // Both homes of the outcome, always: the short popup, and the full
-  // detail (a failure's verbatim reason, the written paths and byte sizes,
-  // any pack-CSS lint warnings) on the diagnostics surface.
-  const message = packExportResultMessage(outcome);
-  for (const line of packExportDiagnosticLines(outcome)) {
+  try {
+    await writePackArchiveFile(destinationPath, archiveOutcome.bytes);
+  } catch (err) {
+    diagnosticsChannel.appendLine(
+      `Export failed for pack "${chosen.manifest.name}": ${err instanceof Error ? err.message : String(err)}`,
+    );
+    void vscode.window.showWarningMessage(
+      `Markii: could not export pack "${chosen.manifest.name}". Open the Markii output for details.`,
+    );
+    return;
+  }
+
+  const message = packArchiveExportResultMessage(
+    archiveOutcome,
+    destinationPath,
+  );
+  for (const line of packArchiveExportDiagnosticLines(
+    archiveOutcome,
+    destinationPath,
+  )) {
     diagnosticsChannel.appendLine(line);
   }
-  if (outcome.kind === 'failed') {
-    void vscode.window.showWarningMessage(message);
-  } else {
-    void vscode.window.showInformationMessage(message);
-  }
+  void vscode.window.showInformationMessage(message);
 }
 
 /**
@@ -331,7 +548,9 @@ function quickPickItemFromEntry(
  * so a caught error here still falls back to the standard set alone rather
  * than failing the whole command.
  */
-async function insertComponentCommand(): Promise<void> {
+async function insertComponentCommand(
+  context: vscode.ExtensionContext,
+): Promise<void> {
   const editor = vscode.window.activeTextEditor;
   if (!editor || !isPreviewableDocument(editor.document)) {
     void vscode.window.showInformationMessage(NO_ACTIVE_MARK_EDITOR_MESSAGE);
@@ -345,7 +564,11 @@ async function insertComponentCommand(): Promise<void> {
 
   let packs: Awaited<ReturnType<typeof discoverConfiguredPacks>> = [];
   try {
-    packs = await discoverConfiguredPacks(configuredPacks, workspaceRoot);
+    packs = await discoverConfiguredPacks(
+      configuredPacks,
+      workspaceRoot,
+      context.extensionUri.fsPath,
+    );
   } catch {
     packs = [];
   }
@@ -584,20 +807,21 @@ function createCompletionAndHoverProviders(catalogCache: CatalogCache): {
 }
 
 /**
- * The catalog cache's `load`: today's configured packs, discovered fresh.
+ * The catalog cache's `load`: today's configured packs (plus the
+ * extension's own bundled packs, GitHub issue #15), discovered fresh.
  * Shared shape with `insertComponentCommand`'s own discovery call, kept
  * separate rather than factored together since the two callers have
  * different failure handling (the cache degrades to the standard set and
  * caches nothing on failure; the command just falls back to `[]` inline).
  */
-function loadConfiguredPacksForCompletion(): Promise<
-  readonly DiscoveredPack[]
-> {
+function loadConfiguredPacksForCompletion(
+  extensionPath: string,
+): Promise<readonly DiscoveredPack[]> {
   const configuredPacks = vscode.workspace
     .getConfiguration('markii')
     .get<string[]>('packs', []);
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  return discoverConfiguredPacks(configuredPacks, workspaceRoot);
+  return discoverConfiguredPacks(configuredPacks, workspaceRoot, extensionPath);
 }
 
 /**
@@ -654,6 +878,12 @@ export function activate(context: vscode.ExtensionContext): void {
       void addPackFolder();
     },
   );
+  const installPackCommandHandle = vscode.commands.registerCommand(
+    'markii.installPack',
+    () => {
+      void installPackCommand(context, diagnosticsChannel);
+    },
+  );
   const enableScheduledRefreshCommand = vscode.commands.registerCommand(
     'markii.enableScheduledRefresh',
     () => {
@@ -681,7 +911,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const insertComponentCommandHandle = vscode.commands.registerCommand(
     'markii.insertComponent',
     () => {
-      void insertComponentCommand();
+      void insertComponentCommand(context);
     },
   );
   const exportHtmlCommandHandle = vscode.commands.registerCommand(
@@ -702,7 +932,9 @@ export function activate(context: vscode.ExtensionContext): void {
   // invalidated whenever what it would discover could have changed:
   // `markii.packs` edited, or a workspace folder added/removed (packs are
   // discovered relative to the workspace root).
-  const catalogCache = createCatalogCache(loadConfiguredPacksForCompletion);
+  const catalogCache = createCatalogCache(() =>
+    loadConfiguredPacksForCompletion(context.extensionUri.fsPath),
+  );
   const { completionProvider, hoverProvider } =
     createCompletionAndHoverProviders(catalogCache);
   const completionProviderHandle =
@@ -732,6 +964,7 @@ export function activate(context: vscode.ExtensionContext): void {
     runScriptsCommand,
     resetScriptGrantsCommand,
     addPackFolderCommand,
+    installPackCommandHandle,
     enableScheduledRefreshCommand,
     toggleRunOnOpenCommand,
     toggleScriptExecutionCommand,

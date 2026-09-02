@@ -24,6 +24,14 @@
  * offers a quick pick when there is more than one, asks where to export and
  * what to name the folder, calls `@markii/host`'s `exportPack` with this
  * module's `PackExportFs`, and shows the message this module renders.
+ *
+ * Export Pack also offers a SECOND output shape (GitHub issue #16): a
+ * single `.mkp` archive file instead of a folder, built by `@markii/host`'s
+ * `exportPackArchive` (the same compile, zipped rather than written as
+ * separate files). `packExportFormatQuickPickItems` is that choice's
+ * quick-pick data; `writePackArchiveFile`, `archiveExportNameFor`, and the
+ * archive-specific wording functions below are this shape's counterparts
+ * to the folder shape's equivalents above them.
  */
 import {
   access,
@@ -33,10 +41,12 @@ import {
   rm,
   writeFile,
 } from 'node:fs/promises';
+import { dirname } from 'node:path';
 import type {
   DiscoveredPack,
   PackExportFs,
   PackExportOutcome,
+  PackExportArchiveOutcome,
 } from '@markii/host';
 
 /**
@@ -207,6 +217,138 @@ export function packExportDiagnosticLines(
   if (outcome.scriptFilesCopied > 0) {
     lines.push(
       `Exported pack "${outcome.packName}": copied ${String(outcome.scriptFilesCopied)} script file${outcome.scriptFilesCopied === 1 ? '' : 's'} from its scripts folder.`,
+    );
+  }
+  lines.push(...outcome.warnings);
+  return lines;
+}
+
+/** One item in the "which shape should this export take" quick pick, plain data, no `vscode.QuickPickItem` dependency. */
+export interface PackExportFormatQuickPickItem {
+  readonly label: string;
+  readonly description: string;
+  readonly format: 'folder' | 'archive';
+}
+
+/**
+ * The two shapes "Markii: Export Pack" offers (GitHub issue #16): a folder
+ * (today's default, still editable component sources alongside the built
+ * output) or a single `.mkp` archive (for sharing, or for "Install Pack
+ * from File" on another machine). `extension.ts` shows this quick pick
+ * even when there is only one pack to export: the format choice is
+ * independent of which pack.
+ */
+export const PACK_EXPORT_FORMAT_ITEMS: readonly PackExportFormatQuickPickItem[] =
+  [
+    {
+      label: 'Folder',
+      description: 'pack.json, webview.js, and scripts as separate files',
+      format: 'folder',
+    },
+    {
+      label: 'Pack archive (.mkp)',
+      description: 'a single zipped file, for sharing or installing elsewhere',
+      format: 'archive',
+    },
+  ];
+
+/**
+ * Writes `bytes` to `absolutePath`, creating any missing parent
+ * directories first. The one raw-byte write this module needs: an archive
+ * export writes exactly one file, so it goes straight to
+ * `node:fs/promises`'s `writeFile` rather than composing several writes
+ * through the text-oriented `PackExportFs` seam `exportPack`'s folder shape
+ * uses.
+ */
+export async function writePackArchiveFile(
+  absolutePath: string,
+  bytes: Uint8Array,
+): Promise<void> {
+  await mkdir(dirname(absolutePath), { recursive: true });
+  await writeFile(absolutePath, bytes);
+}
+
+/** Whether a file exists at `absolutePath`. Never throws. */
+export async function archiveFileExists(
+  absolutePath: string,
+): Promise<boolean> {
+  try {
+    await access(absolutePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Normalizes the user-entered `.mkp` file name: trims whitespace and
+ * appends the `.mkp` extension when the user left it off, so typing just
+ * the pack's name still produces a valid file. Validation (empty, a path
+ * separator, `.`/`..`) happens in `archiveExportNameValidationMessage`
+ * below; this function assumes a name that already passed it.
+ */
+export function normalizeArchiveExportName(name: string): string {
+  const trimmed = name.trim();
+  return trimmed.toLowerCase().endsWith('.mkp') ? trimmed : `${trimmed}.mkp`;
+}
+
+/** The `validateInput` function for the `.mkp` file-name input box: the same unsafe-name rejections as `exportNameValidationMessage`, restated for a file rather than a folder. */
+export function archiveExportNameValidationMessage(
+  name: string,
+): string | undefined {
+  const trimmed = name.trim();
+  if (trimmed.length === 0) {
+    return 'Enter a file name.';
+  }
+  if (trimmed === '.' || trimmed === '..' || trimmed === '.mkp') {
+    return 'Enter a plain file name.';
+  }
+  if (trimmed.includes('/') || trimmed.includes('\\')) {
+    return 'File name cannot contain a path separator.';
+  }
+  return undefined;
+}
+
+/** The overwrite-confirmation modal's wording for a `.mkp` file already at the chosen destination. */
+export function packArchiveOverwriteConfirmMessage(request: {
+  readonly packName: string;
+  readonly fileName: string;
+}): string {
+  return `Markii: "${request.fileName}" already exists at the chosen destination. Overwrite it with this export of pack "${request.packName}"?`;
+}
+
+/**
+ * The one result message for the archive export shape, covering every
+ * `PackExportArchiveOutcome` kind plus the write step this module (not
+ * `@markii/host`) performs. Matches `packExportResultMessage`'s wording
+ * rules: at most two short sentences, no em dashes, no parentheses, and a
+ * failure's reason stays out of the popup.
+ */
+export function packArchiveExportResultMessage(
+  outcome: PackExportArchiveOutcome,
+  destinationPath: string,
+): string {
+  if (outcome.kind === 'failed') {
+    return `Markii: could not export pack "${outcome.packName}". Open the Markii output for details.`;
+  }
+  const sizeClause = formatKb(outcome.bytes.byteLength);
+  return `Markii: exported pack "${outcome.packName}" to ${destinationPath}. The archive is ${sizeClause}.`;
+}
+
+/** The full output-channel detail for one archive export attempt, mirroring `packExportDiagnosticLines`. */
+export function packArchiveExportDiagnosticLines(
+  outcome: PackExportArchiveOutcome,
+  destinationPath: string,
+): string[] {
+  if (outcome.kind === 'failed') {
+    return [`Export failed for pack "${outcome.packName}": ${outcome.reason}`];
+  }
+  const lines = [
+    `Exported pack "${outcome.packName}" to ${destinationPath}: wrote ${String(outcome.bytes.byteLength)} bytes (webview.js ${String(outcome.scriptBytes)} bytes${outcome.stylesheetBytes !== undefined ? `, webview.css ${String(outcome.stylesheetBytes)} bytes` : ''})`,
+  ];
+  if (outcome.scriptFilesCopied > 0) {
+    lines.push(
+      `Exported pack "${outcome.packName}": included ${String(outcome.scriptFilesCopied)} script file${outcome.scriptFilesCopied === 1 ? '' : 's'} from its scripts folder.`,
     );
   }
   lines.push(...outcome.warnings);

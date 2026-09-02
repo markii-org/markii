@@ -10,6 +10,7 @@
  */
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
+import * as path from 'node:path';
 import {
   createNodeFileReader,
   discoverPacks,
@@ -26,6 +27,12 @@ import type {
   PackPathExists,
   SkippedPackFolder,
 } from '@markii/host';
+import { discoverBundledPacks, mergeBundledPacks } from './bundled-packs.js';
+import {
+  mergeArchiveAndFolderPacks,
+  partitionConfiguredPackPaths,
+  resolveArchivePacksForPreview,
+} from './archive-packs.js';
 
 export interface PackContext {
   /** Every validated, non-colliding discovered pack. */
@@ -119,17 +126,30 @@ export interface LoadPackContextOptions {
    * `webview.css`/shadowed-sources checks.
    */
   readonly pathExists?: PackPathExists;
+  /**
+   * The extension's own install directory (`ExtensionContext.extensionUri.fsPath`,
+   * `preview-panel.ts`'s `loadCurrentPackContext`). When given, the
+   * bundled packs under `dist/packs` (AGENTS.md's "Bundled packs", GitHub
+   * issue #15) are discovered and merged AHEAD of `configuredPacks`, via
+   * `./bundled-packs.ts`'s `discoverBundledPacks`/`mergeBundledPacks`.
+   * `undefined` (every existing caller/test that omits it) keeps today's
+   * behavior exactly: no bundled packs, `configuredPacks` alone.
+   */
+  readonly extensionPath?: string;
 }
 
 /**
  * Loads everything about the packs named by `configuredPacks` (the
  * `markii.packs` setting's raw value) resolved against `workspaceRoot`
- * (see `@markii/host`'s `resolvePackPaths`). Never throws: every step it
- * composes already degrades quietly (a missing/invalid manifest is
- * skipped, a missing `scripts/` directory contributes no modules, a
- * missing `webview.js` with no `cacheDir`/`buildWebviewScript` configured
- * just excludes that pack from `webviewPacks`, and a failed build is
- * recorded in `skipped` rather than thrown).
+ * (see `@markii/host`'s `resolvePackPaths`), with the extension's own
+ * bundled packs (`options.extensionPath`) merged in ahead of them. Never
+ * throws: every step it composes already degrades quietly (a
+ * missing/invalid manifest is skipped, a missing `scripts/` directory
+ * contributes no modules, a missing `webview.js` with no
+ * `cacheDir`/`buildWebviewScript` configured just excludes that pack from
+ * `webviewPacks`, a failed build is recorded in `skipped` rather than
+ * thrown, and a user pack whose namespace collides with a bundled one is
+ * recorded in `skipped` too — "bundled wins", `./bundled-packs.ts`).
  */
 export async function loadPackContext(
   configuredPacks: readonly string[],
@@ -140,19 +160,50 @@ export async function loadPackContext(
     cacheDir,
     buildWebviewScript = noopBuilder,
     pathExists = existsSync,
+    extensionPath,
   } = options;
   const homeDir = homedir();
-  const folders = resolvePackPaths(configuredPacks, workspaceRoot, homeDir);
+  const resolvedPaths = resolvePackPaths(
+    configuredPacks,
+    workspaceRoot,
+    homeDir,
+  );
   const relativeEntries = relativePackEntries(configuredPacks, homeDir);
-  const result = await discoverPacks(folders, createNodeFileReader());
-  const packModules = await loadPackModules(result.packs);
+  const { folderPaths, archivePaths } =
+    partitionConfiguredPackPaths(resolvedPaths);
+  const userResult = await discoverPacks(folderPaths, createNodeFileReader());
+  // `.mkp` archive entries (GitHub issue #16): loaded read-only from the
+  // archive, prebuilt form only, never compiled. See `./archive-packs.ts`.
+  // Materialized under a sibling of the pack build cache so it never
+  // touches the workspace or the archive's own folder.
+  const archiveCacheDir =
+    cacheDir !== undefined ? path.join(cacheDir, 'archives') : undefined;
+  const archiveResult = await resolveArchivePacksForPreview(
+    archivePaths,
+    archiveCacheDir,
+  );
+  const combinedUserResult = mergeArchiveAndFolderPacks(
+    userResult.packs,
+    archiveResult.packs,
+  );
+  const bundled =
+    extensionPath !== undefined
+      ? await discoverBundledPacks(extensionPath)
+      : [];
+  const merged = mergeBundledPacks(bundled, combinedUserResult.packs);
+  const packModules = await loadPackModules(merged.packs);
 
-  const skipped: SkippedPackFolder[] = [...result.skipped];
+  const skipped: SkippedPackFolder[] = [
+    ...userResult.skipped,
+    ...archiveResult.skipped,
+    ...combinedUserResult.skipped,
+    ...merged.skipped,
+  ];
   const webviewPacks: DiscoveredPack[] = [];
   const cssWarnings: string[] = [];
   const prebuiltShadowedPacks: { name: string; folder: string }[] = [];
 
-  for (const pack of result.packs) {
+  for (const pack of merged.packs) {
     const prebuilt = await resolvePrebuiltPack(pack, pathExists);
     if (prebuilt !== undefined) {
       webviewPacks.push({
@@ -192,10 +243,10 @@ export async function loadPackContext(
   }
 
   return {
-    packs: result.packs,
+    packs: merged.packs,
     packModules,
     webviewPacks,
-    namespaces: installedNamespaces(result.packs),
+    namespaces: installedNamespaces(merged.packs),
     skipped,
     relativeEntries,
     cssWarnings,
