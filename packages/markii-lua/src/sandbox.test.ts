@@ -21,15 +21,15 @@ function fixtureBundleView() {
     'note.mk.md': u8('# hello'),
     'manifest.json': u8('{"spec":"0.1.0"}'),
     'assets/x.png': u8('img'),
-    'cache/data.json': u8('{}'),
+    '.cache/data.json': u8('{}'),
   });
   const storage = openZipBundle(bytes);
   const manifest: BundleManifest = {
     spec: '0.1.0',
-    permissions: { bundle: ['read', 'write:cache/'] },
+    permissions: { bundle: ['read', 'write:.cache/'] },
   };
   const view = createScriptView(storage, manifest, {
-    bundle: ['read', 'write:cache/'],
+    bundle: ['read', 'write:.cache/'],
   });
   return { storage, view };
 }
@@ -610,13 +610,13 @@ describe('runScript — cache.get hit-path parity with the miss path, end to end
 });
 
 describe('runScript — capabilities: bundle', () => {
-  it('bundle.write to cache/ works through a real ScriptView', async () => {
+  it('bundle.write to .cache/ works through a real ScriptView', async () => {
     const { view, storage } = fixtureBundleView();
-    const r = await run('bundle.write("cache/out.json", "hi"); return true', {
+    const r = await run('bundle.write(".cache/out.json", "hi"); return true', {
       bundle: view,
     });
     expect(r).toEqual({ ok: true, value: true });
-    expect(await storage.read('cache/out.json')).toEqual(u8('hi'));
+    expect(await storage.read('.cache/out.json')).toEqual(u8('hi'));
   });
 
   it('bundle.write to manifest.json/note.mk.md is blocked through the real ScriptView, surfaced as a capability failure', async () => {
@@ -636,14 +636,14 @@ describe('runScript — capabilities: bundle', () => {
     });
     expect(typeResult).toEqual({ ok: true, value: 'function' });
 
-    const call = await run('bundle.write("cache/out.json", "hi")', {
+    const call = await run('bundle.write(".cache/out.json", "hi")', {
       tier: 'auto',
       bundle: view,
     });
     expect(call.ok).toBe(false);
     expect(!call.ok && call.error.kind).toBe('capability');
     expect(!call.ok && call.error.capability).toBe('tier-blocked');
-    expect(await storage.read('cache/out.json')).toBeUndefined();
+    expect(await storage.read('.cache/out.json')).toBeUndefined();
   });
 });
 

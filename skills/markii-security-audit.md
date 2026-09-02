@@ -89,8 +89,8 @@ and `AGENTS.md`.
 
 - `paths.ts`: normalizeBundlePath jail (no percent-decoding; rejects backslash,
   NUL, absolute, drive letters, any `..` segment). isWriteAllowed denies
-  manifest.json/note.mk.md UNCONDITIONALLY, otherwise needs write:cache/
-  grant plus nonempty cache/ prefix.
+  manifest.json/note.mk.md UNCONDITIONALLY, otherwise needs write:.cache/
+  grant plus nonempty .cache/ prefix.
 - `script-view.ts`: effective capability = declared INTERSECT granted; zero
   grants default; exposes read/write/exists only, never list.
 - `zip.ts`: hand-rolled central-directory reader; loud whole-archive rejection

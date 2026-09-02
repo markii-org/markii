@@ -37,9 +37,9 @@ describe('openDirBundle — happy path', () => {
   it('writes and reads a file', async () => {
     const dir = await makeTmpDir('markii-bundle-fs-');
     const storage = openDirBundle(dir);
-    await storage.write('cache/data.json', u8('{"ok":true}'));
-    expect(await storage.read('cache/data.json')).toEqual(u8('{"ok":true}'));
-    expect(await readFile(join(dir, 'cache', 'data.json'), 'utf8')).toBe(
+    await storage.write('.cache/data.json', u8('{"ok":true}'));
+    expect(await storage.read('.cache/data.json')).toEqual(u8('{"ok":true}'));
+    expect(await readFile(join(dir, '.cache', 'data.json'), 'utf8')).toBe(
       '{"ok":true}',
     );
   });
@@ -61,8 +61,8 @@ describe('openDirBundle — happy path', () => {
   it('size() returns the byte length without reading the file', async () => {
     const dir = await makeTmpDir('markii-bundle-fs-');
     const storage = openDirBundle(dir);
-    await storage.write('cache/data.json', u8('{"ok":true}'));
-    expect(await storage.size('cache/data.json')).toBe(
+    await storage.write('.cache/data.json', u8('{"ok":true}'));
+    expect(await storage.size('.cache/data.json')).toBe(
       u8('{"ok":true}').length,
     );
   });
@@ -78,10 +78,10 @@ describe('openDirBundle — happy path', () => {
     const storage = openDirBundle(dir);
     await storage.write('note.mk.md', u8('# hi'));
     await storage.write('assets/photo.png', u8('img'));
-    await storage.write('cache/nested/deep.json', u8('{}'));
+    await storage.write('.cache/nested/deep.json', u8('{}'));
     expect(await storage.list()).toEqual([
+      '.cache/nested/deep.json',
       'assets/photo.png',
-      'cache/nested/deep.json',
       'note.mk.md',
     ]);
   });
@@ -160,7 +160,7 @@ describe('openDirBundle — symlink escape', () => {
   }) => {
     const outsideDir = await makeTmpDir('markii-bundle-fs-outside-');
     const bundleDir = await makeTmpDir('markii-bundle-fs-bundle-');
-    const linkDirPath = join(bundleDir, 'cache');
+    const linkDirPath = join(bundleDir, '.cache');
 
     try {
       await symlink(outsideDir, linkDirPath, 'dir');
@@ -171,7 +171,7 @@ describe('openDirBundle — symlink escape', () => {
 
     const storage = openDirBundle(bundleDir);
     await expect(
-      storage.write('cache/new-file.json', u8('{}')),
+      storage.write('.cache/new-file.json', u8('{}')),
     ).rejects.toThrow(BundlePathError);
 
     // Nothing should have been written into the outside directory.
@@ -180,12 +180,12 @@ describe('openDirBundle — symlink escape', () => {
   });
 });
 
-describe('openDirBundle — ESCAPE 1/2: symlink inside cache/ re-targeting a forbidden in-bundle path', () => {
-  it('a symlink at cache/pwn -> ../manifest.json is rejected outright, manifest.json untouched', async ({
+describe('openDirBundle — ESCAPE 1/2: symlink inside .cache/ re-targeting a forbidden in-bundle path', () => {
+  it('a symlink at .cache/pwn -> ../manifest.json is rejected outright, manifest.json untouched', async ({
     skip,
   }) => {
     const bundleDir = await makeTmpDir('markii-bundle-escape1-');
-    await mkdir(join(bundleDir, 'cache'), { recursive: true });
+    await mkdir(join(bundleDir, '.cache'), { recursive: true });
     await writeFile(
       join(bundleDir, 'manifest.json'),
       '{"spec":"0.1.0"}',
@@ -194,7 +194,7 @@ describe('openDirBundle — ESCAPE 1/2: symlink inside cache/ re-targeting a for
     await writeFile(join(bundleDir, 'note.mk.md'), '# original', 'utf8');
 
     try {
-      await symlink('../manifest.json', join(bundleDir, 'cache', 'pwn'));
+      await symlink('../manifest.json', join(bundleDir, '.cache', 'pwn'));
     } catch {
       skip();
       return;
@@ -203,14 +203,16 @@ describe('openDirBundle — ESCAPE 1/2: symlink inside cache/ re-targeting a for
     const storage = openDirBundle(bundleDir);
     const view = createScriptView(
       storage,
-      { spec: '0.1.0', permissions: { bundle: ['write:cache/'] } },
-      { bundle: ['write:cache/'] },
+      { spec: '0.1.0', permissions: { bundle: ['write:.cache/'] } },
+      { bundle: ['write:.cache/'] },
     );
 
     await expect(
       view.write(
-        'cache/pwn',
-        u8('{"spec":"9.9.9","permissions":{"bundle":["read","write:cache/"]}}'),
+        '.cache/pwn',
+        u8(
+          '{"spec":"9.9.9","permissions":{"bundle":["read","write:.cache/"]}}',
+        ),
       ),
     ).rejects.toThrow();
 
@@ -219,11 +221,11 @@ describe('openDirBundle — ESCAPE 1/2: symlink inside cache/ re-targeting a for
     );
   });
 
-  it('a symlink at cache/pwn-note -> ../note.mk.md is rejected outright, note.mk.md untouched (ESCAPE 2)', async ({
+  it('a symlink at .cache/pwn-note -> ../note.mk.md is rejected outright, note.mk.md untouched (ESCAPE 2)', async ({
     skip,
   }) => {
     const bundleDir = await makeTmpDir('markii-bundle-escape2-');
-    await mkdir(join(bundleDir, 'cache'), { recursive: true });
+    await mkdir(join(bundleDir, '.cache'), { recursive: true });
     await writeFile(
       join(bundleDir, 'manifest.json'),
       '{"spec":"0.1.0"}',
@@ -232,7 +234,7 @@ describe('openDirBundle — ESCAPE 1/2: symlink inside cache/ re-targeting a for
     await writeFile(join(bundleDir, 'note.mk.md'), '# original', 'utf8');
 
     try {
-      await symlink('../note.mk.md', join(bundleDir, 'cache', 'pwn-note'));
+      await symlink('../note.mk.md', join(bundleDir, '.cache', 'pwn-note'));
     } catch {
       skip();
       return;
@@ -241,12 +243,12 @@ describe('openDirBundle — ESCAPE 1/2: symlink inside cache/ re-targeting a for
     const storage = openDirBundle(bundleDir);
     const view = createScriptView(
       storage,
-      { spec: '0.1.0', permissions: { bundle: ['write:cache/'] } },
-      { bundle: ['write:cache/'] },
+      { spec: '0.1.0', permissions: { bundle: ['write:.cache/'] } },
+      { bundle: ['write:.cache/'] },
     );
 
     await expect(
-      view.write('cache/pwn-note', u8('# hacked, self-modifying document')),
+      view.write('.cache/pwn-note', u8('# hacked, self-modifying document')),
     ).rejects.toThrow();
 
     expect(await readFile(join(bundleDir, 'note.mk.md'), 'utf8')).toBe(
@@ -254,11 +256,11 @@ describe('openDirBundle — ESCAPE 1/2: symlink inside cache/ re-targeting a for
     );
   });
 
-  it('a symlinked directory (cache/up -> ..) is rejected even reaching an EXISTING file (manifest.json / note.mk.md)', async ({
+  it('a symlinked directory (.cache/up -> ..) is rejected even reaching an EXISTING file (manifest.json / note.mk.md)', async ({
     skip,
   }) => {
     const bundleDir = await makeTmpDir('markii-bundle-escape1dir-');
-    await mkdir(join(bundleDir, 'cache'), { recursive: true });
+    await mkdir(join(bundleDir, '.cache'), { recursive: true });
     await writeFile(
       join(bundleDir, 'manifest.json'),
       '{"spec":"0.1.0"}',
@@ -267,7 +269,7 @@ describe('openDirBundle — ESCAPE 1/2: symlink inside cache/ re-targeting a for
     await writeFile(join(bundleDir, 'note.mk.md'), '# original', 'utf8');
 
     try {
-      await symlink('..', join(bundleDir, 'cache', 'up'));
+      await symlink('..', join(bundleDir, '.cache', 'up'));
     } catch {
       skip();
       return;
@@ -275,10 +277,10 @@ describe('openDirBundle — ESCAPE 1/2: symlink inside cache/ re-targeting a for
 
     const storage = openDirBundle(bundleDir);
     await expect(
-      storage.write('cache/up/manifest.json', u8('{"spec":"9.9.9"}')),
+      storage.write('.cache/up/manifest.json', u8('{"spec":"9.9.9"}')),
     ).rejects.toThrow(BundlePathError);
     await expect(
-      storage.write('cache/up/note.mk.md', u8('# hacked')),
+      storage.write('.cache/up/note.mk.md', u8('# hacked')),
     ).rejects.toThrow(BundlePathError);
 
     expect(await readFile(join(bundleDir, 'manifest.json'), 'utf8')).toBe(
@@ -289,14 +291,14 @@ describe('openDirBundle — ESCAPE 1/2: symlink inside cache/ re-targeting a for
     );
   });
 
-  it('a symlinked directory (cache/up -> ..) is rejected even when the leaf under it does not exist yet', async ({
+  it('a symlinked directory (.cache/up -> ..) is rejected even when the leaf under it does not exist yet', async ({
     skip,
   }) => {
     const bundleDir = await makeTmpDir('markii-bundle-escape1dir2-');
-    await mkdir(join(bundleDir, 'cache'), { recursive: true });
+    await mkdir(join(bundleDir, '.cache'), { recursive: true });
 
     try {
-      await symlink('..', join(bundleDir, 'cache', 'up'));
+      await symlink('..', join(bundleDir, '.cache', 'up'));
     } catch {
       skip();
       return;
@@ -304,9 +306,9 @@ describe('openDirBundle — ESCAPE 1/2: symlink inside cache/ re-targeting a for
 
     const storage = openDirBundle(bundleDir);
     // "brand-new-file.txt" does not exist anywhere yet — only the parent
-    // component ("cache/up") is a symlink. Must still be rejected.
+    // component (".cache/up") is a symlink. Must still be rejected.
     await expect(
-      storage.write('cache/up/brand-new-file.txt', u8('pwned')),
+      storage.write('.cache/up/brand-new-file.txt', u8('pwned')),
     ).rejects.toThrow(BundlePathError);
 
     const escapedPath = join(bundleDir, 'brand-new-file.txt');
@@ -320,12 +322,12 @@ describe('openDirBundle — ESCAPE 3: hard links defeat the root boundary', () =
   }) => {
     const parent = await makeTmpDir('markii-bundle-escape3-parent-');
     const bundleDir = join(parent, 'b.mkz');
-    await mkdir(join(bundleDir, 'cache'), { recursive: true });
+    await mkdir(join(bundleDir, '.cache'), { recursive: true });
     const victimPath = join(parent, 'victim.txt');
     await writeFile(victimPath, 'original victim content', 'utf8');
 
     try {
-      await link(victimPath, join(bundleDir, 'cache', 'hard'));
+      await link(victimPath, join(bundleDir, '.cache', 'hard'));
     } catch {
       skip();
       return;
@@ -333,7 +335,7 @@ describe('openDirBundle — ESCAPE 3: hard links defeat the root boundary', () =
 
     const storage = openDirBundle(bundleDir);
     await expect(
-      storage.write('cache/hard', u8('overwritten via hardlink')),
+      storage.write('.cache/hard', u8('overwritten via hardlink')),
     ).rejects.toThrow(BundlePathError);
 
     expect(await readFile(victimPath, 'utf8')).toBe('original victim content');
@@ -343,7 +345,7 @@ describe('openDirBundle — ESCAPE 3: hard links defeat the root boundary', () =
     skip,
   }) => {
     const bundleDir = await makeTmpDir('markii-bundle-escape3-manifest-');
-    await mkdir(join(bundleDir, 'cache'), { recursive: true });
+    await mkdir(join(bundleDir, '.cache'), { recursive: true });
     await writeFile(
       join(bundleDir, 'manifest.json'),
       '{"spec":"0.1.0"}',
@@ -353,7 +355,7 @@ describe('openDirBundle — ESCAPE 3: hard links defeat the root boundary', () =
     try {
       await link(
         join(bundleDir, 'manifest.json'),
-        join(bundleDir, 'cache', 'mhard'),
+        join(bundleDir, '.cache', 'mhard'),
       );
     } catch {
       skip();
@@ -362,7 +364,7 @@ describe('openDirBundle — ESCAPE 3: hard links defeat the root boundary', () =
 
     const storage = openDirBundle(bundleDir);
     await expect(
-      storage.write('cache/mhard', u8('{"spec":"9.9.9"}')),
+      storage.write('.cache/mhard', u8('{"spec":"9.9.9"}')),
     ).rejects.toThrow(BundlePathError);
 
     expect(await readFile(join(bundleDir, 'manifest.json'), 'utf8')).toBe(
@@ -373,9 +375,9 @@ describe('openDirBundle — ESCAPE 3: hard links defeat the root boundary', () =
   it('a normal (non-hardlinked) file can still be overwritten (nlink === 1 remains the happy path)', async () => {
     const dir = await makeTmpDir('markii-bundle-escape3-happy-');
     const storage = openDirBundle(dir);
-    await storage.write('cache/plain.json', u8('{"v":1}'));
-    await storage.write('cache/plain.json', u8('{"v":2}'));
-    expect(await storage.read('cache/plain.json')).toEqual(u8('{"v":2}'));
+    await storage.write('.cache/plain.json', u8('{"v":1}'));
+    await storage.write('.cache/plain.json', u8('{"v":2}'));
+    expect(await storage.read('.cache/plain.json')).toEqual(u8('{"v":2}'));
   });
 });
 
@@ -418,7 +420,7 @@ describe('dir <-> zip round-trip', () => {
   it('produces an identical file tree after dir -> zip -> dir', async () => {
     const srcDir = await makeTmpDir('markii-bundle-fs-src-');
     await mkdir(join(srcDir, 'assets'), { recursive: true });
-    await mkdir(join(srcDir, 'cache', 'nested'), { recursive: true });
+    await mkdir(join(srcDir, '.cache', 'nested'), { recursive: true });
     await writeFile(join(srcDir, 'note.mk.md'), '# roundtrip\n', 'utf8');
     await writeFile(join(srcDir, 'manifest.json'), '{"spec":"0.1.0"}', 'utf8');
     await writeFile(
@@ -426,7 +428,7 @@ describe('dir <-> zip round-trip', () => {
       Buffer.from([1, 2, 3, 4]),
     );
     await writeFile(
-      join(srcDir, 'cache', 'nested', 'deep.json'),
+      join(srcDir, '.cache', 'nested', 'deep.json'),
       '{"n":1}',
       'utf8',
     );

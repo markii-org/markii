@@ -201,6 +201,15 @@ and `math` is available, with the remaining unsafe entry points (`load`,
 scrub pass. Each run gets a fresh environment; that costs microseconds, so
 sandbox-per-note is cheap.
 
+On top of that slice the host injects one ungated table, `json`, holding
+`json.decode` and `json.encode`. It carries no ambient authority: it does no
+I/O, so it is present on every run whatever the trigger tier and whatever
+was granted. Both directions run under the same depth, node-count, and size
+limits that bound a fetched response and a script's own return value, and
+they reuse those same decoder and marshal passes rather than a second
+implementation, so a value cannot be shaped to pass one check and fail the
+other.
+
 Resource limits bound every run: an instruction-count hook, a wall-clock
 timeout, a memory cap, and a fetch response size cap. Limit breaches and
 capability denials are recorded on the host side, outside the sandbox, so a
@@ -287,11 +296,14 @@ embedding application's code, and the host checklist in
 A script's entire filesystem is its own bundle. `bundle.read` and
 `bundle.write` accept no absolute paths, no `..`, and no symlink following;
 the host resolves everything inside the bundle root and rejects escapes.
-Writes are limited to `.cache/` by default. A script can never write the
-document (no self-modifying notes) and never `manifest.json`, since a script
-that could edit the manifest could grant itself permissions. A script never
-sees any other note's bundle; sharing data between notes goes through the
-published-value store instead (see [scripting.md](scripting.md)).
+Writes are limited to `.cache/`, and only when the manifest declares the
+`write:.cache/` grant. That is the one accepted spelling: a manifest naming
+any other is rejected with a diagnostic rather than interpreted. A script
+can never write the document (no self-modifying notes) and never
+`manifest.json`, since a script that could edit the manifest could grant
+itself permissions. A script never sees any other note's bundle; sharing
+data between notes goes through the published-value store instead (see
+[scripting.md](scripting.md)).
 
 A bundle is attacker-deliverable in a way a note opened in an editor is
 not: someone can hand you a whole `.mkz`, and its manifest, document,

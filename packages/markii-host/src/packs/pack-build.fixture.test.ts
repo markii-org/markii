@@ -31,6 +31,8 @@ import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import vm from 'node:vm';
+import * as React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import type { PackBuildOutcome } from './pack-build.js';
 
 const FIXTURE_ROOT = path.resolve(
@@ -58,6 +60,17 @@ const TSXPACK_BARESPECIFIER_DIR = path.join(
   FIXTURE_ROOT,
   'tsxpack-barespecifier',
 );
+/**
+ * `../../test-fixtures/packs/tsxpack-jsx-helper`: the declared component
+ * (`Stat.tsx`, the compiler's entry module) renders through `./Badge.tsx`,
+ * a helper module that is not the entry and is not itself declared in
+ * `pack.json`, and that helper has its own JSX. This is the exact shape
+ * that shipped broken under a banner-based JSX shim: a banner's text sits
+ * outside the `format: 'iife'` wrapper, so even an entry-scoped `var`
+ * would never reach a non-entry module in the first place, and the
+ * helper's JSX call throws `__markiiJSX is not defined` at render time.
+ */
+const TSXPACK_JSX_HELPER_DIR = path.join(FIXTURE_ROOT, 'tsxpack-jsx-helper');
 const PACK_BUILD_TS = path.join(import.meta.dirname, 'pack-build.ts');
 
 /**
@@ -172,9 +185,12 @@ describe('buildPackRegistrationScript — real esbuild-wasm against the tsxpack 
 
       // (c) no bundled copy of React: real React is tens of KB and
       // carries telltale internals; this compiled output should be a
-      // few hundred bytes and never reference them.
+      // few kilobytes at most and never reference them. The JSX shim is
+      // now a real injected module (esbuild's module-wrapper machinery
+      // around it, not a bare `banner` string), so the floor is a little
+      // higher than before that change.
       const source = await readFile(outcome.scriptPath, 'utf8');
-      expect(source.length).toBeLessThan(5000);
+      expect(source.length).toBeLessThan(6000);
       expect(source).not.toContain('ReactCurrentDispatcher');
       expect(source).not.toContain('REACT_ELEMENT_TYPE');
 
@@ -534,6 +550,220 @@ describe('buildPackRegistrationScript — real esbuild-wasm against the tsxpack 
         if (outcome.kind !== 'failed') return;
         expect(outcome.reason).toContain('tsxbarespecifier');
         expect(outcome.reason).toContain('left-pad');
+      } finally {
+        await cleanupTempDirs();
+      }
+    }, 30_000);
+  });
+
+  describe('the JSX shim leaves no global behind (inject, not banner)', () => {
+    it('evaluating the compiled script in a vm context with a stub window adds no key beyond the ones the test itself seeded', async () => {
+      const workDir = await makeTempDir();
+      const cacheDir = await makeTempDir();
+      try {
+        const outcome = buildInChildProcess(TSXPACK_DIR, cacheDir, workDir);
+        expect(outcome.kind).toBe('built');
+        if (outcome.kind !== 'built') return;
+        const source = await readFile(outcome.scriptPath, 'utf8');
+
+        const windowObj: Record<string, unknown> = {
+          __markiiPackRegistrations: [] as unknown[],
+        };
+        windowObj.__markiiRegisterPack = (
+          manifest: unknown,
+          componentModules: unknown,
+        ) => {
+          (windowObj.__markiiPackRegistrations as unknown[]).push({
+            manifest,
+            componentModules,
+          });
+        };
+        const sandbox = { window: windowObj, console };
+        const context = vm.createContext(sandbox);
+        const seededKeys = new Set(Object.keys(sandbox));
+
+        vm.runInContext(source, context, {
+          filename: 'tsxpack-registration.js',
+        });
+
+        // No key beyond what this test itself seeded (`window`, `console`)
+        // was added to the vm context — a top-level `var __markiiJSX`
+        // written by a `banner` would show up here.
+        const contextKeys = Object.keys(context).filter(
+          (key) => !seededKeys.has(key),
+        );
+        expect(contextKeys).toEqual([]);
+
+        // And it never appears as a property on `window` either — the
+        // other place a leaking global would be reachable from.
+        expect(
+          Object.prototype.hasOwnProperty.call(windowObj, '__markiiJSX'),
+        ).toBe(false);
+        expect((windowObj as { __markiiJSX?: unknown }).__markiiJSX).toBe(
+          undefined,
+        );
+      } finally {
+        await cleanupTempDirs();
+      }
+    }, 30_000);
+  });
+
+  describe('every compiled component renders through real React', () => {
+    it('tsxpack: the registered component renders real markup with real React set on window.__markiiReact', async () => {
+      const workDir = await makeTempDir();
+      const cacheDir = await makeTempDir();
+      try {
+        const outcome = buildInChildProcess(TSXPACK_DIR, cacheDir, workDir);
+        expect(outcome.kind).toBe('built');
+        if (outcome.kind !== 'built') return;
+        const source = await readFile(outcome.scriptPath, 'utf8');
+
+        const registrations: Array<{
+          manifest: unknown;
+          componentModules: Record<
+            string,
+            { component: (props: unknown) => unknown; inline?: boolean }
+          >;
+        }> = [];
+        const windowObj = {
+          __markiiReact: React,
+          __markiiRegisterPack: (
+            manifest: unknown,
+            componentModules: unknown,
+          ) => {
+            registrations.push({
+              manifest,
+              componentModules: componentModules as never,
+            });
+          },
+        };
+        const context = vm.createContext({ window: windowObj, console });
+        vm.runInContext(source, context, {
+          filename: 'tsxpack-registration.js',
+        });
+
+        expect(registrations).toHaveLength(1);
+        const Stat = registrations[0]!.componentModules.stat!.component;
+        const markup = renderToStaticMarkup(
+          React.createElement(
+            Stat as React.ComponentType<Record<string, unknown>>,
+            {
+              attributes: { label: 'hits' },
+              children: null,
+            },
+          ),
+        );
+        expect(markup).toContain('mk-tsxpack-stat');
+        expect(markup).toContain('data-label="hits"');
+      } finally {
+        await cleanupTempDirs();
+      }
+    }, 30_000);
+
+    it('tsxpack-helpers: the registered component (real component chain through a helper module) renders real markup', async () => {
+      const workDir = await makeTempDir();
+      const cacheDir = await makeTempDir();
+      try {
+        const outcome = buildInChildProcess(
+          TSXPACK_HELPERS_DIR,
+          cacheDir,
+          workDir,
+        );
+        expect(outcome.kind).toBe('built');
+        if (outcome.kind !== 'built') return;
+        const source = await readFile(outcome.scriptPath, 'utf8');
+
+        const registrations: Array<{
+          componentModules: Record<
+            string,
+            { component: (props: unknown) => unknown }
+          >;
+        }> = [];
+        const windowObj = {
+          __markiiReact: React,
+          __markiiRegisterPack: (
+            _manifest: unknown,
+            componentModules: unknown,
+          ) => {
+            registrations.push({ componentModules: componentModules as never });
+          },
+        };
+        const context = vm.createContext({ window: windowObj, console });
+        vm.runInContext(source, context, {
+          filename: 'tsxhelpers-registration.js',
+        });
+
+        const Stat = registrations[0]!.componentModules.stat!.component;
+        const markup = renderToStaticMarkup(
+          React.createElement(
+            Stat as React.ComponentType<Record<string, unknown>>,
+            {
+              attributes: { label: 'hits' },
+              children: null,
+            },
+          ),
+        );
+        expect(markup).toContain('mk-tsxhelpers-stat');
+        expect(markup).toContain('deep-marker-9f3c');
+      } finally {
+        await cleanupTempDirs();
+      }
+    }, 30_000);
+
+    it('tsxpack-jsx-helper: JSX in a NON-entry helper module still renders (the exact regression a banner-scoped shim shipped once)', async () => {
+      const workDir = await makeTempDir();
+      const cacheDir = await makeTempDir();
+      try {
+        const outcome = buildInChildProcess(
+          TSXPACK_JSX_HELPER_DIR,
+          cacheDir,
+          workDir,
+        );
+        expect(outcome.kind).toBe('built');
+        if (outcome.kind !== 'built') return;
+        const source = await readFile(outcome.scriptPath, 'utf8');
+
+        const registrations: Array<{
+          componentModules: Record<
+            string,
+            { component: (props: unknown) => unknown }
+          >;
+        }> = [];
+        const windowObj = {
+          __markiiReact: React,
+          __markiiRegisterPack: (
+            _manifest: unknown,
+            componentModules: unknown,
+          ) => {
+            registrations.push({ componentModules: componentModules as never });
+          },
+        };
+        const context = vm.createContext({ window: windowObj, console });
+
+        // Loading and registering must not throw: this is the exact call
+        // that raised `__markiiJSX is not defined` under the banner-based
+        // shim, because `Badge.tsx` (the non-entry module with its own
+        // JSX) never saw a top-level `var __markiiJSX` scoped to the entry.
+        expect(() => {
+          vm.runInContext(source, context, {
+            filename: 'tsxjsxhelper-registration.js',
+          });
+        }).not.toThrow();
+
+        const Stat = registrations[0]!.componentModules.stat!.component;
+        expect(() => {
+          const markup = renderToStaticMarkup(
+            React.createElement(
+              Stat as React.ComponentType<Record<string, unknown>>,
+              {
+                attributes: { label: 'hits' },
+                children: null,
+              },
+            ),
+          );
+          expect(markup).toContain('mk-tsxjsxhelper_badge');
+          expect(markup).toContain('hits');
+        }).not.toThrow();
       } finally {
         await cleanupTempDirs();
       }

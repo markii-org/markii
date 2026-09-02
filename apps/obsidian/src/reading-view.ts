@@ -16,8 +16,8 @@ import {
 import type { Registry } from '@markii/react';
 import { renderDocument } from './render-document.js';
 import {
-  VaultImageDocument,
   createUnresolvedImageReporter,
+  createVaultImageResolver,
 } from './preview-images.js';
 import type { VaultImageResolver } from './preview-images.js';
 import { createLocalStorageMemento } from './run/local-storage-memento.js';
@@ -223,17 +223,17 @@ class ReadingViewSection extends MarkdownRenderChild {
         : undefined;
 
     const registry: Registry = this.plugin.readingViewRegistry();
+    const resolveImageSrc = createVaultImageResolver(
+      this.sourcePath,
+      this.vaultImageResolver(),
+      this.reportUnresolvedImage,
+    );
 
     this.root.render(
       createElement(
-        VaultImageDocument,
-        {
-          key: this.sourcePath,
-          notePath: this.sourcePath,
-          resolver: this.vaultImageResolver(),
-          onUnresolved: this.reportUnresolvedImage,
-        },
-        renderDocument(text, store, registry),
+        'div',
+        { className: 'doc', key: this.sourcePath },
+        renderDocument(text, store, registry, resolveImageSrc),
       ),
     );
   }

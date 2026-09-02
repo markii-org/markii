@@ -14,7 +14,7 @@ function fixtureStorage() {
     'note.mk.md': u8('# hello'),
     'manifest.json': u8('{"spec":"0.1.0"}'),
     'assets/x.png': u8('img'),
-    'cache/data.json': u8('{}'),
+    '.cache/data.json': u8('{}'),
   });
   return openZipBundle(bytes);
 }
@@ -36,7 +36,7 @@ describe('createScriptView — default grant (no 3rd argument)', () => {
     // .mkz bundle (or a legacy .mkbundle one) declaring every permission it
     // can think of must not be able to self-grant just by asking.
     const manifest = manifestWith({
-      bundle: ['read', 'write:cache/'],
+      bundle: ['read', 'write:.cache/'],
     });
     const view = createScriptView(fixtureStorage(), manifest);
     return Promise.all([
@@ -44,7 +44,7 @@ describe('createScriptView — default grant (no 3rd argument)', () => {
       expect(view.exists('assets/x.png')).rejects.toThrow(
         ScriptCapabilityError,
       ),
-      expect(view.write('cache/out.json', u8('{}'))).rejects.toThrow(
+      expect(view.write('.cache/out.json', u8('{}'))).rejects.toThrow(
         ScriptCapabilityError,
       ),
     ]);
@@ -53,27 +53,27 @@ describe('createScriptView — default grant (no 3rd argument)', () => {
 
 describe('createScriptView — intersection semantics (DEFECT 10)', () => {
   it('a manifest that declares nothing gets nothing, even if the user grants everything', () => {
-    // The user approving "read + write:cache/" for a note whose manifest
+    // The user approving "read + write:.cache/" for a note whose manifest
     // never asked for bundle access at all must not conjure capabilities
     // the note never declared wanting.
     const manifest = manifestWith(undefined);
     const view = createScriptView(fixtureStorage(), manifest, {
-      bundle: ['read', 'write:cache/'],
+      bundle: ['read', 'write:.cache/'],
     });
     return Promise.all([
       expect(view.read('assets/x.png')).rejects.toThrow(ScriptCapabilityError),
-      expect(view.write('cache/out.json', u8('{}'))).rejects.toThrow(
+      expect(view.write('.cache/out.json', u8('{}'))).rejects.toThrow(
         ScriptCapabilityError,
       ),
     ]);
   });
 
   it('a manifest that declares everything gets nothing if the user grants nothing', () => {
-    const manifest = manifestWith({ bundle: ['read', 'write:cache/'] });
+    const manifest = manifestWith({ bundle: ['read', 'write:.cache/'] });
     const view = createScriptView(fixtureStorage(), manifest, {});
     return Promise.all([
       expect(view.read('assets/x.png')).rejects.toThrow(ScriptCapabilityError),
-      expect(view.write('cache/out.json', u8('{}'))).rejects.toThrow(
+      expect(view.write('.cache/out.json', u8('{}'))).rejects.toThrow(
         ScriptCapabilityError,
       ),
     ]);
@@ -82,46 +82,46 @@ describe('createScriptView — intersection semantics (DEFECT 10)', () => {
   it('the manifest narrows: user grants both, manifest declares read-only -> write still denied', async () => {
     const manifest = manifestWith({ bundle: ['read'] });
     const view = createScriptView(fixtureStorage(), manifest, {
-      bundle: ['read', 'write:cache/'],
+      bundle: ['read', 'write:.cache/'],
     });
     expect(await view.read('assets/x.png')).toEqual(u8('img'));
-    await expect(view.write('cache/out.json', u8('{}'))).rejects.toThrow(
+    await expect(view.write('.cache/out.json', u8('{}'))).rejects.toThrow(
       ScriptCapabilityError,
     );
   });
 
   it('the user grant narrows: manifest declares both, user grants read-only -> write still denied', async () => {
-    const manifest = manifestWith({ bundle: ['read', 'write:cache/'] });
+    const manifest = manifestWith({ bundle: ['read', 'write:.cache/'] });
     const view = createScriptView(fixtureStorage(), manifest, {
       bundle: ['read'],
     });
     expect(await view.read('assets/x.png')).toEqual(u8('img'));
-    await expect(view.write('cache/out.json', u8('{}'))).rejects.toThrow(
+    await expect(view.write('.cache/out.json', u8('{}'))).rejects.toThrow(
       ScriptCapabilityError,
     );
   });
 
-  it('both sides agreeing on write:cache/ allows a cache write', async () => {
-    const manifest = manifestWith({ bundle: ['write:cache/'] });
+  it('both sides agreeing on write:.cache/ allows a cache write', async () => {
+    const manifest = manifestWith({ bundle: ['write:.cache/'] });
     const storage = fixtureStorage();
     const view = createScriptView(storage, manifest, {
-      bundle: ['write:cache/'],
+      bundle: ['write:.cache/'],
     });
-    await view.write('cache/out.json', u8('{"ok":true}'));
-    expect(await storage.read('cache/out.json')).toEqual(u8('{"ok":true}'));
+    await view.write('.cache/out.json', u8('{"ok":true}'));
+    expect(await storage.read('.cache/out.json')).toEqual(u8('{"ok":true}'));
   });
 });
 
 describe('grantAllDeclaredPermissions — the explicit fully-trusted opt-in', () => {
   it('reproduces the old "trust the manifest" behavior when explicitly opted into', async () => {
-    const manifest = manifestWith({ bundle: ['read', 'write:cache/'] });
+    const manifest = manifestWith({ bundle: ['read', 'write:.cache/'] });
     const view = createScriptView(
       fixtureStorage(),
       manifest,
       trustDeclared(manifest),
     );
     expect(await view.read('note.mk.md')).toEqual(u8('# hello'));
-    await view.write('cache/out.json', u8('{}'));
+    await view.write('.cache/out.json', u8('{}'));
   });
 
   it('returns {} for a manifest with no permissions (still zero grants)', () => {
@@ -162,7 +162,7 @@ describe('createScriptView — no grants', () => {
       manifest,
       trustDeclared(manifest),
     );
-    await expect(view.write('cache/out.json', u8('{}'))).rejects.toThrow(
+    await expect(view.write('.cache/out.json', u8('{}'))).rejects.toThrow(
       ScriptCapabilityError,
     );
   });
@@ -211,23 +211,23 @@ describe('createScriptView — read grant', () => {
       manifest,
       trustDeclared(manifest),
     );
-    await expect(view.write('cache/out.json', u8('{}'))).rejects.toThrow(
+    await expect(view.write('.cache/out.json', u8('{}'))).rejects.toThrow(
       ScriptCapabilityError,
     );
   });
 });
 
-describe('createScriptView — write:cache/ grant', () => {
-  it('allows a cache/ write', async () => {
+describe('createScriptView — write:.cache/ grant', () => {
+  it('allows a .cache/ write', async () => {
     const storage = fixtureStorage();
-    const manifest = manifestWith({ bundle: ['write:cache/'] });
+    const manifest = manifestWith({ bundle: ['write:.cache/'] });
     const view = createScriptView(storage, manifest, trustDeclared(manifest));
-    await view.write('cache/out.json', u8('{"ok":true}'));
-    expect(await storage.read('cache/out.json')).toEqual(u8('{"ok":true}'));
+    await view.write('.cache/out.json', u8('{"ok":true}'));
+    expect(await storage.read('.cache/out.json')).toEqual(u8('{"ok":true}'));
   });
 
-  it('denies writing manifest.json even with write:cache/ granted', async () => {
-    const manifest = manifestWith({ bundle: ['write:cache/'] });
+  it('denies writing manifest.json even with write:.cache/ granted', async () => {
+    const manifest = manifestWith({ bundle: ['write:.cache/'] });
     const view = createScriptView(
       fixtureStorage(),
       manifest,
@@ -238,8 +238,8 @@ describe('createScriptView — write:cache/ grant', () => {
     ).rejects.toThrow(ScriptCapabilityError);
   });
 
-  it('denies writing note.mk.md even with write:cache/ granted', async () => {
-    const manifest = manifestWith({ bundle: ['write:cache/'] });
+  it('denies writing note.mk.md even with write:.cache/ granted', async () => {
+    const manifest = manifestWith({ bundle: ['write:.cache/'] });
     const view = createScriptView(
       fixtureStorage(),
       manifest,
@@ -250,8 +250,8 @@ describe('createScriptView — write:cache/ grant', () => {
     );
   });
 
-  it('denies writing assets/x (outside cache/) even with write:cache/ granted', async () => {
-    const manifest = manifestWith({ bundle: ['write:cache/'] });
+  it('denies writing assets/x (outside .cache/) even with write:.cache/ granted', async () => {
+    const manifest = manifestWith({ bundle: ['write:.cache/'] });
     const view = createScriptView(
       fixtureStorage(),
       manifest,
@@ -262,7 +262,7 @@ describe('createScriptView — write:cache/ grant', () => {
     );
   });
 
-  it('a manifest maliciously listing write:cache/ still cannot write manifest.json, even fully trusted', async () => {
+  it('a manifest maliciously listing write:.cache/ still cannot write manifest.json, even fully trusted', async () => {
     // Simulates a hostile/tampered manifest object claiming a grant that
     // would let it rewrite its own permissions — isWriteAllowed's
     // unconditional manifest.json denial must hold regardless, even in the
@@ -270,7 +270,7 @@ describe('createScriptView — write:cache/ grant', () => {
     const storage = fixtureStorage();
     const hostileManifest: BundleManifest = {
       spec: '0.1.0',
-      permissions: { bundle: ['read', 'write:cache/'] },
+      permissions: { bundle: ['read', 'write:.cache/'] },
     };
     const view = createScriptView(
       storage,
@@ -281,7 +281,7 @@ describe('createScriptView — write:cache/ grant', () => {
       view.write(
         'manifest.json',
         u8(
-          '{"spec":"0.1.0","permissions":{"bundle":["read","write:cache/"],"net":{"get":["evil.example"]}}}',
+          '{"spec":"0.1.0","permissions":{"bundle":["read","write:.cache/"],"net":{"get":["evil.example"]}}}',
         ),
       ),
     ).rejects.toThrow(ScriptCapabilityError);

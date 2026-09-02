@@ -15,8 +15,8 @@ import { extractFrontmatterUses } from '@markii/core';
 import { resolveUses } from '@markii/pack';
 import { renderDocument } from './render-document.js';
 import {
-  VaultImageDocument,
   createUnresolvedImageReporter,
+  createVaultImageResolver,
 } from './preview-images.js';
 import type { VaultImageResolver } from './preview-images.js';
 import { createLocalStorageMemento } from './run/local-storage-memento.js';
@@ -502,6 +502,11 @@ export class MarkiiPreviewView extends ItemView {
         ? createValueStore(this.values)
         : undefined;
     const registry = this.plugin.packContext?.registry;
+    const resolveImageSrc = createVaultImageResolver(
+      file.path,
+      this.vaultImageResolver(),
+      this.reportUnresolvedImage,
+    );
 
     // docs/packs.md's `uses:` surfacing: a note declaring a pack that is
     // not installed still renders fully (its directives already fall back
@@ -517,21 +522,17 @@ export class MarkiiPreviewView extends ItemView {
       createElement(
         Fragment,
         null,
-        // The `.doc` wrapper, with the image rewrite attached to it: a
-        // relative `<img src>` is resolved against the vault after every
-        // render, value updates included (`src/preview-images.ts`). The
-        // `key` is the note's path so switching notes remounts the tree
-        // rather than reusing an `<img>` still holding the previous
-        // note's resolved URL.
+        // The `.doc` wrapper. A relative `<img src>` is resolved against
+        // the vault as `renderDocument` builds the tree
+        // (`resolveImageSrc`, `src/preview-images.ts`), so the DOM React
+        // mounts already carries the resolved source — no post-render
+        // sweep. The `key` is the note's path so switching notes remounts
+        // the tree rather than reusing an `<img>` still holding the
+        // previous note's resolved URL.
         createElement(
-          VaultImageDocument,
-          {
-            key: file.path,
-            notePath: file.path,
-            resolver: this.vaultImageResolver(),
-            onUnresolved: this.reportUnresolvedImage,
-          },
-          renderDocument(text, store, registry),
+          'div',
+          { className: 'doc', key: file.path },
+          renderDocument(text, store, registry, resolveImageSrc),
         ),
         usesResolution.missing.length > 0
           ? createElement(

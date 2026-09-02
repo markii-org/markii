@@ -1,5 +1,5 @@
 import { Fragment, isValidElement } from 'react';
-import type { ReactElement, ReactNode } from 'react';
+import type { ComponentProps, ReactElement, ReactNode } from 'react';
 import { jsx, jsxs } from 'react/jsx-runtime';
 import { toJsxRuntime } from 'hast-util-to-jsx-runtime';
 import {
@@ -32,6 +32,8 @@ import { ScriptMarker } from './components/script-marker.js';
 import { UnknownDirective } from './components/unknown-directive.js';
 import { ValueDirective } from './components/value-directive.js';
 import { resolveScopedPath } from './store-path.js';
+import { resolveImageAttribute } from './image-resolve.js';
+import type { ResolveImageSrc } from './image-resolve.js';
 import {
   EMPTY_INLINE_MARKER_CLASS,
   emptyInlineTitle,
@@ -310,6 +312,7 @@ function renderDirectiveContent(
   store: ValueStore | undefined,
   vault: VaultStore | undefined,
   layoutClassName: string | undefined,
+  resolveImageSrc: ResolveImageSrc | undefined,
 ): ReactElement {
   // `:value[name]` (§8) is a renderer built-in, resolved before any
   // registry lookup — like the unknown-directive fallback, it is not
@@ -411,7 +414,12 @@ function renderDirectiveContent(
   // `layout` (see `createDirectiveElement`).
   const layoutProps = layoutClassName === undefined ? {} : { layoutClassName };
   const rendered = (
-    <Component attributes={binding.attributes} {...dataProps} {...layoutProps}>
+    <Component
+      attributes={binding.attributes}
+      {...dataProps}
+      {...layoutProps}
+      resolveImageSrc={resolveImageSrc}
+    >
       {children}
     </Component>
   );
@@ -458,6 +466,7 @@ function createDirectiveElement(
   registry: Registry,
   store: ValueStore | undefined,
   vault: VaultStore | undefined,
+  resolveImageSrc: ResolveImageSrc | undefined,
 ): (props: DirectiveElementProps) => ReactElement {
   return function DirectiveElement(props: DirectiveElementProps): ReactElement {
     const written = props['data-mk-name'] ?? '';
@@ -516,6 +525,7 @@ function createDirectiveElement(
       store,
       vault,
       isLayoutScope ? layoutClassName : undefined,
+      resolveImageSrc,
     );
 
     // The wrapper `<div>` applies ONLY to block directives (leaf/container),
@@ -648,6 +658,35 @@ function PreElement({ node, children }: PreElementProps): ReactElement {
   return <pre>{children}</pre>;
 }
 
+type ImgElementProps = ComponentProps<'img'> & { node?: HastElement };
+
+/**
+ * Overrides hast-util-to-jsx-runtime's default `<img>` conversion so an
+ * ordinary markdown image (`![alt](src)`, or a raw `<img>` written in the
+ * document) resolves its `src` the same way a component-built `<img>` does
+ * (`MarkComponentProps.resolveImageSrc`, `./image-resolve.js`). `node` is
+ * accepted only because `hastToReactTree`'s shared `passNode: true` option
+ * hands it to every entry in `components`, the same as `PreElement`; it is
+ * discarded here, since every attribute this needs already arrives as a
+ * converted prop. With no resolver at all (the common case — most renders
+ * pass none) this produces byte-identical output to the default handling.
+ */
+function createImgElement(
+  resolveImageSrc: ResolveImageSrc | undefined,
+): (props: ImgElementProps) => ReactElement {
+  return function ImgElement({
+    node: _node,
+    src,
+    ...rest
+  }: ImgElementProps): ReactElement {
+    const resolvedSrc =
+      typeof src === 'string'
+        ? resolveImageAttribute(src, resolveImageSrc)
+        : src;
+    return <img src={resolvedSrc} {...rest} />;
+  };
+}
+
 /**
  * Converts an already-sanitized hast tree to a React element tree via
  * hast-util-to-jsx-runtime, with directive elements swapped for registry
@@ -662,14 +701,24 @@ function hastToReactTree(
   registry: Registry,
   store: ValueStore | undefined,
   vault: VaultStore | undefined,
+  resolveImageSrc: ResolveImageSrc | undefined,
 ): ReactElement {
-  const DirectiveElement = createDirectiveElement(registry, store, vault);
+  const DirectiveElement = createDirectiveElement(
+    registry,
+    store,
+    vault,
+    resolveImageSrc,
+  );
   return toJsxRuntime(hastTree, {
     Fragment,
     jsx,
     jsxs,
     passNode: true,
-    components: { 'mk-directive': DirectiveElement, pre: PreElement },
+    components: {
+      'mk-directive': DirectiveElement,
+      pre: PreElement,
+      img: createImgElement(resolveImageSrc),
+    },
   }) as ReactElement;
 }
 
@@ -720,16 +769,39 @@ function renderFailureFallback(error: unknown): ReactElement {
  * directly to produce a `ReactElement`, not a component mounted inside its
  * own tree, so there is no existing provider layer for a context to hook
  * into here.
+ *
+ * `options.resolveImageSrc` resolves a relative `<img src>` — an ordinary
+ * markdown image or one a component built from an attribute (the standard
+ * `Figure`) — to a URL a host can actually load: a document folder, an
+ * embedded bundle asset, a vault lookup. It is never asked about a source
+ * that already carries a scheme, a protocol-relative `//host/...`, a bare
+ * `#fragment`, or an empty value, and its result is re-checked against
+ * `@markii/core`'s `isSafeUrl` before use, so it cannot introduce a
+ * `javascript:` URL the sanitizer would otherwise have dropped. Returning
+ * `undefined`, or throwing, leaves the source exactly as the author wrote
+ * it. Omitted entirely, every image renders with the source unchanged,
+ * matching every render before this option existed.
  */
+export interface RenderMarkOptions {
+  readonly resolveImageSrc?: ResolveImageSrc;
+}
+
 export function renderMark(
   text: string,
   registry: Registry,
   store?: ValueStore,
   vault?: VaultStore,
+  options?: RenderMarkOptions,
 ): ReactElement {
   try {
     const hastTree = toHast(text);
-    return hastToReactTree(hastTree, registry, store, vault);
+    return hastToReactTree(
+      hastTree,
+      registry,
+      store,
+      vault,
+      options?.resolveImageSrc,
+    );
   } catch (error) {
     return renderFailureFallback(error);
   }
@@ -764,10 +836,17 @@ export function renderMarkNode(
   registry: Registry,
   store?: ValueStore,
   vault?: VaultStore,
+  options?: RenderMarkOptions,
 ): ReactElement {
   try {
     const hastTree = nodeToHast(node);
-    return hastToReactTree(hastTree, registry, store, vault);
+    return hastToReactTree(
+      hastTree,
+      registry,
+      store,
+      vault,
+      options?.resolveImageSrc,
+    );
   } catch (error) {
     return renderFailureFallback(error);
   }

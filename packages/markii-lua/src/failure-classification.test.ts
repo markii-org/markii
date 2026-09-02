@@ -46,15 +46,15 @@ function fixtureBundleView() {
     'note.mk.md': u8('# hello'),
     'manifest.json': u8('{"spec":"0.1.0"}'),
     'assets/x.png': u8('img'),
-    'cache/data.json': u8('{}'),
+    '.cache/data.json': u8('{}'),
   });
   const storage = openZipBundle(bytes);
   const manifest: BundleManifest = {
     spec: '0.1.0',
-    permissions: { bundle: ['read', 'write:cache/'] },
+    permissions: { bundle: ['read', 'write:.cache/'] },
   };
   const view = createScriptView(storage, manifest, {
-    bundle: ['read', 'write:cache/'],
+    bundle: ['read', 'write:.cache/'],
   });
   return { storage, view };
 }
@@ -226,14 +226,14 @@ describe('forgery battery: genuine tier blocks classify correctly, distinct from
 
   it("a real tier block on bundle.write (bundle view supplied, tier 'auto') classifies as capability/tier-blocked", async () => {
     const { view, storage } = fixtureBundleView();
-    const r = await run('bundle.write("cache/out.json", "hi")', {
+    const r = await run('bundle.write(".cache/out.json", "hi")', {
       tier: 'auto',
       bundle: view,
     });
     expect(r.ok).toBe(false);
     expect(!r.ok && r.error.kind).toBe('capability');
     expect(!r.ok && r.error.capability).toBe('tier-blocked');
-    expect(await storage.read('cache/out.json')).toBeUndefined();
+    expect(await storage.read('.cache/out.json')).toBeUndefined();
   });
 });
 

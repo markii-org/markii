@@ -3,7 +3,12 @@
 // stopped-changing document can be rendered for publishing, CI, email, or an
 // archive with no React runtime. It is one platform renderer among possible
 // many; the React renderer (@markii/react) is another consumer of the same core.
-export { renderMarkToHtml, renderMarkNodeToHtml } from './render.js';
+export {
+  renderMarkToHtml,
+  renderMarkNodeToHtml,
+  type RenderMarkOptions,
+} from './render.js';
+export { type ResolveImageSrc } from './image-resolve.js';
 export { escapeHtml } from './escape.js';
 export {
   exportHtmlDocument,

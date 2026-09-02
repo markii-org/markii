@@ -390,3 +390,184 @@ describe('renderMarkNodeToHtml', () => {
     expect(html).toContain('node body');
   });
 });
+
+describe('renderMarkToHtml — resolveImageSrc option', () => {
+  it('resolves a relative markdown image', () => {
+    const html = renderMarkToHtml(
+      '![a cat](cat.png)',
+      empty,
+      undefined,
+      undefined,
+      {
+        resolveImageSrc: (src) =>
+          src === 'cat.png' ? 'https://cdn.test/cat.png' : undefined,
+      },
+    );
+    expect(html).toContain('src="https://cdn.test/cat.png"');
+  });
+
+  it('never offers a scheme-carrying src to the resolver', () => {
+    const called: string[] = [];
+    const html = renderMarkToHtml(
+      '![a cat](https://example.com/cat.png)',
+      empty,
+      undefined,
+      undefined,
+      {
+        resolveImageSrc: (src) => {
+          called.push(src);
+          return 'https://other.test/should-not-apply.png';
+        },
+      },
+    );
+    expect(called).toEqual([]);
+    expect(html).toContain('src="https://example.com/cat.png"');
+  });
+
+  it('never offers a protocol-relative src to the resolver', () => {
+    const called: string[] = [];
+    renderMarkToHtml(
+      '![a cat](//example.com/cat.png)',
+      empty,
+      undefined,
+      undefined,
+      {
+        resolveImageSrc: (src) => {
+          called.push(src);
+          return undefined;
+        },
+      },
+    );
+    expect(called).toEqual([]);
+  });
+
+  it('never offers a bare-fragment src to the resolver', () => {
+    const called: string[] = [];
+    renderMarkToHtml('<img src="#top" alt="">', empty, undefined, undefined, {
+      resolveImageSrc: (src) => {
+        called.push(src);
+        return undefined;
+      },
+    });
+    expect(called).toEqual([]);
+  });
+
+  it('never offers an empty or whitespace src to the resolver', () => {
+    const called: string[] = [];
+    renderMarkToHtml('<img src="" alt="">', empty, undefined, undefined, {
+      resolveImageSrc: (src) => {
+        called.push(src);
+        return undefined;
+      },
+    });
+    expect(called).toEqual([]);
+  });
+
+  it('leaves the src untouched when the resolver returns undefined', () => {
+    const html = renderMarkToHtml(
+      '![a cat](cat.png)',
+      empty,
+      undefined,
+      undefined,
+      {
+        resolveImageSrc: () => undefined,
+      },
+    );
+    expect(html).toContain('src="cat.png"');
+  });
+
+  it('SECURITY: rejects a hostile javascript: URL returned by the resolver', () => {
+    const html = renderMarkToHtml(
+      '![a cat](cat.png)',
+      empty,
+      undefined,
+      undefined,
+      {
+        resolveImageSrc: () => 'javascript:alert(1)',
+      },
+    );
+    expect(html).toContain('src="cat.png"');
+    expect(html).not.toContain('javascript:');
+  });
+
+  it.each([
+    ['a tab inside the scheme', 'java\u0009script:alert(1)'],
+    ['a newline inside the scheme', 'java\u000ascript:alert(1)'],
+    ['a carriage return inside the scheme', 'java\u000dscript:alert(1)'],
+    ['a leading space', ' javascript:alert(1)'],
+    ['a leading C0 control', '\u0001javascript:alert(1)'],
+    ['mixed case', 'JaVaScRiPt:alert(1)'],
+  ])(
+    'SECURITY: rejects a javascript: URL disguised with %s, which a browser still executes',
+    (_label, hostile) => {
+      const html = renderMarkToHtml(
+        '![a cat](cat.png)',
+        empty,
+        undefined,
+        undefined,
+        { resolveImageSrc: () => hostile },
+      );
+      expect(html).toContain('src="cat.png"');
+      expect(html.toLowerCase()).not.toContain('alert(1)');
+    },
+  );
+
+  it('SECURITY: rejects a hostile vbscript: URL returned by the resolver', () => {
+    const html = renderMarkToHtml(
+      '![a cat](cat.png)',
+      empty,
+      undefined,
+      undefined,
+      {
+        resolveImageSrc: () => 'vbscript:msgbox(1)',
+      },
+    );
+    expect(html).toContain('src="cat.png"');
+  });
+
+  it('accepts a data: URI from the resolver (VS Code embedded bundle assets)', () => {
+    const html = renderMarkToHtml(
+      '![a cat](cat.png)',
+      empty,
+      undefined,
+      undefined,
+      {
+        resolveImageSrc: () => 'data:image/png;base64,AAAA',
+      },
+    );
+    expect(html).toContain('src="data:image/png;base64,AAAA"');
+  });
+
+  it('accepts an app: URL from the resolver (Obsidian vault resource paths)', () => {
+    const html = renderMarkToHtml(
+      '![a cat](cat.png)',
+      empty,
+      undefined,
+      undefined,
+      {
+        resolveImageSrc: () => 'app://local/vault/cat.png?123',
+      },
+    );
+    expect(html).toContain('src="app://local/vault/cat.png?123"');
+  });
+
+  it('never breaks the render when the resolver throws', () => {
+    const html = renderMarkToHtml(
+      '![a cat](cat.png)',
+      empty,
+      undefined,
+      undefined,
+      {
+        resolveImageSrc: () => {
+          throw new Error('boom');
+        },
+      },
+    );
+    expect(html).toContain('src="cat.png"');
+  });
+
+  it('leaves every image untouched with no options at all', () => {
+    const html = renderMarkToHtml('![a cat](cat.png)', empty);
+    expect(html).toContain('src="cat.png"');
+  });
+});

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { describe, expect, it } from 'vitest';
-import { applyDocumentBase, resolveDocumentUrl } from './document-images';
+import { resolveDocumentUrl } from './document-images';
 
 const BASE = 'https://file+.vscode-resource.vscode-cdn.net/home/u/notes/';
 
@@ -127,106 +127,6 @@ describe('resolveDocumentUrl — embedded bundle assets (zip form)', () => {
   it('falls back to baseUri resolution when the assets map has no match', () => {
     expect(resolveDocumentUrl('other.png', BASE, ASSETS)).toBe(
       `${BASE}other.png`,
-    );
-  });
-});
-
-describe('applyDocumentBase — embedded bundle assets (zip form)', () => {
-  it('rewrites a matching relative image to its embedded data URI', () => {
-    const element = container('<img src="assets/nice.png" alt="">');
-    applyDocumentBase(element, undefined, ASSETS);
-    expect(element.querySelector('img')?.getAttribute('src')).toBe(
-      ASSETS['assets/nice.png'],
-    );
-  });
-
-  it('leaves an unmatched image source alone (blank, not a crash)', () => {
-    const element = container('<img src="assets/missing.png" alt="">');
-    expect(() => applyDocumentBase(element, undefined, ASSETS)).not.toThrow();
-    expect(element.querySelector('img')?.getAttribute('src')).toBe(
-      'assets/missing.png',
-    );
-  });
-});
-
-/** Builds a detached container holding `html`, the way the rendered document subtree looks to the effect. */
-function container(html: string): HTMLElement {
-  const element = document.createElement('div');
-  element.innerHTML = html;
-  return element;
-}
-
-describe('applyDocumentBase', () => {
-  it('rewrites a relative image source', () => {
-    const element = container('<img src="nice.png" alt="">');
-    applyDocumentBase(element, BASE);
-    expect(element.querySelector('img')?.getAttribute('src')).toBe(
-      `${BASE}nice.png`,
-    );
-  });
-
-  it('leaves a remote image source alone', () => {
-    const element = container('<img src="https://example.test/a.png" alt="">');
-    applyDocumentBase(element, BASE);
-    expect(element.querySelector('img')?.getAttribute('src')).toBe(
-      'https://example.test/a.png',
-    );
-  });
-
-  it('rewrites every image, mixed sources included', () => {
-    const element = container(
-      '<figure><img src="a.png" alt=""></figure>' +
-        '<img src="https://example.test/b.png" alt="">' +
-        '<p><img src="sub/c.png" alt=""></p>',
-    );
-    applyDocumentBase(element, BASE);
-    const sources = [...element.querySelectorAll('img')].map((img) =>
-      img.getAttribute('src'),
-    );
-    expect(sources).toEqual([
-      `${BASE}a.png`,
-      'https://example.test/b.png',
-      `${BASE}sub/c.png`,
-    ]);
-  });
-
-  it('is idempotent', () => {
-    const element = container('<img src="nice.png" alt="">');
-    applyDocumentBase(element, BASE);
-    applyDocumentBase(element, BASE);
-    expect(element.querySelector('img')?.getAttribute('src')).toBe(
-      `${BASE}nice.png`,
-    );
-  });
-
-  it('leaves everything alone without a base URI', () => {
-    const element = container('<img src="nice.png" alt="">');
-    applyDocumentBase(element, undefined);
-    expect(element.querySelector('img')?.getAttribute('src')).toBe('nice.png');
-  });
-
-  it('skips an image with no src attribute at all', () => {
-    const element = container('<img alt="">');
-    expect(() => applyDocumentBase(element, BASE)).not.toThrow();
-    expect(element.querySelector('img')?.hasAttribute('src')).toBe(false);
-  });
-
-  it('does not touch anchors — fragment links keep working', () => {
-    const element = container('<a href="#section">jump</a>');
-    applyDocumentBase(element, BASE);
-    expect(element.querySelector('a')?.getAttribute('href')).toBe('#section');
-  });
-
-  it('does not touch script or link elements', () => {
-    const element = container(
-      '<script src="main.js"></script><link rel="stylesheet" href="main.css">',
-    );
-    applyDocumentBase(element, BASE);
-    expect(element.querySelector('script')?.getAttribute('src')).toBe(
-      'main.js',
-    );
-    expect(element.querySelector('link')?.getAttribute('href')).toBe(
-      'main.css',
     );
   });
 });

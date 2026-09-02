@@ -31,6 +31,8 @@ import {
   emptyInlineTitle,
 } from './failure-presentation.js';
 import { formatValue } from '@markii/stdlib';
+import { resolveImageAttribute } from './image-resolve.js';
+import type { ResolveImageSrc } from './image-resolve.js';
 
 /** The hast tag name `@markii/core`'s `toHast` marks every directive with (`to-hast.ts`'s `DIRECTIVE_TAG`). */
 const DIRECTIVE_TAG = 'mk-directive';
@@ -102,7 +104,10 @@ function buildValueMarker(
  * The `data*` fields are attached per-directive later (see
  * `withDataBinding`) — this base object never carries them.
  */
-function createBaseContext(scope: ValueScope): HtmlRenderContext {
+function createBaseContext(
+  scope: ValueScope,
+  resolveImageSrc: ResolveImageSrc | undefined,
+): HtmlRenderContext {
   return {
     esc: escapeHtml,
     resolve(name: string): ValueResolution {
@@ -117,6 +122,7 @@ function createBaseContext(scope: ValueScope): HtmlRenderContext {
         : ({ value: undefined, status: 'missing' } as ValueResolution);
       return buildValueMarker(trimmed, resolved, format, decimals);
     },
+    resolveImageSrc,
   };
 }
 
@@ -536,6 +542,24 @@ function renderDirective(
  * children so a nested directive is already resolved by the time its parent
  * serializes it.
  */
+/**
+ * Rewrites an ordinary hast `<img>` element's `src` in place through
+ * `resolveImageSrc` — the plain-markdown-image half of the seam
+ * `Figure` implements for its own attribute-built `<img>` (see
+ * `./components/figure.ts`). With no resolver at all (the common case)
+ * this is a no-op, so a fixture rendered without one produces byte-
+ * identical output to before this option existed.
+ */
+function applyImageResolver(
+  node: Element,
+  resolveImageSrc: ResolveImageSrc | undefined,
+): void {
+  const src = node.properties.src;
+  if (typeof src === 'string') {
+    node.properties.src = resolveImageAttribute(src, resolveImageSrc);
+  }
+}
+
 function makeTransform(
   registry: HtmlRegistry,
   ctx: HtmlRenderContext,
@@ -553,6 +577,9 @@ function makeTransform(
     if (node.tagName === 'pre') {
       const marker = renderScriptMarker(node);
       if (marker !== undefined) return raw(marker);
+    }
+    if (node.tagName === 'img') {
+      applyImageResolver(node, ctx.resolveImageSrc);
     }
     return node;
   }
@@ -573,8 +600,9 @@ function renderRoot(
   root: Root,
   registry: HtmlRegistry,
   scope: ValueScope,
+  resolveImageSrc: ResolveImageSrc | undefined,
 ): string {
-  const ctx = createBaseContext(scope);
+  const ctx = createBaseContext(scope, resolveImageSrc);
   const transform = makeTransform(registry, ctx, scope);
   root.children = root.children.map(transform);
   return serialize(root.children);
@@ -601,15 +629,38 @@ function renderRoot(
  * mine, `@name` = the vault's". With no `vault` supplied, every `@name`
  * degrades to `'missing'` the same way an absent `store` degrades a bare
  * name.
+ *
+ * `options.resolveImageSrc` resolves a relative `<img src>` — an ordinary
+ * markdown image or one `Figure` built from an attribute — to a URL a host
+ * can actually load. It is never asked about a source that already carries
+ * a scheme, a protocol-relative `//host/...`, a bare `#fragment`, or an
+ * empty value, and its result is re-checked against `@markii/core`'s
+ * `isSafeUrl` before use, so it cannot introduce a `javascript:` URL the
+ * sanitizer would otherwise have dropped. Returning `undefined`, or
+ * throwing, leaves the source exactly as the author wrote it. Omitted
+ * entirely, every image renders with the source unchanged, matching every
+ * render before this option existed. The identical option on
+ * `@markii/react`'s `renderMark` uses the same rules, so the two engines
+ * cannot diverge on what a resolver is offered or how its result is used.
  */
+export interface RenderMarkOptions {
+  readonly resolveImageSrc?: ResolveImageSrc;
+}
+
 export function renderMarkToHtml(
   text: string,
   registry: HtmlRegistry,
   store?: ValueStore,
   vault?: VaultStore,
+  options?: RenderMarkOptions,
 ): string {
   try {
-    return renderRoot(toHast(text), registry, { store, vault });
+    return renderRoot(
+      toHast(text),
+      registry,
+      { store, vault },
+      options?.resolveImageSrc,
+    );
   } catch (error) {
     return renderFailureFallback(error);
   }
@@ -620,16 +671,22 @@ export function renderMarkToHtml(
  * node (`@markii/core`'s `MarkNode`) to HTML instead of a whole document's
  * text, via `nodeToHast`. Same registry resolution, same fallbacks, same
  * purity and never-throw guarantees, and the same optional `store`/`vault`
- * value-binding arguments.
+ * value-binding arguments and `resolveImageSrc` option.
  */
 export function renderMarkNodeToHtml(
   node: MarkNode,
   registry: HtmlRegistry,
   store?: ValueStore,
   vault?: VaultStore,
+  options?: RenderMarkOptions,
 ): string {
   try {
-    return renderRoot(nodeToHast(node), registry, { store, vault });
+    return renderRoot(
+      nodeToHast(node),
+      registry,
+      { store, vault },
+      options?.resolveImageSrc,
+    );
   } catch (error) {
     return renderFailureFallback(error);
   }

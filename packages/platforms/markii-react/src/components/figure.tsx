@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react';
 import { isSafeUrl } from '@markii/core';
 import type { MarkComponentProps } from '../registry.js';
+import { resolveImageAttribute } from '../image-resolve.js';
 
 const DEFAULT_ALT = '';
 
@@ -21,14 +22,21 @@ const DEFAULT_ALT = '';
  * own `isSafeUrl` (the exact same allowlist check `sanitizeUrls` uses) and
  * dropping the image entirely when it fails, rather than re-implementing
  * URL-scheme parsing here.
+ *
+ * `resolveImageSrc` (`MarkComponentProps`, `../render.js`'s `renderMark`
+ * option) then gets the same chance at an already-safe `src` that an
+ * ordinary markdown image gets, so a host resolving relative images sees
+ * this component's picture too, not just the ones markdown itself wrote.
  */
 export function Figure({
   attributes,
   children,
+  resolveImageSrc,
 }: MarkComponentProps): ReactElement {
   const rawSrc = attributes.src ?? null;
   const alt = attributes.alt ?? DEFAULT_ALT;
-  const src = rawSrc && isSafeUrl(rawSrc) ? rawSrc : null;
+  const safeSrc = rawSrc && isSafeUrl(rawSrc) ? rawSrc : null;
+  const src = safeSrc ? resolveImageAttribute(safeSrc, resolveImageSrc) : null;
 
   return (
     <figure className="mk-figure">

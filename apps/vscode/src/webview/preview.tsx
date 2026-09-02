@@ -1,4 +1,4 @@
-import { Component, useEffect, useMemo, useRef, useState } from 'react';
+import { Component, useEffect, useMemo, useState } from 'react';
 import type { ErrorInfo, ReactElement, ReactNode } from 'react';
 import { renderMark } from '@markii/react';
 import type { Registry } from '@markii/react';
@@ -10,7 +10,7 @@ import { resolveUses } from '@markii/pack';
 import { isHostToWebviewMessage, isNewerRevision } from '../protocol.js';
 import type { WebviewToHostMessage, WireRunTrace } from '../protocol.js';
 import { runMarkerLabel, runMarkerTitle } from './run-marker.js';
-import { applyDocumentBase } from './document-images.js';
+import { resolveDocumentUrl } from './document-images.js';
 import {
   DEFAULT_PREVIEW_WIDTH,
   previewDocumentClassName,
@@ -188,7 +188,6 @@ function initialState(): LocalState {
  */
 export function Preview({ registry }: PreviewProps): ReactElement {
   const [state, setState] = useState<LocalState>(initialState);
-  const documentRef = useRef<HTMLDivElement>(null);
   // ITEM 3: the run marker's relative-time label ("ran 2m ago") is a
   // function of wall-clock time, not just of `state` — without a ticking
   // clock it would freeze at whatever it read on the message that set
@@ -339,9 +338,21 @@ export function Preview({ registry }: PreviewProps): ReactElement {
     return createValueStore(state.runValues.values);
   }, [state.runValues, state.revision]);
 
+  // Relative image sources (an ordinary markdown image, or `Figure`'s own
+  // attribute-built one) are resolved through `renderMark`'s
+  // `resolveImageSrc` option — `resolveDocumentUrl` (`document-images.ts`)
+  // closes over the current `baseUri`/`assets` — rather than a DOM pass
+  // after the fact, so the tree React mounts already carries the resolved
+  // `src`. Included in this memo's own dependencies (not just `state.text`)
+  // so a folder change alone, with the same document text, still produces a
+  // freshly resolved tree.
   const rendered = useMemo(
-    () => renderMark(state.text, registry, store),
-    [state.text, registry, store],
+    () =>
+      renderMark(state.text, registry, store, undefined, {
+        resolveImageSrc: (src) =>
+          resolveDocumentUrl(src, state.baseUri, state.assets),
+      }),
+    [state.text, registry, store, state.baseUri, state.assets],
   );
 
   /**
@@ -364,17 +375,6 @@ export function Preview({ registry }: PreviewProps): ReactElement {
     [state.text, state.packNamespaces],
   );
 
-  // Relative image sources are resolved against the document's folder AFTER
-  // each render, in the DOM, rather than anywhere inside the renderer — see
-  // `document-images.ts` for why that boundary is where it is. Re-runs
-  // whenever the rendered tree or the folder changes.
-  useEffect(() => {
-    const container = documentRef.current;
-    if (container) {
-      applyDocumentBase(container, state.baseUri, state.assets);
-    }
-  }, [rendered, state.baseUri, state.assets]);
-
   if (state.bundleError !== undefined) {
     return (
       <p className="mk-preview__error" role="alert">
@@ -385,20 +385,11 @@ export function Preview({ registry }: PreviewProps): ReactElement {
 
   return (
     <PreviewErrorBoundary resetKey={state.revision}>
-      {/*
-        `key` is the base URI so that switching to a document in a DIFFERENT
-        folder remounts the tree instead of letting React reuse an `<img>`
-        whose `src` prop is unchanged (`nice.png` in both documents) — a
-        reused element keeps the absolute URL the effect above already wrote
-        into it, which would point at the OLD folder. Remounting restores the
-        relative source, and the effect re-resolves it against the new base.
-      */}
       <div
         className={previewDocumentClassName(
           state.previewWidth ?? DEFAULT_PREVIEW_WIDTH,
           state.hideScriptBlocks === true,
         )}
-        ref={documentRef}
         key={state.baseUri ?? ''}
       >
         {state.readOnly === true && (

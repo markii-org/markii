@@ -3,6 +3,7 @@ import type { DocView } from '@markii/runtime';
 import { LuaReturn, type LuaThread } from 'wasmoon';
 import {
   buildCapabilities,
+  DEFAULT_MAX_FETCH_BYTES,
   type CacheProvider,
   type CapabilityTier,
   type NetGrants,
@@ -12,6 +13,7 @@ import { buildDoc } from './doc.js';
 import { MARSHAL_ERROR_TAG, ScriptLimitError } from './errors.js';
 import type { ScriptFailure, ScriptMarshalReason } from './errors.js';
 import { createEmptyLuaEngine } from './globals.js';
+import { buildJsonTable } from './json-table.js';
 import { DEFAULT_LIMITS, installLimits, type ScriptLimits } from './limits.js';
 import {
   buildMarshalPrelude,
@@ -168,6 +170,20 @@ function extractMarshalReason(message: string): ScriptMarshalReason {
       return 'key-type';
     case 'nul-byte':
       return 'nul-byte';
+    case 'non-finite-number':
+      // Unlike the other cases above (all raised from INSIDE the Lua-side
+      // `__smd_marshal` walk itself), a non-finite number is normally
+      // caught by `finalizeMarshaledValue` running directly in JS on a
+      // successful run's already-returned value -- it never crosses back
+      // through Lua as a thrown, tagged error on that path, so this case
+      // was unreached before `./json-table` existed. `json.encode` reuses
+      // `finalizeMarshaledValue` itself (the same JS-side check, the same
+      // reason) but calls it from inside a host function invoked FROM Lua,
+      // so its rejection DOES round-trip through a thrown Lua error and
+      // land here -- this case keeps that reused reason classified
+      // identically to the return-value path, instead of falling through
+      // to the generic 'type' default.
+      return 'non-finite-number';
     case 'type':
       return 'type';
     default:
@@ -240,7 +256,10 @@ function classifyRuntimeError(err: unknown): ScriptFailure {
  *    the real `require` global, sharing the same `bundle`/denial-recording
  *    wiring (§8's bundle-local and pack-namespaced module sources).
  * 4. `./marshal` — inject the trusted node/depth-capped marshal walk that
- *    the wrapped user code's return value is piped through.
+ *    the wrapped user code's return value is piped through, then
+ *    `./json-table` — the `json.decode`/`json.encode` table, unconditional
+ *    and ungated (pure computation, no capability grant), reusing that
+ *    same marshal walk and `./json-decode`'s existing decoder.
  * 5. A dedicated child thread (NOT `engine.doString`, which creates its
  *    own internal thread we'd have no handle to — see `./limits`'s "hooks
  *    are per-thread" note) gets the instruction/wall-clock hook installed,
@@ -336,6 +355,20 @@ export async function runScript(
     }
 
     await engine.doString(buildMarshalPrelude(marshalLimits));
+
+    // ./json-table: the `json` table (GitHub issue #40, slice 3a). Pure
+    // computation, no I/O -- injected unconditionally, for every tier, with
+    // no capability grant, same as the marshal/doc preludes below and
+    // above it. Wired AFTER the marshal prelude because `json.encode`
+    // reuses `__smd_marshal_root`, defined by that prelude.
+    const jsonTable = buildJsonTable({
+      limits: marshalLimits,
+      maxFetchBytes: options.maxFetchBytes ?? DEFAULT_MAX_FETCH_BYTES,
+    });
+    for (const [name, fn] of Object.entries(jsonTable.rawGlobals)) {
+      engine.global.set(name, fn);
+    }
+    await engine.doString(jsonTable.preludeLua);
 
     // ./doc: the note-scoped read-only view (GitHub issue #33). Wired
     // AFTER the marshal prelude and, like `require`, wired unconditionally

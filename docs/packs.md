@@ -314,7 +314,12 @@ satisfies the rules below loads in any conforming host.
 The script is an IIFE: loading it must not leave globals behind beyond the
 one call it makes. Anything the build needs, a JSX shim included, goes
 INSIDE that wrapper; a preamble emitted outside it leaks a global and breaks
-this rule. That call is:
+this rule. A JSX shim has a second requirement on top of that one: it must
+be in scope of every component module, not only the entry, which a bundler
+does through an inject-style option that pulls a shared module into each
+file referencing it. A plain declaration at the top of the entry is scoped
+to the entry alone, so a component reached through a helper module never
+sees it. That call is:
 
 ```js
 window.__markiiRegisterPack(manifestJson, componentModules);

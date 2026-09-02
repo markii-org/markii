@@ -16,7 +16,7 @@
  * 3. The `bundle` capability needs no user-facing prompt at all any more:
  *    a manifest's declared `permissions.bundle` grants are forwarded
  *    straight through. This does NOT loosen anything else — the path-jail
- *    (writes confined to `cache/`) and the read-only tier for
+ *    (writes confined to `.cache/`) and the read-only tier for
  *    auto/scheduled triggers (no writes at all) still hold, unconditionally.
  *
  * Every case here drives the REAL `runOnce` -> `runGrantFlow`/
@@ -125,7 +125,7 @@ describe('consent unification probe — (b) a declaration/scan mismatch surfaces
 });
 
 describe('consent unification probe — (c) the bundle capability needs no prompt, and stays path-jailed and tier-gated', () => {
-  it('a manual run with declared read+write:cache/ and NO promptBundleAccess supplied still cannot write outside cache/', async () => {
+  it('a manual run with declared read+write:.cache/ and NO promptBundleAccess supplied still cannot write outside .cache/', async () => {
     const memento = fakeMemento();
 
     const result = await runOnce({
@@ -146,7 +146,7 @@ describe('consent unification probe — (c) the bundle capability needs no promp
       timeoutMs: 8000,
       bundle: {
         manifest: manifestWith({
-          permissions: { bundle: ['read', 'write:cache/'] as BundleFsGrant[] },
+          permissions: { bundle: ['read', 'write:.cache/'] as BundleFsGrant[] },
         }),
         buildSnapshot: async () => ({}),
         persistCacheOut: async () => undefined,
@@ -155,19 +155,19 @@ describe('consent unification probe — (c) the bundle capability needs no promp
 
     expect(result.failures).toEqual([]);
     // The write itself failed inside the pcall (caught in Lua) -- the
-    // path-jail confines every write to cache/, regardless of what the
+    // path-jail confines every write to .cache/, regardless of what the
     // manifest declares or that no prompt was ever shown.
     expect(result.values.a?.value).toBe('false');
   }, 20000);
 
-  it('the SAME declared grants under an auto trigger cannot write at all, even to cache/ — the read-only tier, not a prompt, is what blocks it', async () => {
+  it('the SAME declared grants under an auto trigger cannot write at all, even to .cache/ — the read-only tier, not a prompt, is what blocks it', async () => {
     const memento = fakeMemento();
 
     const result = await runOnce({
       documentKey: 'bundle:///consent-c-tier.mkz',
       text: fence(
         'a',
-        'local ok, err = pcall(function() bundle.write("cache/out.json", "{}") end)\nreturn tostring(ok)',
+        'local ok, err = pcall(function() bundle.write(".cache/out.json", "{}") end)\nreturn tostring(ok)',
       ),
       trigger: 'auto',
       memento,
@@ -184,7 +184,7 @@ describe('consent unification probe — (c) the bundle capability needs no promp
       timeoutMs: 8000,
       bundle: {
         manifest: manifestWith({
-          permissions: { bundle: ['read', 'write:cache/'] as BundleFsGrant[] },
+          permissions: { bundle: ['read', 'write:.cache/'] as BundleFsGrant[] },
         }),
         buildSnapshot: async () => ({}),
         persistCacheOut: async () => undefined,
@@ -192,7 +192,7 @@ describe('consent unification probe — (c) the bundle capability needs no promp
     });
 
     expect(result.failures).toEqual([]);
-    // Even a write INTO cache/ -- otherwise allowed -- is refused under the
+    // Even a write INTO .cache/ -- otherwise allowed -- is refused under the
     // read-only tier an auto/scheduled trigger forces, independent of the
     // manifest's declaration and of there being no prompt to decline.
     expect(result.values.a?.value).toBe('false');

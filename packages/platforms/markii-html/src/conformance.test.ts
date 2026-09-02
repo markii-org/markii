@@ -201,6 +201,7 @@ describe('render-level conformance fixtures (conformance/render/)', () => {
     '03-layout-attributes',
     '04-value-failure',
     '05-table',
+    '06-image',
   ];
 
   it('the fixture list above accounts for every *.mk.md file in conformance/render/ (nothing silently skipped)', () => {
@@ -223,4 +224,24 @@ describe('render-level conformance fixtures (conformance/render/)', () => {
       expect(html.replace(/\n$/, '')).toBe(expectedHtml.replace(/\n$/, ''));
     });
   }
+
+  it("06-image WITH a resolveImageSrc option: a plain markdown image and Figure's own <img> both resolve", () => {
+    const input = readFileSync(
+      join(renderFixturesDir, '06-image.mk.md'),
+      'utf8',
+    );
+    const html = renderMarkToHtml(
+      input,
+      defaultHtmlRegistry,
+      undefined,
+      undefined,
+      {
+        resolveImageSrc: (src) => `resolved/${src}`,
+      },
+    );
+    expect(html).toContain('src="resolved/cat.png"');
+    expect(html).toContain('src="resolved/dog.png"');
+    expect(html).not.toContain('src="cat.png"');
+    expect(html).not.toContain('src="dog.png"');
+  });
 });

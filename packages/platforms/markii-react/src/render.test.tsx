@@ -1096,6 +1096,213 @@ describe('renderMark — render-level conformance fixtures (conformance/render/)
       'no data',
     );
   });
+
+  it('06-image: a plain markdown image and a Figure image, unresolved (no resolveImageSrc option)', () => {
+    const { container } = render(
+      renderMark(readRenderFixture('06-image'), defaultRegistry),
+    );
+    const images = [...container.querySelectorAll('img')].map((img) =>
+      img.getAttribute('src'),
+    );
+    expect(images).toEqual(['cat.png', 'dog.png']);
+  });
+
+  it("06-image WITH a resolveImageSrc option: a plain markdown image and Figure's own <img> both resolve", () => {
+    const { container } = render(
+      renderMark(
+        readRenderFixture('06-image'),
+        defaultRegistry,
+        undefined,
+        undefined,
+        { resolveImageSrc: (src) => `resolved/${src}` },
+      ),
+    );
+    const images = [...container.querySelectorAll('img')].map((img) =>
+      img.getAttribute('src'),
+    );
+    expect(images).toEqual(['resolved/cat.png', 'resolved/dog.png']);
+  });
+});
+
+describe('renderMark — resolveImageSrc option', () => {
+  it('resolves a relative markdown image', () => {
+    const { container } = render(
+      renderMark('![a cat](cat.png)', defaultRegistry, undefined, undefined, {
+        resolveImageSrc: (src) =>
+          src === 'cat.png' ? 'https://cdn.test/cat.png' : undefined,
+      }),
+    );
+    expect(container.querySelector('img')).toHaveAttribute(
+      'src',
+      'https://cdn.test/cat.png',
+    );
+  });
+
+  it('never offers a scheme-carrying src to the resolver', () => {
+    const called: string[] = [];
+    const { container } = render(
+      renderMark(
+        '![a cat](https://example.com/cat.png)',
+        defaultRegistry,
+        undefined,
+        undefined,
+        {
+          resolveImageSrc: (src) => {
+            called.push(src);
+            return 'https://other.test/should-not-apply.png';
+          },
+        },
+      ),
+    );
+    expect(called).toEqual([]);
+    expect(container.querySelector('img')).toHaveAttribute(
+      'src',
+      'https://example.com/cat.png',
+    );
+  });
+
+  it('never offers a protocol-relative src to the resolver', () => {
+    const called: string[] = [];
+    render(
+      renderMark(
+        '![a cat](//example.com/cat.png)',
+        defaultRegistry,
+        undefined,
+        undefined,
+        {
+          resolveImageSrc: (src) => {
+            called.push(src);
+            return undefined;
+          },
+        },
+      ),
+    );
+    expect(called).toEqual([]);
+  });
+
+  it('never offers a bare-fragment src to the resolver', () => {
+    // A raw `<img src="#top">` is unusual, but the rule is about the value,
+    // not about how an image ordinarily gets written.
+    const called: string[] = [];
+    render(
+      renderMark(
+        '<img src="#top" alt="">',
+        defaultRegistry,
+        undefined,
+        undefined,
+        {
+          resolveImageSrc: (src) => {
+            called.push(src);
+            return undefined;
+          },
+        },
+      ),
+    );
+    expect(called).toEqual([]);
+  });
+
+  it('never offers an empty or whitespace src to the resolver', () => {
+    const called: string[] = [];
+    render(
+      renderMark('<img src="" alt="">', defaultRegistry, undefined, undefined, {
+        resolveImageSrc: (src) => {
+          called.push(src);
+          return undefined;
+        },
+      }),
+    );
+    expect(called).toEqual([]);
+  });
+
+  it('leaves the src untouched when the resolver returns undefined', () => {
+    const { container } = render(
+      renderMark('![a cat](cat.png)', defaultRegistry, undefined, undefined, {
+        resolveImageSrc: () => undefined,
+      }),
+    );
+    expect(container.querySelector('img')).toHaveAttribute('src', 'cat.png');
+  });
+
+  it('SECURITY: rejects a hostile javascript: URL returned by the resolver', () => {
+    const { container } = render(
+      renderMark('![a cat](cat.png)', defaultRegistry, undefined, undefined, {
+        resolveImageSrc: () => 'javascript:alert(1)',
+      }),
+    );
+    expect(container.querySelector('img')).toHaveAttribute('src', 'cat.png');
+    expect(container.innerHTML).not.toContain('javascript:');
+  });
+
+  it.each([
+    ['a tab inside the scheme', 'java\u0009script:alert(1)'],
+    ['a newline inside the scheme', 'java\u000ascript:alert(1)'],
+    ['a carriage return inside the scheme', 'java\u000dscript:alert(1)'],
+    ['a leading space', ' javascript:alert(1)'],
+    ['a leading C0 control', '\u0001javascript:alert(1)'],
+    ['mixed case', 'JaVaScRiPt:alert(1)'],
+  ])(
+    'SECURITY: rejects a javascript: URL disguised with %s, which a browser still executes',
+    (_label, hostile) => {
+      const { container } = render(
+        renderMark('![a cat](cat.png)', defaultRegistry, undefined, undefined, {
+          resolveImageSrc: () => hostile,
+        }),
+      );
+      expect(container.querySelector('img')).toHaveAttribute('src', 'cat.png');
+      expect(container.innerHTML.toLowerCase()).not.toContain('alert(1)');
+    },
+  );
+
+  it('SECURITY: rejects a hostile vbscript: URL returned by the resolver', () => {
+    const { container } = render(
+      renderMark('![a cat](cat.png)', defaultRegistry, undefined, undefined, {
+        resolveImageSrc: () => 'vbscript:msgbox(1)',
+      }),
+    );
+    expect(container.querySelector('img')).toHaveAttribute('src', 'cat.png');
+  });
+
+  it('accepts a data: URI from the resolver (VS Code embedded bundle assets)', () => {
+    const { container } = render(
+      renderMark('![a cat](cat.png)', defaultRegistry, undefined, undefined, {
+        resolveImageSrc: () => 'data:image/png;base64,AAAA',
+      }),
+    );
+    expect(container.querySelector('img')).toHaveAttribute(
+      'src',
+      'data:image/png;base64,AAAA',
+    );
+  });
+
+  it('accepts an app: URL from the resolver (Obsidian vault resource paths)', () => {
+    const { container } = render(
+      renderMark('![a cat](cat.png)', defaultRegistry, undefined, undefined, {
+        resolveImageSrc: () => 'app://local/vault/cat.png?123',
+      }),
+    );
+    expect(container.querySelector('img')).toHaveAttribute(
+      'src',
+      'app://local/vault/cat.png?123',
+    );
+  });
+
+  it('never breaks the render when the resolver throws', () => {
+    const { container } = render(
+      renderMark('![a cat](cat.png)', defaultRegistry, undefined, undefined, {
+        resolveImageSrc: () => {
+          throw new Error('boom');
+        },
+      }),
+    );
+    expect(container.querySelector('img')).toHaveAttribute('src', 'cat.png');
+  });
+
+  it('leaves every image untouched with no options at all (renderMarkNode too)', () => {
+    const { container } = render(
+      renderMark('![a cat](cat.png)', defaultRegistry),
+    );
+    expect(container.querySelector('img')).toHaveAttribute('src', 'cat.png');
+  });
 });
 
 // URL-sanitization behavior is a `toHast` (@markii/core) concern and is tested

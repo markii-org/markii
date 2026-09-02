@@ -64,12 +64,12 @@ function instrumentedFakeStorage(files: Record<string, string>): {
 }
 
 describe('buildBundleSnapshot', () => {
-  it('collects scripts/, cache/, and assets/ files, but not manifest.json or the document', async () => {
+  it('collects scripts/, .cache/, and assets/ files, but not manifest.json or the document', async () => {
     const storage = fakeStorage({
       'manifest.json': '{"spec":"0.1.0"}',
       'note.mk.md': '# hi',
       'scripts/etl.lua': 'return 1',
-      'cache/data.json': '{"a":1}',
+      '.cache/data.json': '{"a":1}',
       'assets/photo.png': 'binary-ish',
       'other/ignored.txt': 'nope',
     });
@@ -78,8 +78,8 @@ describe('buildBundleSnapshot', () => {
 
     expect(truncated).toBe(false);
     expect(Object.keys(files).sort()).toEqual([
+      '.cache/data.json',
       'assets/photo.png',
-      'cache/data.json',
       'scripts/etl.lua',
     ]);
     expect(new TextDecoder().decode(files['scripts/etl.lua'])).toBe('return 1');
@@ -155,7 +155,7 @@ describe('bundleModulesFromSnapshot', () => {
   it('resolves every src= script path present in the snapshot to its decoded text', () => {
     const snapshot = {
       'scripts/etl.lua': bytesOf('return 1'),
-      'cache/unrelated.json': bytesOf('{}'),
+      '.cache/unrelated.json': bytesOf('{}'),
     };
     const modules = bundleModulesFromSnapshot(
       [
@@ -185,16 +185,16 @@ describe('bundleModulesFromSnapshot', () => {
 });
 
 describe('cacheFilesFrom', () => {
-  it('keeps only cache/-prefixed entries', () => {
+  it('keeps only .cache/-prefixed entries', () => {
     const files = {
       'scripts/a.lua': bytesOf('x'),
-      'cache/a.json': bytesOf('{}'),
-      'cache/nested/b.json': bytesOf('{}'),
+      '.cache/a.json': bytesOf('{}'),
+      '.cache/nested/b.json': bytesOf('{}'),
       'assets/img.png': bytesOf('x'),
     };
     expect(Object.keys(cacheFilesFrom(files)).sort()).toEqual([
-      'cache/a.json',
-      'cache/nested/b.json',
+      '.cache/a.json',
+      '.cache/nested/b.json',
     ]);
   });
 });
@@ -202,13 +202,13 @@ describe('cacheFilesFrom', () => {
 describe('withPersistedCache', () => {
   it('overlays persisted entries onto the base snapshot, persisted winning on collision', () => {
     const base = {
-      'cache/a.json': bytesOf('base'),
-      'cache/b.json': bytesOf('base-b'),
+      '.cache/a.json': bytesOf('base'),
+      '.cache/b.json': bytesOf('base-b'),
     };
-    const persisted = { 'cache/a.json': bytesOf('persisted') };
+    const persisted = { '.cache/a.json': bytesOf('persisted') };
     const merged = withPersistedCache(base, persisted);
-    expect(new TextDecoder().decode(merged['cache/a.json'])).toBe('persisted');
-    expect(new TextDecoder().decode(merged['cache/b.json'])).toBe('base-b');
+    expect(new TextDecoder().decode(merged['.cache/a.json'])).toBe('persisted');
+    expect(new TextDecoder().decode(merged['.cache/b.json'])).toBe('base-b');
   });
 });
 
@@ -240,25 +240,25 @@ describe('manifestBundleFsGrants', () => {
   it('returns the declared grants, or [] when none declared', () => {
     expect(
       manifestBundleFsGrants(
-        manifestWith({ permissions: { bundle: ['read', 'write:cache/'] } }),
+        manifestWith({ permissions: { bundle: ['read', 'write:.cache/'] } }),
       ),
-    ).toEqual(['read', 'write:cache/']);
+    ).toEqual(['read', 'write:.cache/']);
     expect(manifestBundleFsGrants(manifestWith())).toEqual([]);
   });
 });
 
 describe('encodeBundleCacheForStorage / decodeBundleCacheFromStorage', () => {
   it('round-trips a cache file map through base64', () => {
-    const files = { 'cache/a.json': bytesOf('{"x":1}') };
+    const files = { '.cache/a.json': bytesOf('{"x":1}') };
     const encoded = encodeBundleCacheForStorage(files);
     expect(encoded).toBeDefined();
     const decoded = decodeBundleCacheFromStorage(encoded);
-    expect(new TextDecoder().decode(decoded['cache/a.json'])).toBe('{"x":1}');
+    expect(new TextDecoder().decode(decoded['.cache/a.json'])).toBe('{"x":1}');
   });
 
   it('drops (returns undefined) an oversize cache rather than partially persisting it', () => {
     const files = {
-      'cache/big.json': new Uint8Array(MAX_PERSISTED_BUNDLE_CACHE_BYTES + 1),
+      '.cache/big.json': new Uint8Array(MAX_PERSISTED_BUNDLE_CACHE_BYTES + 1),
     };
     expect(encodeBundleCacheForStorage(files)).toBeUndefined();
   });
@@ -268,6 +268,6 @@ describe('encodeBundleCacheForStorage / decodeBundleCacheFromStorage', () => {
     expect(decodeBundleCacheFromStorage(null)).toEqual({});
     expect(decodeBundleCacheFromStorage('not an object')).toEqual({});
     expect(decodeBundleCacheFromStorage(['array', 'not', 'map'])).toEqual({});
-    expect(decodeBundleCacheFromStorage({ 'cache/a.json': 42 })).toEqual({});
+    expect(decodeBundleCacheFromStorage({ '.cache/a.json': 42 })).toEqual({});
   });
 });

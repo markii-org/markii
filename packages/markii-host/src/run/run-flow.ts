@@ -272,7 +272,7 @@ export interface RunOnceOptions {
    * closure `computeGrantKey` hashes, ahead of any prompting — still the
    * same single call per run, just earlier. `persistCacheOut` receives the
    * worker's `RunResult.cacheOut`
-   * (its bundle `cache/` subtree, post-run) when the run produced one, and
+   * (its bundle `.cache/` subtree, post-run) when the run produced one, and
    * is the caller's own persistence: writing back into a directory-form
    * bundle on disk, or into extension storage keyed by bundle identity for
    * a read-only zip form (see `preview-panel.ts`'s adapters).

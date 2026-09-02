@@ -58,9 +58,9 @@ export function grantAllDeclaredPermissions(
  *
  * - No effective bundle grants at all: every call throws `ScriptCapabilityError`.
  * - `'read'` in the intersection: `read`/`exists` work bundle-wide; `write` still fails.
- * - `'write:cache/'` in the intersection: `write` works, but only for paths
- *   `isWriteAllowed` accepts — `cache/` only. Critically, this holds even
- *   if both the manifest and the granted set include `'write:cache/'` and
+ * - `'write:.cache/'` in the intersection: `write` works, but only for paths
+ *   `isWriteAllowed` accepts — `.cache/` only. Critically, this holds even
+ *   if both the manifest and the granted set include `'write:.cache/'` and
  *   the script asks for `manifest.json` or `note.mk.md`: `isWriteAllowed`
  *   denies those two paths unconditionally, regardless of what's granted
  *   or declared (see `./paths`).

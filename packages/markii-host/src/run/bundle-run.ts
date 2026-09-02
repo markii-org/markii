@@ -23,7 +23,7 @@
  * `assets/` reachable, and current `.cache/` contents" — deliberately NOT
  * `manifest.json` or the document itself, even though `@markii/bundle`'s
  * `ScriptView.read` places no path restriction on a granted read (only
- * `write` is jailed to `cache/`). A script that specifically wants to
+ * `write` is jailed to `.cache/`). A script that specifically wants to
  * introspect its own manifest or document text cannot do so through
  * `bundle.read` in this slice — `bundle.read("manifest.json")` comes back
  * `undefined`, indistinguishable from "no such file", exactly like any
@@ -45,7 +45,7 @@
  *   mismatch is surfaced instead.
  * - The `bundle` capability (`permissions.bundle`) needs no user-facing
  *   prompt at all: `@markii/bundle`'s path-jail confines every read to the
- *   snapshot and every write to `cache/`, and the read-only tier for
+ *   snapshot and every write to `.cache/`, and the read-only tier for
  *   auto/scheduled triggers blocks `bundle.write` outright regardless of
  *   what the manifest declares. `manifestBundleFsGrants`'s result is passed
  *   straight through as the run's granted bundle-fs permissions — see
@@ -56,11 +56,11 @@ import type { BundleFsGrant } from '@markii/bundle';
 import type { GrantClosureScript } from '@markii/runtime';
 
 /** The three bundle-relative prefixes a run's snapshot ever collects — see this module's top doc comment. */
-const SNAPSHOT_PREFIXES = ['scripts/', 'cache/', 'assets/'] as const;
+const SNAPSHOT_PREFIXES = ['scripts/', '.cache/', 'assets/'] as const;
 
 /**
  * Total byte budget for one run's bundle snapshot (across `scripts/` +
- * `cache/` + `assets/` combined). Mirrors the same order of magnitude as
+ * `.cache/` + `assets/` combined). Mirrors the same order of magnitude as
  * `bundle-resolve.ts`'s `DEFAULT_MAX_EMBEDDED_ASSET_BYTES` (20MB) — a
  * personal note bundle's scripts and cache are typically tiny; this budget
  * exists so a hostile or oversized bundle degrades quietly (files beyond
@@ -94,7 +94,7 @@ export interface BundleSnapshotResult {
 }
 
 /**
- * Reads every file under `scripts/`, `cache/`, and `assets/` out of
+ * Reads every file under `scripts/`, `.cache/`, and `assets/` out of
  * `storage`, up to `maxTotalBytes` total. `storage.list()` already returns
  * paths sorted, so which files get dropped once the budget is hit is
  * deterministic rather than depending on iteration order.
@@ -190,13 +190,13 @@ export function bundleModulesFromSnapshot(
   return modules;
 }
 
-/** Every `cache/`-prefixed entry in `files`, unchanged — the shape a worker's `RunResult.cacheOut` carries back and a host persists. */
+/** Every `.cache/`-prefixed entry in `files`, unchanged — the shape a worker's `RunResult.cacheOut` carries back and a host persists. */
 export function cacheFilesFrom(
   files: Record<string, Uint8Array>,
 ): Record<string, Uint8Array> {
   const out: Record<string, Uint8Array> = {};
   for (const [path, bytes] of Object.entries(files)) {
-    if (path.startsWith('cache/')) out[path] = bytes;
+    if (path.startsWith('.cache/')) out[path] = bytes;
   }
   return out;
 }
@@ -206,7 +206,7 @@ export function cacheFilesFrom(
  * wherever the host keeps it) onto `base` (a freshly built snapshot),
  * persisted entries winning on a path collision — the "seed the next run's
  * snapshot from the persisted cache" half of the design. Used for the
- * zip-form path, where the archive's own on-disk `cache/` entries (if any)
+ * zip-form path, where the archive's own on-disk `.cache/` entries (if any)
  * are stale the moment a run has written a persisted cache elsewhere (the
  * host never rewrites the user's zip — see `docs` design comment).
  */
@@ -272,7 +272,7 @@ export function netDeclarationDiagnostics(
   return lines;
 }
 
-/** The bundle-filesystem grants a manifest declares under `permissions.bundle` (`'read'` / `'write:cache/'`), or `[]` when it declares none. */
+/** The bundle-filesystem grants a manifest declares under `permissions.bundle` (`'read'` / `'write:.cache/'`), or `[]` when it declares none. */
 export function manifestBundleFsGrants(
   manifest: BundleManifest,
 ): BundleFsGrant[] {
@@ -295,7 +295,7 @@ export const MAX_PERSISTED_BUNDLE_CACHE_BYTES = 1_000_000;
 export type EncodedBundleCache = Record<string, string>;
 
 /**
- * Encodes `files` (a bundle run's `cache/` output) for Memento storage, or
+ * Encodes `files` (a bundle run's `.cache/` output) for Memento storage, or
  * `undefined` when it must be dropped instead — either it doesn't encode at
  * all, or the encoded form exceeds `MAX_PERSISTED_BUNDLE_CACHE_BYTES`.
  * Callers write `undefined` back to storage in that case, exactly like

@@ -1,13 +1,7 @@
-// @vitest-environment jsdom
-
-import { act } from 'react';
-import { createElement } from 'react';
-import { createRoot } from 'react-dom/client';
 import { describe, expect, it } from 'vitest';
 import {
-  VaultImageDocument,
-  applyVaultImageSources,
   createUnresolvedImageReporter,
+  createVaultImageResolver,
   resolveVaultImageResource,
 } from './preview-images.js';
 import type { VaultImageResolver } from './preview-images.js';
@@ -29,13 +23,6 @@ function fakeVault(options: {
       options.resourcePath ??
       ((vaultPath) => `app://local/vault/${vaultPath}?1700000000000`),
   };
-}
-
-/** Renders `html` into a detached container, so the sweep runs over real DOM elements. */
-function container(html: string): HTMLElement {
-  const element = document.createElement('div');
-  element.innerHTML = html;
-  return element;
 }
 
 describe('resolveVaultImageResource', () => {
@@ -148,78 +135,6 @@ describe('resolveVaultImageResource', () => {
   });
 });
 
-describe('applyVaultImageSources', () => {
-  it('rewrites a figure image and a markdown image alike', () => {
-    const resolver = fakeVault({
-      files: ['notes/travel/a.png', 'notes/travel/b.png'],
-    });
-    const root = container(
-      '<figure class="mk-figure"><img src="./a.png" alt=""></figure><p><img src="b.png" alt=""></p>',
-    );
-    applyVaultImageSources(root, NOTE, resolver);
-    const sources = [...root.querySelectorAll('img')].map((image) =>
-      image.getAttribute('src'),
-    );
-    expect(sources).toEqual([
-      'app://local/vault/notes/travel/a.png?1700000000000',
-      'app://local/vault/notes/travel/b.png?1700000000000',
-    ]);
-  });
-
-  it('leaves remote and data sources exactly as written', () => {
-    const resolver = fakeVault({});
-    const root = container(
-      '<img src="https://example.test/a.png"><img src="data:image/png;base64,AA">',
-    );
-    applyVaultImageSources(root, NOTE, resolver);
-    const sources = [...root.querySelectorAll('img')].map((image) =>
-      image.getAttribute('src'),
-    );
-    expect(sources).toEqual([
-      'https://example.test/a.png',
-      'data:image/png;base64,AA',
-    ]);
-  });
-
-  it('keeps the original value and reports a source that matches nothing', () => {
-    const resolver = fakeVault({});
-    const reported: string[] = [];
-    const root = container('<img src="./ghost.png">');
-    applyVaultImageSources(root, NOTE, resolver, (src) => {
-      reported.push(src);
-    });
-    expect(root.querySelector('img')?.getAttribute('src')).toBe('./ghost.png');
-    expect(reported).toEqual(['./ghost.png']);
-  });
-
-  it('reports nothing for a source it deliberately left alone', () => {
-    const reported: string[] = [];
-    const root = container('<img src="https://example.test/a.png">');
-    applyVaultImageSources(root, NOTE, fakeVault({}), (src) => {
-      reported.push(src);
-    });
-    expect(reported).toEqual([]);
-  });
-
-  it('is idempotent: a second pass leaves the resolved URL alone', () => {
-    let calls = 0;
-    const resolver = fakeVault({
-      files: ['notes/travel/a.png'],
-      resourcePath: (vaultPath) => {
-        calls += 1;
-        return `app://local/vault/${vaultPath}?${String(calls)}`;
-      },
-    });
-    const root = container('<img src="./a.png">');
-    applyVaultImageSources(root, NOTE, resolver);
-    applyVaultImageSources(root, NOTE, resolver);
-    expect(root.querySelector('img')?.getAttribute('src')).toBe(
-      'app://local/vault/notes/travel/a.png?1',
-    );
-    expect(calls).toBe(1);
-  });
-});
-
 describe('createUnresolvedImageReporter', () => {
   it('writes one line naming the source and the note, once per pair', () => {
     const lines: string[] = [];
@@ -236,42 +151,63 @@ describe('createUnresolvedImageReporter', () => {
   });
 });
 
-describe('VaultImageDocument', () => {
-  it('rewrites after the first render and again after a value update', () => {
-    const resolver = fakeVault({ files: ['notes/travel/a.png'] });
-    const host = document.createElement('div');
-    document.body.append(host);
-    const root = createRoot(host);
-
-    const tree = (caption: string) =>
-      createElement(
-        VaultImageDocument,
-        { notePath: NOTE, resolver },
-        createElement('img', { src: './a.png', alt: '' }),
-        createElement('span', null, caption),
-      );
-
-    act(() => {
-      root.render(tree('42'));
+describe('createVaultImageResolver', () => {
+  it('resolves a figure image and a markdown image alike, the same way resolveVaultImageResource does', () => {
+    const resolver = fakeVault({
+      files: ['notes/travel/a.png', 'notes/travel/b.png'],
     });
-    expect(host.querySelector('img')?.getAttribute('src')).toBe(
+    const resolveImageSrc = createVaultImageResolver(NOTE, resolver);
+    expect(resolveImageSrc('./a.png')).toBe(
       'app://local/vault/notes/travel/a.png?1700000000000',
     );
-    expect(host.querySelector('div')?.className).toBe('doc');
-
-    // A re-render for a fresh value: React writes the author's relative
-    // `src` back into the reused element, so the sweep has to run again.
-    act(() => {
-      root.render(tree('43'));
-    });
-    expect(host.querySelector('span')?.textContent).toBe('43');
-    expect(host.querySelector('img')?.getAttribute('src')).toBe(
-      'app://local/vault/notes/travel/a.png?1700000000000',
+    expect(resolveImageSrc('b.png')).toBe(
+      'app://local/vault/notes/travel/b.png?1700000000000',
     );
+  });
 
-    act(() => {
-      root.unmount();
+  it('keeps the original value and reports a source that matches nothing', () => {
+    const reported: string[] = [];
+    const resolveImageSrc = createVaultImageResolver(
+      NOTE,
+      fakeVault({}),
+      (src) => {
+        reported.push(src);
+      },
+    );
+    expect(resolveImageSrc('./ghost.png')).toBeUndefined();
+    expect(reported).toEqual(['./ghost.png']);
+  });
+
+  it('reports nothing for a source vaultImageCandidates has no reading of at all', () => {
+    // `renderMark` never offers a scheme-carrying source to the resolver in
+    // the first place, but this asserts the resolver's own defense too.
+    const reported: string[] = [];
+    const resolveImageSrc = createVaultImageResolver(
+      NOTE,
+      fakeVault({}),
+      (src) => {
+        reported.push(src);
+      },
+    );
+    expect(resolveImageSrc('https://example.test/a.png')).toBeUndefined();
+    expect(reported).toEqual([]);
+  });
+
+  it('is idempotent-friendly: asking twice for the same source calls the vault twice but resolves the same way', () => {
+    let calls = 0;
+    const resolver = fakeVault({
+      files: ['notes/travel/a.png'],
+      resourcePath: (vaultPath) => {
+        calls += 1;
+        return `app://local/vault/${vaultPath}?${String(calls)}`;
+      },
     });
-    host.remove();
+    const resolveImageSrc = createVaultImageResolver(NOTE, resolver);
+    expect(resolveImageSrc('./a.png')).toBe(
+      'app://local/vault/notes/travel/a.png?1',
+    );
+    expect(resolveImageSrc('./a.png')).toBe(
+      'app://local/vault/notes/travel/a.png?2',
+    );
   });
 });

@@ -9,6 +9,7 @@
 
 import type { FailureKind, ValueStatus } from '@markii/runtime';
 import type { LayoutAxis } from '@markii/stdlib';
+import type { ResolveImageSrc } from './image-resolve.js';
 
 /**
  * Attributes parsed off a directive, e.g. `{type=warning title="Careful"}`. A
@@ -85,6 +86,15 @@ export interface HtmlRenderContext {
    * arguments and has no room for a fourth.
    */
   layoutClassName?: string;
+  /**
+   * `renderMarkToHtml`'s `resolveImageSrc` option (`render.ts`'s
+   * `RenderMarkOptions`), carried on `ctx` so a component that builds its
+   * own `<img>` from an attribute — the standard `Figure` is the only one
+   * today — can resolve it the same way an ordinary markdown image does.
+   * `undefined` when the render call supplied none, in which case a
+   * component must leave its `src` exactly as authored.
+   */
+  resolveImageSrc?: ResolveImageSrc;
 }
 
 /**

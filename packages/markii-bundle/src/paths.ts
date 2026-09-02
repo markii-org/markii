@@ -14,7 +14,7 @@
  */
 
 /** The two write grants a manifest may declare under `permissions.bundle`. */
-export type BundleFsGrant = 'read' | 'write:cache/';
+export type BundleFsGrant = 'read' | 'write:.cache/';
 
 export type NormalizePathResult =
   { ok: true; path: string } | { ok: false; reason: string };
@@ -84,8 +84,12 @@ export interface BundleWritePolicy {
  * `policy` — this is load-bearing, not a default: a script that could edit
  * the manifest could grant itself further permissions, and a script that
  * could edit `note.mk.md` would make the document self-modifying, which §8
- * explicitly rules out. Every other path requires the `write:cache/` grant
- * and must normalize to a path under `cache/`.
+ * explicitly rules out. Every other path requires the `write:.cache/` grant
+ * and must normalize to a path under `.cache/`. The dot prefix is the one
+ * spelling: `normalizeBundlePath` collapses a bare `.` segment away, so
+ * `.cache/x` normalizes to a first segment of `.cache`, an ordinary
+ * dot-prefixed directory name rather than a traversal segment (only a
+ * literal `..` segment is rejected).
  */
 export function isWriteAllowed(
   path: string,
@@ -99,7 +103,7 @@ export function isWriteAllowed(
   // Unconditional denial: no policy input can override this.
   if (p === 'note.mk.md' || p === 'manifest.json') return false;
 
-  if (!policy.grants.includes('write:cache/')) return false;
+  if (!policy.grants.includes('write:.cache/')) return false;
 
-  return p.startsWith('cache/') && p.length > 'cache/'.length;
+  return p.startsWith('.cache/') && p.length > '.cache/'.length;
 }

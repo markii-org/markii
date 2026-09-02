@@ -16,7 +16,7 @@
  * file goes further: it fires the SAME probe repeatedly (simulating what a
  * `setInterval`-driven `refreshTimer` actually does — many ticks over a
  * note's life) and widens the attack surface to POST/PATCH, a bundle write
- * OUTSIDE `.cache/` (a manifest that never declares `write:cache/` at all,
+ * OUTSIDE `.cache/` (a manifest that never declares `write:.cache/` at all,
  * so there is nothing to intersect), and a same-key cache-write-then-read
  * chain across ticks, trying to launder a cache write into a capability
  * escalation.
@@ -114,11 +114,11 @@ describe('issue #12 / item 1: bundle write is refused under read-only, even OUTS
   const manifestNoBundleGrants: BundleManifest = { spec: '0.1.0' };
   const manifestFullBundleGrants: BundleManifest = {
     spec: '0.1.0',
-    permissions: { bundle: ['read', 'write:cache/'] },
+    permissions: { bundle: ['read', 'write:.cache/'] },
   };
 
   for (const trigger of NON_MANUAL_TRIGGERS) {
-    it(`${trigger}: bundle.write to a path OUTSIDE cache/ fails even when 'read' is granted (path jail, not just tier)`, async () => {
+    it(`${trigger}: bundle.write to a path OUTSIDE .cache/ fails even when 'read' is granted (path jail, not just tier)`, async () => {
       const text = fence(
         'p',
         'local ok = pcall(function() bundle.write("assets/pwn.txt", "owned") end)\nreturn ok',
@@ -133,16 +133,16 @@ describe('issue #12 / item 1: bundle write is refused under read-only, even OUTS
         bundle: {
           snapshot: {},
           manifest: manifestFullBundleGrants,
-          grantedBundlePermissions: ['read', 'write:cache/'],
+          grantedBundlePermissions: ['read', 'write:.cache/'],
         },
       });
       expect(result.values.p?.value).toBe(false);
     }, 15000);
 
-    it(`${trigger}: bundle.write to cache/ is STILL refused under the read-only tier, even with a full write:cache/ grant AND manifest declaration (repeated 4x)`, async () => {
+    it(`${trigger}: bundle.write to .cache/ is STILL refused under the read-only tier, even with a full write:.cache/ grant AND manifest declaration (repeated 4x)`, async () => {
       const text = fence(
         'p',
-        'local ok = pcall(function() bundle.write("cache/x.json", "{}") end)\nreturn ok',
+        'local ok = pcall(function() bundle.write(".cache/x.json", "{}") end)\nreturn ok',
       );
       for (let tick = 0; tick < 4; tick++) {
         const result = await spawnRun({
@@ -155,18 +155,18 @@ describe('issue #12 / item 1: bundle write is refused under read-only, even OUTS
           bundle: {
             snapshot: {},
             manifest: manifestFullBundleGrants,
-            grantedBundlePermissions: ['read', 'write:cache/'],
+            grantedBundlePermissions: ['read', 'write:.cache/'],
           },
         });
         expect(result.values.p?.value, `tick ${tick}`).toBe(false);
-        expect(result.cacheOut?.['cache/x.json']).toBeUndefined();
+        expect(result.cacheOut?.['.cache/x.json']).toBeUndefined();
       }
     }, 45000);
 
     it(`${trigger}: bundle.write attempted with NO manifest permissions.bundle at all still fails cleanly (no crash, no escalation)`, async () => {
       const text = fence(
         'p',
-        'local ok = pcall(function() bundle.write("cache/x.json", "{}") end)\nreturn ok',
+        'local ok = pcall(function() bundle.write(".cache/x.json", "{}") end)\nreturn ok',
       );
       const result = await spawnRun({
         text,
@@ -182,7 +182,7 @@ describe('issue #12 / item 1: bundle write is refused under read-only, even OUTS
           // manifest never declared -- @markii/bundle's createScriptView
           // must intersect with the manifest regardless of what the host
           // hands in here.
-          grantedBundlePermissions: ['write:cache/'],
+          grantedBundlePermissions: ['write:.cache/'],
         },
       });
       expect(result.values.p?.value).toBe(false);
@@ -319,23 +319,23 @@ describe('issue #12 / item 7: a pack Lua module required under a scheduled/auto 
         timeoutMs: 10000,
         workerPath: WORKER_PATH,
         bundle: {
-          snapshot: { 'cache/seed.json': new TextEncoder().encode('"seed"') },
+          snapshot: { '.cache/seed.json': new TextEncoder().encode('"seed"') },
           manifest: {
             spec: '0.1.0',
-            permissions: { bundle: ['read', 'write:cache/'] },
+            permissions: { bundle: ['read', 'write:.cache/'] },
           },
-          grantedBundlePermissions: ['read', 'write:cache/'],
+          grantedBundlePermissions: ['read', 'write:.cache/'],
         },
         packModules: {
           acme: {
             'fs-helper.lua':
-              'local ok = pcall(function() bundle.write("cache/pack-out.json", "{}") end)\n' +
+              'local ok = pcall(function() bundle.write(".cache/pack-out.json", "{}") end)\n' +
               'return { ok = ok }',
           },
         },
       });
       expect(result.values.p?.value).toBe(false);
-      expect(result.cacheOut?.['cache/pack-out.json']).toBeUndefined();
+      expect(result.cacheOut?.['.cache/pack-out.json']).toBeUndefined();
     }, 15000);
   }
 

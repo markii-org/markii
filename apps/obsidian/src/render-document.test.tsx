@@ -29,4 +29,13 @@ describe('renderDocument', () => {
     expect(html).toContain('totally-unmade-up');
     expect(html).toContain('An unknown directive falls back cleanly.');
   });
+
+  it('forwards resolveImageSrc through to renderMark', () => {
+    const html = renderToStaticMarkup(
+      renderDocument('![a cat](cat.png)', undefined, undefined, (src) =>
+        src === 'cat.png' ? 'app://local/vault/cat.png' : undefined,
+      ),
+    );
+    expect(html).toContain('src="app://local/vault/cat.png"');
+  });
 });

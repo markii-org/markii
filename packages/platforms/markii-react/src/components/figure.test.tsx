@@ -90,4 +90,57 @@ describe('Figure', () => {
       'caption only',
     );
   });
+
+  it("resolves a relative src through renderMark's resolveImageSrc option, the same way an ordinary markdown image does", () => {
+    const { container } = render(
+      renderMark(
+        ':::figure{src="cat.png"}\ncaption\n:::',
+        defaultRegistry,
+        undefined,
+        undefined,
+        {
+          resolveImageSrc: (src) =>
+            src === 'cat.png' ? 'https://cdn.test/cat.png' : undefined,
+        },
+      ),
+    );
+    expect(container.querySelector('img')).toHaveAttribute(
+      'src',
+      'https://cdn.test/cat.png',
+    );
+  });
+
+  it('never offers an already-absolute src to the resolver', () => {
+    const { container } = render(
+      renderMark(
+        ':::figure{src="https://example.com/cat.png"}\ncaption\n:::',
+        defaultRegistry,
+        undefined,
+        undefined,
+        {
+          resolveImageSrc: () => {
+            throw new Error('should never be asked for an absolute src');
+          },
+        },
+      ),
+    );
+    expect(container.querySelector('img')).toHaveAttribute(
+      'src',
+      'https://example.com/cat.png',
+    );
+  });
+
+  it('rejects a resolver result that is not a safe URL, keeping the original src', () => {
+    const { container } = render(
+      renderMark(
+        ':::figure{src="cat.png"}\ncaption\n:::',
+        defaultRegistry,
+        undefined,
+        undefined,
+        { resolveImageSrc: () => 'javascript:alert(1)' },
+      ),
+    );
+    expect(container.querySelector('img')).toHaveAttribute('src', 'cat.png');
+    expect(container.innerHTML).not.toContain('javascript:');
+  });
 });

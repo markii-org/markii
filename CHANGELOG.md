@@ -6,6 +6,69 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-09-03
+
+The `@markii/*` packages and the VS Code extension ship this release as
+0.13.0, the Obsidian plugin as 0.10.0.
+
+### Added
+
+- **`@markii/lua`: a `json` table for scripts.** `json.decode(text)` parses
+  JSON into ordinary Lua data, and `json.encode(value)` converts a Lua value
+  back into JSON text. Both are present on every trigger tier and need no
+  capability grant, because neither does any I/O. They reuse the decoder and
+  the marshal walk the runtime already has rather than adding a second copy
+  of either, so `json.decode` is bound by the same size, depth, and
+  node-count budget `net.fetch_json` applies, and `json.encode` rejects a
+  cycle, a function, a non-string table key, or a non-finite number exactly
+  as a script's own return value is rejected.
+- **`@markii/bundle`: `createMemoryBundleStorage(files)`.** A third
+  `BundleStorage` form beside the zip and directory forms, backed by a plain
+  map of bundle-relative paths to strings or bytes. It routes every path
+  through the package's own jail and is exported from the browser-safe main
+  entry, so a host that already holds a bundle's files as values does not
+  need Node to use them.
+
+- **`@markii/react` and `@markii/html`: a `resolveImageSrc` render option.**
+  `renderMark` and `renderMarkNode`, and `renderMarkToHtml` and
+  `renderMarkNodeToHtml`, accept an optional function that turns a relative
+  `<img src>` into a URL the host can load. It covers both an ordinary
+  markdown image and a component that builds its own `<img>`, such as the
+  standard figure, and it is never asked about a source that already carries
+  a scheme. A resolver that returns nothing, or throws, leaves the source as
+  written. A `javascript:` or `vbscript:` result is refused, judged the way a
+  browser parses a URL rather than by the raw text, so a disguised scheme
+  cannot slip through.
+
+### Changed
+
+- **Both hosts resolve a note's images during the render instead of after
+  it.** The VS Code preview and Obsidian's preview and Reading view pass
+  `resolveImageSrc` and no longer sweep the mounted DOM rewriting `<img>`
+  elements once React has finished. The images resolve the same way they did,
+  including Obsidian's report of a source that names nothing in the vault, but
+  the page no longer briefly requests the unresolved URL first.
+
+### Fixed
+
+- **Host-compiled packs no longer leave a `__markiiJSX` global behind.** The
+  pack builder passed its JSX shim through esbuild's `banner` option, which
+  writes text outside the `format: 'iife'` wrapper, so every pack the VS Code
+  extension compiled from source, and both hosts' bundled `read`, `dash`, and
+  `prep` packs, leaked that global. The shim is now an injected module inside
+  the wrapper. This also fixes a component that renders through a helper
+  module: because a banner cannot put the shim in scope of a non-entry
+  module, JSX in such a helper failed at render time. Packs rebuild once on
+  upgrade.
+- **`@markii/bundle`: the bundle write grant is spelled `write:.cache/`.**
+  The writable directory is documented everywhere as `.cache/`, but the write
+  jail accepted only the undotted `cache/` prefix, so `bundle.write(".cache/x")`
+  was denied even with the grant while a write to `cache/x` landed outside the
+  documented directory. The jail, the grant token, and the manifest grammar
+  now all use `.cache/`. **Breaking for bundles:** a manifest declaring the
+  retired `write:cache/` no longer parses, and reports a diagnostic naming the
+  correct token instead of being silently accepted.
+
 ## [0.12.1] - 2026-09-02
 
 ### Added

@@ -57,15 +57,15 @@ function fixtureBundle() {
     'note.mk.md': u8('# hello'),
     'manifest.json': u8('{"spec":"0.1.0"}'),
     'assets/x.png': u8('img'),
-    'cache/data.json': u8('{}'),
+    '.cache/data.json': u8('{}'),
   });
   const storage = openZipBundle(bytes);
   const manifest: BundleManifest = {
     spec: '0.1.0',
-    permissions: { bundle: ['read', 'write:cache/'] },
+    permissions: { bundle: ['read', 'write:.cache/'] },
   };
   const view = createScriptView(storage, manifest, {
-    bundle: ['read', 'write:cache/'],
+    bundle: ['read', 'write:.cache/'],
   });
   return { storage, view };
 }
@@ -745,14 +745,14 @@ describe('buildCapabilities — bundle delegates to a real @markii/bundle Script
     const { view } = fixtureBundle();
     const r = await run(
       `
-      local cached = bundle.read("cache/data.json")
+      local cached = bundle.read(".cache/data.json")
       local computed
       if cached == nil then
         computed = "computed"
       else
         computed = "from-cache"
       end
-      local miss = bundle.read("cache/does-not-exist.json")
+      local miss = bundle.read(".cache/does-not-exist.json")
       local missBranch
       if miss == nil then
         missBranch = "computed-on-miss"
@@ -766,17 +766,17 @@ describe('buildCapabilities — bundle delegates to a real @markii/bundle Script
     expect(r).toEqual({ ok: true, value: 'from-cache' });
   });
 
-  it("tier 'manual': bundle.write to cache/ works through the real path-jail/write policy", async () => {
+  it("tier 'manual': bundle.write to .cache/ works through the real path-jail/write policy", async () => {
     const { view, storage } = fixtureBundle();
     const r = await run(
-      'bundle.write("cache/out.json", "hello"); return true',
+      'bundle.write(".cache/out.json", "hello"); return true',
       {
         tier: 'manual',
         bundle: view,
       },
     );
     expect(r).toEqual({ ok: true, value: true });
-    const written = await storage.read('cache/out.json');
+    const written = await storage.read('.cache/out.json');
     expect(written && new TextDecoder().decode(written)).toBe('hello');
   });
 
@@ -804,14 +804,14 @@ describe('buildCapabilities — bundle delegates to a real @markii/bundle Script
     const writeSpy = vi.spyOn(view, 'write');
     const r = await run(
       `
-      local ok, err = pcall(bundle.write, "cache/out.json", "hi")
+      local ok, err = pcall(bundle.write, ".cache/out.json", "hi")
       return type(bundle.write), ok, err
       `,
       { tier: 'auto', bundle: view },
     );
     expect(r).toEqual({ ok: true, value: 'function' });
     expect(writeSpy).not.toHaveBeenCalled();
-    expect(await storage.read('cache/out.json')).toBeUndefined();
+    expect(await storage.read('.cache/out.json')).toBeUndefined();
   });
 
   it("tier 'auto': bundle.write's tier-blocked stub records a 'tier-blocked' denial on buildCapabilities' own denials handle", async () => {
@@ -832,7 +832,7 @@ describe('buildCapabilities — bundle delegates to a real @markii/bundle Script
       const thread = engine.global.newThread();
       const idx = engine.global.getTop();
       try {
-        thread.loadString('bundle.write("cache/out.json", "hi")');
+        thread.loadString('bundle.write(".cache/out.json", "hi")');
         await expect(thread.run(0)).rejects.toThrow();
       } finally {
         engine.global.remove(idx);

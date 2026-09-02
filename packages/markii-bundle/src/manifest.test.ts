@@ -20,7 +20,7 @@ describe('parseManifest — happy paths', () => {
         spec: '1.2.3',
         permissions: {
           net: { get: ['api.github.com'], post: ['hooks.example.com'] },
-          bundle: ['read', 'write:cache/'],
+          bundle: ['read', 'write:.cache/'],
         },
         uses: ['ana'],
       }),
@@ -33,7 +33,7 @@ describe('parseManifest — happy paths', () => {
     ]);
     expect(result.manifest.permissions?.bundle).toEqual([
       'read',
-      'write:cache/',
+      'write:.cache/',
     ]);
     expect(result.manifest.uses).toEqual(['ana']);
   });
@@ -188,6 +188,32 @@ describe('parseManifest — errors', () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.errors.join(' ')).toMatch(/invalid grant/);
+  });
+
+  it('rejects the retired "write:cache/" spelling with a diagnostic naming "write:.cache/"', () => {
+    const result = parseManifest(
+      JSON.stringify({
+        spec: '0.1.0',
+        permissions: { bundle: ['write:cache/'] },
+      }),
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors.join(' ')).toMatch(/retired grant "write:cache\/"/);
+    expect(result.errors.join(' ')).toMatch(/"write:\.cache\/"/);
+  });
+
+  it('collects both a retired grant and an unrelated invalid grant as separate errors', () => {
+    const result = parseManifest(
+      JSON.stringify({
+        spec: '0.1.0',
+        permissions: { bundle: ['write:cache/', 'write:/'] },
+      }),
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors.some((e) => /retired grant/.test(e))).toBe(true);
+    expect(result.errors.some((e) => /invalid grant/.test(e))).toBe(true);
   });
 
   it('rejects permissions as a non-object', () => {

@@ -24,7 +24,7 @@ export type {
 export { isWriteAllowed, normalizeBundlePath } from './paths.js';
 
 export type { BundleStorage } from './storage.js';
-export { normalizeOrThrow } from './storage.js';
+export { createMemoryBundleStorage, normalizeOrThrow } from './storage.js';
 
 export {
   BundlePathError,

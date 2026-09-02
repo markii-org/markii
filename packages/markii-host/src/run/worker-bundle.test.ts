@@ -23,7 +23,7 @@ function bytesOf(text: string): Uint8Array {
 }
 
 function manifestWithBundleGrants(
-  grants: ('read' | 'write:cache/')[],
+  grants: ('read' | 'write:.cache/')[],
 ): BundleManifest {
   return { spec: '0.1.0', permissions: { bundle: grants } };
 }
@@ -112,10 +112,10 @@ describe('worker bundle capability — read', () => {
 });
 
 describe('worker bundle capability — write', () => {
-  it('bundle.write to cache/ succeeds and the write comes back in cacheOut', async () => {
+  it('bundle.write to .cache/ succeeds and the write comes back in cacheOut', async () => {
     const text = fence(
       'a',
-      'bundle.write("cache/out.json", "{\\"ok\\":true}")\nreturn "done"',
+      'bundle.write(".cache/out.json", "{\\"ok\\":true}")\nreturn "done"',
     );
     const result = await spawnRun({
       text,
@@ -125,20 +125,20 @@ describe('worker bundle capability — write', () => {
       workerPath: WORKER_PATH,
       bundle: {
         snapshot: {},
-        manifest: manifestWithBundleGrants(['write:cache/']),
-        grantedBundlePermissions: ['write:cache/'],
+        manifest: manifestWithBundleGrants(['write:.cache/']),
+        grantedBundlePermissions: ['write:.cache/'],
       },
     });
 
     expect(result.failures).toEqual([]);
     expect(result.values.a?.status).toBe('fresh');
     expect(result.cacheOut).toBeDefined();
-    const written = result.cacheOut?.['cache/out.json'];
+    const written = result.cacheOut?.['.cache/out.json'];
     expect(written).toBeDefined();
     expect(new TextDecoder().decode(written)).toBe('{"ok":true}');
   });
 
-  it('bundle.write to the document or manifest is denied even when write:cache/ is granted', async () => {
+  it('bundle.write to the document or manifest is denied even when write:.cache/ is granted', async () => {
     const text = fence(
       'a',
       'local ok, err = pcall(function() bundle.write("note.mk.md", "pwned") end)\nreturn tostring(ok)',
@@ -151,8 +151,8 @@ describe('worker bundle capability — write', () => {
       workerPath: WORKER_PATH,
       bundle: {
         snapshot: { 'note.mk.md': bytesOf('# original') },
-        manifest: manifestWithBundleGrants(['write:cache/']),
-        grantedBundlePermissions: ['write:cache/'],
+        manifest: manifestWithBundleGrants(['write:.cache/']),
+        grantedBundlePermissions: ['write:.cache/'],
       },
     });
 
@@ -163,10 +163,10 @@ describe('worker bundle capability — write', () => {
     expect(result.cacheOut).toEqual({});
   });
 
-  it('bundle.write outside cache/ is denied when only read is granted', async () => {
+  it('bundle.write outside .cache/ is denied when only read is granted', async () => {
     const text = fence(
       'a',
-      'local ok, err = pcall(function() bundle.write("cache/x.json", "y") end)\nreturn tostring(ok) .. ":" .. tostring(err)',
+      'local ok, err = pcall(function() bundle.write(".cache/x.json", "y") end)\nreturn tostring(ok) .. ":" .. tostring(err)',
     );
     const result = await spawnRun({
       text,
@@ -188,7 +188,7 @@ describe('worker bundle capability — write', () => {
 
 describe('worker bundle capability — .cache/ round-trips across two runs', () => {
   it("the second run sees the first run's cache write, via the host's own persistence contract", async () => {
-    // Seeded with an existing "cache/counter.json" rather than starting from
+    // Seeded with an existing ".cache/counter.json" rather than starting from
     // an empty snapshot: see this slice's report for a documented,
     // pre-existing `@markii/lua` gap — `bundle.read` of a path absent from
     // the snapshot throws a raw JS error ("Cannot read properties of null
@@ -198,16 +198,16 @@ describe('worker bundle capability — .cache/ round-trips across two runs', () 
     // off limits for this slice); this test is written to exercise the
     // round-trip contract this slice DOES own without tripping that
     // unrelated bug.
-    const manifest = manifestWithBundleGrants(['read', 'write:cache/']);
+    const manifest = manifestWithBundleGrants(['read', 'write:.cache/']);
     const bumpCounter = fence(
       'a',
-      'local existing = bundle.read("cache/counter.json")\n' +
+      'local existing = bundle.read(".cache/counter.json")\n' +
         'local n = tonumber(existing) + 1\n' +
-        'bundle.write("cache/counter.json", tostring(n))\n' +
+        'bundle.write(".cache/counter.json", tostring(n))\n' +
         'return n',
     );
     const seedSnapshot = () => ({
-      'cache/counter.json': bytesOf('0'),
+      '.cache/counter.json': bytesOf('0'),
     });
 
     const firstRun = await spawnRun({
@@ -219,7 +219,7 @@ describe('worker bundle capability — .cache/ round-trips across two runs', () 
       bundle: {
         snapshot: seedSnapshot(),
         manifest,
-        grantedBundlePermissions: ['read', 'write:cache/'],
+        grantedBundlePermissions: ['read', 'write:.cache/'],
       },
     });
     expect(firstRun.failures).toEqual([]);
@@ -243,7 +243,7 @@ describe('worker bundle capability — .cache/ round-trips across two runs', () 
       bundle: {
         snapshot: secondSnapshot,
         manifest,
-        grantedBundlePermissions: ['read', 'write:cache/'],
+        grantedBundlePermissions: ['read', 'write:.cache/'],
       },
     });
 

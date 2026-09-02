@@ -13,11 +13,15 @@
  * the `pack-diagnostics` wiring around `./pack-registry.ts`.
  *
  * RELATIVE IMAGES: `preview.tsx` resolves a document's relative image
- * sources against its folder in a DOM effect AFTER `renderMark` produces
- * its tree (`./document-images.ts`). `renderToStaticMarkup` never mounts a
- * DOM, so that effect never runs here, and an exported file keeps the
+ * sources through `renderMark`'s `resolveImageSrc` option, closing over the
+ * document's `baseUri`/`assets` (`./document-images.ts`). This function has
+ * neither — `ExportRequestMessage` carries only `text` and `values` — so it
+ * calls `renderMark` with no such option, and an exported file keeps the
  * note's own relative image sources exactly as slice 1 already documented
- * for the static engine. This is deliberate, not a gap to close.
+ * for the static engine. This is deliberate, not a gap to close: the
+ * extension host's own image embedding (`../export-images.ts`,
+ * `@markii/host`'s `embedImagesInHtml`) resolves and reads each source
+ * itself, from the note's OWN relative text, after this body comes back.
  */
 import { renderMark } from '@markii/react';
 import type { Registry } from '@markii/react';

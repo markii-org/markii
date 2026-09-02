@@ -265,7 +265,7 @@ describe('require probe — tier gating: bundle-local require is read-only, allo
   it('a required module cannot reach bundle.write even under manual tier from inside its own body', async () => {
     const view = bundleWithScripts({
       'probe.lua': `
-        local ok, err = pcall(function() return bundle.write("cache/x.json", "1") end)
+        local ok, err = pcall(function() return bundle.write(".cache/x.json", "1") end)
         return { ok = ok, err = tostring(err) }
       `,
     });
@@ -325,7 +325,7 @@ describe('require probe — slice 4: no require/load internals leak to user code
     expect(result).toEqual({ ok: true, value: 'nil,nil,nil,nil,nil,nil' });
   });
 
-  it('reassigning `require` in user code cannot reach the private cache/stack it closes over', async () => {
+  it('reassigning `require` in user code cannot reach the private cache/stack locals it closes over', async () => {
     // Even after shadowing `require`, the prelude locals stay unreachable —
     // they are upvalues of the original closure, never globals.
     const result = await run(`

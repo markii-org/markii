@@ -116,10 +116,22 @@
  *
  * - JSX itself never imports `react` or `react/jsx-runtime` at all: a
  *   custom `jsxFactory`/`jsxFragment` pair (`__markiiJSX.createElement` /
- *   `__markiiJSX.Fragment`, defined in `REACT_SHIM_BANNER` below as plain
+ *   `__markiiJSX.Fragment`, defined by `JSX_SHIM_SOURCE` below as plain
  *   getters) replaces the automatic runtime, and a getter's body only
  *   runs when the property is actually read — i.e. at the JSX call site
- *   inside a component's render, not when the script loads.
+ *   inside a component's render, not when the script loads. `JSX_SHIM_SOURCE`
+ *   is compiled as an ordinary module of the build (seeded into
+ *   `fileContents` under a synthetic path inside the pack's own folder) and
+ *   wired into every module that references `__markiiJSX` as a free
+ *   variable through esbuild's `inject` option — never through `banner`,
+ *   which writes its text OUTSIDE the `format: 'iife'` wrapper and leaves
+ *   `__markiiJSX` as a global on `window` (docs/packs.md's "must not leave
+ *   globals behind beyond the one call it makes"). `inject` is what puts
+ *   the shim in scope for every module that reads it, not only the entry:
+ *   a `var` declared in the entry module alone is scoped to that module by
+ *   the bundler, so a component reached only through a non-entry helper
+ *   module never sees it and throws `__markiiJSX is not defined` at render
+ *   time instead.
  * - An explicit `import ... from 'react'` (hooks, `forwardRef`, etc.) is
  *   redirected by `lazyGlobalModulePlugin` to a virtual CommonJS module
  *   whose `module.exports` is a `Proxy` over `window.__markiiReact`. A
@@ -185,8 +197,8 @@ type EsbuildBuildFn = typeof import('esbuild-wasm/lib/browser.js').build;
 type EsbuildInitializeFn =
   typeof import('esbuild-wasm/lib/browser.js').initialize;
 
-/** Bumped whenever this module's OUTPUT for the same pack sources would change (a banner/plugin tweak, an esbuild option change) — folded into the cache key (`computeCacheKey`) so a stale cached script from a previous version of this builder is never reused after an upgrade. Bumped again for the real dynamic module resolution + sidecar cache fix (`virtualSourcePlugin`'s doc comment): a pack with a helper module built before this version may have silently failed, or (had it somehow succeeded) would not be sidecar-tracked — either way, a fresh cache key forces every pack through the corrected path once. */
-const BUILDER_VERSION = 4;
+/** Bumped whenever this module's OUTPUT for the same pack sources would change (a shim/plugin tweak, an esbuild option change) — folded into the cache key (`computeCacheKey`) so a stale cached script from a previous version of this builder is never reused after an upgrade. Bumped again for the `inject`-based JSX shim (replacing `banner`): a pack built before this version leaves `__markiiJSX` as a global on `window`, so every pack must rebuild once to pick up the fix. */
+const BUILDER_VERSION = 5;
 
 /**
  * `esbuild-wasm`'s browser entry unconditionally reaches for the `self`
@@ -528,7 +540,8 @@ function resolveFailure(text: string): OnResolveResult {
  * the complete, real transitive file set — what the sidecar cache records.
  *
  * `onResolve` handles three shapes: an ALREADY-ABSOLUTE specifier (what
- * `entrySource` writes for each declared component) is looked up as its own
+ * `entrySource` writes for each declared component, and what esbuild's
+ * `inject` option resolves the JSX shim's path as) is looked up as its own
  * base path; a RELATIVE specifier (`./guard`, `./util`, `./x.css`, …) is
  * resolved against `path.dirname(args.importer)` first; anything else is a
  * BARE specifier, which — `react`/`react-dom` having already been claimed
@@ -537,14 +550,20 @@ function resolveFailure(text: string): OnResolveResult {
  * dependency) and is rejected outright with a clear reason naming the pack
  * and the specifier. A resolved candidate that falls outside
  * `jailRealRoot` (the pack's own folder, real-path compared so `..` and
- * symlinks cannot walk out) is rejected the same way. Every rejection is an
- * explicit `errors` result, never `undefined` — so esbuild's own
- * filesystem-less default resolver is never reached.
+ * symlinks cannot walk out) is rejected the same way — EXCEPT a path in
+ * `virtualOnlyPaths`, which never exists on disk (the JSX shim, seeded
+ * directly into `fileContents` under a synthetic in-pack path — see
+ * `buildPackRegistrationScript`) and so cannot be `realpath`-checked at
+ * all; it is trusted outright, since this builder wrote its content itself
+ * rather than reading it from anywhere a pack author controls. Every other
+ * rejection is an explicit `errors` result, never `undefined` — so
+ * esbuild's own filesystem-less default resolver is never reached.
  */
 function virtualSourcePlugin(
   packName: string,
   fileContents: Map<string, string>,
   jailRealRoot: string,
+  virtualOnlyPaths: ReadonlySet<string>,
 ): Plugin {
   return {
     name: 'markii-pack-source',
@@ -573,6 +592,13 @@ function virtualSourcePlugin(
             return resolveFailure(
               `pack "${packName}": could not resolve "${args.path}" imported from "${args.importer}"`,
             );
+          }
+
+          if (virtualOnlyPaths.has(resolved)) {
+            // Never exists on disk (the JSX shim) — realpath would throw
+            // ENOENT. Its content was written by this builder, not read
+            // from the pack, so the jail check has nothing to verify.
+            return { path: resolved, namespace: VIRTUAL_SOURCE_NAMESPACE };
           }
 
           let real: string;
@@ -622,17 +648,41 @@ function virtualSourcePlugin(
 }
 
 /**
+ * The synthetic file name the JSX shim module is seeded into `fileContents`
+ * under, joined to the pack's own folder so `virtualSourcePlugin`'s jail
+ * check has an absolute in-pack path to reason about (see
+ * `buildPackRegistrationScript`'s use of `JSX_SHIM_FILENAME` for the actual
+ * jail bypass). Deliberately distinctive and double-underscore-prefixed so
+ * an ordinary component source is exceedingly unlikely to collide with it;
+ * `buildPackRegistrationScript` still checks for a real file at that path
+ * before building and fails cleanly (never silently shadows it) if one
+ * exists.
+ */
+const JSX_SHIM_FILENAME = '__markii-jsx-shim.js';
+
+/**
  * Custom JSX compiler options: JSX never imports `react`/`react/jsx-runtime`
- * at all. `__markiiJSX` (defined in `REACT_SHIM_BANNER`) exposes
+ * at all. `__markiiJSX` (this module's source, below) exposes
  * `createElement`/`Fragment` as GETTERS over `window.__markiiReact` — read
  * only at the point a JSX expression actually evaluates (inside a
  * component's render), never at the top of the compiled script.
+ *
+ * Compiled as an ordinary ESM module (not a `banner`) and wired in through
+ * esbuild's `inject` option, so it stays inside the `format: 'iife'`
+ * wrapper and reaches every module that references `__markiiJSX`, not only
+ * the entry — see this file's top doc comment ("The lazy-React contract")
+ * for why a `banner` or an entry-only `var` cannot do this.
  */
-const REACT_SHIM_BANNER = [
-  'var __markiiJSX = {',
-  "  get createElement() { return (typeof window !== 'undefined' && window.__markiiReact || {}).createElement; },",
-  "  get Fragment() { return (typeof window !== 'undefined' && window.__markiiReact || {}).Fragment; },",
+const JSX_SHIM_SOURCE = [
+  'export var __markiiJSX = {',
+  '  get createElement() {',
+  "    return ((typeof window !== 'undefined' && window.__markiiReact) || {}).createElement;",
+  '  },',
+  '  get Fragment() {',
+  "    return ((typeof window !== 'undefined' && window.__markiiReact) || {}).Fragment;",
+  '  },',
   '};',
+  '',
 ].join('\n');
 
 /** One component's declared local name and the absolute path to its source, in `manifest.components` declaration order. Reads the manifest through `@markii/pack`'s `packComponents()` (the one accessor that normalizes both the string shorthand and the object form) rather than walking `pack.manifest.components` directly. */
@@ -822,9 +872,24 @@ function hashFileContent(text: string): string {
   return createHash('sha256').update(text).digest('hex');
 }
 
-/** Builds the sidecar record for a completed build's full, real file set (`fileContents`, mutated in place by `virtualSourcePlugin` as it resolved). Sorted by path so the serialized JSON is stable across runs with the same file set. */
-function buildSidecar(fileContents: ReadonlyMap<string, string>): CacheSidecar {
+/**
+ * Builds the sidecar record for a completed build's full, real file set
+ * (`fileContents`, mutated in place by `virtualSourcePlugin` as it
+ * resolved) — EXCLUDING `virtualOnlyPaths` (the JSX shim). The shim has no
+ * file on disk to re-read and re-hash on a later `sidecarStillValid` check
+ * (`readComponentSource` would always report it missing), so recording it
+ * would turn every cache hit into a permanent miss; it needs no entry
+ * anyway, since its content is fixed and any change to it is a change to
+ * this builder itself, already covered by `BUILDER_VERSION` in the
+ * pre-build cache key. Sorted by path so the serialized JSON is stable
+ * across runs with the same file set.
+ */
+function buildSidecar(
+  fileContents: ReadonlyMap<string, string>,
+  virtualOnlyPaths: ReadonlySet<string>,
+): CacheSidecar {
   const files = [...fileContents.entries()]
+    .filter(([filePath]) => !virtualOnlyPaths.has(filePath))
     .map(([filePath, text]) => ({
       path: filePath,
       hash: hashFileContent(text),
@@ -987,6 +1052,14 @@ export async function buildPackRegistrationScript(
     return { kind: 'skipped' };
   }
 
+  const jsxShimPath = path.join(pack.folder, JSX_SHIM_FILENAME);
+  if (existsSync(jsxShimPath)) {
+    return {
+      kind: 'failed',
+      reason: `pack "${pack.manifest.name}": "${JSX_SHIM_FILENAME}" is a reserved file name used internally by the pack builder and must not exist in the pack's own folder`,
+    };
+  }
+
   const sources = new Map<string, string>();
   for (const component of components) {
     let text: string | undefined;
@@ -1070,10 +1143,17 @@ export async function buildPackRegistrationScript(
   // `virtualSourcePlugin` is the ONLY way any of it reaches esbuild: the
   // in-process WebAssembly build (this file's top doc comment) has no
   // filesystem of its own. Seeded with what the pre-build scan already
-  // knows; `virtualSourcePlugin` mutates this in place as it resolves
-  // further files, so after a successful build it holds the complete,
-  // real transitive set — what `buildSidecar` records below.
-  const fileContents = new Map<string, string>([...sources, ...cssSources]);
+  // knows, plus the JSX shim's own source under its synthetic path (never
+  // written to disk); `virtualSourcePlugin` mutates this in place as it
+  // resolves further files, so after a successful build it holds the
+  // complete, real transitive set — what `buildSidecar` records below,
+  // minus the shim itself (`virtualOnlyPaths`).
+  const fileContents = new Map<string, string>([
+    ...sources,
+    ...cssSources,
+    [jsxShimPath, JSX_SHIM_SOURCE],
+  ]);
+  const virtualOnlyPaths = new Set<string>([jsxShimPath]);
 
   // The jail boundary every dynamically-resolved import must stay inside
   // (task #2 in this file's top doc comment). A pack folder that cannot be
@@ -1149,10 +1229,24 @@ export async function buildPackRegistrationScript(
       // business being compiled against ITS host's unrelated TypeScript
       // settings anyway.
       tsconfigRaw: '{}',
-      banner: { js: REACT_SHIM_BANNER },
+      // The JSX shim as an INJECTED module, not a `banner`: a `banner`
+      // writes its text outside the `format: 'iife'` wrapper and leaves
+      // `__markiiJSX` as a global on `window` — this file's top doc
+      // comment ("The lazy-React contract") and `JSX_SHIM_SOURCE`'s own
+      // comment have the full reasoning. `inject` compiles the shim as an
+      // ordinary module of the bundle (resolved through
+      // `virtualSourcePlugin` like any other pack file) and imports its
+      // `__markiiJSX` export into every module — component or helper,
+      // entry or not — that references it as a free variable.
+      inject: [jsxShimPath],
       plugins: [
         lazyGlobalModulePlugin(),
-        virtualSourcePlugin(pack.manifest.name, fileContents, jailRealRoot),
+        virtualSourcePlugin(
+          pack.manifest.name,
+          fileContents,
+          jailRealRoot,
+          virtualOnlyPaths,
+        ),
       ],
       logLevel: 'silent',
     });
@@ -1193,7 +1287,7 @@ export async function buildPackRegistrationScript(
     // pointing at a script that was never written.
     await writeCacheFileAtomic(
       sidecarPath,
-      JSON.stringify(buildSidecar(fileContents)),
+      JSON.stringify(buildSidecar(fileContents, virtualOnlyPaths)),
     );
   } catch (err) {
     return {

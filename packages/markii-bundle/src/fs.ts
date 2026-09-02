@@ -32,8 +32,8 @@ function isEnoent(err: unknown): boolean {
 
 /**
  * `ENOTDIR` shows up when an *earlier* path component turns out to be a
- * plain file instead of a directory (e.g. writing `cache/data.json/sub`
- * when `cache/data.json` already exists as a file) — treated the same as
+ * plain file instead of a directory (e.g. writing `.cache/data.json/sub`
+ * when `.cache/data.json` already exists as a file) — treated the same as
  * "doesn't exist yet" by the lstat walk below, deferring the actual clear
  * error to the subsequent `mkdir`/`writeFile`/`open` call.
  */
@@ -51,7 +51,7 @@ function isEnoentLike(err: unknown): boolean {
  * in `./paths` only reasons about the *logical* path string, but the actual
  * filesystem write/read *follows symlinks*, so a symlink planted anywhere
  * inside the bundle (even one that resolves to somewhere still nominally
- * "inside the bundle root", like `cache/pwn -> ../manifest.json`) can
+ * "inside the bundle root", like `.cache/pwn -> ../manifest.json`) can
  * silently retarget an otherwise-innocuous-looking write.
  *
  * Two layers, in order:
@@ -61,10 +61,10 @@ function isEnoentLike(err: unknown): boolean {
  *    `stat`, which would itself follow a symlink). The moment any
  *    *existing* component is a symlink — file or directory, leaf or
  *    ancestor, whether or not it resolves inside or outside the root — the
- *    whole operation is rejected. This alone defeats ESCAPE 1 (`cache/pwn`
+ *    whole operation is rejected. This alone defeats ESCAPE 1 (`.cache/pwn`
  *    symlinked to `../manifest.json`) and its directory variant
- *    (`cache/up` symlinked to `..`, then `cache/up/manifest.json` or even
- *    `cache/up/not-yet-created.txt`): the symlinked component is caught
+ *    (`.cache/up` symlinked to `..`, then `.cache/up/manifest.json` or even
+ *    `.cache/up/not-yet-created.txt`): the symlinked component is caught
  *    before we ever ask whether its target exists.
  * 2. **Defense in depth — resolved-path re-check.** Once the walk finds
  *    the nearest existing ancestor (the leaf itself may not exist yet,
@@ -148,7 +148,7 @@ async function resolveInsideRoot(
  * Writes `data` to an already symlink-checked `target` that is known to
  * exist, refusing to write through a hard link (ESCAPE 3: `st_nlink > 1`
  * means some other path — possibly outside the bundle entirely, e.g.
- * `ln b.mkz/../victim.txt b.mkz/cache/hard` — refers to the exact same
+ * `ln b.mkz/../victim.txt b.mkz/.cache/hard` — refers to the exact same
  * inode, so writing here would also silently modify that other path).
  *
  * Opens the file first *without* truncating (`'r+'`), `fstat`s the open

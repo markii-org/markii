@@ -65,6 +65,8 @@ packages/platforms/markii-react   the reference L1 renderer, a platform adapter
   src/registry.ts    Registry types + createRegistry/mergeRegistries
   src/render.tsx     hast + registry → React tree (unknown-directive fallback;
                      folds {name=…} script blocks into a collapsed marker)
+  src/image-resolve.ts  the resolveImageSrc seam: which srcs are offered to a
+                     host resolver, and the dangerous-scheme check on its result
   src/components/    the @markii/stdlib standard set (callout, card, badge,
                      details, figure, tabs/tab, kbd, rating, divider; data-bound
                      dashboard: stat, progress, chart, table; row + cell; layout wrappers
@@ -85,6 +87,7 @@ packages/platforms/markii-html   the static HTML renderer (issue #2), a second
                      unknown/form-mismatch fallback markup+classes as @markii/react.
                      renderMarkToHtml/renderMarkNodeToHtml take optional store/vault;
                      threads :value[…] + data= binding through the render context
+  src/image-resolve.ts  the resolveImageSrc seam, mirroring @markii/react's
   src/registry.ts    HtmlRegistry: components are (attrs, childrenHtml, ctx)→string;
                      same alias/hostile-config rules as the React registry.
                      HtmlRenderContext carries esc + resolve/valueMarker (shared)
@@ -130,6 +133,8 @@ packages/markii-bundle  .mkz bundle handling (docs/bundles.md, L2) — no React,
   src/zip.ts         zip form via fflate (browser-safe main entry)
   src/fs.ts          directory form via node:fs (Node-only "./fs" subpath export)
   src/script-view.ts capability-restricted view for future script runtime (§11)
+  src/storage.ts     BundleStorage contract + createMemoryBundleStorage (the
+                     in-memory third form, main entry, jailed like the others)
 packages/markii-pack    component pack contract (docs/packs.md, issue #3) — no React,
                         no parsing; the seam later slices (registry loading,
                         uses: surfacing, require) build against:
@@ -241,6 +246,8 @@ packages/markii-lua     Lua sandbox runtime (docs/security.md, L3) — no React,
                      sharing the run's globals/limits
   src/marshal.ts     Lua↔JS value conversion (serializable-only, depth/size caps)
   src/sandbox.ts     runScript(): assemble env + limits + caps, run, marshal result
+  src/json-table.ts  the ungated `json` table (decode/encode), reusing
+                     json-decode's prelude and marshal's walk, never a second copy
   src/executor.ts    createLuaExecutor(): adapts runScript to @markii/runtime's ScriptExecutor
 packs/                  the bundled packs (read, dash, prep): plain component
                         sources, NOT an npm workspace. Both hosts build them

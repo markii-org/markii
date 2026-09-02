@@ -282,7 +282,7 @@ export const DEFAULT_MAX_ZIP_TOTAL_BYTES = 256 * 1024 * 1024;
  *
  * Collision protection (DEFECT 5): two distinct raw entry names that
  * *normalize* to the same bundle path (e.g. `manifest.json` and
- * `./manifest.json`, or `cache/x` and `cache//x`) are rejected outright
+ * `./manifest.json`, or `.cache/x` and `.cache//x`) are rejected outright
  * rather than silently last-wins — a bundle could otherwise show a benign
  * file to one reader and a hostile one to another depending on which
  * implementation's normalization/iteration order "wins".
@@ -415,7 +415,7 @@ export function openZipBundle(
  * `{}` — `fflate`'s `zipSync` flattens its input with a bracket-assignment
  * loop (`t[key] = ...`) that inherits the same `__proto__` special-case
  * problem when `key` is nested under a directory prefix; giving it a
- * null-prototype object here means a bundle path like `cache/__proto__`
+ * null-prototype object here means a bundle path like `.cache/__proto__`
  * (a *nested* `__proto__`, i.e. everything except a bare top-level path)
  * round-trips correctly instead of silently corrupting our own dict.
  *
@@ -439,7 +439,7 @@ export async function exportZipBundle(
     throw new BundleZipError(
       `zip export rejected: bundle path(s) ${topLevelProtoLike.map((p) => JSON.stringify(p)).join(', ')} cannot be represented as a top-level zip entry ` +
         `(fflate's zip writer cannot serialize a top-level entry literally named "__proto__", "constructor", or "prototype"); ` +
-        `nest the file under a directory (e.g. "cache/__proto__") to work around this`,
+        `nest the file under a directory (e.g. ".cache/__proto__") to work around this`,
       topLevelProtoLike,
     );
   }

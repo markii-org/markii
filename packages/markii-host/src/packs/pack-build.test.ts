@@ -1,5 +1,5 @@
 import { describe, expect, it, afterEach } from 'vitest';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { buildPackRegistrationScript, computeCacheKey } from './pack-build.js';
@@ -475,6 +475,64 @@ describe('buildPackRegistrationScript', () => {
       expect(callCount()).toBe(1); // still a cache hit, no second esbuild call
       expect(second.kind).toBe('built');
       if (second.kind === 'built') expect(second.warnings.length).toBe(2);
+    });
+  });
+
+  describe('the JSX shim: inject, not banner', () => {
+    it("wires the shim in through esbuild's `inject` option and never passes `banner`", async () => {
+      const packDir = await makeTempDir();
+      const pack = packFor(packDir);
+      const cacheDir = await makeTempDir();
+
+      let capturedOptions: Record<string, unknown> | undefined;
+      const build: NonNullable<PackBuildOptions['build']> = async (options) => {
+        capturedOptions = options as Record<string, unknown>;
+        const { build: inner } = fakeBuild();
+        return inner(options);
+      };
+
+      const outcome = await buildPackRegistrationScript(pack, cacheDir, {
+        build,
+        readComponentSource: readerFor({
+          [pack.componentPaths.stat!]: 'export function Stat(){}',
+        }),
+      });
+
+      expect(outcome.kind).toBe('built');
+      expect(capturedOptions?.banner).toBeUndefined();
+      expect(capturedOptions?.inject).toEqual([
+        path.join(packDir, '__markii-jsx-shim.js'),
+      ]);
+    });
+
+    it('rejects a pack whose own folder already has a file named like the internal JSX shim', async () => {
+      const packDir = await makeTempDir();
+      await writeFile(
+        path.join(packDir, 'Stat.tsx'),
+        'export function Stat(){}',
+        'utf8',
+      );
+      await writeFile(
+        path.join(packDir, '__markii-jsx-shim.js'),
+        '// not the shim',
+        'utf8',
+      );
+      const pack = packFor(packDir);
+      const cacheDir = await makeTempDir();
+      const { build } = fakeBuild();
+
+      const outcome = await buildPackRegistrationScript(pack, cacheDir, {
+        build,
+        readComponentSource: readerFor({
+          [pack.componentPaths.stat!]: 'export function Stat(){}',
+        }),
+      });
+
+      expect(outcome.kind).toBe('failed');
+      if (outcome.kind === 'failed') {
+        expect(outcome.reason).toContain('reserved');
+        expect(outcome.reason).toContain('__markii-jsx-shim.js');
+      }
     });
   });
 });

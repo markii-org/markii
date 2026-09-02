@@ -90,7 +90,7 @@ export interface RunJob {
    * `runDocumentScripts`, whose `tierForTrigger` (`@markii/runtime`) is THE
    * SECURITY GATE: `'manual'` runs at the full capability tier, while
    * `'auto'` and `'scheduled'` are forced to the read-only tier (GET,
-   * cache/bundle reads, cache writes — never POST/PATCH/bundle-write)
+   * cache and bundle reads, cache writes — never POST/PATCH/bundle-write)
    * regardless of what the net/bundle grants allow. Absent (an older host,
    * or `run-host.ts` omitting it) defaults to `'manual'`, preserving the
    * pre-#11 behavior; this default is safe because only the trusted host
@@ -169,7 +169,7 @@ export interface RunResult {
   cacheSnapshot: Record<string, CacheEntry>;
   /**
    * Present only when `RunJob.bundle` was set: the FULL, post-run contents
-   * of the bundle snapshot's `cache/` subtree (not a diff) — the host
+   * of the bundle snapshot's `.cache/` subtree (not a diff) — the host
    * persists this verbatim (directory form: written back into the bundle
    * dir; zip form: extension storage keyed by bundle identity) and seeds
    * the next run's snapshot from it. Absent for a bare `.mk.md` run.

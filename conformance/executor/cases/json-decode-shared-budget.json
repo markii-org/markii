@@ -1,0 +1,24 @@
+{
+  "id": "contract/json-decode-shared-budget",
+  "area": "contract",
+  "invariant": "json.decode(text) is available in every tier with no capability grant, reuses the same trusted in-guest JSON decoder net.fetch_json uses (never a second decoder), and applies the identical depth/node/size budget net.fetch_json applies to a fetched response, checked before the text is ever decoded.",
+  "scenario": {
+    "cases": [
+      "well-formed object/array/scalar/null text under a read-only trigger with no capabilities configured",
+      "malformed JSON text",
+      "a non-string argument",
+      "text past the shared byte-size cap",
+      "text whose parsed shape exceeds the shared depth cap",
+      "text whose parsed shape exceeds the shared node-count cap",
+      "a null array element versus a null object value, matching net.fetch_json's own decode semantics"
+    ]
+  },
+  "mustHold": [
+    "json.decode is reachable and callable under a read-only trigger with zero grants",
+    "a well-formed input decodes to a genuine guest-native value, not a live host-object handle",
+    "malformed text fails cleanly and is catchable by the guest, never a crash or hang",
+    "a non-string argument is rejected before any parsing is attempted",
+    "an over-budget input (by size, depth, or node count) is rejected before the full decode runs, with the same reason taxonomy a return-value marshal rejection uses",
+    "the depth/node/size numbers enforced here are the SAME numbers net.fetch_json enforces on a fetched body, not independently tuned"
+  ]
+}

@@ -322,6 +322,7 @@ small, flat, and holdable in one head:
 - `net.fetch_json(url)`: fetch and parse JSON from a granted host
 - `cache.get(key, ttl, fn)`: return cached value or compute and store it
 - `bundle.read(path)` / `bundle.write(path, data)`: bundle-scoped files
+- `json.decode(text)` / `json.encode(value)`: JSON text to Lua data and back
 
 Write the URL for a `net` call as one complete string literal, inside the
 call itself:
@@ -357,6 +358,18 @@ comes back in exactly the same plain shape it was stored in. None of this
 needs a defensive `pcall`. Responses are bounded by the sandbox's size
 limits; a response too large or too deeply nested fails the fetch with a
 clear error instead of reaching the script partially.
+
+The `json` table converts between JSON text and Lua data without touching
+the network. `json.decode(text)` parses a string and hands back the same
+plain shape a fetch does, including the `null` rule just described, because
+both go through one decoder. `json.encode(value)` goes the other way, and
+accepts the values a script can already return from its top level: tables,
+strings, numbers, booleans, and nil. A cycle, a function, a non-string table
+key, or a number that is NaN or infinite fails with a clear error rather
+than producing misleading JSON. Both directions are bound by the same depth,
+node-count, and size limits a fetched response is bound by, so a script
+cannot use them to sidestep those caps. Neither function needs a permission:
+they compute, and that is all they do, so they are there on every trigger.
 
 The available Lua standard library is a curated slice: `string`, `table`,
 and `math`. There is no `os`, no `io`, and no raw `require`; everything a

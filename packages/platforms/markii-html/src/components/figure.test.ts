@@ -44,4 +44,36 @@ describe('Figure', () => {
     expect(html).toContain('&amp;');
     expect(html).toContain('&lt;b&gt;');
   });
+
+  it('resolves a relative src through ctx.resolveImageSrc, the same way an ordinary markdown image does', () => {
+    const resolvedCtx = createTestContext({
+      resolveImageSrc: (src) =>
+        src === 'cat.png' ? 'https://cdn.test/cat.png' : undefined,
+    });
+    const html = Figure({ src: 'cat.png' }, 'caption', resolvedCtx);
+    expect(html).toContain('src="https://cdn.test/cat.png"');
+  });
+
+  it('never offers an already-absolute src to the resolver', () => {
+    const resolvedCtx = createTestContext({
+      resolveImageSrc: () => {
+        throw new Error('should never be asked for an absolute src');
+      },
+    });
+    const html = Figure(
+      { src: 'https://example.com/cat.png' },
+      'caption',
+      resolvedCtx,
+    );
+    expect(html).toContain('src="https://example.com/cat.png"');
+  });
+
+  it('rejects a resolver result that is not a safe URL, keeping the original src', () => {
+    const resolvedCtx = createTestContext({
+      resolveImageSrc: () => 'javascript:alert(1)',
+    });
+    const html = Figure({ src: 'cat.png' }, 'caption', resolvedCtx);
+    expect(html).toContain('src="cat.png"');
+    expect(html).not.toContain('javascript:');
+  });
 });

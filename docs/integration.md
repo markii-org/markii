@@ -62,8 +62,8 @@ application. The split is:
 - `@markii/runtime`: the value store, run orchestration, vault store, and
   grant-key computation. Framework-free and runtime-agnostic; the script
   executor is injected.
-- `@markii/bundle`: bundle reading and writing in both forms, manifest
-  validation, and the path jail.
+- `@markii/bundle`: bundle reading and writing in all three storage forms,
+  manifest validation, and the path jail.
 - `@markii/lua`: the sandboxed Lua executor that plugs into the runtime.
 
 A minimal React embedding is a registry plus one call:
@@ -84,6 +84,16 @@ markdown arrives pre-rendered as children. `renderMark` also accepts an
 optional value store and vault store for documents that use scripting, and
 `renderMarkNode` renders a single block from a parsed document under the
 same contract, for hosts that need block-level granularity.
+
+A bundle reaches `@markii/bundle` through one of three storage forms, all
+satisfying the same `BundleStorage` contract. `openZipBundle` reads the zip
+form, `openDirBundle` reads a directory from the `./fs` subpath and is the
+only one needing Node, and `createMemoryBundleStorage` takes a plain map of
+bundle-relative paths to strings or bytes for a host that already holds the
+files as values. All three route every path through the same jail, so none
+of them is a place to reimplement it, and all three enforce structure only:
+confining writes to `.cache/` is the script view's job, whichever storage it
+wraps. The memory form sits on the main entry, so a browser build can use it.
 
 ## Theming a host
 
@@ -369,6 +379,27 @@ Resolution is not authorization. Each host reads an image through its own
 storage layer and never outside it, so a note cannot point the preview at a
 file the host would not otherwise open. The export path below reuses the
 same resolution, on purpose.
+
+Both renderers expose this as a plain option rather than a host-specific
+hook. `renderMark` and `renderMarkNode` in `@markii/react`, and
+`renderMarkToHtml` and `renderMarkNodeToHtml` in `@markii/html`, take an
+optional `resolveImageSrc` function. It is called for a relative `<img src>`,
+whether that comes from an ordinary markdown image or from a component that
+builds its own, such as the standard figure. It is never called for a source
+that already carries a scheme, a protocol-relative form, a bare fragment, or
+an empty value. Returning `undefined`, or throwing, leaves the source exactly
+as the author wrote it, so one unresolvable image never costs a render.
+
+The result is deliberately not held to the author-facing `isSafeUrl`
+allowlist that `@markii/core` applies to a URL someone typed into a document.
+A resolver's answer describes where the host's own image lives, and the
+legitimate answers include forms that allowlist rejects: a `data:` URI for an
+embedded bundle asset, and an application scheme such as Obsidian's vault
+resource path. What the renderers do refuse is a `javascript:` or `vbscript:`
+result, so a resolver cannot turn an image reference into a way to run code.
+That refusal reads the value the way a browser's URL parser does, ignoring
+tabs, newlines, and leading control characters, because a check that trusted
+the raw text would pass a disguised scheme straight through.
 
 ## Exporting a note
 

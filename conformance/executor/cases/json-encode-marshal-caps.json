@@ -1,0 +1,24 @@
+{
+  "id": "contract/json-encode-marshal-caps",
+  "area": "contract",
+  "invariant": "json.encode(value) is available in every tier with no capability grant and goes through the same serializable-only walk a script's own return value goes through: depth/node caps, no functions/userdata/threads, no cycles, non-finite numbers rejected -- never a second, independently-tuned cap.",
+  "scenario": {
+    "cases": [
+      "scalars and a nested table/array under a read-only trigger with no capabilities configured",
+      "a value nested past the shared depth cap",
+      "a table wide past the shared node-count cap",
+      "a self-referential (cyclic) table",
+      "a function, userdata, or thread value",
+      "NaN and positive/negative Infinity",
+      "a table with an attached __index-style metatable, if one can be constructed in this guest at all"
+    ]
+  },
+  "mustHold": [
+    "json.encode is reachable and callable under a read-only trigger with zero grants",
+    "a well-formed value encodes to valid JSON text equivalent to the guest value",
+    "an oversized or too-deep value fails cleanly with the same reason taxonomy a return-value marshal rejection uses, never a hang",
+    "a cycle is detected and rejected without stack overflow or hang",
+    "a non-finite number is rejected, never silently coerced to null or to a string",
+    "any metatable on the value being encoded is not consulted, or is documented as inert for this guest"
+  ]
+}

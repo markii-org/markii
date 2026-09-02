@@ -22,14 +22,14 @@ const WORKER_PATH = path.join(__dirname, 'worker-entry.ts');
 function writeFence(): string {
   return (
     '```lua {name=w}\n' +
-    'local ok = pcall(function() bundle.write("cache/out.json", "{}") end)\n' +
+    'local ok = pcall(function() bundle.write(".cache/out.json", "{}") end)\n' +
     'return ok\n' +
     '```\n'
   );
 }
 
 function manifest(): BundleManifest {
-  return { spec: '0.1.0', permissions: { bundle: ['write:cache/'] } };
+  return { spec: '0.1.0', permissions: { bundle: ['write:.cache/'] } };
 }
 
 async function runWrite(trigger: RunTrigger) {
@@ -43,7 +43,7 @@ async function runWrite(trigger: RunTrigger) {
     bundle: {
       snapshot: {},
       manifest: manifest(),
-      grantedBundlePermissions: ['write:cache/'],
+      grantedBundlePermissions: ['write:.cache/'],
     },
   });
 }
@@ -52,7 +52,7 @@ describe('worker trigger tier gate (issue #11)', () => {
   it('manual trigger: bundle.write succeeds when granted (baseline)', async () => {
     const result = await runWrite('manual');
     expect(result.values.w?.value).toBe(true);
-    expect(result.cacheOut?.['cache/out.json']).toBeDefined();
+    expect(result.cacheOut?.['.cache/out.json']).toBeDefined();
   }, 20000);
 
   it('auto trigger: bundle.write is refused under the read-only tier, even when granted', async () => {
@@ -60,13 +60,13 @@ describe('worker trigger tier gate (issue #11)', () => {
     // The write did not happen: the pcall reported failure and nothing landed
     // in cacheOut.
     expect(result.values.w?.value).toBe(false);
-    expect(result.cacheOut?.['cache/out.json']).toBeUndefined();
+    expect(result.cacheOut?.['.cache/out.json']).toBeUndefined();
   }, 20000);
 
   it('scheduled trigger: identical read-only refusal', async () => {
     const result = await runWrite('scheduled');
     expect(result.values.w?.value).toBe(false);
-    expect(result.cacheOut?.['cache/out.json']).toBeUndefined();
+    expect(result.cacheOut?.['.cache/out.json']).toBeUndefined();
   }, 20000);
 
   it('a malformed trigger is rejected fail-closed (worker reports a malformed job)', async () => {

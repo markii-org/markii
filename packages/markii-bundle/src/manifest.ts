@@ -59,7 +59,14 @@ const KNOWN_TOP_LEVEL_KEYS = new Set([
   'uses',
   'document',
 ]);
-const KNOWN_FS_GRANTS = new Set<string>(['read', 'write:cache/']);
+const KNOWN_FS_GRANTS = new Set<string>(['read', 'write:.cache/']);
+
+/**
+ * The retired, undotted spelling of the write grant. Never accepted as an
+ * alias: no released bundle declares it, so a manifest naming it gets a
+ * diagnostic pointing at the correct token instead of a silent rewrite.
+ */
+const RETIRED_WRITE_GRANT = 'write:cache/';
 
 // Simplified but structurally correct semver: MAJOR.MINOR.PATCH with
 // optional prerelease/build metadata. Good enough for a "shape" check —
@@ -218,10 +225,24 @@ export function parseManifest(json: string): ManifestParseResult {
             (grant) => !KNOWN_FS_GRANTS.has(grant),
           );
           if (badGrants.length > 0) {
-            errors.push(
-              `"permissions.bundle" contains invalid grant(s): ${badGrants.join(', ')} ` +
-                `(expected "read" or "write:cache/")`,
+            const retiredGrants = badGrants.filter(
+              (grant) => grant === RETIRED_WRITE_GRANT,
             );
+            const otherGrants = badGrants.filter(
+              (grant) => grant !== RETIRED_WRITE_GRANT,
+            );
+            if (retiredGrants.length > 0) {
+              errors.push(
+                `"permissions.bundle" uses the retired grant "write:cache/"; ` +
+                  `the writable directory is "write:.cache/"`,
+              );
+            }
+            if (otherGrants.length > 0) {
+              errors.push(
+                `"permissions.bundle" contains invalid grant(s): ${otherGrants.join(', ')} ` +
+                  `(expected "read" or "write:.cache/")`,
+              );
+            }
           } else {
             perms.bundle = permsObj.bundle as BundleFsGrant[];
           }

@@ -49,6 +49,9 @@ export {
 export type { DocConfig } from './doc.js';
 export { buildDoc } from './doc.js';
 
+export type { JsonTableConfig } from './json-table.js';
+export { buildJsonTable } from './json-table.js';
+
 export type { MarshalLimits } from './marshal.js';
 export {
   DEFAULT_MARSHAL_LIMITS,

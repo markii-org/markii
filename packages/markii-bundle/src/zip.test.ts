@@ -27,12 +27,12 @@ describe('openZipBundle — happy path', () => {
     const bytes = zipSync({
       'note.mk.md': u8('# hello'),
       'assets/photo.png': u8('binary-ish'),
-      'cache/data.json': u8('{}'),
+      '.cache/data.json': u8('{}'),
     });
     const storage = openZipBundle(bytes);
     expect(await storage.list()).toEqual([
+      '.cache/data.json',
       'assets/photo.png',
-      'cache/data.json',
       'note.mk.md',
     ]);
     expect(await storage.read('note.mk.md')).toEqual(u8('# hello'));
@@ -133,7 +133,7 @@ describe('map <-> zip round-trip', () => {
     const files = {
       'note.mk.md': u8('# roundtrip\n\nsome *markdown*.'),
       'assets/photo.png': new Uint8Array([137, 80, 78, 71, 1, 2, 3, 4, 5]),
-      'cache/data.json': u8(JSON.stringify({ n: 42 })),
+      '.cache/data.json': u8(JSON.stringify({ n: 42 })),
     };
     const bytes1 = zipSync(files);
     const storage1 = openZipBundle(bytes1);
@@ -153,7 +153,7 @@ describe('openZipBundle — DEFECT 4: decompression-bomb guard', () => {
     // a deliberately small 1MB budget (fast/deterministic for CI — the
     // production default is 256MB, see DEFAULT_MAX_ZIP_TOTAL_BYTES).
     const huge = new Uint8Array(2 * 1024 * 1024); // already zero-filled
-    const bytes = zipSync({ 'cache/bomb.bin': huge }, { level: 9 });
+    const bytes = zipSync({ '.cache/bomb.bin': huge }, { level: 9 });
     expect(bytes.length).toBeLessThan(64 * 1024); // confirms a real high ratio
 
     expect(() => openZipBundle(bytes, { maxTotalBytes: 1024 * 1024 })).toThrow(
@@ -163,7 +163,7 @@ describe('openZipBundle — DEFECT 4: decompression-bomb guard', () => {
 
   it('rejects a single entry that exceeds a configured per-entry budget, even under the total budget', () => {
     const huge = new Uint8Array(2 * 1024 * 1024);
-    const bytes = zipSync({ 'cache/bomb.bin': huge }, { level: 9 });
+    const bytes = zipSync({ '.cache/bomb.bin': huge }, { level: 9 });
 
     expect(() =>
       openZipBundle(bytes, {
@@ -187,7 +187,7 @@ describe('openZipBundle — DEFECT 4: decompression-bomb guard', () => {
     // either — the guard fires before inflation of the oversized entry.
     const huge = new Uint8Array(4 * 1024 * 1024);
     const bytes = zipSync(
-      { 'cache/bomb.bin': huge, 'note.mk.md': u8('# after the bomb') },
+      { '.cache/bomb.bin': huge, 'note.mk.md': u8('# after the bomb') },
       { level: 9 },
     );
     let threw: unknown;
@@ -205,27 +205,27 @@ describe('openZipBundle — DEFECT 5: colliding entry names', () => {
     const bytes = zipSync({
       'manifest.json': u8('{"spec":"0.1.0"}'),
       './manifest.json': u8(
-        '{"spec":"9.9.9","permissions":{"bundle":["read","write:cache/"]}}',
+        '{"spec":"9.9.9","permissions":{"bundle":["read","write:.cache/"]}}',
       ),
     });
     expect(() => openZipBundle(bytes)).toThrow(BundleZipError);
   });
 
-  it('rejects cache/x + cache//x (same normalized path)', () => {
+  it('rejects .cache/x + .cache//x (same normalized path)', () => {
     const bytes = zipSync({
-      'cache/x': u8('benign'),
-      'cache//x': u8('hostile'),
+      '.cache/x': u8('benign'),
+      '.cache//x': u8('hostile'),
     });
     expect(() => openZipBundle(bytes)).toThrow(BundleZipError);
   });
 
   it('does not reject distinct entries that normalize to distinct paths', async () => {
     const bytes = zipSync({
-      'cache/x': u8('one'),
-      'cache/y': u8('two'),
+      '.cache/x': u8('one'),
+      '.cache/y': u8('two'),
     });
     const storage = openZipBundle(bytes);
-    expect(await storage.list()).toEqual(['cache/x', 'cache/y']);
+    expect(await storage.list()).toEqual(['.cache/x', '.cache/y']);
   });
 });
 
@@ -262,12 +262,12 @@ describe('openZipBundle — DEFECT 6: CRC-32 verification', () => {
 describe('openZipBundle — DEFECT 7: prototype-pollution-safe names', () => {
   it('safely round-trips a file whose basename is literally __proto__ (nested, not top-level)', async () => {
     const bytes = zipSync({
-      'cache/__proto__': u8('not a prototype, just a filename'),
+      '.cache/__proto__': u8('not a prototype, just a filename'),
       'note.mk.md': u8('# hi'),
     });
     const storage = openZipBundle(bytes);
-    expect(await storage.list()).toEqual(['cache/__proto__', 'note.mk.md']);
-    expect(await storage.read('cache/__proto__')).toEqual(
+    expect(await storage.list()).toEqual(['.cache/__proto__', 'note.mk.md']);
+    expect(await storage.read('.cache/__proto__')).toEqual(
       u8('not a prototype, just a filename'),
     );
     expect(await storage.read('note.mk.md')).toEqual(u8('# hi'));

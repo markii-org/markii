@@ -37,7 +37,7 @@ export interface CacheEntry {
 
 /**
  * Host-provided cache primitive backing `cache.get(key, ttl, fn)`. Real
- * persistence (bundle `cache/`, IndexedDB, whatever the host uses) is the
+ * persistence (bundle `.cache/`, IndexedDB, whatever the host uses) is the
  * host's concern; this package only defines the read-if-fresh-else-run-fn
  * contract.
  */
@@ -569,7 +569,7 @@ net.patch = function(url, body) return __smd_net_patch_blocked(url, body):await(
   //     JSON-safe result is handed to `config.cache!.set` — so
   //     `CacheEntry.value`'s STORAGE shape is unchanged (still whatever
   //     plain value the host's `CacheProvider` already expects; e.g. a
-  //     bundle's `cache/*.json` file), and a script's own scalar values
+  //     bundle's `.cache/*.json` file), and a script's own scalar values
   //     (numbers, strings, booleans) round-trip exactly as before.
   //   - Either enforcement failing raises the existing, already-classified
   //     `MARSHAL_ERROR_TAG` error (`sandbox.ts` already recognizes it as
@@ -584,7 +584,7 @@ net.patch = function(url, body) return __smd_net_patch_blocked(url, body):await(
       // to text and handed to Lua — mirrors `net.fetch_json`'s own
       // pre-check exactly (adversarial finding B2). A host-stored value is
       // exactly as untrusted as a remote fetch body — a bundle's
-      // `cache/*.json` file, for instance, can be edited by anything with
+      // `.cache/*.json` file, for instance, can be edited by anything with
       // write access to the bundle, not just this sandbox's own WRITE side
       // below — so without this check, a 300k-element cached array reached
       // the script completely uncapped even though the FETCH path was
@@ -710,7 +710,7 @@ end
 
   // --- bundle -------------------------------------------------------------
   // Delegates entirely to the injected `ScriptView` (`@markii/bundle`), which
-  // already enforces the path-jail and the read/write:cache/ split (spec
+  // already enforces the path-jail and the read/write:.cache/ split (spec
   // §11). This module adds nothing on top except the tier gate for
   // `bundle.write` (a tier-blocked stub under 'auto' — read-only tier) and
   // the byte<->Lua-string conversion.

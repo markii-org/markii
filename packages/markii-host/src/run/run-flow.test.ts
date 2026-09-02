@@ -350,7 +350,7 @@ describe('runOnce — bundle-backed run', () => {
       timeoutMs: 15000,
       bundle: {
         manifest: manifestWith({
-          permissions: { bundle: ['read', 'write:cache/'] },
+          permissions: { bundle: ['read', 'write:.cache/'] },
         }),
         buildSnapshot: () =>
           Promise.resolve({ 'assets/x.txt': new Uint8Array([1]) }),
@@ -361,7 +361,7 @@ describe('runOnce — bundle-backed run', () => {
     const spawnArgs = spawnRun.mock.calls[0]?.[0];
     expect(spawnArgs?.bundle?.grantedBundlePermissions).toEqual([
       'read',
-      'write:cache/',
+      'write:.cache/',
     ]);
     expect(spawnArgs?.bundle?.snapshot).toEqual({
       'assets/x.txt': new Uint8Array([1]),
@@ -434,7 +434,7 @@ describe('runOnce — bundle-backed run', () => {
 
   it('persists RunResult.cacheOut via the bundle option when present', async () => {
     const memento = fakeMemento();
-    const cacheOut = { 'cache/a.json': new Uint8Array([1, 2, 3]) };
+    const cacheOut = { '.cache/a.json': new Uint8Array([1, 2, 3]) };
     const spawnRun = () => Promise.resolve(fakeRunResult({ cacheOut }));
     const persistCacheOut = vi.fn(() => Promise.resolve());
 

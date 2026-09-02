@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react';
 import { renderMark } from '@markii/react';
-import type { Registry } from '@markii/react';
+import type { Registry, RenderMarkOptions } from '@markii/react';
 import { defaultRegistry } from '@markii/react/components';
 import type { ValueStore } from '@markii/runtime';
 
@@ -26,11 +26,20 @@ import type { ValueStore } from '@markii/runtime';
  * in a plain module `view.tsx` calls, the same split
  * `apps/vscode/src/mark-document.ts` and friends use for the VS Code
  * extension.
+ *
+ * `resolveImageSrc` is `renderMark`'s image-resolution option
+ * (`./preview-images.ts`'s `createVaultImageResolver`), forwarded straight
+ * through: both `view.tsx` and `reading-view.ts` build it from the note's
+ * own path and the vault, so a relative `<img>` resolves as the tree is
+ * built rather than through a DOM pass afterward. Omitted for a document
+ * with no vault to resolve against, in which case every image renders with
+ * the source unchanged.
  */
 export function renderDocument(
   text: string,
   store?: ValueStore,
   registry: Registry = defaultRegistry,
+  resolveImageSrc?: RenderMarkOptions['resolveImageSrc'],
 ): ReactElement {
-  return renderMark(text, registry, store);
+  return renderMark(text, registry, store, undefined, { resolveImageSrc });
 }

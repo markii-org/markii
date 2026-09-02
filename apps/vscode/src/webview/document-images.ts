@@ -6,27 +6,34 @@
  * those relative URLs would resolve against the webview's own opaque origin
  * (`vscode-webview://<uuid>/`), which holds nothing, so they simply never
  * load. The host therefore sends a `baseUri` (`protocol.ts`) — the
- * `asWebviewUri` form of the document's folder — and this module rewrites
- * relative sources against it after each render.
+ * `asWebviewUri` form of the document's folder — and `resolveDocumentUrl`
+ * below is `preview.tsx`'s `resolveImageSrc` resolver body, closing over
+ * that `baseUri` and the read-only bundle's embedded `assets` map, and
+ * handed straight to `@markii/react`'s `renderMark` as an option: the
+ * renderer resolves each `<img src>` as it builds the tree, rather than a
+ * DOM pass rewriting it afterward.
  *
- * DECISION — an explicit per-image rewrite, NOT a `<base href>` element.
- * A `<base>` would resolve relative image sources with one line, but it
- * changes the resolution of EVERY relative URL on the page, anchors
- * included: `[jump](#section)` would stop being an in-document fragment and
- * become a cross-document navigation to a `vscode-resource` URL, which the
- * webview hands to the editor's external-link handler. Narrowing the rewrite
- * to `<img src>` keeps that blast radius at zero. (The nonce'd script and
- * the stylesheet are unaffected either way — `preview-panel.ts` gives both
- * absolute `asWebviewUri` URLs, and they are loaded before any of this runs.)
+ * DECISION — a resolver function, NOT a `<base href>` element. A `<base>`
+ * would resolve relative image sources with one line, but it changes the
+ * resolution of EVERY relative URL on the page, anchors included:
+ * `[jump](#section)` would stop being an in-document fragment and become a
+ * cross-document navigation to a `vscode-resource` URL, which the webview
+ * hands to the editor's external-link handler. `renderMark`'s
+ * `resolveImageSrc` option only ever touches `<img src>`, by construction —
+ * it is never offered an anchor's `href` — so that blast radius stays zero.
+ * (The nonce'd script and the stylesheet are unaffected either way —
+ * `preview-panel.ts` gives both absolute `asWebviewUri` URLs, and they are
+ * loaded before any of this runs.)
  *
  * SECURITY — this module resolves, it does not authorize. A traversal
  * attempt (`src="../../etc/passwd"`) resolves to a URL outside the panel's
  * `localResourceRoots`, and VS Code refuses to serve it: the image is simply
  * blank, with nothing disclosed. Scheme safety is likewise upstream —
  * `@markii/core`'s `isSafeUrl` has already dropped `javascript:` sources
- * before they reach the DOM, and `isSafeBaseUri` (`protocol.ts`) has already
- * rejected a hostile base. Nothing here weakens either check: a value that
- * already carries a scheme is left exactly as it is.
+ * before they reach the DOM, `isSafeBaseUri` (`protocol.ts`) has already
+ * rejected a hostile base, and `renderMark` re-checks `isSafeUrl` again on
+ * whatever this function returns, so a value that already carries a scheme
+ * is left exactly as it is.
  */
 
 /**
@@ -103,32 +110,5 @@ export function resolveDocumentUrl(
     return new URL(value, baseUri).toString();
   } catch {
     return undefined;
-  }
-}
-
-/**
- * Rewrites every relative `<img src>` inside `container` to its absolute (or
- * embedded-asset) form under `baseUri`/`assets`. Idempotent: a second pass
- * sees absolute sources and leaves them alone.
- *
- * Called from an effect after each render (`preview.tsx`). React writes the
- * relative `src` first and this runs immediately after, so the browser may
- * briefly request the unresolved URL against the webview's own origin — a
- * request that 404s harmlessly, and the alternative (teaching the renderer
- * about host URL mapping) would push host concerns into the reference
- * renderer, which is not the extension's place.
- */
-export function applyDocumentBase(
-  container: ParentNode,
-  baseUri: string | undefined,
-  assets?: Readonly<Record<string, string>>,
-): void {
-  for (const image of container.querySelectorAll('img')) {
-    const source = image.getAttribute('src');
-    if (source === null) continue;
-    const resolved = resolveDocumentUrl(source, baseUri, assets);
-    if (resolved !== undefined && resolved !== source) {
-      image.setAttribute('src', resolved);
-    }
   }
 }
