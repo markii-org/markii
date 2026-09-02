@@ -55,13 +55,13 @@ function fakeNet(get: (url: string) => Promise<NetResponse>) {
 function fixtureBundle() {
   const bytes = zipSync({
     'note.mk.md': u8('# hello'),
-    'manifest.json': u8('{"mark":"0.1.0"}'),
+    'manifest.json': u8('{"spec":"0.1.0"}'),
     'assets/x.png': u8('img'),
     'cache/data.json': u8('{}'),
   });
   const storage = openZipBundle(bytes);
   const manifest: BundleManifest = {
-    mark: '0.1.0',
+    spec: '0.1.0',
     permissions: { bundle: ['read', 'write:cache/'] },
   };
   const view = createScriptView(storage, manifest, {
@@ -728,7 +728,7 @@ describe('buildCapabilities — bundle delegates to a real @markii/bundle Script
   it('bundle.read with "read" NOT granted is still a capability denial (unaffected by the nil fix)', async () => {
     const { storage } = fixtureBundle();
     const manifest: BundleManifest = {
-      mark: '0.1.0',
+      spec: '0.1.0',
       permissions: { bundle: ['read'] },
     };
     // Granted set intersected down to nothing -- `canRead` is false.

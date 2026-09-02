@@ -26,7 +26,7 @@ the difference between them is only how much of the document they cover.
 Inline, inside a sentence:
 
 ```
-Press :kbd[Ctrl+S] to save. This feature is :badge[beta]{color=purple}.
+Press :kbd[Ctrl+S] to save. This feature is :badge[beta]{variant=info}.
 ```
 
 A leaf block, standing on its own line:
@@ -120,9 +120,10 @@ Attributes become the component's settings, and the markdown inside a
 container becomes its content.
 
 The reference renderer ships a standard set: `callout`, `card`, `badge`,
-`details`, `figure`, `tabs` and `tab`, `kbd`, `rating`, `divider`, and three
-data-bound components, `stat`, `progress`, and `chart`. These are defaults,
-not a fixed vocabulary. You can restyle them, replace them, or add your own.
+`details`, `figure`, `tabs` and `tab`, `kbd`, `rating`, `divider`, and four
+data-bound components, `stat`, `progress`, `chart`, and `table`. These are
+defaults, not a fixed vocabulary. You can restyle them, replace them, or add
+your own.
 
 A `---` thematic break keeps its plain CommonMark meaning. The `divider`
 component is the separate directive for a break that needs a label or a
@@ -385,6 +386,51 @@ the format, since live values in prose are worth having, but prose meant to
 travel should prefer component bindings like `::stat{data=stars}`, which
 degrade to a clean line of their own. The full scripting model is in
 [scripting.md](scripting.md).
+
+### Formatting a value
+
+A raw number is rarely what you want to read. Any value shown through
+`:value[...]`, `stat`, `progress`, or `table` takes a `format` attribute:
+
+| `format` | What it does |
+| --- | --- |
+| `plain` | the value as-is, and the default |
+| `number` | groups thousands, so `2301234` reads as `2,301,234` |
+| `compact` | shortens large numbers, so `2301234` reads as `2.3M` |
+| `percent` | reads a fraction as a percentage, so `0.123` reads as `12.3%` |
+| `date` | reads an ISO date or epoch milliseconds as a local date |
+| `relative` | reads the same input as elapsed time, such as `3 hours ago` |
+
+`decimals` sets the digits after the decimal point, from 0 to 6, for
+`number`, `compact`, and `percent`.
+
+```markdown
+::stat{label="Signups" data=signups format=number}
+::stat{label="Revenue" data=revenue format=compact decimals=1}
+```
+
+Formatting never fails a document. An unrecognized `format`, or a `decimals`
+outside the allowed range, is ignored and the value falls back to `plain`. A
+value that is not a number under a numeric format is shown unchanged.
+
+### Tables from data
+
+`table` renders a bound value as a table:
+
+```markdown
+::table{data=users columns="name,role" limit=10 caption="Team"}
+```
+
+It reads four shapes. An array of objects becomes columns drawn from the
+keys, in the order the keys are first seen. An array of arrays becomes rows
+exactly as given. An array of primitives becomes a single column. A single
+object becomes key and value rows.
+
+`columns` picks the columns to show and the order to show them in, `limit`
+caps the number of rows, and `caption` adds a caption. `text` aligns the
+table's own text, and `format` and `decimals` apply to numeric cells only. A
+binding that is missing, stale, or failed shows the same quiet empty state
+the other data-bound components use.
 
 ## What markdown features are out
 

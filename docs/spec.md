@@ -7,7 +7,7 @@ MUST, SHOULD, and MAY are used in their usual normative sense.
 
 The spec is versioned with plain semver and is currently pre-1.0. The
 format's name, Markii, carries no version information. A bundle records
-the spec version it targets in its manifest's required `mark` field.
+the spec version it targets in its manifest's required `spec` field.
 
 ## 1. Document syntax
 
@@ -203,7 +203,15 @@ A bundle is a directory, or a zip of that directory, containing
 `manifest.json`, the document, and optionally `assets/`, `scripts/`, and
 `.cache/`. The two forms are equivalent, and both carry the `.mkz`
 extension. An implementation SHOULD also recognize the legacy
-`.mkbundle` name. `.cache/` is disposable;
+`.mkbundle` name.
+
+The manifest MUST declare the spec version it targets in its `spec` field.
+`mark` is the retired name for that field. An implementation SHOULD still
+accept `mark` and treat its value as `spec`, reporting a warning and never
+an error. When both fields are present, `spec` MUST win. An implementation
+MUST write `spec` and MUST NOT write `mark`.
+
+`.cache/` is disposable;
 deleting it MUST NOT lose authored content. The document is `note.mk.md` at
 the bundle root unless the manifest's optional `document` field names
 another bundle-relative path; when present it MUST be a string, and it is
@@ -218,7 +226,75 @@ Three persistence invariants hold regardless of file form: rendering never
 executes; the host never writes authored files; caches are disposable.
 Where a host persists last-run values is host policy.
 
-## 9. Conformance
+## 9. Requirement-to-fixture map
+
+This section pins every normative `MUST`/`MUST NOT` sentence in sections 1
+through 6 to the conformance fixture(s) that check it, so a requirement can
+never quietly go unverified. Each row splits one clause of the spec into a
+single checkable claim; several rows can come from the same sentence when
+that sentence bundles more than one requirement.
+
+The `Fixtures` column uses one of five forms:
+
+- a comma-separated list of fixture numbers, e.g. `08` or `09, 25`: each
+  number names a `conformance/NN-*.mk.md` / `.json` pair, checked against
+  the parser's actual output;
+- `core:<file>`: pinned by a colocated Vitest suite in
+  `packages/markii-core/src` rather than a numbered fixture, used only when
+  the requirement lives past the parse stage (the hast conversion, or a
+  frontmatter/script accessor that reads a fixture's raw text rather than
+  its tree shape) and so falls outside the parse-only corpus format;
+- `render:render/<name>` for a `conformance/render/` fixture, or
+  `render:<pkg>:<file>` (e.g. `render:react:aliases.test.tsx`,
+  `render:runtime:vault.test.ts`) naming a real test file in another
+  `@markii/*` package's own suite: a renderer- or value-binding requirement
+  that a live registry (or a running script/store) is needed to observe.
+  Valid only for requirements that are genuinely renderer/value behavior
+  (section 4 and one row of section 6), never for a requirement the parser
+  alone can check;
+- `other:<reason>`: a requirement that is neither parse- nor
+  render-observable at all (a dependency constraint, or a rule enforced by
+  a different package's own tests). Used only for the two rows marked below;
+- `gap:<reason>`: an honest admission that nothing pins this requirement
+  yet. A `gap:` row is a known TODO, not a passing state. The accompanying
+  test in `packages/markii-core` fails on every `gap:` row on purpose, so
+  the table can never quietly treat "not done" as "done."
+
+| ID | § | Requirement | Fixtures |
+|---|---|---|---|
+| S1-01 | 1 | Raw HTML MUST NOT be rendered. | 29, core:to-hast.test.ts |
+| S1-02 | 1 | Directives MUST NOT parse inside code fences. | 08 |
+| S1-03 | 1 | Malformed or unclosed directive syntax MUST degrade to text, never to an error. | 09, 31 |
+| S1-04 | 1 | A container left open MUST be closed implicitly when its enclosing container's fence or the end of input arrives, never reported as an error. | 09, 25 |
+| S1-05 | 1 | Frontmatter MUST parse to a distinct metadata node. | 19 |
+| S1-06 | 1 | Frontmatter MUST NOT be rendered. | core:to-hast.test.ts |
+| S1-07 | 1 | An unterminated opening frontmatter fence MUST degrade to ordinary markdown, never to an error. | 21 |
+| S1-08 | 1 | An implementation MUST read the flow form of `uses` (`uses: [a, b]`). | 19 |
+| S1-09 | 1 | An implementation MUST read the block-sequence form of `uses` (`- name` lines). | 20 |
+| S1-10 | 1 | An implementation MUST NOT fail on any other shape of `uses`. | core:frontmatter.test.ts |
+| S1-11 | 1 | Reading frontmatter MUST NOT require a YAML parser. | other: dependency constraint, not AST-observable; `frontmatter.ts` is a hand-rolled reader and no `@markii/core` dependency is a YAML library |
+| S1-12 | 1 | A directive name MUST NOT contain `:`. | 30 |
+| S1-13 | 1 | A conforming parser MUST apply the inline-directive word-start recognition rule. | 28 |
+| S1-14 | 1 | The reserved first path segments (`scripts`, `assets`, `.cache`) MUST NOT be pack or library namespaces, nor component name prefixes. | other: pack/bundle namespace rule enforced by `@markii/pack`'s `namespace.ts` (own test suite), not by `@markii/core`'s parser, which this same section says accepts any legal directive name |
+| S3-01 | 3 | Components MUST NOT ship outer margins. | render:react:doc-css-invariants.test.ts |
+| S3-02 | 3 | Text MUST NOT wrap around components. | render:react:doc-css-invariants.test.ts |
+| S4-01 | 4 | A throwing `get`, a stored entry whose property access throws, or a stored value whose property-access trap throws during a dotted-path walk MUST degrade to the ordinary missing resolution, never propagate out of the renderer. | render:react:hostile-store.test.tsx |
+| S4-02 | 4 | A renderer's own standard components MUST hold to this same never-throw guarantee when reading a bound value. | render:react:hostile-store.test.tsx |
+| S4-03 | 4 | Rendering MUST NOT execute scripts. | render:react:render.test.tsx |
+| S4-04 | 4 | An alias MUST be resolved at lookup time. | render:react:aliases.test.tsx |
+| S4-05 | 4 | An alias MUST NOT be followed more than one hop. | render:react:aliases.test.tsx |
+| S4-06 | 4 | A registered component MUST take precedence over an alias of the same name. | render:react:aliases.test.tsx |
+| S4-07 | 4 | Attributes written in the document MUST take precedence over an alias's preset attributes. | render:react:aliases.test.tsx |
+| S4-08 | 4 | Alias presets that are reserved attributes MUST be intercepted exactly as author-written ones are. | render:react:aliases.test.tsx |
+| S4-09 | 4 | An alias whose target is unregistered MUST render the unknown-directive fallback under the target's name. | render:react:aliases.test.tsx |
+| S4-10 | 4 | A document MUST NOT be able to define aliases itself. | render:react:alias-injection.test.tsx |
+| S4-11 | 4 | A renderer MUST NOT render a component in a directive form that contradicts its registered kind, where doing so would produce invalid nesting. | render:react:form-mismatch.test.tsx |
+| S4-12 | 4 | The fallback's form MUST follow the directive's own form, not the component's registered kind. | render:react:form-mismatch.test.tsx |
+| S5-01 | 5 | Implementations MUST fail closed on an unrecognized boolean fence-meta spelling: it never enables behavior. | core:publish-attribute.test.ts |
+| S5-02 | 5 | A script name MUST match `[A-Za-z_][A-Za-z0-9_-]*`. | 16 |
+| S6-01 | 6 | The application MUST reject a second publisher of the same published name. | render:runtime:vault.test.ts |
+
+## 10. Conformance
 
 Levels: L0 parse, L1 render behavior, L2 bundles, L3 scripting with the
 capability model. An implementation states the level it meets.
@@ -228,10 +304,10 @@ paired with expected syntax trees as JSON, plus behavioral assertions. An
 implementation at a level MUST reproduce the corpus results relevant to
 that level. The corpus is plain data, usable from any language.
 
-## 10. Non-goals
+## 11. Non-goals
 
 Fixed by design, not open for extension: no rendered raw HTML, no freeform
 styling, no floats, no expressions in attributes, no self-modifying
 documents, no timers in the sandbox, no package manager for scripts, no
-per-file dependencies or scaffolding, and no programming-language ambitions
-for the directive syntax.
+per-file dependencies or scaffolding, no programming-language ambitions for
+the directive syntax, and no math notation (`$...$`).

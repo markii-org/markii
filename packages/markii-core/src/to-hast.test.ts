@@ -146,6 +146,30 @@ describe('code-fence meta preservation (hast level)', () => {
 });
 
 /**
+ * Raw HTML MUST NOT be rendered (docs/spec.md §1): the parser still emits an
+ * `html` mdast node (conformance fixture 29 pins that parse-level fact) so a
+ * host can inspect it, but nothing may reach the hast tree from it.
+ * `mdast-util-to-hast` has no default handler for `html`, so the node is
+ * dropped rather than converted. This is pinned here as a rendering
+ * guarantee of the format, matching the frontmatter-drop test below, so a
+ * future dependency change that started passing raw HTML through fails
+ * loudly instead of silently reopening an HTML-injection path.
+ */
+describe('raw HTML (hast level)', () => {
+  it('drops a raw HTML block entirely, keeping the surrounding content', () => {
+    const tree = toHast('Before.\n\n<div class="raw">nope</div>\n\nAfter.\n');
+    const serialized = JSON.stringify(tree);
+    expect(serialized).not.toContain('raw');
+    expect(serialized).not.toContain('nope');
+    const paragraphs: string[] = [];
+    visit(tree, 'element', (node: HastElement) => {
+      if (node.tagName === 'p') paragraphs.push(textOf(node));
+    });
+    expect(paragraphs).toEqual(['Before.', 'After.']);
+  });
+});
+
+/**
  * Frontmatter is metadata, never content: a leading `---` block must leave
  * no trace in the rendered tree. `mdast-util-to-hast` maps `yaml` to its
  * `ignore` handler today, but this is a guarantee of the format rather than

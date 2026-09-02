@@ -81,6 +81,12 @@ data-bound component. When a run has failed, the reason appears as a hover
 tooltip on that placeholder, never as error text in the page. A document
 never breaks because its data isn't there yet.
 
+A script returns a plain value and leaves presentation to the document. To
+show a number as a grouped or compact figure, a percentage, or a date, use
+the `format` and `decimals` attributes described in
+[format.md](format.md#formatting-a-value) rather than formatting the string
+inside the script.
+
 ## Reading the note from a script
 
 A script knows its own source and nothing about the note around it. That
@@ -275,21 +281,23 @@ become a one-line reference with an empty body:
 The code lives in the bundle's `scripts/` folder, the note keeps a visible
 marker, and prose stays prose.
 
-Shared code enters through a sandboxed `require` with exactly three sources:
+Shared code enters through a sandboxed `require` with exactly two sources:
 
 1. **Bundle-local modules**: `require "scripts/util"`, resolved inside the
    same bundle.
 2. **Pack modules**: `require "ana/http"`, shipped by an installed component
    pack under its namespace. See [packs.md](packs.md).
-3. **The vault library**: `require "mylib/etl"`, a folder of plain `.lua`
-   files inside the vault that the application maps to a namespace. This is
-   the "maintain my helpers once, use them in every note" answer for a
-   single vault; code meant to travel beyond one vault belongs in a pack.
 
-The three are told apart by the first path segment. The bundle's structural
+A folder of shared Lua with nothing to render is simply a pack that declares
+no components. Its `pack.json` carries `"components": {}` and it ships only a
+`scripts/` folder. That is the "maintain my helpers once, use them in every
+note" answer, and it is the same mechanism whether the helpers stay in one
+vault or travel to other people.
+
+The two are told apart by the first path segment. The bundle's structural
 directories, `scripts`, `assets`, and `.cache`, are reserved: a name starting
 with one of them always resolves inside the bundle and can never be a pack
-or library namespace. Every other first segment is a namespace. All required
+namespace. Every other first segment is a pack namespace. All required
 code is pure Lua; a `require` that can't resolve fails softly, and the
 consuming script reports "requires library `mylib`" in the same graceful way
 an unknown component falls back.

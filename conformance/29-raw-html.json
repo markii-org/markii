@@ -1,0 +1,44 @@
+{
+  "children": [
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "Raw HTML MUST NOT be rendered. The parser still recognizes it as an "
+        },
+        {
+          "type": "inlineCode",
+          "value": "html"
+        },
+        {
+          "type": "text",
+          "value": "\nnode so the rest of the document keeps flowing around it; a renderer is the\none that must drop the node (pinned separately at the hast-conversion\nstage, since this fixture only checks the parsed tree)."
+        }
+      ],
+      "type": "paragraph"
+    },
+    {
+      "type": "html",
+      "value": "<div class=\"raw\">This block stays out of the rendered document.</div>"
+    },
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "Ordinary content continues normally after it."
+        }
+      ],
+      "type": "paragraph"
+    },
+    {
+      "attributes": {
+        "title": "Still works",
+        "type": "info"
+      },
+      "children": [],
+      "name": "callout",
+      "type": "leafDirective"
+    }
+  ],
+  "type": "root"
+}

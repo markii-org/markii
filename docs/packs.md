@@ -28,6 +28,14 @@ written for. A host that cannot run that engine shows the standard
 unknown-component fallback for the pack's directives, so a note using an
 unavailable pack stays fully readable.
 
+`version` is optional: a plain semver string such as `1.0.0`, three numeric
+parts and nothing else. It carries no prerelease or build suffix, because
+the field exists for a host to read and show a pack's version, not to drive
+dependency resolution. Leaving it out is valid and warns about nothing. A
+value that is present but not well-formed is a manifest error rather than a
+warning, on the same reasoning as a malformed `name`: a version a host
+cannot trust is worse than no version at all.
+
 ### Describing a component
 
 A `components` entry can be the string shorthand shown above, a source
@@ -142,18 +150,39 @@ boxes. There are no import statements in a note body; the note stays prose.
 
 A pack is also the distribution unit for shared Lua: `require "ana/http"`
 loads a module the pack ships, so a long script is maintained once rather
-than copied per note. For helpers that only matter inside one vault, the
-vault library fills the same role locally (see
-[scripting.md](scripting.md)); code meant to travel belongs in a pack.
+than copied per note. For helpers that only matter inside one vault, a
+pack that declares no components fills the same role locally: just a
+`scripts/` folder and `"components": {}` (see
+[scripting.md](scripting.md)). The same mechanism carries those helpers
+along once you decide to share them.
 Sharing *data* between notes is a different mechanism entirely, the
 published-value store, and never involves packs.
 
 ## Collision and install rules
 
 Flat and boring on purpose. Installing two packs with the same namespace is
-rejected at install time. A vault library that shadows an installed pack's
-namespace wins, with a visible warning. There is no transitive dependency
-resolution and there are no version ranges.
+rejected at install time. There is no transitive dependency resolution and
+there are no version ranges.
+
+## Bundled packs
+
+Three packs ship with the reference hosts and need no installation: `read`
+for reading and annotation notes, `dash` for dashboards, and `prep` for
+revision notes. They are ordinary packs in every way that matters. Their
+components are namespaced like any other, so `read`'s `source` component is
+written `read_source`. A note lists them in `uses:` the same way. They
+appear in the insert catalog and in directive completion.
+
+They are registered before any pack a user configured. If a user pack claims
+a namespace a bundled pack already holds, the user pack is skipped and the
+host says so on its diagnostics surface. The bundled pack wins. This follows
+the ordinary collision rule above rather than making an exception to it: two
+packs still cannot share a namespace, and the tie is broken by load order
+instead of by rejecting both.
+
+Bundling changes nothing about how a pack is written. These three are
+maintained as plain sources in the Markii repository under `packs/`, and a
+pack you write yourself has the same shape.
 
 ## Loading a pack in a host
 
@@ -199,6 +228,26 @@ the next vault), so a host notes relative entries in its diagnostics. For
 one shared folder across projects, use an absolute path; a leading `~`
 expands to your home directory, which keeps an absolute entry short.
 
+### Naming a pack, or installing one
+
+A host's pack list names each pack by path. An entry may point at a pack
+folder, or straight at a `.mkp` file. An archive entry is read-only and
+prebuilt-only: the host reads it where it sits and never compiles anything
+out of it, so pointing at an archive is the lightest way to use a pack you
+did not write.
+
+A host may also offer to install one. Installing copies the archive's
+contents into the host's own pack directory and adds it to the pack list,
+which is stored per device, because a pack list decides what code runs.
+
+Installing runs someone else's code in your previews, so it asks first, and
+the question says exactly that rather than talking about files. The order
+matters and is part of the contract: the archive is validated first, then
+consent is asked, then a namespace already in use asks before it is
+replaced, and only after all of those does anything reach disk. An archive
+that fails validation is reported and installs nothing, so a rejected pack
+never leaves a half-written directory behind.
+
 ### Two ways to run a pack: prebuilt and from source
 
 A pack reaches a host in one of two forms, and they serve different people.
@@ -237,6 +286,45 @@ The prebuilt filenames are a host convention layered on the pack
 contract, the same way `webview.js` always was. The manifest gains no
 field for them: `pack.json` keeps describing the sources, and a host
 simply prefers the built files when they are present.
+
+### What a prebuilt `webview.js` must do
+
+A `webview.js` is not an opaque artifact of one toolchain. It is a contract,
+so a pack author with their own build can produce one. Anything that
+satisfies the rules below loads in any conforming host.
+
+The script is an IIFE: loading it must not leave globals behind beyond the
+one call it makes. Anything the build needs, a JSX shim included, goes
+INSIDE that wrapper; a preamble emitted outside it leaks a global and breaks
+this rule. That call is:
+
+```js
+window.__markiiRegisterPack(manifestJson, componentModules);
+```
+
+`manifestJson` is the pack's own `pack.json` as a STRING: the file's raw
+text, passed through unchanged rather than parsed and re-serialized. A host
+parses it itself. Passing an object instead is rejected, and re-serializing
+it is a quiet way to lose fields, because anything the producer's parser did
+not recognize is dropped on the way through.
+
+`componentModules` maps each component's LOCAL name, the key as written in
+the manifest, to an object with a `component` function and an optional
+boolean `inline`. Only own properties are read, so an inherited value cannot
+smuggle a component in.
+
+React is not bundled into the script and is not imported at the top level.
+The host's own bundle is the single place that sets `window.__markiiReact`
+and `window.__markiiReactDom`, and a pack reads the same instance from there
+rather than carrying its own copy. Because a pack script loads before the
+host sets those globals, every read of them must happen inside a function
+that runs at render time. Loading the script on its own, with
+`window.__markiiReact` still undefined, must not throw. That is the test a
+prebuilt script has to pass.
+
+The host collects the queued registrations and folds them into its registry.
+Registration order decides a namespace tie, so a host that ships packs of its
+own registers them first.
 
 ## Styling a pack
 
@@ -351,6 +439,35 @@ exported prebuilt folder.
 The command needs the compiler, so an install that does not carry one
 cannot run it. It says so plainly and names the install that would restore
 it.
+
+## A pack as a single file
+
+A pack can also travel as one file. A `.mkp` archive is a zip of the pack's
+prebuilt form, with the files at the root of the archive rather than inside a
+folder:
+
+```
+pack.json
+webview.js
+webview.css     when the pack has styles
+scripts/        when the pack ships Lua modules
+```
+
+An archive is named after what its manifest declares: `<name>-<version>.mkp`
+when the manifest has a `version`, and `<name>.mkp` when it does not. The
+filename claims exactly what the manifest says and nothing more, so a pack
+with no declared version does not acquire an invented one.
+
+A `.mkp` holds the prebuilt form only. `webview.js` is required, and a reader
+never compiles anything out of an archive. An archive carrying leftover
+component sources is still valid: the extra files are ignored, the same way a
+prebuilt script already wins over sources sitting beside it.
+
+Reading one is bounded the same way reading a `.mkz` bundle is, because it is
+the same reader underneath. Entry sizes and the total are capped before
+anything is decompressed, and every path goes through the same jail, so an
+entry naming `../` or an absolute path is refused rather than written. A
+malformed or hostile archive is reported and nothing is installed.
 
 ## What the reference project provides, and what it doesn't
 

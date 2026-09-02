@@ -15,8 +15,8 @@ Start with the page that matches what you're doing:
   verification status.
 - [integration.md](integration.md): embedding the libraries, writing your
   own renderer, and what a host application owns.
-- [packs.md](packs.md): sharing components and Lua modules (designed, not
-  yet implemented).
+- [packs.md](packs.md): sharing components and Lua modules. Both reference
+  hosts load packs.
 - [spec.md](spec.md): the rules an implementation must follow, and what
   conformance means. The normative core.
 

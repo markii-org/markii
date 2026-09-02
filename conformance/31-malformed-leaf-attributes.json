@@ -1,0 +1,41 @@
+{
+  "children": [
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "Malformed directive syntax MUST degrade to text, never to an error, and this\ncovers more than just an unclosed container (fixture 09): an attribute\nbrace that is opened but never closed must degrade the same way, even\nacross a line break."
+        }
+      ],
+      "type": "paragraph"
+    },
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "::name{attr\nMore text that was meant to close the brace above but never does."
+        }
+      ],
+      "type": "paragraph"
+    },
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "A quoted attribute value left open behaves the same way:"
+        }
+      ],
+      "type": "paragraph"
+    },
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "::other{attr=\"unterminated\nStill just text."
+        }
+      ],
+      "type": "paragraph"
+    }
+  ],
+  "type": "root"
+}

@@ -25,12 +25,31 @@ import type {
  * `kind`/`attributes` metadata (see `./components.ts`,
  * `resolvePackComponent`, `packComponents`).
  *
+ * `components` may be an EMPTY object. There is exactly one way to share
+ * Lua beyond a bundle's own `scripts/` folder: a pack module. A folder of
+ * shared Lua with nothing to render is simply a pack whose `components`
+ * is `{}` and which carries its own `scripts/*.lua` — it contributes zero
+ * directives and never appears in a component catalog, but its modules
+ * still resolve through `require "name/module"` like any other pack's.
+ *
  * Shared Lua modules are NOT a manifest field. docs/packs.md says they
  * travel under a conventional `scripts/` directory inside the pack
  * (`require "ana/http"`), the same way a bundle's `scripts/` works — there
  * is no separate manifest declaration for them, so this type doesn't add
- * one. (Flagged in the slice-0 report for orchestrator sign-off in case
- * docs/packs.md meant something more explicit.)
+ * one.
+ *
+ * `version` is an OPTIONAL fourth field: a plain semver string
+ * (`MAJOR.MINOR.PATCH`, digits only, no leading zeros on a multi-digit
+ * component — see `SEMVER_PATTERN`). A pack that omits it keeps loading
+ * exactly as before, with no warning. Prerelease/build suffixes
+ * (`-beta.1`, `+build5`) are deliberately NOT accepted: AGENTS.md already
+ * commits this project to "plain semver" for spec versioning, and a pack
+ * version exists so a host can compare/display it, not to drive a resolver
+ * that needs prerelease ordering. Accepting a wider grammar than the one
+ * fact this field is for would be a casual-user-facing complication with
+ * no present consumer. A malformed `version` is an ERROR, not a
+ * forward-compatible warning, the same posture `name` gets: a version a
+ * host cannot trust is worse than no version.
  */
 export interface PackManifest {
   /** The pack's namespace, e.g. `"ana"`. See `validatePackName`. */
@@ -46,13 +65,30 @@ export interface PackManifest {
    * the one place both forms are normalized.
    */
   components: Record<string, PackComponentEntry>;
+  /**
+   * Optional plain-semver version string, e.g. `"1.0.0"`. Absent unless
+   * the pack author declared one. See this interface's doc comment for
+   * the accepted grammar and why prerelease/build suffixes are rejected.
+   */
+  version?: string;
 }
 
 export type PackManifestParseResult =
   | { ok: true; manifest: PackManifest; warnings: string[] }
   | { ok: false; errors: string[] };
 
-const KNOWN_TOP_LEVEL_KEYS = new Set(['name', 'engine', 'components']);
+const KNOWN_TOP_LEVEL_KEYS = new Set([
+  'name',
+  'engine',
+  'components',
+  'version',
+]);
+
+// Plain semver only: MAJOR.MINOR.PATCH, digits only, no leading zeros on a
+// multi-digit component ("1.0.0" and "0.0.1" are valid; "01.0.0" is not).
+// No prerelease or build metadata suffix — see PackManifest's doc comment
+// for why this field deliberately does not accept the wider semver grammar.
+const SEMVER_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
 // The keys a component's object-form entry may carry, and which of those
 // are required. Mirrors KNOWN_TOP_LEVEL_KEYS's role for the manifest root:
@@ -442,13 +478,28 @@ export function parsePackManifest(json: string): PackManifestParseResult {
       result[key] = sanitized;
     }
 
-    if (Object.keys(componentsObj).length === 0) {
-      errors.push('"components" must have at least one entry');
-      componentsValid = false;
-    }
-
     if (componentsValid) {
       components = result;
+    }
+  }
+
+  // --- version (optional) ---
+  //
+  // Absent is valid and produces neither an error nor a warning. Present
+  // but malformed is an ERROR (rejects the whole manifest), not a
+  // forward-compatible warning: a version a host cannot trust is worse
+  // than no version at all, the same posture as a malformed `name`.
+  let version: string | undefined;
+  let versionValid = true;
+  if (Object.hasOwn(obj, 'version')) {
+    const rawVersion = obj.version;
+    if (typeof rawVersion !== 'string' || !SEMVER_PATTERN.test(rawVersion)) {
+      errors.push(
+        '"version" must be a plain semver string ("MAJOR.MINOR.PATCH", digits only, no leading zeros, no prerelease or build suffix)',
+      );
+      versionValid = false;
+    } else {
+      version = rawVersion;
     }
   }
 
@@ -465,14 +516,18 @@ export function parsePackManifest(json: string): PackManifestParseResult {
     errors.length > 0 ||
     name === undefined ||
     engine === undefined ||
-    components === undefined
+    components === undefined ||
+    !versionValid
   ) {
     return { ok: false, errors };
   }
 
   return {
     ok: true,
-    manifest: { name, engine, components },
+    manifest:
+      version === undefined
+        ? { name, engine, components }
+        : { name, engine, components, version },
     warnings,
   };
 }

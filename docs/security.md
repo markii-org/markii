@@ -46,8 +46,7 @@ wording should say so.
 
 Grants are remembered per note, keyed by a hash of the note's full
 executable closure: its inline scripts, `src=` script files, required
-bundle-local modules, vault-library modules, and the versions of any pack
-modules it requires. If any of that code changes, the grant is stale and the
+bundle-local modules, and the versions of any pack modules it requires. If any of that code changes, the grant is stale and the
 host prompts again. Without this rule, edited shared code would silently
 inherit grants that were made to different code. The reference
 implementation of the key is `computeGrantKey` in `@markii/runtime`.
@@ -63,18 +62,13 @@ because the boundary is the hostname string, a script that builds a request
 URL at run time rather than writing it as a literal cannot be reasoned about
 in advance: the host cannot know which hostname it will name, so such a
 request is denied unless its host was granted through some other literal in
-the same note. A consequence of that denial surfaced in use. When a note's `net` calls all
-build their URLs at run time, the scan resolves no hostname at all, and the
-consent gate that covers unlistable addresses was still shown. With nothing
-grantable behind it, accepting that gate granted no host and declining it
-withdrew none, and because a run that ends with an empty allowlist is never
-persisted, the same dialog reopened on every run. The gate is now shown only
-when at least one hostname was resolved, which is the only case where the
-answer can change the outcome. The reachable set is unchanged: it was empty
-before the gate and empty after it, whichever button was pressed. The
-denial itself still reaches the user, at execution time and naming the host
-actually attempted, through the component's quiet failure marker and the
-host's diagnostics surface.
+the same note. The consent gate that covers unlistable addresses is shown
+only when the scan resolved at least one hostname, which is the only case
+where the answer can change the outcome. A note whose `net` calls all build
+their URLs at run time resolves no hostname, so nothing is grantable and no
+gate appears. The denial still reaches the user at execution time, naming
+the host actually attempted, through the component's quiet failure marker
+and the host's diagnostics surface.
 
 Second, a hostname is not an address, so the name the user
 granted and the machine the request reaches are two different things. A
@@ -82,7 +76,7 @@ public name can answer with a private address, and a record can change
 between the check and the connection, which is DNS rebinding. A hostname
 check alone sees neither.
 
-The reference host closes that gap by resolving and pinning (issue #10).
+The reference host closes that gap by resolving and pinning.
 Every hop of a request resolves its host once, vets every address the
 resolver returned, and then connects to the vetted address itself, so the
 gap between resolving and connecting is closed by construction rather than
@@ -251,17 +245,17 @@ still reaches the script as a capability error rather than as an ordinary
 failure.
 
 The worker's bytes reach the isolate differently in the Obsidian plugin
-than in the worker-thread hosts. Since plugin version 0.3.0, the worker
-bundle and the Lua interpreter's wasm binary are embedded in the plugin's
-own entry file as base64 and decoded at spawn time, instead of being read
-from sibling files on disk. The isolate boundary is unchanged: the same
-bundle runs, in the same kind of worker, under the same watchdog. What
-changes is provenance. There is no longer a partially copied install whose
-Run path silently loads a stale or missing worker file, and the build
-fails outright if the embedding step did not run, so an entry file with
-empty worker bytes cannot ship. Verification: the worker-bundle probe
-builds the real bundle from the real build options, decodes it through the
-same base64 path the plugin uses, and executes it.
+than in the worker-thread hosts. The plugin embeds the worker bundle and
+the Lua interpreter's wasm binary in its own entry file as base64 and
+decodes them at spawn time, rather than reading them from sibling files on
+disk. The isolate boundary is the same either way: the same bundle runs, in
+the same kind of worker, under the same watchdog. What differs is
+provenance. A partially copied install cannot leave the Run path loading a
+stale or missing worker file, and the build fails outright if the embedding
+step did not run, so an entry file with empty worker bytes cannot ship.
+Verification: the worker-bundle probe builds the real bundle from the real
+build options, decodes it through the same base64 path the plugin uses, and
+executes it.
 
 One Electron-specific finding qualifies the Web Worker picture further.
 Obsidian creates its workers with Node integration enabled, so `process`,
@@ -312,16 +306,22 @@ recomputed rather than served, so a shipped `.cache/` cannot pin stale
 values. The reference host's assessment of these paths is recorded in the
 verification status below.
 
+A `.mkp` pack archive is read through the same zip reader and the same path
+jail, so it inherits both guarantees rather than restating them. Its entry
+and total sizes are capped before anything is decompressed, and an entry
+naming a parent directory or an absolute path is refused rather than
+written. A pack archive is also prebuilt-only: nothing inside one is ever
+compiled, so an archive cannot introduce source that a host would build.
+
 ## Sandboxed require
 
 `require` resolves exactly two sources today: bundle-local modules
 (`require "scripts/..."`, `"assets/..."`, `".cache/..."`), whose source text
 is read through the identical `ScriptView` and path-jail that `bundle.read`
 uses, and pack-namespaced modules (`require "packName/..."`), gated behind an
-optional host-injected resolver. That resolver is absent by default, so every
-pack-namespaced `require` denies cleanly rather than reaching any real pack
-loader. The vault library, the third source named in the scripting model, is
-not implemented yet.
+optional host-injected resolver. A host that has not wired one up denies
+every pack-namespaced `require` cleanly rather than reaching any real pack
+loader.
 
 A resolved module runs as a protected chunk on the same Lua thread as the rest
 of the run, sharing its globals, capabilities, and instruction, wall-clock, and
@@ -366,7 +366,7 @@ tested, and the skills in `skills/` grade against this table.
 | `address-vetted` | A request's host is resolved once and every returned address vetted before connecting, and the connection is pinned to the vetted address, so a name cannot be reached at a private or loopback address or rebound between check and connect. | [Capabilities](#capabilities); `pinHostAddress` and `pinnedLookup` in the extension's run path |
 | `bundle-jail` | `bundle.read` and `bundle.write` reject absolute paths, `..`, and symlink escapes, so a script never reaches outside its own bundle. | [The bundle jail](#the-bundle-jail); the `@markii/bundle` path jail |
 | `writes-to-cache` | A script's writes are confined to `.cache/`; it can never write the document or the manifest. | [The bundle jail](#the-bundle-jail); the write jail |
-| `bounded-open` | A file is size-checked before it is materialized and a zip archive before it is read, so opening or running a bundle cannot exhaust the host. | [The bundle jail](#the-bundle-jail) |
+| `bounded-open` | A file is size-checked before it is materialized and a zip archive before it is read, so opening or running a bundle, or reading a `.mkp` pack archive, cannot exhaust the host. | [The bundle jail](#the-bundle-jail) |
 | `cache-not-trusted` | A cached entry with an implausible timestamp is recomputed rather than served, so a shipped `.cache/` cannot pin stale values. | [The bundle jail](#the-bundle-jail) |
 | `unattended-is-user-scoped` | A setting that can make scripts run without a user gesture is user-scope only, so a workspace cannot enable unattended execution for whoever opens it. | [Triggers cap capabilities](#triggers-cap-capabilities); the extension's `contributes.configuration` scopes |
 | `values-are-data` | A script value reaches the page as data only; its text never becomes markup, and a failure carries only its kind, never its text. | [Capabilities](#capabilities); the failure-presentation seam in `@markii/react` |

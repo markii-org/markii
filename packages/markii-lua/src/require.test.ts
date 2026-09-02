@@ -49,7 +49,7 @@ async function run(
 function fixtureBundle(scripts: Record<string, string>) {
   const files: Record<string, Uint8Array> = {
     'note.mk.md': u8('# hello'),
-    'manifest.json': u8('{"mark":"0.1.0"}'),
+    'manifest.json': u8('{"spec":"0.1.0"}'),
   };
   for (const [name, source] of Object.entries(scripts)) {
     files[`scripts/${name}`] = u8(source);
@@ -57,7 +57,7 @@ function fixtureBundle(scripts: Record<string, string>) {
   const bytes = zipSync(files);
   const storage = openZipBundle(bytes);
   const manifest: BundleManifest = {
-    mark: '0.1.0',
+    spec: '0.1.0',
     permissions: { bundle: ['read'] },
   };
   const view = createScriptView(storage, manifest, { bundle: ['read'] });
@@ -125,12 +125,12 @@ describe('buildRequire — bundle-local modules', () => {
   it('a bundle with no read grant denies require the same way it denies bundle.read', async () => {
     const bytes = zipSync({
       'note.mk.md': u8('# hello'),
-      'manifest.json': u8('{"mark":"0.1.0"}'),
+      'manifest.json': u8('{"spec":"0.1.0"}'),
       'scripts/util.lua': u8('return 1'),
     });
     const storage = openZipBundle(bytes);
     const manifest: BundleManifest = {
-      mark: '0.1.0',
+      spec: '0.1.0',
       permissions: { bundle: ['read'] },
     };
     // Manifest declares read, but the user never granted it — DEFECT 10

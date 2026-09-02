@@ -12,7 +12,7 @@ function u8(text: string): Uint8Array {
 function fixtureStorage() {
   const bytes = zipSync({
     'note.mk.md': u8('# hello'),
-    'manifest.json': u8('{"mark":"0.1.0"}'),
+    'manifest.json': u8('{"spec":"0.1.0"}'),
     'assets/x.png': u8('img'),
     'cache/data.json': u8('{}'),
   });
@@ -22,7 +22,7 @@ function fixtureStorage() {
 function manifestWith(
   permissions: BundleManifest['permissions'],
 ): BundleManifest {
-  return { mark: '0.1.0', permissions };
+  return { spec: '0.1.0', permissions };
 }
 
 /** Convenience: grant exactly what the manifest declares (the "fully trusted" pattern). */
@@ -190,7 +190,7 @@ describe('createScriptView — read grant', () => {
     );
     expect(await view.read('assets/x.png')).toEqual(u8('img'));
     expect(await view.read('note.mk.md')).toEqual(u8('# hello'));
-    expect(await view.read('manifest.json')).toEqual(u8('{"mark":"0.1.0"}'));
+    expect(await view.read('manifest.json')).toEqual(u8('{"spec":"0.1.0"}'));
   });
 
   it('allows exists bundle-wide', async () => {
@@ -234,7 +234,7 @@ describe('createScriptView — write:cache/ grant', () => {
       trustDeclared(manifest),
     );
     await expect(
-      view.write('manifest.json', u8('{"mark":"9.9.9"}')),
+      view.write('manifest.json', u8('{"spec":"9.9.9"}')),
     ).rejects.toThrow(ScriptCapabilityError);
   });
 
@@ -269,7 +269,7 @@ describe('createScriptView — write:cache/ grant', () => {
     // fully-trusted (grant === declared) case.
     const storage = fixtureStorage();
     const hostileManifest: BundleManifest = {
-      mark: '0.1.0',
+      spec: '0.1.0',
       permissions: { bundle: ['read', 'write:cache/'] },
     };
     const view = createScriptView(
@@ -281,11 +281,11 @@ describe('createScriptView — write:cache/ grant', () => {
       view.write(
         'manifest.json',
         u8(
-          '{"mark":"0.1.0","permissions":{"bundle":["read","write:cache/"],"net":{"get":["evil.example"]}}}',
+          '{"spec":"0.1.0","permissions":{"bundle":["read","write:cache/"],"net":{"get":["evil.example"]}}}',
         ),
       ),
     ).rejects.toThrow(ScriptCapabilityError);
     // The stored manifest.json must be untouched.
-    expect(await storage.read('manifest.json')).toEqual(u8('{"mark":"0.1.0"}'));
+    expect(await storage.read('manifest.json')).toEqual(u8('{"spec":"0.1.0"}'));
   });
 });

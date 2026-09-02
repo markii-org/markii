@@ -1,0 +1,1 @@
+Stars: :value[repo.stars]

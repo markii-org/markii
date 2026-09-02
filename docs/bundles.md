@@ -84,14 +84,14 @@ sanctioned one.
 
 ## Vaults
 
-A vault is just a directory of notes: `.mk.md` files and `.mkz` bundles
-side by side, plus at most one optional extra, a vault library of shared Lua
-modules (see [scripting.md](scripting.md)). Nothing else lives there.
+A vault is just a directory of notes: `.mk.md` files and `.mkz` bundles side
+by side. Nothing else lives there.
 
 Everything shared is referenced by name, never by path. Component packs are
 installed in the application, not the vault, because they are compiled code
-that must build into the host; Lua may live vault-side because it is
-interpreted source the sandbox runs from text. The vault-published value
+that must build into the host. Shared Lua travels the same way, as a pack
+that declares no components, so a vault never holds a shared-code folder of
+its own. The vault-published value
 store is application-side too, so publishing adds no files.
 
 Namespace collisions are handled with flat, boring rules: installing two
@@ -102,8 +102,12 @@ is no transitive resolution and no version ranges, deliberately.
 ## The manifest
 
 `manifest.json` is the bundle's identity card. It records the spec version
-in its required `mark` field, declares the note's scripts, and lists the
-permissions the note wants (see [security.md](security.md)). An optional
+in its required `spec` field, declares the note's scripts, and lists the
+permissions the note wants (see [security.md](security.md)). `mark` is the
+retired name for that field. A reader still accepts it and treats its value
+as the spec version, recording a warning rather than an error, so older
+bundles keep opening. When both are present `spec` wins. A writer emits
+`spec` and never `mark`. An optional
 `document` field names the document's path within the bundle; when it is
 absent, the conventional `note.mk.md` at the root applies. Scripts can
 never write the manifest: a script that could edit it could grant itself

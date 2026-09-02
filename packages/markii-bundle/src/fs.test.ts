@@ -188,7 +188,7 @@ describe('openDirBundle — ESCAPE 1/2: symlink inside cache/ re-targeting a for
     await mkdir(join(bundleDir, 'cache'), { recursive: true });
     await writeFile(
       join(bundleDir, 'manifest.json'),
-      '{"mark":"0.1.0"}',
+      '{"spec":"0.1.0"}',
       'utf8',
     );
     await writeFile(join(bundleDir, 'note.mk.md'), '# original', 'utf8');
@@ -203,19 +203,19 @@ describe('openDirBundle — ESCAPE 1/2: symlink inside cache/ re-targeting a for
     const storage = openDirBundle(bundleDir);
     const view = createScriptView(
       storage,
-      { mark: '0.1.0', permissions: { bundle: ['write:cache/'] } },
+      { spec: '0.1.0', permissions: { bundle: ['write:cache/'] } },
       { bundle: ['write:cache/'] },
     );
 
     await expect(
       view.write(
         'cache/pwn',
-        u8('{"mark":"9.9.9","permissions":{"bundle":["read","write:cache/"]}}'),
+        u8('{"spec":"9.9.9","permissions":{"bundle":["read","write:cache/"]}}'),
       ),
     ).rejects.toThrow();
 
     expect(await readFile(join(bundleDir, 'manifest.json'), 'utf8')).toBe(
-      '{"mark":"0.1.0"}',
+      '{"spec":"0.1.0"}',
     );
   });
 
@@ -226,7 +226,7 @@ describe('openDirBundle — ESCAPE 1/2: symlink inside cache/ re-targeting a for
     await mkdir(join(bundleDir, 'cache'), { recursive: true });
     await writeFile(
       join(bundleDir, 'manifest.json'),
-      '{"mark":"0.1.0"}',
+      '{"spec":"0.1.0"}',
       'utf8',
     );
     await writeFile(join(bundleDir, 'note.mk.md'), '# original', 'utf8');
@@ -241,7 +241,7 @@ describe('openDirBundle — ESCAPE 1/2: symlink inside cache/ re-targeting a for
     const storage = openDirBundle(bundleDir);
     const view = createScriptView(
       storage,
-      { mark: '0.1.0', permissions: { bundle: ['write:cache/'] } },
+      { spec: '0.1.0', permissions: { bundle: ['write:cache/'] } },
       { bundle: ['write:cache/'] },
     );
 
@@ -261,7 +261,7 @@ describe('openDirBundle — ESCAPE 1/2: symlink inside cache/ re-targeting a for
     await mkdir(join(bundleDir, 'cache'), { recursive: true });
     await writeFile(
       join(bundleDir, 'manifest.json'),
-      '{"mark":"0.1.0"}',
+      '{"spec":"0.1.0"}',
       'utf8',
     );
     await writeFile(join(bundleDir, 'note.mk.md'), '# original', 'utf8');
@@ -275,14 +275,14 @@ describe('openDirBundle — ESCAPE 1/2: symlink inside cache/ re-targeting a for
 
     const storage = openDirBundle(bundleDir);
     await expect(
-      storage.write('cache/up/manifest.json', u8('{"mark":"9.9.9"}')),
+      storage.write('cache/up/manifest.json', u8('{"spec":"9.9.9"}')),
     ).rejects.toThrow(BundlePathError);
     await expect(
       storage.write('cache/up/note.mk.md', u8('# hacked')),
     ).rejects.toThrow(BundlePathError);
 
     expect(await readFile(join(bundleDir, 'manifest.json'), 'utf8')).toBe(
-      '{"mark":"0.1.0"}',
+      '{"spec":"0.1.0"}',
     );
     expect(await readFile(join(bundleDir, 'note.mk.md'), 'utf8')).toBe(
       '# original',
@@ -346,7 +346,7 @@ describe('openDirBundle — ESCAPE 3: hard links defeat the root boundary', () =
     await mkdir(join(bundleDir, 'cache'), { recursive: true });
     await writeFile(
       join(bundleDir, 'manifest.json'),
-      '{"mark":"0.1.0"}',
+      '{"spec":"0.1.0"}',
       'utf8',
     );
 
@@ -362,11 +362,11 @@ describe('openDirBundle — ESCAPE 3: hard links defeat the root boundary', () =
 
     const storage = openDirBundle(bundleDir);
     await expect(
-      storage.write('cache/mhard', u8('{"mark":"9.9.9"}')),
+      storage.write('cache/mhard', u8('{"spec":"9.9.9"}')),
     ).rejects.toThrow(BundlePathError);
 
     expect(await readFile(join(bundleDir, 'manifest.json'), 'utf8')).toBe(
-      '{"mark":"0.1.0"}',
+      '{"spec":"0.1.0"}',
     );
   });
 
@@ -392,7 +392,7 @@ describe('promoteToBundle', () => {
       join(targetDir, 'manifest.json'),
       'utf8',
     );
-    expect(JSON.parse(manifestRaw)).toEqual({ mark: '0.1.0' });
+    expect(JSON.parse(manifestRaw)).toEqual({ spec: '0.1.0' });
   });
 
   it('works identically under a legacy .mkbundle directory name', async () => {
@@ -410,7 +410,7 @@ describe('promoteToBundle', () => {
       join(targetDir, 'manifest.json'),
       'utf8',
     );
-    expect(JSON.parse(manifestRaw)).toEqual({ mark: '0.1.0' });
+    expect(JSON.parse(manifestRaw)).toEqual({ spec: '0.1.0' });
   });
 });
 
@@ -420,7 +420,7 @@ describe('dir <-> zip round-trip', () => {
     await mkdir(join(srcDir, 'assets'), { recursive: true });
     await mkdir(join(srcDir, 'cache', 'nested'), { recursive: true });
     await writeFile(join(srcDir, 'note.mk.md'), '# roundtrip\n', 'utf8');
-    await writeFile(join(srcDir, 'manifest.json'), '{"mark":"0.1.0"}', 'utf8');
+    await writeFile(join(srcDir, 'manifest.json'), '{"spec":"0.1.0"}', 'utf8');
     await writeFile(
       join(srcDir, 'assets', 'photo.png'),
       Buffer.from([1, 2, 3, 4]),

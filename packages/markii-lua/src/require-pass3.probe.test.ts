@@ -22,7 +22,7 @@ function u8(text: string): Uint8Array {
 function bundleWithScripts(scripts: Record<string, string>) {
   const files: Record<string, Uint8Array> = {
     'note.mk.md': u8('# hello'),
-    'manifest.json': u8('{"mark":"0.1.0"}'),
+    'manifest.json': u8('{"spec":"0.1.0"}'),
   };
   for (const [name, source] of Object.entries(scripts)) {
     files[`scripts/${name}`] = u8(source);
@@ -30,7 +30,7 @@ function bundleWithScripts(scripts: Record<string, string>) {
   const bytes = zipSync(files);
   const storage = openZipBundle(bytes);
   const manifest: BundleManifest = {
-    mark: '0.1.0',
+    spec: '0.1.0',
     permissions: { bundle: ['read'] },
   };
   return createScriptView(storage, manifest, { bundle: ['read'] });

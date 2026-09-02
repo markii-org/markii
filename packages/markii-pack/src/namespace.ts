@@ -200,9 +200,10 @@ export interface NamespaceCollision {
 /**
  * Given several installed pack namespaces, returns the ones that appear
  * more than once. Pure predicate only — docs/packs.md says installing two
- * packs with the same namespace is rejected at install time, but that
- * install-time rejection (and the vault-library-shadows-a-pack warning
- * case) is a later slice; this is the detection primitive it will use.
+ * packs with the same namespace is rejected at install time; `@markii/host`'s
+ * `discoverPacks` (`packages/markii-host/src/packs/discover.ts`) is the
+ * caller that applies this at install time, excluding every pack sharing a
+ * colliding namespace.
  *
  * Comparison is exact-string (case-sensitive), matching `validatePackName`
  * which already forces lowercase, so two namespaces differing only in case

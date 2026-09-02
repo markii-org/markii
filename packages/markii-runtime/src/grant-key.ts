@@ -1,8 +1,8 @@
 /**
  * docs/security.md ("Security model"): "Grants are remembered per note, keyed
  * by a hash of the note's full *executable closure* — its inline scripts,
- * `src=` script files, required bundle-local modules, vault-library
- * modules, and the versions of any pack modules it requires. If any of that
+ * `src=` script files, required bundle-local modules, and the versions of
+ * any pack modules it requires. If any of that
  * code changes, the grant is stale and the host re-prompts; otherwise
  * edited shared code would silently inherit grants that were made to
  * different code."
@@ -10,7 +10,7 @@
  * This module is that hash. It is deliberately inert: nothing here parses
  * markdown, reads a file, or touches the network — the host (the piece that
  * already knows how to walk a note's scripts, resolve its `src=` files,
- * follow its `require`s into the bundle and the vault library, and read the
+ * follow its `require`s into the bundle and its packs, and read the
  * installed pack manifest) assembles a `GrantClosure` and hands it in.
  * `@markii/core`'s `ScriptBlock` is NOT imported here on purpose — this
  * package stays independent of the parser layer (see AGENTS.md's import

@@ -1,0 +1,40 @@
+{
+  "children": [
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "A directive name MUST NOT contain "
+        },
+        {
+          "type": "inlineCode",
+          "value": ":"
+        },
+        {
+          "type": "text",
+          "value": ". The grammar makes this the same\ncase as malformed syntax: the colon inside the name breaks recognition\nentirely, so the whole construct degrades to plain text rather than\nparsing with a truncated or colon-bearing name."
+        }
+      ],
+      "type": "paragraph"
+    },
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": ":::a:b\nNever recognized as a container directive.\n:::"
+        }
+      ],
+      "type": "paragraph"
+    },
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "Inline form: :a:b[label] also stays literal text."
+        }
+      ],
+      "type": "paragraph"
+    }
+  ],
+  "type": "root"
+}

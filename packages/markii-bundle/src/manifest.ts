@@ -1,15 +1,23 @@
 import type { BundleFsGrant } from './paths.js';
 
 /**
- * `manifest.json`'s contract (spec §9–§11). `mark` is the only required
+ * `manifest.json`'s contract (spec §9–§11). `spec` is the only required
  * field. The index signature keeps unrecognized top-level keys typed as
  * `unknown` rather than dropped — `parseManifest` preserves them verbatim
- * (see the "forward compatibility" note there) so a manifest written by a
- * newer spec version round-trips through an older implementation intact.
+ * (see the "forward compatibility" note there) so a manifest field
+ * introduced by a newer spec version round-trips through an older
+ * implementation intact.
+ *
+ * `mark` is the retired name for this field (pre-rename). It is still
+ * accepted on read (see `parseManifest`) but is never written; keep it as
+ * an explicit optional field, rather than relying on the index signature,
+ * so a reader can name it without an `as` cast.
  */
 export interface BundleManifest {
   /** Spec semver this bundle was authored against, e.g. `"0.1.0"`. */
-  mark: string;
+  spec: string;
+  /** Retired name for `spec`. Read-only compatibility; never written. */
+  mark?: string;
   permissions?: BundlePermissions;
   uses?: string[];
   /**
@@ -45,6 +53,7 @@ export type ManifestParseResult =
 export const CURRENT_SPEC_VERSION = '0.1.0';
 
 const KNOWN_TOP_LEVEL_KEYS = new Set([
+  'spec',
   'mark',
   'permissions',
   'uses',
@@ -73,6 +82,10 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
+function isValidSpecVersion(value: unknown): value is string {
+  return typeof value === 'string' && SEMVER_RE.test(value);
+}
+
 /**
  * Hand-rolled `manifest.json` validation (no schema library — see AGENTS.md
  * dependency policy). Never throws: malformed JSON, a non-object root, or
@@ -90,6 +103,17 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  * rather than preserved, since `permissions` itself is a known, normalized
  * key. Extending preservation to arbitrary nesting depth would be a
  * reasonable follow-up but wasn't asked for here.
+ *
+ * `spec`/`mark` compatibility: `spec` is the current, required field name.
+ * `mark` is the retired name. If `spec` is present and valid it is always
+ * used, regardless of whether `mark` is also present. If `spec` is absent
+ * but a valid `mark` is present, `mark`'s value is used as `spec` and a
+ * warning is recorded (never an error) so legacy manifests keep working.
+ * If both are present, `mark` is ignored and a warning names it, since a
+ * manifest author who sets both most likely left `mark` behind while
+ * migrating to `spec` — preferring the new field is the least surprising
+ * behavior and matches how unknown-key forward-compat already favors the
+ * newer shape.
  */
 export function parseManifest(json: string): ManifestParseResult {
   let raw: unknown;
@@ -112,14 +136,40 @@ export function parseManifest(json: string): ManifestParseResult {
   const errors: string[] = [];
   const warnings: string[] = [];
 
-  // --- mark (required) ---
+  // --- spec (required, with legacy `mark` fallback) ---
+  const specRaw = obj.spec;
   const markRaw = obj.mark;
-  if (typeof markRaw !== 'string') {
-    errors.push('"mark" is required and must be a string');
-  } else if (!SEMVER_RE.test(markRaw)) {
-    errors.push(
-      `"mark" must be a semver string (got ${JSON.stringify(markRaw)})`,
-    );
+  const specPresent = specRaw !== undefined;
+  const markPresent = markRaw !== undefined;
+  let resolvedSpec: string | undefined;
+
+  if (specPresent) {
+    if (!isValidSpecVersion(specRaw)) {
+      errors.push(
+        `"spec" must be a semver string (got ${JSON.stringify(specRaw)})`,
+      );
+    } else {
+      resolvedSpec = specRaw;
+      if (markPresent) {
+        warnings.push(
+          '"mark" is ignored because "spec" is also present; remove "mark" ' +
+            'from this manifest',
+        );
+      }
+    }
+  } else if (markPresent) {
+    if (!isValidSpecVersion(markRaw)) {
+      errors.push(
+        `"mark" must be a semver string (got ${JSON.stringify(markRaw)})`,
+      );
+    } else {
+      resolvedSpec = markRaw;
+      warnings.push(
+        '"mark" is a retired field name; rename it to "spec" in this manifest',
+      );
+    }
+  } else {
+    errors.push('"spec" is required and must be a string');
   }
 
   // --- permissions (optional) ---
@@ -221,7 +271,11 @@ export function parseManifest(json: string): ManifestParseResult {
     return { ok: false, errors };
   }
 
-  const manifest: BundleManifest = { ...obj, mark: markRaw as string };
+  const manifest: BundleManifest = {
+    ...obj,
+    spec: resolvedSpec as string,
+  };
+  delete manifest.mark;
   if (permissions !== undefined) manifest.permissions = permissions;
   if (uses !== undefined) manifest.uses = uses;
   if (document !== undefined) manifest.document = document;
@@ -233,5 +287,5 @@ export function parseManifest(json: string): ManifestParseResult {
 export function createDefaultManifest(
   specVersion: string = CURRENT_SPEC_VERSION,
 ): BundleManifest {
-  return { mark: specVersion };
+  return { spec: specVersion };
 }

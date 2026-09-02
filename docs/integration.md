@@ -14,8 +14,9 @@ implementation, not the standard itself.
 The corpus lives in `conformance/` as plain data: each fixture pairs a
 `.mk.md` input with its expected syntax tree as JSON, plus behavioral cases
 such as "directives inside code fences must not parse" and "an unclosed
-container must not throw". A Rust, Swift, or Python implementation tests
-against the same files. Passing the corpus is what "supports Markii" means.
+container must not throw". The corpus is the definition; the TypeScript
+libraries are the only implementation today. Passing the corpus is what
+"supports Markii" means.
 
 Markii inherits its hard parts rather than inventing them. The syntax is
 CommonMark plus GFM plus the generic directive proposal, and the syntax-tree
@@ -92,7 +93,10 @@ detects which theme is active. Instead it supplies values for a small
 palette, and because the host's own theme variables already differ between
 light and dark, the document follows automatically.
 
-The palette is fifteen custom properties, declared on `.doc`:
+The Tier 1 contract is nineteen custom properties declared on `.doc`:
+fifteen colors, and the four widths described after them.
+
+The palette is those fifteen colors:
 
 | Token | What it is for |
 | --- | --- |
@@ -116,6 +120,25 @@ Everything else is derived. Each semantic variant's fill, strong fill, and
 ink are mixed from its hue against `--mk-bg` or `--mk-fg` at three fixed
 ratios, so a host maps the palette and every variant becomes correct in both
 directions for free. A host should not override the derived properties.
+
+The remaining four tokens are sizes, not colors. They are the sizing half of
+the `width=` layout presets, so a host can make a preset wider or narrower
+without overriding a selector:
+
+| Token | What it is for |
+| --- | --- |
+| `--mk-width-fit` | the width of `width=fit`, which shrinks a block to its content |
+| `--mk-width-narrow` | the width of `width=narrow` |
+| `--mk-width-wide` | the width of `width=wide`, which reaches past the text column |
+| `--mk-width-full` | the width of `width=full`, the widest preset |
+
+There is no token for `width=normal`. That preset is the document's own text
+column and produces no class, so there is no rule for a token to feed.
+
+A host theme and a pack stylesheet may redefine what a preset measures. Neither
+may add a preset name. The set of presets is part of the format, so a document
+that uses one renders the same everywhere, and a host that invented a sixth
+would produce documents no other host could show.
 
 Mapping the palette is the whole job:
 
@@ -171,6 +194,11 @@ importance:
    URL. The reference Obsidian plugin embeds, so an install channel that
    copies only the plugin's entry file still runs scripts. The isolate
    requirement is about termination, not delivery.
+   The Lua runtime's WebAssembly binary has to reach the isolate the same
+   way, and it is the larger of the two. Ship it beside the worker or embed
+   it as the worker bundle does, but decide deliberately: a host that
+   embeds the worker and leaves the wasm on disk runs scripts only where
+   the install channel happened to copy the extra file.
 2. **The grant store and prompts.** Persist grants keyed by
    `computeGrantKey`'s executable-closure hash, re-prompt when the key
    changes, and word network prompts as "can send data to `<host>`".
@@ -207,9 +235,8 @@ importance:
    that landed before it.
 6. **The vault stores.** Enforce one writer per published name, and back the
    `@`-prefixed reads with your vault store implementation.
-7. **The require mappings.** Map vault-library namespaces to folders, and
-   resolve pack modules, keeping the reserved bundle segments
-   (`scripts`, `assets`, `.cache`) bundle-local.
+7. **The require mappings.** Resolve pack modules, keeping the reserved
+   bundle segments (`scripts`, `assets`, `.cache`) bundle-local.
 8. **Bundle handling, if you run bundles.** A `.mkz` bundle is
    attacker-deliverable, so treat its every part as untrusted. Read its
    files through `@markii/bundle`'s jailed storage (never your own path
@@ -234,7 +261,39 @@ importance:
     both a prebuilt script and component sources on disk, say so on your
     diagnostics surface as an informational line; it is a supported state
     and never warrants a notification.
-11. **Storage that does not travel.** Anything that authorizes execution or
+    A host may also ship packs of its own, loaded with no configuration.
+    Register those before any pack the user configured, and when a user pack
+    claims a namespace a shipped pack already holds, skip the user pack and
+    say so on the diagnostics surface. That keeps the ordinary rule that two
+    packs cannot share a namespace, and settles the tie by load order rather
+    than by refusing both.
+    A pack path may also name a `.mkp` archive rather than a folder. Read one
+    where it sits, prebuilt-only, and never compile out of it. If you offer to
+    install one, treat it as a consent step, because installing decides what
+    code runs in a preview: validate the archive, then ask in words that say
+    the pack's code will run, then ask again before replacing a namespace
+    already installed, and write nothing until all of those have passed. A
+    rejected archive is reported on the diagnostics surface and leaves nothing
+    behind.
+11. **Pack compilation, if you compile packs from source.** A pack ships
+    component sources and no build step of its own, so a host that offers
+    source packs compiles them at load time with `esbuild-wasm`, and it
+    must use the in-process WebAssembly path rather than the Node one. This
+    is a requirement, not a preference: the Node path spawns a child
+    process, and an Electron renderer ships no `node` binary for it to
+    spawn, so that path fails outright there. Feed sources to the compiler
+    through a resolve and load plugin instead of letting it read the disk,
+    and cache the output outside the pack's own folder so a pack's source
+    directory is never written to. The runtime costs roughly fourteen
+    megabytes, which is enough that a host may reasonably choose not to
+    embed it. A host without it is still a working host: it loads prebuilt
+    packs normally and degrades cleanly for source packs, saying on its
+    diagnostics surface that compilation is unavailable rather than
+    reporting a broken pack. The reference hosts split exactly here, and
+    the split is deliberate. VS Code is the authoring host and compiles
+    from source; Obsidian consumes prebuilt packs as its normal path and
+    keeps source compilation only where the runtime is present beside it.
+12. **Storage that does not travel.** Anything that authorizes execution or
     network access, meaning grants, auto-run, any scheduled interval, and
     any switch that decides whether scripts run at all, is stored per user
     and per device, never anywhere that moves with the

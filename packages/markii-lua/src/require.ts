@@ -4,17 +4,19 @@ import { CAPABILITY_ERROR_TAG } from './errors.js';
 
 /**
  * Sandboxed `require` (spec §8 "Long scripts and shared code", docs/
- * scripting.md): exactly two of the spec's three sources are implemented
- * here — bundle-local modules and the SEAM for pack modules (the pack
- * loader itself, and the third source, the vault library, are later
- * phases: packs need the pack-installation machinery from packs.md, and
- * the vault library needs a host-side namespace-to-folder mapping neither
- * of which exists yet). Both implemented sources, and the not-yet-wired
- * one, share ONE property: every require target this module resolves is
- * PURE LUA SOURCE TEXT, loaded as a fresh PROTECTED CHUNK on the SAME
- * thread as the rest of the run, so it shares that run's globals,
- * capabilities, and instruction/wall-clock/memory budget — a module can
- * never grant itself more than the script that required it already had.
+ * scripting.md): there are exactly TWO sources of shared Lua, and this
+ * module implements both — bundle-local modules, and pack modules (the
+ * `PackModuleResolver` seam below, which a host wires to its own installed
+ * packs, e.g. `@markii/host`'s `createPackModuleResolver`). There is no
+ * third source: a folder of shared Lua with nothing to render is simply a
+ * pack whose manifest declares no components (`"components": {}`) and
+ * carries its own `scripts/*.lua` — it is a pack module like any other, not
+ * a separate mechanism. Both sources share ONE property: every require
+ * target this module resolves is PURE LUA SOURCE TEXT, loaded as a fresh
+ * PROTECTED CHUNK on the SAME thread as the rest of the run, so it shares
+ * that run's globals, capabilities, and instruction/wall-clock/memory
+ * budget — a module can never grant itself more than the script that
+ * required it already had.
  *
  * ## Two sources, told apart by the first path segment (docs/scripting.md)
  *
@@ -31,11 +33,13 @@ import { CAPABILITY_ERROR_TAG } from './errors.js';
  *   no separate tier gate to apply on top of what `bundle.read` already
  *   enforces.
  * - **Pack-namespaced**: `require "ana/http"` (first segment anything
- *   else). This phase implements ONLY the seam: an optional injected
- *   `PackModuleResolver`. With no resolver configured (packs are not
- *   wired into any host yet), a pack-namespaced `require` fails cleanly
- *   as a capability denial — never a crash, never a fallthrough into
- *   filesystem or network access.
+ *   else). This package only defines the seam: an optional injected
+ *   `PackModuleResolver`. A host that has wired up pack installation
+ *   (`@markii/host`'s `discoverPacks` + `loadPackModules` +
+ *   `createPackModuleResolver`) passes a real resolver in; with none
+ *   configured, a pack-namespaced `require` fails cleanly as a capability
+ *   denial — never a crash, never a fallthrough into filesystem or network
+ *   access.
  *
  * ## Why a real `require` needs `load` back, carefully
  *

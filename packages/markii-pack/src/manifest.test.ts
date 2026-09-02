@@ -134,11 +134,14 @@ describe('parsePackManifest', () => {
     expect(result.ok).toBe(false);
   });
 
-  it('rejects an empty "components" map', () => {
+  it('accepts an empty "components" map (a pack that contributes only shared Lua modules)', () => {
     const result = parsePackManifest(
       JSON.stringify({ name: 'ana', engine: 'react', components: {} }),
     );
-    expect(result.ok).toBe(false);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.manifest.components).toEqual({});
+    }
   });
 
   it('rejects an invalid component key', () => {
@@ -235,6 +238,87 @@ describe('parsePackManifest', () => {
     if (!result.ok) {
       expect(result.errors.length).toBeGreaterThan(1);
     }
+  });
+
+  describe('version', () => {
+    it('accepts a manifest with no "version" field, with no warning', () => {
+      const result = parsePackManifest(VALID);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.manifest.version).toBeUndefined();
+        expect(result.warnings).toEqual([]);
+      }
+    });
+
+    it('accepts a valid plain-semver "version"', () => {
+      const result = parsePackManifest(
+        JSON.stringify({
+          name: 'ana',
+          engine: 'react',
+          components: { timeline: './Timeline.tsx' },
+          version: '1.0.0',
+        }),
+      );
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.manifest.version).toBe('1.0.0');
+        expect(result.warnings).toEqual([]);
+      }
+    });
+
+    it('rejects a malformed "version" as an error, not a warning', () => {
+      for (const bad of [
+        '1.0',
+        '1.0.0-beta.1',
+        '1.0.0+build5',
+        'v1.0.0',
+        '01.0.0',
+        'x',
+      ]) {
+        const result = parsePackManifest(
+          JSON.stringify({
+            name: 'ana',
+            engine: 'react',
+            components: { timeline: './Timeline.tsx' },
+            version: bad,
+          }),
+        );
+        expect(result.ok, `expected version ${bad} to be rejected`).toBe(false);
+        if (!result.ok) {
+          expect(result.errors.some((e) => e.includes('"version"'))).toBe(true);
+        }
+      }
+    });
+
+    it('rejects a non-string "version"', () => {
+      const result = parsePackManifest(
+        JSON.stringify({
+          name: 'ana',
+          engine: 'react',
+          components: { timeline: './Timeline.tsx' },
+          version: 100,
+        }),
+      );
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.errors.some((e) => e.includes('"version"'))).toBe(true);
+      }
+    });
+
+    it('does not report "version" as an unknown top-level key', () => {
+      const result = parsePackManifest(
+        JSON.stringify({
+          name: 'ana',
+          engine: 'react',
+          components: { timeline: './Timeline.tsx' },
+          version: '1.0.0',
+        }),
+      );
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.warnings.some((w) => w.includes('version'))).toBe(false);
+      }
+    });
   });
 
   describe('object-form components', () => {
