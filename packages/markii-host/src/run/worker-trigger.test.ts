@@ -29,7 +29,7 @@ function writeFence(): string {
 }
 
 function manifest(): BundleManifest {
-  return { mark: '0.1.0', permissions: { bundle: ['write:cache/'] } };
+  return { spec: '0.1.0', permissions: { bundle: ['write:cache/'] } };
 }
 
 async function runWrite(trigger: RunTrigger) {

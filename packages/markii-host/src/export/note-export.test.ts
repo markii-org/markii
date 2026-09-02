@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { StoredValue } from '@markii/runtime';
 import {
+  EXPORT_HIDE_SCRIPT_BLOCKS_CLASS,
   EXPORT_PAGE_CSS,
   FALLBACK_EXPORT_BASE_NAME,
+  buildCascadeIndexHtml,
   buildNoteExport,
   buildNoteHtmlExport,
   composeNoteHtmlExport,
@@ -86,6 +88,35 @@ describe('EXPORT_PAGE_CSS', () => {
 
   it('never claims :root, the same politeness rule doc.css follows', () => {
     expect(EXPORT_PAGE_CSS).not.toContain(':root');
+  });
+
+  it('sets a page margin for print', () => {
+    expect(EXPORT_PAGE_CSS).toContain('@page');
+    expect(EXPORT_PAGE_CSS).toMatch(/@page\s*{\s*margin:/);
+  });
+
+  it('avoids a page break inside a card, callout, and table when printing', () => {
+    const printBlock = EXPORT_PAGE_CSS.slice(
+      EXPORT_PAGE_CSS.indexOf('@media print'),
+    );
+    expect(printBlock).toContain('.mk-card');
+    expect(printBlock).toContain('.mk-callout');
+    expect(printBlock).toContain('table');
+    expect(printBlock).toMatch(/break-inside:\s*avoid/);
+  });
+
+  it('hides the collapsed script marker and the run marker when printing', () => {
+    const printBlock = EXPORT_PAGE_CSS.slice(
+      EXPORT_PAGE_CSS.indexOf('@media print'),
+    );
+    expect(printBlock).toContain('.mk-script');
+    expect(printBlock).toContain('.mk-preview__run-marker');
+  });
+
+  it('carries the hide-script-blocks rule, scoped to the class buildNoteHtmlExport/composeNoteHtmlExport apply', () => {
+    expect(EXPORT_PAGE_CSS).toContain(
+      `.doc.${EXPORT_HIDE_SCRIPT_BLOCKS_CLASS} .mk-script`,
+    );
   });
 });
 
@@ -171,6 +202,24 @@ describe('buildNoteHtmlExport', () => {
     });
     expect(html).not.toContain('<title><script>');
     expect(html).toContain('&lt;script&gt;alert(1)&lt;x&gt;');
+  });
+
+  it('carries the hide-script-blocks class onto .doc when hideScriptBlocks is on', () => {
+    const html = buildNoteHtmlExport({
+      text: '```lua {name=refresh}\nreturn 1\n```\n',
+      fileName: 'notes.mk.md',
+      hideScriptBlocks: true,
+    });
+    expect(html).toContain(`doc ${EXPORT_HIDE_SCRIPT_BLOCKS_CLASS}`);
+  });
+
+  it('leaves .doc plain when hideScriptBlocks is omitted, matching the default preview', () => {
+    const html = buildNoteHtmlExport({
+      text: '```lua {name=refresh}\nreturn 1\n```\n',
+      fileName: 'notes.mk.md',
+    });
+    expect(html).toContain('<div class="doc">');
+    expect(html).not.toContain(`doc ${EXPORT_HIDE_SCRIPT_BLOCKS_CLASS}`);
   });
 });
 
@@ -258,6 +307,48 @@ describe('composeNoteHtmlExport', () => {
       ],
     });
     expect(html.split('</style>').length - 1).toBe(1);
+  });
+
+  it('carries the hide-script-blocks class onto .doc when hideScriptBlocks is on', () => {
+    const html = composeNoteHtmlExport({
+      bodyHtml: '<p>hello</p>',
+      fileName: 'week.mk.md',
+      hideScriptBlocks: true,
+    });
+    expect(html).toContain(`doc ${EXPORT_HIDE_SCRIPT_BLOCKS_CLASS}`);
+  });
+});
+
+describe('buildCascadeIndexHtml', () => {
+  it('lists every entry by title, linking to its file', () => {
+    const html = buildCascadeIndexHtml([
+      { title: 'week', fileName: 'week.html' },
+      { title: 'notes-2', fileName: 'notes-2.html' },
+    ]);
+    expect(html).toContain('<a href="week.html">week</a>');
+    expect(html).toContain('<a href="notes-2.html">notes-2</a>');
+    // The root note (walked first) stays first in the list.
+    expect(html.indexOf('week.html')).toBeLessThan(
+      html.indexOf('notes-2.html'),
+    );
+  });
+
+  it('is a complete, self-contained document with the shared stylesheet embedded', () => {
+    const html = buildCascadeIndexHtml([{ title: 'a', fileName: 'a.html' }]);
+    expect(html.startsWith('<!doctype html>')).toBe(true);
+    expect(html).toContain('.doc > * + *');
+  });
+
+  it('escapes a hostile note title rather than emitting it as markup', () => {
+    const html = buildCascadeIndexHtml([
+      { title: '<script>alert(1)</script>', fileName: 'a.html' },
+    ]);
+    expect(html).not.toContain('<script>alert(1)</script>');
+    expect(html).toContain('&lt;script&gt;');
+  });
+
+  it('renders an empty list rather than throwing when there is nothing to link to', () => {
+    expect(() => buildCascadeIndexHtml([])).not.toThrow();
   });
 });
 
@@ -378,6 +469,16 @@ describe('buildNoteExport', () => {
     expect(result.html).toBe(
       buildNoteHtmlExport({ text, fileName: 'week.mk.md' }),
     );
+  });
+
+  it('carries the hide-script-blocks class through the React path too', async () => {
+    const result = await buildNoteExport({
+      text,
+      fileName: 'week.mk.md',
+      renderBody: () => ({ ok: true, html: '<p>x</p>' }),
+      hideScriptBlocks: true,
+    });
+    expect(result.html).toContain(`doc ${EXPORT_HIDE_SCRIPT_BLOCKS_CLASS}`);
   });
 });
 

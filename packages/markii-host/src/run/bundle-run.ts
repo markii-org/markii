@@ -31,6 +31,25 @@
  * principle: a quiet miss, never a special-cased error). This is a
  * deliberate scope line for this slice, not an oversight — flagged in the
  * slice's own report rather than silently widened.
+ *
+ * ## Consent unification (SECURITY-RELEVANT)
+ *
+ * Two rules this module and its callers (`./run-flow.ts`, `./grant-flow.ts`)
+ * now hold to, so a bundle's consent story matches a bare `.mk.md`
+ * document's exactly:
+ *
+ * - `manifestNetHosts` (the manifest's `permissions.net` declaration) is
+ *   never merged into what a run prompts for. The static scan
+ *   (`./script-requirements.ts`) is the only source of prompted hostnames,
+ *   for a bundle too — see `netDeclarationDiagnostics` below for how a
+ *   mismatch is surfaced instead.
+ * - The `bundle` capability (`permissions.bundle`) needs no user-facing
+ *   prompt at all: `@markii/bundle`'s path-jail confines every read to the
+ *   snapshot and every write to `cache/`, and the read-only tier for
+ *   auto/scheduled triggers blocks `bundle.write` outright regardless of
+ *   what the manifest declares. `manifestBundleFsGrants`'s result is passed
+ *   straight through as the run's granted bundle-fs permissions — see
+ *   `./run-flow.ts`.
  */
 import type { BundleManifest, BundleStorage } from '@markii/bundle';
 import type { BundleFsGrant } from '@markii/bundle';
@@ -203,6 +222,54 @@ export function manifestNetHosts(manifest: BundleManifest): string[] {
   const get = manifest.permissions?.net?.get ?? [];
   const post = manifest.permissions?.net?.post ?? [];
   return [...new Set([...get, ...post].map((host) => host.toLowerCase()))];
+}
+
+/**
+ * Consent unification (SECURITY-RELEVANT, GitHub issue #9 follow-up): a
+ * bundle's manifest `permissions.net` is DECLARED INTENT only. The static
+ * scan of the run's executable closure (`./script-requirements.ts`) is the
+ * ONLY source of the hostnames a run prompts for, for a bundle exactly as
+ * for a bare `.mk.md` document — the manifest's declaration never widens
+ * that prompt (a declared-but-unused host is never prompted for) and never
+ * narrows it (a host a script actually reaches is always prompted for,
+ * declared or not).
+ *
+ * A mismatch between the two is not silently absorbed: this pure function
+ * returns one diagnostics line per mismatched host, in both directions, for
+ * the host's diagnostics surface (docs/integration.md) — never the rendered
+ * page. Wording lives here, the one place both apps' adapters read it from,
+ * so it can never drift between VS Code's output channel and Obsidian's
+ * console/notice surface.
+ *
+ * Returns `[]` when the two sets agree (including when both are empty).
+ * Order: every declared-but-unused host first (in `declaredHosts` order),
+ * then every used-but-undeclared host (in `scannedHosts` order) — matching
+ * how `manifestNetHosts`/`extractRunRequirements` already dedupe and order
+ * their inputs, so this function does no case-folding or deduping of its
+ * own.
+ */
+export function netDeclarationDiagnostics(
+  declaredHosts: readonly string[],
+  scannedHosts: readonly string[],
+): string[] {
+  const declared = new Set(declaredHosts);
+  const scanned = new Set(scannedHosts);
+  const lines: string[] = [];
+  for (const host of declaredHosts) {
+    if (!scanned.has(host)) {
+      lines.push(
+        `The manifest declares net access to ${host}. No script in this run uses that host.`,
+      );
+    }
+  }
+  for (const host of scannedHosts) {
+    if (!declared.has(host)) {
+      lines.push(
+        `A script in this run uses net access to ${host}. The manifest does not declare that host.`,
+      );
+    }
+  }
+  return lines;
 }
 
 /** The bundle-filesystem grants a manifest declares under `permissions.bundle` (`'read'` / `'write:cache/'`), or `[]` when it declares none. */

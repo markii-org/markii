@@ -169,6 +169,32 @@ const WORKER_MAX_OLD_GENERATION_SIZE_MB = 128;
 const MAX_PROGRESS_VALUES = 1000;
 
 /**
+ * Dev/Vitest only: point `tsx` at the repo's `tsconfig.dev.json` so a
+ * `.ts` worker entry resolves `@markii/*` to each package's SOURCE.
+ *
+ * Without this the worker is a plain Node resolution: a bare `@markii/lua`
+ * goes through `node_modules` to that package's `exports`, which name the
+ * built `dist/`. `npm run build` only type-checks (`tsc --noEmit`); the
+ * emitting script is `build:dist`, which runs at release. So `dist/` is
+ * whatever a past release left behind, and a real-isolate probe would
+ * silently exercise that stale code instead of the source it is written to
+ * test. A capability added since the last `build:dist` simply would not
+ * exist inside the worker.
+ *
+ * Gated on a `.ts` entry, the same signal `execArgvFor` already uses for
+ * the tsx hook, so a packaged host passing its own bundled `.js` worker is
+ * never touched by this.
+ */
+function devTsconfigEnv(
+  entryPath: string,
+): { env: NodeJS.ProcessEnv } | undefined {
+  if (!entryPath.endsWith('.ts')) return undefined;
+  const tsconfig = path.resolve(__dirname, '../../../..', 'tsconfig.dev.json');
+  if (!existsSync(tsconfig)) return undefined;
+  return { env: { ...process.env, TSX_TSCONFIG_PATH: tsconfig } };
+}
+
+/**
  * The default isolate: a `node:worker_threads` worker, which is what every
  * Node host (the VS Code extension host, this package's own tests) uses. It
  * is the only kind that accepts `resourceLimits`, so it is also the only
@@ -178,6 +204,7 @@ const MAX_PROGRESS_VALUES = 1000;
 export const workerThreadIsolate: IsolateSpawner = (options): RunIsolate => {
   const worker = new Worker(options.entryPath, {
     ...(options.execArgv ? { execArgv: options.execArgv } : {}),
+    ...(devTsconfigEnv(options.entryPath) ?? {}),
     resourceLimits: {
       maxOldGenerationSizeMb: options.maxOldGenerationSizeMb,
     },

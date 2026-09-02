@@ -170,6 +170,14 @@ export async function walkNoteCascade(
 }
 
 /**
+ * The archive entry name a cascade's own index page uses. Reserved up
+ * front with `assignCascadeFileNames`'s `reservedNames`, so a walked note
+ * that happens to be called `index` gets a numeric suffix instead of
+ * silently colliding with, and overwriting, the index page in the zip.
+ */
+export const CASCADE_INDEX_FILE_NAME = 'index.html';
+
+/**
  * The file name each note gets inside the archive: its own base name with
  * an `.html` extension.
  *
@@ -177,12 +185,21 @@ export async function walkNoteCascade(
  * name. The first one to be reached keeps it, and each later claimant gets
  * a numeric suffix. The walk is breadth first and deterministic, so the
  * same vault always produces the same names.
+ *
+ * `reservedNames` are claimed before any note, case-insensitively, exactly
+ * like an earlier note's claim — a host builds the same archive's index
+ * page under one of these names and needs it to never collide with a
+ * walked note.
  */
 export function assignCascadeFileNames(
   paths: readonly string[],
+  reservedNames: Iterable<string> = [],
 ): Map<string, string> {
   const names = new Map<string, string>();
   const taken = new Set<string>();
+  for (const reserved of reservedNames) {
+    taken.add(reserved.toLowerCase());
+  }
   for (const path of paths) {
     const base = exportBaseName(path);
     let candidate = `${base}.html`;

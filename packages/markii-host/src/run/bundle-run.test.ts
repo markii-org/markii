@@ -66,7 +66,7 @@ function instrumentedFakeStorage(files: Record<string, string>): {
 describe('buildBundleSnapshot', () => {
   it('collects scripts/, cache/, and assets/ files, but not manifest.json or the document', async () => {
     const storage = fakeStorage({
-      'manifest.json': '{"mark":"0.1.0"}',
+      'manifest.json': '{"spec":"0.1.0"}',
       'note.mk.md': '# hi',
       'scripts/etl.lua': 'return 1',
       'cache/data.json': '{"a":1}',
@@ -213,7 +213,7 @@ describe('withPersistedCache', () => {
 });
 
 function manifestWith(overrides: Partial<BundleManifest> = {}): BundleManifest {
-  return { mark: '0.1.0', ...overrides };
+  return { spec: '0.1.0', ...overrides };
 }
 
 describe('manifestNetHosts', () => {

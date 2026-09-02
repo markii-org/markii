@@ -62,7 +62,6 @@ export type {
   GrantFlowRequirements,
   GrantFlowResult,
   GrantMemento,
-  PromptBundleAccess,
   PromptHost,
   PromptManyHosts,
   PromptUnknownHosts,
@@ -73,7 +72,6 @@ export {
   DONT_ALLOW_LABEL,
   MAX_HOST_PROMPTS,
   UNKNOWN_HOSTS_PROMPT_MESSAGE,
-  bundleAccessPromptMessage,
   clearGrantForDocument,
   hostPromptMessage,
   isSafeHostForPrompt,
@@ -98,6 +96,7 @@ export {
   encodeBundleCacheForStorage,
   manifestBundleFsGrants,
   manifestNetHosts,
+  netDeclarationDiagnostics,
   withPersistedCache,
 } from './run/bundle-run.js';
 
@@ -121,6 +120,7 @@ export { staleValuesForRehydration } from './run/stale-values.js';
 // a self-contained HTML document, via `@markii/html`. Host-neutral: both
 // apps build the same file and name it the same way.
 export type {
+  CascadeIndexEntry,
   ComposeNoteHtmlExportOptions,
   ExportBodyRenderer,
   ExportBodyResult,
@@ -133,9 +133,11 @@ export type {
   StaticExportReason,
 } from './export/note-export.js';
 export {
+  EXPORT_HIDE_SCRIPT_BLOCKS_CLASS,
   EXPORT_PAGE_CSS,
   FALLBACK_EXPORT_BASE_NAME,
   MARK_EXTENSION,
+  buildCascadeIndexHtml,
   buildNoteExport,
   buildNoteHtmlExport,
   composeNoteHtmlExport,
@@ -187,6 +189,7 @@ export type {
   CascadeWalkResult,
 } from './export/cascade.js';
 export {
+  CASCADE_INDEX_FILE_NAME,
   DEFAULT_CASCADE_MAX_DEPTH,
   DEFAULT_CASCADE_MAX_NOTES,
   assignCascadeFileNames,
@@ -298,6 +301,14 @@ export type {
   PackExportOutcome,
 } from './packs/pack-export.js';
 export { exportPack, resolveExportTarget } from './packs/pack-export.js';
+
+// The archive shape of "export pack" (issue #16): the same build, zipped
+// into a single `.mkp` file's bytes instead of written as a folder.
+export type {
+  ExportPackArchiveOptions,
+  PackExportArchiveOutcome,
+} from './packs/pack-export-archive.js';
+export { exportPackArchive } from './packs/pack-export-archive.js';
 
 export type {
   BuildRenderRegistryResult,

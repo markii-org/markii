@@ -111,9 +111,9 @@ describe('issue #12 / item 1: repeated ticks cannot reach POST or PATCH', () => 
 });
 
 describe('issue #12 / item 1: bundle write is refused under read-only, even OUTSIDE .cache/ and even when the manifest declares no write grant at all', () => {
-  const manifestNoBundleGrants: BundleManifest = { mark: '0.1.0' };
+  const manifestNoBundleGrants: BundleManifest = { spec: '0.1.0' };
   const manifestFullBundleGrants: BundleManifest = {
-    mark: '0.1.0',
+    spec: '0.1.0',
     permissions: { bundle: ['read', 'write:cache/'] },
   };
 
@@ -321,7 +321,7 @@ describe('issue #12 / item 7: a pack Lua module required under a scheduled/auto 
         bundle: {
           snapshot: { 'cache/seed.json': new TextEncoder().encode('"seed"') },
           manifest: {
-            mark: '0.1.0',
+            spec: '0.1.0',
             permissions: { bundle: ['read', 'write:cache/'] },
           },
           grantedBundlePermissions: ['read', 'write:cache/'],

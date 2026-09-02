@@ -8,16 +8,28 @@
  * and no execution; it only reads.
  *
  * Host extraction is deliberately BEST-EFFORT: it is a plain textual scan
- * of each inline script's Lua source, not a Lua parser. A call whose URL
- * argument is a single, unconcatenated string literal
- * (`net.fetch_json("https://api.example.com/x")`) is picked up exactly;
- * anything else — a variable, a `..` concatenation, an expression, a
- * `src=` long-script reference whose body isn't even in this document —
- * cannot be resolved statically and is folded into `hasUnknownHosts`
- * instead of being silently missed. Fail toward "prompt more broadly",
- * never toward "let an unrecognized host slip through unprompted": a false
- * positive here just means one extra grant prompt; a false negative would
- * mean a host reaching the network with no prompt at all.
+ * of Lua source, not a Lua parser. A call whose URL argument is a single,
+ * unconcatenated string literal (`net.fetch_json("https://api.example.com/x")`)
+ * is picked up exactly; anything else — a variable, a `..` concatenation,
+ * an expression — cannot be resolved statically and is folded into
+ * `hasUnknownHosts` instead of being silently missed. Fail toward "prompt
+ * more broadly", never toward "let an unrecognized host slip through
+ * unprompted": a false positive here just means one extra grant prompt; a
+ * false negative would mean a host reaching the network with no prompt at
+ * all.
+ *
+ * A `src=` long-script reference is scanned exactly like an inline block
+ * WHEN its source is available — `extractRunRequirements`'s
+ * `resolveScriptSource` parameter lets a caller supply it (a bundle run
+ * resolves it from the run's snapshot; see `./bundle-run.ts` and
+ * `./run-flow.ts`). Only when no resolution is available (a plain `.mk.md`
+ * document, whose `src=` target lives nowhere this scan can read, or a
+ * bundle-resolved path missing from the snapshot) does the block fold into
+ * `hasUnknownHosts` instead. This scan is the ONLY source of the hostnames
+ * a run is prompted for — a bundle manifest's own `permissions.net`
+ * declaration is never consulted here; see `./bundle-run.ts`'s
+ * `netDeclarationDiagnostics` for how a mismatch between the two is
+ * surfaced instead of silently changing what gets prompted.
  */
 import type { Root } from 'mdast';
 import { extractScripts, parse, type ScriptBlock } from '@markii/core';
@@ -196,16 +208,44 @@ function toGrantClosureScript(block: ScriptBlock): GrantClosureScript {
 }
 
 /**
- * Computes `RunRequirements` for `text` — parses it with `@markii/core`'s
- * `parse`, pulls its script blocks with `extractScripts`, and scans each
- * INLINE block's own source for statically-resolvable `net.*` hosts. Pure:
- * no I/O, no `vscode`, safe to call on every keystroke if a future slice
- * wants a live preview of what a run would ask for.
+ * Parses `text` and returns its script blocks, in both the raw
+ * `@markii/core` `ScriptBlock` shape and the `GrantClosureScript` shape
+ * `computeGrantKey` hashes. Split out from `extractRunRequirements` (below)
+ * so a caller that needs to resolve `src=` script content BEFORE scanning
+ * for hosts — a bundle run, which must read the referenced file out of its
+ * snapshot first — can do so without parsing the document twice.
  */
-export function extractRunRequirements(text: string): RunRequirements {
+export function extractScriptBlocks(text: string): {
+  scripts: ScriptBlock[];
+  grantScripts: GrantClosureScript[];
+} {
   const tree: Root = parse(text);
   const scripts = extractScripts(tree);
+  return { scripts, grantScripts: scripts.map(toGrantClosureScript) };
+}
 
+/**
+ * Resolves a `src=` block's actual Lua source, when the caller has one —
+ * for a bundle-backed run, this is the file's content out of the run's
+ * snapshot (`./bundle-run.ts`'s `bundleModulesFromSnapshot`). Returning
+ * `undefined` for a block (path missing from the snapshot, or a plain
+ * `.mk.md` document with no bundle to resolve from at all) leaves that
+ * block's hosts unknown, exactly as before this seam existed.
+ */
+export type ResolveScriptSource = (block: ScriptBlock) => string | undefined;
+
+/**
+ * Scans `scripts` for statically-resolvable `net.*` hosts — an INLINE
+ * block's own `code`, or (when `resolveScriptSource` is given and resolves
+ * it) a `src=` block's referenced source. A `src=` block with no resolution
+ * available folds into `hasUnknownHosts`, same as this module has always
+ * done for a bare `.mk.md` document's `src=` references (their source
+ * genuinely isn't in `text` at all).
+ */
+export function scanRunRequirementHosts(
+  scripts: readonly ScriptBlock[],
+  resolveScriptSource?: ResolveScriptSource,
+): { hosts: string[]; hasUnknownHosts: boolean } {
   const hosts = new Set<string>();
   let hasUnknownHosts = false;
   const markUnknown = (): void => {
@@ -214,19 +254,49 @@ export function extractRunRequirements(text: string): RunRequirements {
 
   for (const block of scripts) {
     if (block.src !== undefined) {
-      // The referenced file's source isn't in `text` at all -- its net
-      // usage, if any, is entirely unknown to this scan. See this
-      // module's top doc comment.
-      markUnknown();
+      const resolved = resolveScriptSource?.(block);
+      if (resolved === undefined) {
+        // The referenced file's source isn't available to this scan --
+        // its net usage, if any, is entirely unknown. See this module's
+        // top doc comment.
+        markUnknown();
+        continue;
+      }
+      scanForHosts(resolved, hosts, markUnknown);
       continue;
     }
     scanForHosts(block.code, hosts, markUnknown);
   }
 
+  return { hosts: [...hosts], hasUnknownHosts };
+}
+
+/**
+ * Computes `RunRequirements` for `text` — parses it with `@markii/core`'s
+ * `parse`, pulls its script blocks with `extractScripts`, and scans each
+ * INLINE block's own source for statically-resolvable `net.*` hosts. Pure:
+ * no I/O, no `vscode`, safe to call on every keystroke if a future slice
+ * wants a live preview of what a run would ask for.
+ *
+ * `resolveScriptSource`, when given, lets a `src=` block's hosts be
+ * resolved too (a bundle run passes one backed by its snapshot); omitted,
+ * every `src=` block folds into `hasUnknownHosts` exactly as before this
+ * option existed.
+ */
+export function extractRunRequirements(
+  text: string,
+  resolveScriptSource?: ResolveScriptSource,
+): RunRequirements {
+  const { scripts, grantScripts } = extractScriptBlocks(text);
+  const { hosts, hasUnknownHosts } = scanRunRequirementHosts(
+    scripts,
+    resolveScriptSource,
+  );
+
   return {
     scripts,
-    hosts: [...hosts],
+    hosts,
     hasUnknownHosts,
-    grantScripts: scripts.map(toGrantClosureScript),
+    grantScripts,
   };
 }

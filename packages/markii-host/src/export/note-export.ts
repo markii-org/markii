@@ -23,7 +23,7 @@
  * markdown still rendered inside it. Nothing crashes and no content is
  * dropped either way; see `@markii/html`'s `render.ts`.
  */
-import { exportHtmlDocument, renderMarkToHtml } from '@markii/html';
+import { escapeHtml, exportHtmlDocument, renderMarkToHtml } from '@markii/html';
 import { defaultHtmlRegistry } from '@markii/html/components';
 import { createValueStore } from '@markii/runtime';
 import { EMPTY_IMAGE_REPORT, embedImagesInHtml } from './image-embed.js';
@@ -114,8 +114,30 @@ export function exportDocumentTitle(fileName: string): string {
  *
  * The print block matters more than it looks: the Obsidian PDF command
  * prints exactly this document, so the paper layout is decided here rather
- * than in a host-specific branch.
+ * than in a host-specific branch. `@page` sets the sheet's own margins
+ * (the PDF command has no separate page-setup step of its own), the
+ * `break-inside: avoid` list keeps a card/callout/table from splitting
+ * across two pages wherever it fits on one, and the collapsed script
+ * marker and the VS Code webview's run marker are hidden on paper: both
+ * are live-preview affordances (a disclosure toggle, a status line about
+ * the last run) that mean nothing on a printed or archived page.
  */
+
+/**
+ * The class `composeNoteHtmlExport`/`buildNoteHtmlExport` put on the `.doc`
+ * wrapper when `hideScriptBlocks` is on, and the class `EXPORT_PAGE_CSS`'s
+ * rule below is scoped to.
+ *
+ * Both hosts already have this preference (VS Code's
+ * `markii.hideScriptBlocks`, Obsidian's "Hide script blocks" setting) for
+ * their live preview, hiding only the collapsed `⚙ name` marker and
+ * nothing else — a failure a reader needs to see is never hidden along
+ * with it. An export carries whichever value the exporting host's own
+ * preview was showing, so a note exported with scripts hidden in the
+ * editor stays that way in the file.
+ */
+export const EXPORT_HIDE_SCRIPT_BLOCKS_CLASS = 'mk-export--hide-scripts';
+
 export const EXPORT_PAGE_CSS = `
 body {
   margin: 0;
@@ -127,6 +149,12 @@ body {
   margin: 0 auto;
   padding: 2.5rem 1.5rem 4rem;
 }
+.doc.${EXPORT_HIDE_SCRIPT_BLOCKS_CLASS} .mk-script {
+  display: none;
+}
+@page {
+  margin: 2cm;
+}
 @media print {
   .doc {
     max-width: none;
@@ -137,7 +165,8 @@ body {
   .doc .mk-callout,
   .doc .mk-stat,
   .doc .mk-figure,
-  .doc .mk-unknown {
+  .doc .mk-unknown,
+  .doc table {
     break-inside: avoid;
   }
   /* A collapsed \`details\` prints as its summary alone, which loses the
@@ -145,6 +174,10 @@ body {
      every disclosure prints open. */
   .doc details > *:not(summary) {
     display: block;
+  }
+  .doc .mk-script,
+  .doc .mk-preview__run-marker {
+    display: none;
   }
 }
 `;
@@ -165,6 +198,13 @@ export interface NoteHtmlExportOptions {
   readonly values?: Record<string, StoredValue>;
   /** Extra host CSS appended after `doc.css` and `EXPORT_PAGE_CSS`. Trusted, inserted verbatim. */
   readonly extraCss?: string;
+  /**
+   * Hides the collapsed script marker in the exported file, mirroring the
+   * exporting host's own `hideScriptBlocks` preview preference. Defaults to
+   * `false`, which exports every script marker exactly as the preview
+   * would show it with the preference off.
+   */
+  readonly hideScriptBlocks?: boolean;
 }
 
 /**
@@ -178,6 +218,9 @@ export function buildNoteHtmlExport(options: NoteHtmlExportOptions): string {
     bodyHtml: renderStaticBody(options.text, options.values ?? {}),
     fileName: options.fileName,
     ...(options.extraCss !== undefined ? { extraCss: options.extraCss } : {}),
+    ...(options.hideScriptBlocks !== undefined
+      ? { hideScriptBlocks: options.hideScriptBlocks }
+      : {}),
   });
 }
 
@@ -326,6 +369,8 @@ export interface ComposeNoteHtmlExportOptions {
   readonly packStylesheets?: readonly ExportPackStylesheet[];
   /** Extra host CSS, appended after `EXPORT_PAGE_CSS` and before the pack stylesheets. Trusted, inserted verbatim. */
   readonly extraCss?: string;
+  /** Hides the collapsed script marker in the exported file. See `NoteHtmlExportOptions.hideScriptBlocks`. Defaults to `false`. */
+  readonly hideScriptBlocks?: boolean;
 }
 
 /**
@@ -347,6 +392,9 @@ export function composeNoteHtmlExport(
   return exportHtmlDocument(options.bodyHtml, {
     title: exportDocumentTitle(options.fileName),
     extraCss: parts.join('\n'),
+    ...(options.hideScriptBlocks
+      ? { docClassName: EXPORT_HIDE_SCRIPT_BLOCKS_CLASS }
+      : {}),
   });
 }
 
@@ -379,6 +427,8 @@ export interface NoteExportBuildRequest {
    * which is slice 2's behavior.
    */
   readonly embedImages?: ExportImageReader;
+  /** Hides the collapsed script marker in the exported file. See `NoteHtmlExportOptions.hideScriptBlocks`. Defaults to `false`. */
+  readonly hideScriptBlocks?: boolean;
 }
 
 /** One built export: the complete document, how it was rendered, and how many values it baked in. */
@@ -434,6 +484,9 @@ export async function buildNoteExport(
         packStylesheets,
         ...(request.extraCss !== undefined
           ? { extraCss: request.extraCss }
+          : {}),
+        ...(request.hideScriptBlocks !== undefined
+          ? { hideScriptBlocks: request.hideScriptBlocks }
           : {}),
       }),
       render,
@@ -493,4 +546,53 @@ export async function buildNoteExport(
  */
 export function noteHasScripts(text: string): boolean {
   return /^ {0,3}(?:`{3,}|~{3,})[ \t]*lua\b/m.test(text);
+}
+
+/**
+ * One note a cascade index page links to (GitHub issue #28 slice 3, part
+ * 2's `index.html`).
+ */
+export interface CascadeIndexEntry {
+  /**
+   * The note's title as shown on the index page — the same base name
+   * `exportDocumentTitle` gives that note's own `<title>` tag, so the two
+   * pages never name a note two different ways.
+   */
+  readonly title: string;
+  /** The note's exported file name inside the archive, e.g. `week-2.html`. Used as the link's `href`, relative to `index.html`. */
+  readonly fileName: string;
+}
+
+/** The title `exportHtmlDocument` gives the index page itself, distinct from any exported note's own title. */
+const CASCADE_INDEX_TITLE = 'Markii export';
+
+/**
+ * Builds a cascade archive's `index.html`: a self-contained document
+ * listing every exported note by title, each linking to its own file.
+ *
+ * A cascade archive has no single note to open first once it is
+ * unzipped, and without this a reader has to guess a file name or open the
+ * archive's contents blind. `entries` is expected in the same order the
+ * cascade walked (root note first, breadth first), which is what makes the
+ * list read as a sensible table of contents rather than an alphabetized
+ * jumble.
+ *
+ * Uses the same page shell every exported note gets (`doc.css`,
+ * `EXPORT_PAGE_CSS`), so the index reads as part of the same export rather
+ * than a bare, unstyled file dropped in beside it.
+ */
+export function buildCascadeIndexHtml(
+  entries: readonly CascadeIndexEntry[],
+): string {
+  const items = entries
+    .map(
+      (entry) =>
+        `<li><a href="${escapeHtml(entry.fileName)}">${escapeHtml(entry.title)}</a></li>`,
+    )
+    .join('\n');
+  const body = `<ul class="mk-cascade-index">\n${items}\n</ul>`;
+  return composeNoteHtmlExport({
+    bodyHtml: body,
+    fileName: CASCADE_INDEX_TITLE,
+  });
 }

@@ -974,6 +974,19 @@ export async function buildPackRegistrationScript(
     options.readComponentSource ?? defaultReadComponentSource;
   const components = orderedComponents(pack);
 
+  // A pack whose manifest declares no components at all (`"components":
+  // {}`) is a shared-Lua-only pack module: it has nothing for esbuild-wasm
+  // to compile and contributes zero directives. Rather than pay
+  // esbuild-wasm's initialization cost to produce a registration script
+  // that would call `window.__markiiRegisterPack` with an empty entry map,
+  // this returns `'skipped'` straight away — the same "no attempt was
+  // made" outcome a host already treats as "nothing to add to the
+  // registry," so such a pack never appears as an empty entry anywhere a
+  // caller renders build outcomes.
+  if (components.length === 0) {
+    return { kind: 'skipped' };
+  }
+
   const sources = new Map<string, string>();
   for (const component of components) {
     let text: string | undefined;

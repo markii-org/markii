@@ -239,6 +239,16 @@ describe('assignCascadeFileNames', () => {
     const names = assignCascadeFileNames(['a/Note.mk.md', 'b/note.mk.md']);
     expect([...names.values()]).toEqual(['Note.html', 'note-2.html']);
   });
+
+  it('reserves a name up front so a colliding note is suffixed instead of overwriting it', () => {
+    const names = assignCascadeFileNames(['a/index.mk.md'], ['index.html']);
+    expect(names.get('a/index.mk.md')).toBe('index-2.html');
+  });
+
+  it('reserves a name case-insensitively, matching how a collision between two notes is treated', () => {
+    const names = assignCascadeFileNames(['a/Index.mk.md'], ['index.html']);
+    expect(names.get('a/Index.mk.md')).toBe('Index-2.html');
+  });
 });
 
 describe('rewriteCascadeLinks', () => {

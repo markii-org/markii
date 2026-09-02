@@ -25,7 +25,7 @@ function bytesOf(text: string): Uint8Array {
 function manifestWithBundleGrants(
   grants: ('read' | 'write:cache/')[],
 ): BundleManifest {
-  return { mark: '0.1.0', permissions: { bundle: grants } };
+  return { spec: '0.1.0', permissions: { bundle: grants } };
 }
 
 describe('worker bundle capability — read', () => {
@@ -101,7 +101,7 @@ describe('worker bundle capability — read', () => {
       workerPath: WORKER_PATH,
       bundle: {
         snapshot: { 'assets/photo.txt': bytesOf('secret') },
-        manifest: { mark: '0.1.0' }, // declares nothing
+        manifest: { spec: '0.1.0' }, // declares nothing
         grantedBundlePermissions: ['read'],
       },
     });
@@ -263,7 +263,7 @@ describe('worker bundle capability — src= resolution', () => {
       workerPath: WORKER_PATH,
       bundle: {
         snapshot: { 'scripts/etl.lua': bytesOf('return 42') },
-        manifest: { mark: '0.1.0' },
+        manifest: { spec: '0.1.0' },
         grantedBundlePermissions: [],
       },
     });
@@ -283,7 +283,7 @@ describe('worker bundle capability — src= resolution', () => {
       workerPath: WORKER_PATH,
       bundle: {
         snapshot: {},
-        manifest: { mark: '0.1.0' },
+        manifest: { spec: '0.1.0' },
         grantedBundlePermissions: [],
       },
     });

@@ -239,11 +239,46 @@ describe('runOnce', () => {
 });
 
 function manifestWith(overrides: Partial<BundleManifest> = {}): BundleManifest {
-  return { mark: '0.1.0', ...overrides };
+  return { spec: '0.1.0', ...overrides };
 }
 
 describe('runOnce — bundle-backed run', () => {
-  it('merges the manifest-declared net hosts into the grant flow (union with the static scan)', async () => {
+  it('SECURITY: prompts only for scanned hosts, never merging in the manifest declaration', async () => {
+    const memento = fakeMemento();
+    const promptHost = vi.fn(() => Promise.resolve(true));
+    const spawnRun = vi.fn((_options: SpawnRunOptions): Promise<RunResult> =>
+      Promise.resolve(fakeRunResult()),
+    );
+
+    const result = await runOnce({
+      documentKey: 'bundle:///a.mkz',
+      // The static scan finds only "scan.example.com".
+      text: fence('a', 'return net.fetch_json("https://scan.example.com/x")'),
+      memento,
+      promptHost,
+      promptUnknownHosts: () => Promise.resolve(true),
+      promptManyHosts: () => Promise.resolve(true),
+      spawnRun,
+      timeoutMs: 15000,
+      bundle: {
+        manifest: manifestWith({
+          permissions: { net: { get: ['manifest.example.com'] } },
+        }),
+        buildSnapshot: () => Promise.resolve({}),
+        persistCacheOut: () => Promise.resolve(),
+      },
+    });
+
+    expect(result.failures).toEqual([]);
+    // The manifest's declared host is never prompted for, and never ends
+    // up in the allowlist.
+    expect(promptHost).toHaveBeenCalledTimes(1);
+    expect(promptHost).toHaveBeenCalledWith('scan.example.com');
+    const spawnArgs = spawnRun.mock.calls[0]?.[0];
+    expect(spawnArgs?.netAllowlist).toEqual(['scan.example.com']);
+  });
+
+  it('surfaces a declared-but-unused and a used-but-undeclared host as diagnostics, never as a prompt change', async () => {
     const memento = fakeMemento();
     const spawnRun = vi.fn((_options: SpawnRunOptions): Promise<RunResult> =>
       Promise.resolve(fakeRunResult()),
@@ -251,7 +286,6 @@ describe('runOnce — bundle-backed run', () => {
 
     const result = await runOnce({
       documentKey: 'bundle:///a.mkz',
-      // The static scan alone would only find "scan.example.com".
       text: fence('a', 'return net.fetch_json("https://scan.example.com/x")'),
       memento,
       promptHost: () => Promise.resolve(true),
@@ -268,19 +302,42 @@ describe('runOnce — bundle-backed run', () => {
       },
     });
 
-    expect(result.failures).toEqual([]);
-    const spawnArgs = spawnRun.mock.calls[0]?.[0];
-    expect(spawnArgs?.netAllowlist.sort()).toEqual(
-      ['manifest.example.com', 'scan.example.com'].sort(),
-    );
+    expect(result.netDeclarationDiagnostics).toEqual([
+      'The manifest declares net access to manifest.example.com. No script in this run uses that host.',
+      'A script in this run uses net access to scan.example.com. The manifest does not declare that host.',
+    ]);
   });
 
-  it('prompts for the manifest-declared bundle-fs grants and forwards the allowed subset to spawnRun', async () => {
+  it('no diagnostics when the manifest declaration and the scan agree', async () => {
+    const memento = fakeMemento();
+    const spawnRun = () => Promise.resolve(fakeRunResult());
+
+    const result = await runOnce({
+      documentKey: 'bundle:///a.mkz',
+      text: fence('a', 'return net.fetch_json("https://api.example.com/x")'),
+      memento,
+      promptHost: () => Promise.resolve(true),
+      promptUnknownHosts: () => Promise.resolve(true),
+      promptManyHosts: () => Promise.resolve(true),
+      spawnRun,
+      timeoutMs: 15000,
+      bundle: {
+        manifest: manifestWith({
+          permissions: { net: { get: ['api.example.com'] } },
+        }),
+        buildSnapshot: () => Promise.resolve({}),
+        persistCacheOut: () => Promise.resolve(),
+      },
+    });
+
+    expect(result.netDeclarationDiagnostics).toEqual([]);
+  });
+
+  it('forwards the manifest-declared bundle-fs grants to spawnRun with no prompt at all', async () => {
     const memento = fakeMemento();
     const spawnRun = vi.fn((_options: SpawnRunOptions): Promise<RunResult> =>
       Promise.resolve(fakeRunResult()),
     );
-    const promptBundleAccess = vi.fn(() => Promise.resolve(true));
 
     await runOnce({
       documentKey: 'bundle:///a.mkz',
@@ -289,7 +346,6 @@ describe('runOnce — bundle-backed run', () => {
       promptHost: () => Promise.resolve(true),
       promptUnknownHosts: () => Promise.resolve(true),
       promptManyHosts: () => Promise.resolve(true),
-      promptBundleAccess,
       spawnRun,
       timeoutMs: 15000,
       bundle: {
@@ -302,7 +358,6 @@ describe('runOnce — bundle-backed run', () => {
       },
     });
 
-    expect(promptBundleAccess).toHaveBeenCalledWith(['read', 'write:cache/']);
     const spawnArgs = spawnRun.mock.calls[0]?.[0];
     expect(spawnArgs?.bundle?.grantedBundlePermissions).toEqual([
       'read',
@@ -313,7 +368,7 @@ describe('runOnce — bundle-backed run', () => {
     });
   });
 
-  it('declining the bundle-access prompt forwards no bundle-fs grants at all', async () => {
+  it('a manifest declaring no bundle-fs grants forwards none, still with no prompt', async () => {
     const memento = fakeMemento();
     const spawnRun = vi.fn((_options: SpawnRunOptions): Promise<RunResult> =>
       Promise.resolve(fakeRunResult()),
@@ -326,11 +381,10 @@ describe('runOnce — bundle-backed run', () => {
       promptHost: () => Promise.resolve(true),
       promptUnknownHosts: () => Promise.resolve(true),
       promptManyHosts: () => Promise.resolve(true),
-      promptBundleAccess: () => Promise.resolve(false),
       spawnRun,
       timeoutMs: 15000,
       bundle: {
-        manifest: manifestWith({ permissions: { bundle: ['read'] } }),
+        manifest: manifestWith(),
         buildSnapshot: () => Promise.resolve({}),
         persistCacheOut: () => Promise.resolve(),
       },
@@ -338,6 +392,44 @@ describe('runOnce — bundle-backed run', () => {
 
     const spawnArgs = spawnRun.mock.calls[0]?.[0];
     expect(spawnArgs?.bundle?.grantedBundlePermissions).toEqual([]);
+  });
+
+  it('resolves a src= script host from the bundle snapshot instead of treating it as unknown', async () => {
+    const memento = fakeMemento();
+    const promptHost = vi.fn(() => Promise.resolve(true));
+    const promptUnknownHosts = vi.fn(() => Promise.resolve(true));
+    const spawnRun = vi.fn((_options: SpawnRunOptions): Promise<RunResult> =>
+      Promise.resolve(fakeRunResult()),
+    );
+
+    const result = await runOnce({
+      documentKey: 'bundle:///a.mkz',
+      text: '```lua {name=a src=scripts/etl.lua}\n```\n',
+      memento,
+      promptHost,
+      promptUnknownHosts,
+      promptManyHosts: () => Promise.resolve(true),
+      spawnRun,
+      timeoutMs: 15000,
+      bundle: {
+        manifest: manifestWith(),
+        buildSnapshot: () =>
+          Promise.resolve({
+            'scripts/etl.lua': new TextEncoder().encode(
+              'return net.fetch_json("https://resolved.example.com/x")',
+            ),
+          }),
+        persistCacheOut: () => Promise.resolve(),
+      },
+    });
+
+    expect(result.failures).toEqual([]);
+    expect(promptHost).toHaveBeenCalledWith('resolved.example.com');
+    // The host was resolved, so the "can't be listed in advance" gate never
+    // needed to fire for this script.
+    expect(promptUnknownHosts).not.toHaveBeenCalled();
+    const spawnArgs = spawnRun.mock.calls[0]?.[0];
+    expect(spawnArgs?.netAllowlist).toEqual(['resolved.example.com']);
   });
 
   it('persists RunResult.cacheOut via the bundle option when present', async () => {
@@ -395,6 +487,9 @@ describe('runOnce — bundle-backed run', () => {
     const promptHost = vi.fn(() => Promise.resolve(true));
     const spawnRun = () => Promise.resolve(fakeRunResult());
 
+    // The same literal host in every variant -- only a trailing comment
+    // changes, so the grant key changes (F-1: the file's actual bytes are
+    // hashed) without changing which host gets scanned or prompted for.
     const runWith = (etlSource: string) =>
       runOnce({
         documentKey: 'bundle:///same.mkz',
@@ -406,9 +501,7 @@ describe('runOnce — bundle-backed run', () => {
         spawnRun,
         timeoutMs: 15000,
         bundle: {
-          manifest: manifestWith({
-            permissions: { net: { get: ['api.example.com'] } },
-          }),
+          manifest: manifestWith(),
           buildSnapshot: () =>
             Promise.resolve({
               'scripts/etl.lua': new TextEncoder().encode(etlSource),
@@ -417,17 +510,17 @@ describe('runOnce — bundle-backed run', () => {
         },
       });
 
-    await runWith('return 1');
+    await runWith('return net.fetch_json("https://api.example.com/x") -- v1');
     expect(promptHost).toHaveBeenCalledTimes(1);
 
     // Same note text, same script fence -- but the referenced file's
     // content changed. Before the F-1 fix, `bundleModules` was always `{}`
     // in the grant closure, so this would NOT re-prompt.
-    await runWith('return 2');
+    await runWith('return net.fetch_json("https://api.example.com/x") -- v2');
     expect(promptHost).toHaveBeenCalledTimes(2);
 
     // Re-running with the SAME (already-seen) content reuses the grant.
-    await runWith('return 2');
+    await runWith('return net.fetch_json("https://api.example.com/x") -- v2');
     expect(promptHost).toHaveBeenCalledTimes(2);
   });
 
@@ -451,9 +544,7 @@ describe('runOnce — bundle-backed run', () => {
         spawnRun: () => Promise.resolve(fakeRunResult()),
         timeoutMs: 15000,
         bundle: {
-          manifest: manifestWith({
-            permissions: { net: { get: ['api.example.com'] } },
-          }),
+          manifest: manifestWith(),
           buildSnapshot: () =>
             Promise.resolve({
               'scripts/etl.lua': new TextEncoder().encode(etlSource),
@@ -468,8 +559,16 @@ describe('runOnce — bundle-backed run', () => {
     // coverage; this is the end-to-end wiring check that `runOnce` actually
     // resolves and threads the src= content through at all, for both
     // bundles, without throwing.
-    await run('bundle:///x.mkz', promptHostA, 'return 1');
-    await run('bundle:///y.mkz', promptHostB, 'return 2');
+    await run(
+      'bundle:///x.mkz',
+      promptHostA,
+      'return net.fetch_json("https://api.example.com/x") -- v1',
+    );
+    await run(
+      'bundle:///y.mkz',
+      promptHostB,
+      'return net.fetch_json("https://api.example.com/x") -- v2',
+    );
     expect(promptHostA).toHaveBeenCalledTimes(1);
     expect(promptHostB).toHaveBeenCalledTimes(1);
   });

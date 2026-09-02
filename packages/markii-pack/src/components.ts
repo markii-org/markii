@@ -3,9 +3,13 @@ import type { PackManifest } from './manifest.js';
 /**
  * Which directive form a pack component is written as. Mirrors
  * `@markii/stdlib`'s `ComponentKind`; defined locally here rather than
- * imported because `@markii/pack` is a published, zero-dependency package
- * (see AGENTS.md's Stack section) and `@markii/stdlib` is a sibling
- * package, not a dependency of this one. The two unions must stay aligned;
+ * imported because `@markii/stdlib` is a sibling package this package
+ * deliberately does not depend on, to stay decoupled from the reference
+ * renderer's component contracts (see AGENTS.md's Stack section). This is
+ * unrelated to `@markii/pack`'s dependency on `@markii/bundle` for `.mkp`
+ * archive reading (`./archive.ts`, issue #16): that dependency reuses a
+ * neutral, framework-agnostic zip reader and path jail, not a renderer
+ * contract. The two unions must stay aligned;
  * `@markii/host` (which depends on both) carries an executable check of
  * that alignment, since this package cannot import `@markii/stdlib` to
  * check it itself.

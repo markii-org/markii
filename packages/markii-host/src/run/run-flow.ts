@@ -10,12 +10,14 @@
  * resulting message. See `./grant-flow.ts` and `./run-host.ts` for the
  * pieces this file composes.
  */
-import { extractRunRequirements } from './script-requirements.js';
+import {
+  extractScriptBlocks,
+  scanRunRequirementHosts,
+} from './script-requirements.js';
 import { resolveStoredGrant, runGrantFlow } from './grant-flow.js';
 import type {
   GrantFlowResult,
   GrantMemento,
-  PromptBundleAccess,
   PromptHost,
   PromptManyHosts,
   PromptUnknownHosts,
@@ -24,6 +26,7 @@ import {
   bundleModulesFromSnapshot,
   manifestBundleFsGrants,
   manifestNetHosts,
+  netDeclarationDiagnostics,
 } from './bundle-run.js';
 import type { RunResult, SpawnRunOptions } from './run-host.js';
 import type { ValuesFailure } from '../values-failure.js';
@@ -241,8 +244,6 @@ export interface RunOnceOptions {
   promptUnknownHosts: PromptUnknownHosts;
   /** PROMPT-STORM guard's consolidated gate — see `./grant-flow.ts`'s `MAX_HOST_PROMPTS`. */
   promptManyHosts: PromptManyHosts;
-  /** Prompts for a bundle's declared bundle-fs grants — see `./grant-flow.ts`'s `PromptBundleAccess`. Only ever consulted when `bundle` (below) is set AND its manifest declares `permissions.bundle`. */
-  promptBundleAccess?: PromptBundleAccess;
   /** Injected so this function is testable with a fake worker runner — the real adapter passes `./run-host.ts`'s `spawnRun`. */
   spawnRun: (options: SpawnRunOptions) => Promise<RunResult>;
   /**
@@ -309,6 +310,16 @@ export interface RunOnceResult {
     kind: ValuesFailure['kind'];
     message: string;
   }[];
+  /**
+   * Consent unification (SECURITY-RELEVANT): lines describing any mismatch
+   * between a bundle manifest's declared `permissions.net` and the hosts
+   * this run's scripts actually reach, from `./bundle-run.ts`'s
+   * `netDeclarationDiagnostics`. Always `[]` for a bare `.mk.md` document
+   * (no manifest to compare against) or a bundle whose declaration and
+   * scan agree. For the host's diagnostics surface only — never the
+   * rendered page — same posture as `failureDetails` above.
+   */
+  netDeclarationDiagnostics: string[];
 }
 
 /**
@@ -323,40 +334,68 @@ export interface RunOnceResult {
  * above) — same treatment `failures` already got.
  */
 export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
-  const requirements = extractRunRequirements(options.text);
+  const { scripts, grantScripts } = extractScriptBlocks(options.text);
 
-  // Design point 5 (GitHub issue #9): a bundle's manifest-declared net hosts
-  // seed the grant flow too, unioned with whatever the static script scan
-  // already found — so a bundle prompts for what it DECLARES, not only for
-  // hosts a literal `net.fetch_json("https://...")` call site happens to
-  // reveal. Declaring is not granting: this only changes what gets PROMPTED
-  // for, never what ends up allowed without a prompt.
-  const manifestHosts = options.bundle
-    ? manifestNetHosts(options.bundle.manifest)
-    : [];
-  const mergedHosts = [...new Set([...requirements.hosts, ...manifestHosts])];
-  const bundleFsGrants = options.bundle
-    ? manifestBundleFsGrants(options.bundle.manifest)
-    : [];
-
-  // F-1 fix: the bundle snapshot is built BEFORE the grant flow now (it used
-  // to be built only after, purely to feed the run itself) specifically so
-  // any `src=` script file's CONTENT can be folded into the grant closure
-  // below — see `bundleModulesFromSnapshot`'s doc comment. This also means
-  // the snapshot is only ever built once per run, same as before.
+  // F-1 fix, still true under the consent-unification change below: the
+  // bundle snapshot is built BEFORE the host scan so a `src=` script's
+  // resolved content can both (a) be folded into the grant closure
+  // `computeGrantKey` hashes (`bundleModulesFromSnapshot`'s doc comment)
+  // and (b) let the scan resolve that block's `net.*` hosts instead of
+  // folding it into `hasUnknownHosts` — see `./bundle-run.ts`'s "Consent
+  // unification" section. Built exactly once per run either way.
   const bundleSnapshot = options.bundle
     ? await options.bundle.buildSnapshot()
     : undefined;
   const bundleModules =
     options.bundle && bundleSnapshot
-      ? bundleModulesFromSnapshot(requirements.grantScripts, bundleSnapshot)
+      ? bundleModulesFromSnapshot(grantScripts, bundleSnapshot)
       : undefined;
+
+  // SECURITY-RELEVANT (consent unification): the static scan of this run's
+  // executable closure is the ONLY source of the hostnames prompted for —
+  // for a bundle too. A `src=` block resolves through `bundleModules` when
+  // its file is in the snapshot; otherwise it folds into
+  // `hasUnknownHosts`, exactly like a plain `.mk.md` document's `src=`
+  // reference always has. The manifest's `permissions.net` is never
+  // consulted here — see below for how it's compared instead.
+  const { hosts: scannedHosts, hasUnknownHosts } = scanRunRequirementHosts(
+    scripts,
+    bundleModules
+      ? (block) =>
+          block.src !== undefined ? bundleModules[block.src] : undefined
+      : undefined,
+  );
+
+  // The manifest's declared `permissions.net` is DECLARED INTENT only: it
+  // never widens or narrows `scannedHosts` above. A mismatch between the
+  // two is surfaced as diagnostics lines instead (host's diagnostics
+  // surface only, never the rendered page) — see
+  // `netDeclarationDiagnostics`'s doc comment.
+  const declaredNetHosts = options.bundle
+    ? manifestNetHosts(options.bundle.manifest)
+    : [];
+  const netDiagnostics = netDeclarationDiagnostics(
+    declaredNetHosts,
+    scannedHosts,
+  );
+
+  // The `bundle` capability needs no user-facing prompt any more (consent
+  // unification): the manifest's declared bundle-fs grants are passed
+  // straight through as this run's granted permissions.
+  // `@markii/bundle`'s `createScriptView` still intersects this against
+  // the manifest's own declaration, the path-jail still confines every
+  // read/write, and the read-only tier for auto/scheduled triggers still
+  // blocks `bundle.write` outright — only the prompt is gone.
+  const grantedBundlePermissions = options.bundle
+    ? manifestBundleFsGrants(options.bundle.manifest)
+    : [];
 
   const trigger = options.trigger ?? 'manual';
   const grantRequirements = {
-    ...requirements,
-    hosts: mergedHosts,
-    bundleFsGrants,
+    scripts,
+    grantScripts,
+    hosts: scannedHosts,
+    hasUnknownHosts,
     ...(bundleModules ? { bundleModules } : {}),
   };
 
@@ -373,7 +412,6 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
           promptHost: options.promptHost,
           promptUnknownHosts: options.promptUnknownHosts,
           promptManyHosts: options.promptManyHosts,
-          promptBundleAccess: options.promptBundleAccess,
         })
       : await resolveStoredGrant({
           documentKey: options.documentKey,
@@ -412,7 +450,7 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
           bundle: {
             snapshot: bundleSnapshot,
             manifest: options.bundle.manifest,
-            grantedBundlePermissions: grant.allowedBundleGrants,
+            grantedBundlePermissions,
           },
         }
       : {}),
@@ -463,5 +501,6 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
       kind: failure.kind,
       message: failure.message,
     })),
+    netDeclarationDiagnostics: netDiagnostics,
   };
 }

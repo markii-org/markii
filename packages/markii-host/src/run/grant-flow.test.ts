@@ -5,7 +5,6 @@ import {
   DONT_ALLOW_LABEL,
   MAX_HOST_PROMPTS,
   UNKNOWN_HOSTS_PROMPT_MESSAGE,
-  bundleAccessPromptMessage,
   clearGrantForDocument,
   hostPromptMessage,
   isSafeHostForPrompt,
@@ -596,12 +595,6 @@ describe('prompt wording', () => {
       'This note requests network access to many hosts (42). Allow all or deny all?',
     );
   });
-
-  it('the bundle-access message names the exact declared grants', () => {
-    expect(bundleAccessPromptMessage(['read', 'write:cache/'])).toBe(
-      "This note's scripts request bundle file access (read, write:cache/). Allow?",
-    );
-  });
 });
 
 describe('runGrantFlow — F-1: bundleModules participates in the grant key', () => {
@@ -708,135 +701,6 @@ describe('runGrantFlow — F-1: bundleModules participates in the grant key', ()
 
     expect(promptHost).not.toHaveBeenCalled();
     expect(second.allowedHosts).toEqual(['api.example.com']);
-  });
-});
-
-describe('runGrantFlow — bundle-fs access prompting (GitHub issue #9)', () => {
-  it('never prompts for bundle access when the manifest declares none', async () => {
-    const memento = fakeMemento();
-    const promptBundleAccess = vi.fn(alwaysAllow);
-
-    const result = await runGrantFlow({
-      documentKey: 'bundle:///a.mkz',
-      requirements: requirementsFor({ bundleFsGrants: [] }),
-      memento,
-      promptHost: alwaysAllow,
-      promptUnknownHosts: alwaysAllow,
-      promptManyHosts: alwaysAllow,
-      promptBundleAccess,
-    });
-
-    expect(promptBundleAccess).not.toHaveBeenCalled();
-    expect(result.allowedBundleGrants).toEqual([]);
-  });
-
-  it('prompts once, all-or-nothing, for the manifest-declared bundle grants', async () => {
-    const memento = fakeMemento();
-    const promptBundleAccess = vi.fn(alwaysAllow);
-
-    const result = await runGrantFlow({
-      documentKey: 'bundle:///a.mkz',
-      requirements: requirementsFor({
-        bundleFsGrants: ['read', 'write:cache/'],
-      }),
-      memento,
-      promptHost: alwaysAllow,
-      promptUnknownHosts: alwaysAllow,
-      promptManyHosts: alwaysAllow,
-      promptBundleAccess,
-    });
-
-    expect(promptBundleAccess).toHaveBeenCalledTimes(1);
-    expect(promptBundleAccess).toHaveBeenCalledWith(['read', 'write:cache/']);
-    expect(result.allowedBundleGrants).toEqual(['read', 'write:cache/']);
-  });
-
-  it('declining the bundle-access gate grants nothing', async () => {
-    const memento = fakeMemento();
-
-    const result = await runGrantFlow({
-      documentKey: 'bundle:///a.mkz',
-      requirements: requirementsFor({ bundleFsGrants: ['read'] }),
-      memento,
-      promptHost: alwaysAllow,
-      promptUnknownHosts: alwaysAllow,
-      promptManyHosts: alwaysAllow,
-      promptBundleAccess: alwaysDeny,
-    });
-
-    expect(result.allowedBundleGrants).toEqual([]);
-  });
-
-  it('grants declared but no promptBundleAccess supplied is a silent denial, never an implicit grant', async () => {
-    const memento = fakeMemento();
-
-    const result = await runGrantFlow({
-      documentKey: 'bundle:///a.mkz',
-      requirements: requirementsFor({ bundleFsGrants: ['read'] }),
-      memento,
-      promptHost: alwaysAllow,
-      promptUnknownHosts: alwaysAllow,
-      promptManyHosts: alwaysAllow,
-      // promptBundleAccess omitted entirely.
-    });
-
-    expect(result.allowedBundleGrants).toEqual([]);
-  });
-
-  it('a matching-key second run reuses the stored bundle grant with no re-prompting', async () => {
-    const memento = fakeMemento();
-    const requirements = requirementsFor({ bundleFsGrants: ['read'] });
-
-    const first = await runGrantFlow({
-      documentKey: 'bundle:///a.mkz',
-      requirements,
-      memento,
-      promptHost: alwaysAllow,
-      promptUnknownHosts: alwaysAllow,
-      promptManyHosts: alwaysAllow,
-      promptBundleAccess: alwaysAllow,
-    });
-    expect(first.allowedBundleGrants).toEqual(['read']);
-
-    const promptBundleAccess = vi.fn(alwaysAllow);
-    const second = await runGrantFlow({
-      documentKey: 'bundle:///a.mkz',
-      requirements,
-      memento,
-      promptHost: alwaysAllow,
-      promptUnknownHosts: alwaysAllow,
-      promptManyHosts: alwaysAllow,
-      promptBundleAccess,
-    });
-
-    expect(promptBundleAccess).not.toHaveBeenCalled();
-    expect(second.allowedBundleGrants).toEqual(['read']);
-  });
-
-  it('a stored grant with a foreign bundle-grant string degrades to re-prompting, never trusting it verbatim', async () => {
-    const memento = fakeMemento({
-      'markii.netGrants': {
-        'bundle:///a.mkz': {
-          key: 'whatever',
-          allowedHosts: [],
-          allowedBundleGrants: ['read', 'delete-everything'],
-        },
-      },
-    });
-    const promptBundleAccess = vi.fn(alwaysAllow);
-
-    const result = await runGrantFlow({
-      documentKey: 'bundle:///a.mkz',
-      requirements: requirementsFor({ bundleFsGrants: ['read'] }),
-      memento,
-      promptHost: alwaysAllow,
-      promptUnknownHosts: alwaysAllow,
-      promptManyHosts: alwaysAllow,
-      promptBundleAccess,
-    });
-
-    expect(promptBundleAccess).toHaveBeenCalledTimes(1);
-    expect(result.allowedBundleGrants).toEqual(['read']);
   });
 });
 
@@ -1072,7 +936,6 @@ describe('resolveStoredGrant — non-interactive (auto/scheduled), issue #11', (
       memento,
     });
     expect(result.allowedHosts).toEqual([]);
-    expect(result.allowedBundleGrants).toEqual([]);
   });
 
   it('returns empty when the stored grant is for different code (key mismatch)', async () => {

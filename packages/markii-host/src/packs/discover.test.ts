@@ -43,6 +43,26 @@ describe('discoverPacks', () => {
     expect(installedNamespaces(result.packs)).toEqual(['demo']);
   });
 
+  it('discovers a module-only pack ("components": {}), contributing zero component paths', async () => {
+    const folder = '/packs/vault-lua';
+    const reader = readerFor({
+      [path.join(folder, 'pack.json')]: JSON.stringify({
+        name: 'vaultlua',
+        engine: 'react',
+        components: {},
+      }),
+    });
+
+    const result = await discoverPacks([folder], reader);
+
+    expect(result.skipped).toEqual([]);
+    expect(result.packs).toHaveLength(1);
+    const pack = result.packs[0]!;
+    expect(pack.manifest.name).toBe('vaultlua');
+    expect(pack.componentPaths).toEqual({});
+    expect(pack.scriptsDir).toBe(path.join(folder, 'scripts'));
+  });
+
   it('quietly skips a folder with no pack.json', async () => {
     const reader = readerFor({});
     const result = await discoverPacks(['/packs/missing'], reader);

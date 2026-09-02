@@ -41,6 +41,14 @@ describe('buildComponentCatalog', () => {
     expect(standardNames).toEqual(Object.keys(STANDARD_COMPONENTS));
   });
 
+  it('picks up a new standard component (table) with no catalog code change, since it iterates STANDARD_COMPONENTS directly', () => {
+    const catalog = buildComponentCatalog([]);
+    const table = catalog.find((entry) => entry.directiveName === 'table');
+    expect(table).toBeDefined();
+    expect(table?.source).toBe('standard');
+    expect(table?.kind).toBe('leaf');
+  });
+
   it('carries each standard component contract kind and required attributes through', () => {
     const catalog = buildComponentCatalog([]);
     const figure = catalog.find((entry) => entry.directiveName === 'figure');
