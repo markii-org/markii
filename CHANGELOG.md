@@ -6,6 +6,195 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **VS Code: `.mkp` pack archives.** A `markii.packs` entry may now name a
+  `.mkp` file directly instead of a folder. It loads read-only from the
+  archive (validated with `@markii/pack`'s `openPackArchive`), in its
+  prebuilt form only, and is never compiled from source: the archive's
+  contents are extracted into the extension's own pack-cache directory,
+  wiped and rewritten on every load, so an edited or reinstalled archive
+  never leaves stale files behind. A namespace collision between an archive
+  pack and a folder pack is rejected the same way two folder packs
+  colliding already was.
+- **VS Code: `Markii: Install Pack from File…` (`markii.installPack`).**
+  Picks a `.mkp` file, validates it, asks the user to confirm that
+  installing it will let its code run inside every Markii preview, asks
+  before replacing an already-installed pack of the same namespace, unzips
+  it into the extension's own `installed-packs` directory under
+  `globalStorage`, and adds that directory to `markii.packs`. A rejected
+  archive reports the reason on the Markii output channel and installs
+  nothing.
+- **VS Code: `Markii: Export Pack` gains an archive output.** Alongside
+  today's folder export, the command now offers a single `.mkp` file,
+  built by `@markii/host`'s new `exportPackArchive` (the same compile,
+  zipped with `fflate` instead of written as separate files) and named
+  with `@markii/pack`'s `packArchiveFileName`.
+- **`@markii/host`: `exportPackArchive`**, the archive-producing counterpart
+  of `exportPack`: it compiles a pack through the same build cache and
+  returns a `.mkp` file's bytes rather than writing a folder.
+
+- **Obsidian: three bundled component packs, `read`, `dash`, and `prep`,**
+  need no installation. Their prebuilt registration scripts and stylesheets
+  are compiled at plugin build time (reusing `@markii/host`'s
+  `buildPackRegistrationScript`, the same compiler VS Code and this plugin's
+  own on-demand pack loading already use) and embedded into `main.js` as
+  base64, the same `esbuild.options.mjs` pattern the Run path's worker
+  bundle and wasmoon's `glue.wasm` already use, with the build failing
+  loudly if the substitution did not happen. That makes the three-file BRAT
+  install carry them, with no esbuild-wasm runtime required at load time.
+  They behave as ordinary packs: namespaced (`read_source`, and so on),
+  listed by a note's `uses:`, and shown in the Insert Component and
+  completion catalogs. They load before any user-configured pack, and a
+  configured pack that claims a namespace one of the three already holds is
+  skipped, with a line on both the console and a `Notice`: the bundled pack
+  wins the namespace, matching the ordinary collision rule rather than
+  making an exception to it. The pack contract itself is unchanged; only
+  `apps/obsidian`'s build and pack-loading pipeline gained a bundled-pack
+  source ahead of its on-disk one.
+
+- **A `table` standard component**, data-bound like `stat`, `progress`, and
+  `chart`. It handles four bound shapes: an array of objects (columns from
+  the union of keys, in first-seen order), an array of arrays (rows as
+  given), an array of primitives (one column), and a single object
+  (key/value rows). `columns=` picks and orders columns, `limit=` caps the
+  rows shown, `caption=` adds a caption, and `format=`/`decimals=` apply to
+  numeric cells only. A missing, stale, or failed binding collapses to one
+  quiet empty state rather than an error.
+- **`format=` and `decimals=` attributes** on `:value[...]`, `stat`,
+  `progress`, and `table`. `number` groups thousands, `compact` shortens
+  them, `percent` reads a fraction as a percentage, and `date` and
+  `relative` read an ISO date or epoch milliseconds. `plain` stays the
+  default, so existing documents render unchanged. An invalid `format` or
+  `decimals` is ignored rather than raised, and non-numeric input under a
+  numeric format shows unchanged. The logic lives in one `@markii/stdlib`
+  primitive both renderers call, so the two engines cannot format a value
+  differently.
+- **`conformance/render/`**, a render-level fixture set: each `.mk.md` input
+  is paired with committed `.html` that `@markii/html` is byte-diffed
+  against, with `@markii/react` cross-checked for the same classes and
+  structure. The existing corpus pins the AST; this pins the rendered
+  output.
+- **`docs/spec.md` §9, a requirement-to-fixture map** tying every literal
+  MUST and MUST NOT in the spec's core sections to the test that pins it. A
+  new test in `@markii/core` parses the table and fails when a row cites a
+  fixture that does not exist, so the map cannot rot into decoration.
+- **A dark palette for exported documents.** `doc.css` remaps its Tier 1
+  tokens under `prefers-color-scheme: dark`, so a standalone HTML export
+  opened by a viewer with a dark OS preference renders themed instead of a
+  light page glaring back. A host's own theme layer (VS Code, Obsidian)
+  still wins the cascade for its own preview, since it redeclares the same
+  tokens unconditionally after `doc.css` loads: only a page with no such
+  layer after it, an export, ever resolves the new block.
+- **A print stylesheet for exported documents.** `@markii/host`'s
+  `EXPORT_PAGE_CSS` now sets `@page` margins, keeps a card, callout, or
+  table from splitting across a page break, and hides the collapsed script
+  marker and the VS Code webview's run marker when printing.
+- **An `index.html` entry file for a cascade export.** `@markii/host`'s new
+  `buildCascadeIndexHtml` lists every note a cascade exported by title,
+  linking to its file, and both hosts write it into the archive alongside
+  the notes. `assignCascadeFileNames` takes an optional `reservedNames`
+  list so a walked note literally called `index` gets suffixed instead of
+  colliding with the archive's own index page.
+- **A `hideScriptBlocks` export option.** `buildNoteHtmlExport`,
+  `composeNoteHtmlExport`, and `buildNoteExport` accept it, and
+  `exportHtmlDocument` grew a matching `docClassName` option to carry it
+  onto the `.doc` wrapper. Both hosts pass their existing preview
+  preference (VS Code's `markii.hideScriptBlocks`, Obsidian's "Hide script
+  blocks" setting) into every export, so a note exported with scripts
+  hidden in the editor stays that way in the file.
+- **Obsidian: `.mk.md` notes render inline in Reading view.** A markdown
+  post processor renders the whole note through the same `@markii/react`
+  seam the Markii Preview pane uses, into the first Reading-view section
+  Obsidian calls it for, and leaves every later section empty, since
+  Obsidian's section splits do not line up with a Markii `:::` container's
+  span. Wikilinks and embeds are converted to ordinary markdown first,
+  resolved through Obsidian's metadata cache, so an unresolved link keeps
+  pointing at its own text instead of breaking the render. A run's values
+  update the rendered note without reopening it. A plain `.md` file is
+  never touched, and Live Preview stays untouched by design. The new
+  "Render components in Reading view" setting, on by default, turns this
+  off while leaving the Markii Preview pane exactly as it was.
+- **Obsidian: install a pack from a `.mkp` file.** The new "Install Markii
+  pack from file" command validates the archive, asks in words that say the
+  pack's code will run in the preview, asks again before replacing a pack of
+  the same name, and writes nothing until all of that has passed. A rejected
+  archive is reported and leaves nothing behind. An entry in the device-local
+  pack list can also point straight at a `.mkp`, read where it sits and never
+  compiled, so it works on an install that carries no compiler.
+- **An optional `version` field on a pack manifest (`@markii/pack`).** A
+  pack's `pack.json` may now declare a plain semver `version` string
+  (`MAJOR.MINOR.PATCH`, digits only, no leading zeros, no prerelease or
+  build suffix). Omitting it stays fully valid, with no warning. A present
+  but malformed value is a validation error, the same posture `name` gets,
+  since a version a host cannot trust is worse than none. The three
+  bundled packs (`read`, `dash`, `prep`) now declare `"version": "1.0.0"`.
+- **`.mkp` pack archives: a reader in `@markii/pack`.** `openPackArchive`
+  takes the raw bytes of a `.mkp` file (a zip of a pack's prebuilt form,
+  files at the archive root: `pack.json`, `webview.js`, `webview.css` when
+  present, `scripts/` when present) and returns its validated manifest,
+  compiled script, optional stylesheet, and optional shared Lua modules, or
+  a structured error. It never compiles anything: an archive with no
+  `webview.js` is rejected, since `.mkp` exists for hosts that may not
+  carry a compiler. It reuses `@markii/bundle`'s zip reader and path jail
+  rather than a second implementation, so a `.mkp` gets the same
+  decompression-bomb guard and zip-slip rejection (`../`, an absolute
+  path) a `.mkz` bundle gets. `packArchiveFileName` implements the naming
+  rule for a produced archive, `<name>-<version>.mkp`, falling back to
+  `<name>.mkp` when the manifest declares no `version`.
+- **The VS Code extension ships three bundled packs by default: `read`,
+  `dash`, and `prep`** (their sources now live at `packs/` in this
+  repository, moved from the separate `markii-packs` repo). `esbuild.config.mjs`
+  compiles each one at extension build time into `dist/packs/<name>/`
+  (`pack.json`, `webview.js`, `webview.css` when the pack has CSS, and
+  `scripts/` when it has Lua), reusing the same `@markii/host` pack
+  compiler the `markii.exportPack` command runs. The extension treats
+  `dist/packs` as an always-present pack root, ordered ahead of the
+  user's `markii.packs` entries: a bundled pack is namespaced, listed by
+  a note's `uses:`, and shown in the Insert Component and completion
+  catalogs like any other pack. A user pack claiming the same namespace
+  as a bundled one is skipped, with a line on the Markii output channel
+  explaining that the bundled pack won.
+- **A root `typecheck:packs` script** (`tsc -p packs/tsconfig.json`),
+  wired into the root `build` chain, so a broken bundled pack source
+  fails the build instead of shipping silently. `packs/` is not an npm
+  workspace, so nothing else typechecks it.
+
+### Changed
+
+- **The four `width=` presets are themeable.** `--mk-width-fit`,
+  `--mk-width-narrow`, `--mk-width-wide`, and `--mk-width-full` join the
+  Tier 1 token contract, bringing it to 19 properties, so a host can widen
+  or shrink a preset without overriding a selector. Both host theme layers
+  map them to today's values, so nothing changes visually.
+- **A bundle manifest declares its spec version as `spec`.** The retired
+  name `mark` is still read, so existing bundles keep working, and it
+  records a warning asking for the rename. When both are present `spec`
+  wins. `mark` is never written.
+
+### Fixed
+
+- **`@markii/pack`'s manifest validation accepts an empty `components` map.**
+  A pack that carries `scripts/*.lua` and nothing to render used to be
+  rejected with `"components" must have at least one entry`. There is
+  exactly one way to share Lua beyond a bundle's own `scripts/` folder: a
+  pack module. A folder of shared code with nothing to render is simply a
+  pack whose `components` is `{}`, not a separate "vault library" concept,
+  so it is no longer an error. An end-to-end test in `@markii/host`
+  (`pack-module-require.e2e.test.ts`) pins the whole chain: manifest
+  parsing, pack discovery, module loading, and `require "name/module"`
+  resolving against the real wasmoon interpreter.
+
+### Security
+
+- **Consent prompting is unified on what a script actually does.** A run
+  prompts based on the static scan of script content; manifest
+  declarations inform diagnostics rather than driving a second prompt, and
+  a declared `permissions.bundle` grant no longer raises a prompt of its
+  own. The path jail and the read-only tier gate for automatic and
+  scheduled triggers are unchanged. An executed probe drives the real
+  worker thread and the real Lua sandbox rather than asserting on mocks.
+
 ## [0.11.0] - 2026-09-01
 
 ### Added

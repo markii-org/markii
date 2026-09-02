@@ -52,7 +52,10 @@ who they serve — with the third acting as the overriding scope test:
 docs/                the spec + documentation — source of truth. spec.md is the
                      normative core; format/scripting/bundles/security/
                      integration/packs.md carry the full material per topic
-conformance/         language-agnostic corpus: *.mk.md inputs + expected-AST *.json
+conformance/         language-agnostic corpus: *.mk.md inputs + expected-AST *.json;
+                     render/ holds render-level fixtures (*.mk.md + committed
+                     *.html), byte-diffed by @markii/html's conformance.test.ts
+                     and cross-checked for classes/structure by @markii/react
 packages/markii-core    framework-agnostic reference impl — ZERO React dependency:
   src/parse.ts       text → mdast AST (unified + remark-parse + remark-directive)
   src/to-hast.ts     mdast → hast: directive tagging (data.hName) + URL sanitizer
@@ -64,7 +67,7 @@ packages/platforms/markii-react   the reference L1 renderer, a platform adapter
                      folds {name=…} script blocks into a collapsed marker)
   src/components/    the @markii/stdlib standard set (callout, card, badge,
                      details, figure, tabs/tab, kbd, rating, divider; data-bound
-                     dashboard: stat, progress, chart; row + cell; layout wrappers
+                     dashboard: stat, progress, chart, table; row + cell; layout wrappers
                      center/right/wide/narrow/full via createLayoutWrapper;
                      failure-presentation.ts — the ONE home of failure wording)
   src/pack-loader.ts pack install/namespacing (docs/packs.md, issue #3 slice 1):
@@ -88,7 +91,8 @@ packages/platforms/markii-html   the static HTML renderer (issue #2), a second
                      + per-directive data/dataStatus/dataError/dataFailureKind
   src/resolve.ts     value resolver ported from @markii/react's store-path/safe-data
                      (dotted walk, @vault scoping, never-throw, hasOwn-guarded)
-  src/value-format.ts stringifyStoredValue (bound value → display text)
+  src/value-format.ts stringifyStoredValue (bound value → display text), a thin
+                     plain wrapper around @markii/stdlib's formatValue
   src/failure-presentation.ts failurePhrase/failureTitle/failureKindClass/
                      dataStateClassName — the ONE home of failure wording, per engine
   src/document.ts    exportHtmlDocument(body, options?): full-page shell with
@@ -100,7 +104,7 @@ packages/platforms/markii-html   the static HTML renderer (issue #2), a second
   src/conformance.test.ts  runs the L1 corpus through this engine (issue #2 gate)
   src/components/    the standard set as string emitters (callout, card, badge,
                      details, figure, tabs/tab, kbd, rating, divider, row, cell, layout
-                     wrappers, and the data-bound stat/progress/chart — chart is
+                     wrappers, and the data-bound stat/progress/chart/table — chart is
                      dependency-free SVG) + defaultHtmlRegistry; markup/classes
                      match @markii/react so doc.css is shared
 packages/markii-runtime host-side scripting glue (docs/scripting.md) — neutral, no React,
@@ -114,6 +118,12 @@ packages/markii-stdlib  standard component contracts (docs/integration.md) — n
   src/layout.ts      the layout system as data: LAYOUT_ATTRIBUTE_KEYS,
                      WIDTH_PRESETS, ALIGN_PRESETS, LAYOUT_ATTRIBUTES. The one
                      source both renderers' class maps and completion read
+  src/value-format.ts formatValue/isNumericLike + FORMAT_ATTRIBUTE/
+                     DECIMALS_ATTRIBUTE: the format=/decimals= primitive both
+                     renderers share, so the two engines cannot format a value
+                     differently
+  src/table-shape.ts deriveTableShape: the ::table shape logic both renderers
+                     share (array of objects/arrays/primitives, single object)
 packages/markii-bundle  .mkz bundle handling (docs/bundles.md, L2) — no React, no parsing:
   src/manifest.ts    manifest.json types + hand-rolled validation (no schema deps)
   src/paths.ts       path-jail: bundle-relative path normalization/rejection
@@ -121,8 +131,12 @@ packages/markii-bundle  .mkz bundle handling (docs/bundles.md, L2) — no React,
   src/fs.ts          directory form via node:fs (Node-only "./fs" subpath export)
   src/script-view.ts capability-restricted view for future script runtime (§11)
 packages/markii-pack    component pack contract (docs/packs.md, issue #3) — no React,
-                        no parsing, no bundle loading; the seam later slices
-                        (registry loading, uses: surfacing, require) build against:
+                        no parsing; the seam later slices (registry loading,
+                        uses: surfacing, require) build against:
+  src/archive.ts     the .mkp reader: a zipped prebuilt pack opened through
+                     @markii/bundle's zip reader and path jail (never a
+                     reimplemented jail), size-bounded like a bundle;
+                     packArchiveFileName gives the <name>-<version>.mkp rule
   src/manifest.ts    pack.json contract: PackManifest (name/engine/components)
                      + parsePackManifest() hand-rolled validation (no schema deps)
   src/namespace.ts   namespace/engine rules: pack-name + local-component-name
@@ -181,6 +195,12 @@ packages/markii-host    PRIVATE, never published (no npm presence, absent from
                      CSS) with esbuild-wasm's in-process wasm path, cached
                      outside the pack's own folder. See the Stack section for
                      why the in-process path is mandatory, not preferred
+  src/packs/pack-export-archive.ts  the .mkp half of Export Pack: zips the
+                     prebuilt form the folder export writes
+  src/packs/pack-contract.test.ts  loads a hand-written webview.js built only
+                     from docs/packs.md's registration contract, so the docs
+                     cannot drift from the loader (markii-packs builds its
+                     archives against that documented contract)
   src/packs/prebuilt.ts    the prebuilt-pack convention (issue #15): the
                      sibling webview.css next to webview.js, and detection
                      of a prebuilt script shadowing on-disk sources
@@ -220,6 +240,15 @@ packages/markii-lua     Lua sandbox runtime (docs/security.md, L3) — no React,
   src/marshal.ts     Lua↔JS value conversion (serializable-only, depth/size caps)
   src/sandbox.ts     runScript(): assemble env + limits + caps, run, marshal result
   src/executor.ts    createLuaExecutor(): adapts runScript to @markii/runtime's ScriptExecutor
+packs/                  the bundled packs (read, dash, prep): plain component
+                        sources, NOT an npm workspace. Both hosts build them
+                        into their own output and load them ahead of user
+                        packs (a user pack with the same namespace is skipped
+                        with a diagnostics line). Root ESLint and Prettier
+                        cover them; packs/tsconfig.json + the root
+                        typecheck:packs script (in the build chain) typecheck
+                        them. Everything else pack-shaped lives in the
+                        markii-packs repo
 apps/playground      thin Vite dev harness to view .mk.md files. NOT the product.
 apps/vscode          the "Markii" VS Code extension (preview + Run + packs) — an
                      app/consumer of @markii/react, never a renderer:
@@ -249,6 +278,13 @@ apps/vscode          the "Markii" VS Code extension (preview + Run + packs) — 
                      pure worker-side PackModuleResolver; pack-context.ts
                      composes them; export-pack.ts + discover-configured-packs.ts
                      back the markii.exportPack command (issue #16);
+                     bundled-packs.ts + build-bundled-packs.ts build packs/
+                     into dist/packs at extension build time and register
+                     that folder as the always-present pack root;
+                     archive-packs.ts resolves a markii.packs entry that
+                     names a .mkp file; install-pack.ts backs
+                     markii.installPack (validate, consent, then write into
+                     globalStorage, in that order);
                      src/insert-component.ts backs markii.insertComponent
                      (issue #17); src/completion.ts (wording, snippet and
                      filter text) + src/completion-catalog.ts (cached pack
@@ -267,9 +303,11 @@ apps/vscode          the "Markii" VS Code extension (preview + Run + packs) — 
                      deprecated relative markii.packs entries
 apps/obsidian        the "Markii" Obsidian plugin (desktop only) — an
                      app/consumer of @markii/react, never a renderer. A full
-                     second host: preview, Run, packs. Still absent by
-                     design: a markdown post-processor (Reading view renders
-                     inline) and a Live Preview CM6 extension:
+                     second host: preview, Run, packs, and in-place
+                     rendering of .mk.md notes in Reading view through a
+                     markdown post-processor (whole-note, first section).
+                     Still absent by design: a Live Preview CM6 extension,
+                     because its widget swapping makes the page jump:
   src/main.ts        Plugin subclass: view registration, the three commands
                      (Open Markii Preview, Run Markii scripts, Show Markii
                      diagnostics), settings load. With view.tsx,
@@ -314,6 +352,16 @@ apps/obsidian        the "Markii" Obsidian plugin (desktop only) — an
                      (issue #17); src/complete-component.ts +
                      src/complete-suggest.ts (an EditorSuggest, .mk.md
                      notes only) back directive completion (issue #27)
+  src/reading-view.ts + src/reading-view/  the Reading view post-processor:
+                     .mk.md notes only, renders the whole note into the first
+                     section and empties the rest, wikilinks converted to
+                     markdown links first; src/run/run-events.ts re-renders
+                     it when a Run lands values
+  src/packs/bundled-packs.ts (+ the build-substituted embedded sibling)
+                     the bundled packs base64-embedded in main.js like the
+                     worker, so a 3-file install carries them;
+                     archive-packs.ts + install-pack.ts are the .mkp entry
+                     and the Install Markii pack from file command
   src/export-note.ts + src/export/html-to-pdf.ts  the two export commands
                      (issue #28): export-note.ts is the obsidian-free flow,
                      wording, and failure classification behind Export as
@@ -321,7 +369,7 @@ apps/obsidian        the "Markii" Obsidian plugin (desktop only) — an
                      ONE Electron-touching module (hidden BrowserWindow,
                      javascript disabled, webContents.printToPDF), feature-
                      detected at call time and degrading to the HTML file
-  src/obsidian-theme.css  maps doc.css's 15 Tier 1 tokens onto Obsidian's
+  src/obsidian-theme.css  maps doc.css's 19 Tier 1 tokens onto Obsidian's
                      theme variables; src/theme-coverage.test.ts fails when
                      a token is left unmapped
   scripts/generate-doc-css.ts  concatenates doc.css + the theme layer into
@@ -492,6 +540,19 @@ not notes someone decodes:
   and chatbot artifacts. Reference it; do not inline it.
 - While re-authoring, collect gaps and misdesigns and REPORT them; never
   silently change a design decision as part of a rewrite.
+- Docs state rules, never history. A page says what holds today; how it
+  came to hold belongs in `CHANGELOG.md`. Sentences built on "now", "no
+  longer", "was previously", "surfaced in use", a commit hash, or an issue
+  narrative are the smell (user-set 2026-09-02, after security.md and
+  integration.md had grown into release notes). Verification status is the
+  one exception: it keeps evidence, in the audit-status voice.
+- Every status claim in a doc ("not yet implemented", "both hosts do X",
+  "designed only") is checked against the code in the same commit it is
+  written or touched, and the index page (`docs/README.md`) must agree with
+  the topic page it points at.
+- Every authored example uses attributes the component actually reads:
+  grep the component or its `@markii/stdlib` contract before writing the
+  snippet. A snippet that shows an attribute nothing reads is a bug.
 
 ## Maintenance map (what to update when something changes)
 
@@ -546,6 +607,20 @@ same commit as the change that triggers them:
   checklist in `docs/integration.md` are the merge gate; grant persistence
   re-validates on read; bundle handling goes through `@markii/bundle`'s
   jailed storage, never a reimplemented jail.
+- **Host parity** (user-set 2026-09-02) → a finding made while building,
+  upgrading, or fixing ONE app (a runtime constraint, a dependency the
+  host needs, a degraded mode such as a compiler-less install, a storage
+  rule, an export limitation) is recorded in `docs/integration.md`'s host
+  checklist in the same commit, in host-neutral wording, and the other
+  app is checked against it: either it already complies, it is fixed in
+  the same commit, or the gap is filed as an issue named in the commit
+  message. A finding that lives only in one app's source comments or
+  CHANGELOG entry is lost to the next host. Concretely, the checklist must
+  carry: which isolate kind each runtime supports and what it cannot
+  bound, that pack compilation needs esbuild-wasm's in-process path and
+  what a host without it does, how the worker bytes and the Lua wasm reach
+  the isolate, what an export cannot contain, and where each host's
+  diagnostics surface is.
 - **Any change visible in authored Markii content** (directive naming or
   composition, component names/attributes, script or frontmatter syntax) →
   sweep ALL demo and doc content in the same pass: `README.md`'s example,

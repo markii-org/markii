@@ -164,6 +164,11 @@ and ordinary components for your engine, built once and pointed at your app.
 On a machine without the pack, the same note shows a labeled fallback and
 stays readable. The contract lives in [docs/packs.md](docs/packs.md).
 
+Both apps also ship three packs by default, no configuration needed: `read`
+(citation cards, quotes, inline marks and terms), `dash` (sparklines, gauges,
+status dots, an uptime bar) and `prep` (question cards, topic confidence,
+a self-test quiz). Their sources live at `packs/` in this repository.
+
 ## Integrating and extending
 
 Markii is a format first and a library second. The definition is the spec plus
