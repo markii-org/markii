@@ -334,19 +334,27 @@ apps/obsidian        the "Markii" Obsidian plugin (desktop only) — an
                      placeholder: the plugin build base64-embeds the worker
                      bundle + wasmoon's glue.wasm into main.js (issue #13
                      step 2) and fails if substitution didn't happen;
-                     decode-base64.ts is the decode half. dist/ is just
-                     main.js + esbuild-wasm/ now, so a 3-file BRAT install
-                     runs scripts
-  src/packs/         pack loading against @markii/host's shared discovery:
-                     pack-settings (the folder list), pack-context,
-                     pack-runtime, pack-styles, pack-diagnostics (the
-                     console + notice surface named in docs/integration.md);
-                     pack-compilation.ts degrades compile-from-source
-                     cleanly when the (deliberately unembedded, ~14 MB)
-                     esbuild-wasm runtime isn't beside main.js (zip installs
-                     carry it, 3-file installs don't);
-                     discover-configured-packs.ts feeds the insert command's
-                     catalog. No export/build command here by design (see
+                     decode-base64.ts is the decode half. The release ships
+                     exactly main.js, manifest.json, and styles.css, so a
+                     3-file BRAT install runs scripts and carries the
+                     bundled packs
+  src/packs/         the app-managed pack store (user-set 2026-09-02):
+                     archive-only, NO compiler, no folder list. A pack is
+                     installed from a .mkp into
+                     .obsidian/plugins/markii/packs/<namespace>/ and loads
+                     only when the DEVICE-LOCAL trust list (pack-trust.ts,
+                     saveLocalStorage) names it; a folder present but
+                     untrusted (arrived via Sync or by hand) is listed as
+                     "present, not enabled on this device" and never
+                     evaluated (pack-trust.probe.test.ts proves it with real
+                     registration scripts). installed-packs.ts owns the
+                     list; install-pack.ts refuses a bundled namespace before
+                     any write; pack-context, pack-runtime, pack-styles,
+                     pack-diagnostics (the console + notice surface named in
+                     docs/integration.md). Install, remove, enable, and the
+                     Reload Markii packs command reload packs and re-render
+                     every open view. discover-configured-packs.ts feeds the
+                     insert command's catalog. No export/build command here by design (see
                      Host positioning below): src/insert-component.ts +
                      src/insert-modals.ts back Insert Markii component
                      (issue #17); src/complete-component.ts +
@@ -412,9 +420,10 @@ them).
 VS Code is the AUTHORING host: pack development, live preview of source
 packs, and pack packaging (the Export Pack command) live there, and future
 authoring features land there first. Obsidian is a CONSUMING host: prebuilt
-packs are its normal path, source live-compile stays as a consumption
-convenience (shared-folder workflows), and it grows no pack-development or
-export features. Note-authoring features (like Insert Component) are not
+`.mkp` archives installed through the plugin are its ONLY pack path (source
+live-compile and the vault folder list were removed 2026-09-02, user-set,
+which also removed the compiler from the plugin), and it grows no
+pack-development or export features. Note-authoring features (like Insert Component) are not
 development features and belong in BOTH hosts. A future engine/host may
 join the authoring side; nothing is built for that in advance.
 
@@ -439,24 +448,19 @@ join the authoring side; nothing is built for that in advance.
   RUNTIME dependency that compiles a pack's component sources (and any CSS
   they import) at load time, so a pack needs no build step of its own. It
   lives in `packages/markii-host`, which is PRIVATE and never published, and
-  both hosts consume it from there. The rule it must obey is that it never
-  enters a PUBLISHED package: the neutral `@markii/*` packages on npm stay
-  free of a build toolchain.
+  since 2026-09-02 only the VS Code extension consumes it: the Obsidian
+  plugin is archive-only and carries no compiler. The rule it must obey is
+  that it never enters a PUBLISHED package: the neutral `@markii/*` packages
+  on npm stay free of a build toolchain.
 
-  Both hosts use esbuild-wasm's IN-PROCESS WebAssembly path (its `browser`
+  The host uses esbuild-wasm's IN-PROCESS WebAssembly path (its `browser`
   entry, initialized with a compiled `WebAssembly.Module`), with sources fed
-  through a resolve/load plugin rather than read from disk by esbuild. This
-  is not a preference. Its Node path spawns `node bin/esbuild` as a child
-  process, and Obsidian's Electron renderer ships no `node` binary, so that
-  path fails there with `spawn node ENOENT` (verified in a real vault,
-  Electron 43). The in-process path also measured faster: 221 ms to
-  initialize and 809 ms cold in Obsidian, against 1554 ms cold for the
-  child-process path. One path, both hosts, no divergence to maintain.
-
-  It costs roughly 14 MB unpacked. In Obsidian that exceeds Obsidian Sync's
-  per-file limit, so a user who pays for Sync and opts into plugin syncing
-  installs the plugin per device instead. Nothing breaks; this was weighed
-  and accepted rather than designed around.
+  through a resolve/load plugin rather than read from disk by esbuild. Keep
+  it that way even though VS Code has a `node` binary: the in-process path
+  is the one a future browser-based or Electron host can also run (its Node
+  path spawns `node bin/esbuild`, which an Electron renderer cannot), and it
+  measured faster cold. One path, no divergence to maintain. It costs
+  roughly 14 MB unpacked in the extension, which is acceptable there.
 
 - Obsidian plugin only (`apps/obsidian`, user-approved 2026-08-25):
   `obsidian` (API types, dev-only, external at build time) and `esbuild`

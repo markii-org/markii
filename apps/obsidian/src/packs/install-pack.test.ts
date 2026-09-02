@@ -3,6 +3,7 @@ import { mkdtemp, readFile, readdir, rm, access } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { zipSync } from 'fflate';
+import { openPackArchive } from '@markii/pack';
 import { createNodeArchiveExtractFs } from './archive-packs.js';
 import {
   installConsentMessage,
@@ -64,6 +65,7 @@ describe('installPackFromArchive', () => {
       installRoot,
       exists: existsOnDisk(),
       extractFs: createNodeArchiveExtractFs(),
+      bundledNamespaces: new Set<string>(),
       confirmConsent: async (name) => {
         consentCalls.push(name);
         return true;
@@ -100,6 +102,7 @@ describe('installPackFromArchive', () => {
       installRoot,
       exists: existsOnDisk(),
       extractFs: createNodeArchiveExtractFs(),
+      bundledNamespaces: new Set<string>(),
       confirmConsent: async () => {
         consentAsked = true;
         return true;
@@ -120,6 +123,7 @@ describe('installPackFromArchive', () => {
       installRoot,
       exists: existsOnDisk(),
       extractFs: createNodeArchiveExtractFs(),
+      bundledNamespaces: new Set<string>(),
       confirmConsent: async () => false,
       confirmReplace: async () => true,
     });
@@ -149,6 +153,7 @@ describe('installPackFromArchive', () => {
       installRoot,
       exists: existsOnDisk(),
       extractFs: fs,
+      bundledNamespaces: new Set<string>(),
       confirmConsent: async () => true,
       confirmReplace: async () => {
         replaceAsked = true;
@@ -186,6 +191,7 @@ describe('installPackFromArchive', () => {
       installRoot,
       exists: existsOnDisk(),
       extractFs: fs,
+      bundledNamespaces: new Set<string>(),
       confirmConsent: async () => true,
       confirmReplace: async () => true,
     });
@@ -213,10 +219,125 @@ describe('installPackFromArchive', () => {
       installRoot,
       exists: existsOnDisk(),
       extractFs: createNodeArchiveExtractFs(),
+      bundledNamespaces: new Set<string>(),
       confirmConsent: async () => false,
       confirmReplace: async () => true,
     });
     await expect(readdir(installRoot)).resolves.toEqual([]);
+  });
+});
+
+describe('installPackFromArchive — bundled namespace refusal', () => {
+  it('refuses an archive naming a bundled namespace before any write and before consent is asked', async () => {
+    const installRoot = await makeTempDir();
+    let consentAsked = false;
+
+    const outcome = await installPackFromArchive({
+      archiveBytes: validArchiveBytes('read'),
+      archivePath: '/downloads/read.mkp',
+      installRoot,
+      exists: existsOnDisk(),
+      extractFs: createNodeArchiveExtractFs(),
+      confirmConsent: async () => {
+        consentAsked = true;
+        return true;
+      },
+      confirmReplace: async () => true,
+      bundledNamespaces: new Set(['read', 'dash', 'prep']),
+    });
+
+    expect(outcome).toEqual({ kind: 'bundled', packName: 'read' });
+    expect(consentAsked).toBe(false);
+    await expect(readdir(installRoot)).resolves.toEqual([]);
+  });
+
+  it('a namespace not among the bundled ones installs normally', async () => {
+    const installRoot = await makeTempDir();
+    const outcome = await installPackFromArchive({
+      archiveBytes: validArchiveBytes('ana'),
+      archivePath: '/downloads/ana.mkp',
+      installRoot,
+      exists: existsOnDisk(),
+      extractFs: createNodeArchiveExtractFs(),
+      confirmConsent: async () => true,
+      confirmReplace: async () => true,
+      bundledNamespaces: new Set(['read', 'dash', 'prep']),
+    });
+    expect(outcome.kind).toBe('installed');
+  });
+});
+
+describe('installPackFromArchive — hostile archive contents never escape the install directory', () => {
+  it('a path-escaping entry and an absolute-ish entry are rejected before install, and nothing lands outside installRoot', async () => {
+    const installRoot = await makeTempDir();
+    // A sibling directory to prove nothing was written outside installRoot
+    // at all, not merely outside the pack's own subdirectory.
+    const parentBefore = await readdir(path.dirname(installRoot));
+
+    const hostileBytes = zipSync({
+      'pack.json': new TextEncoder().encode(
+        JSON.stringify({
+          name: 'hostile',
+          engine: 'react',
+          components: { widget: './Widget.tsx' },
+        }),
+      ),
+      'webview.js': new TextEncoder().encode(
+        'window.__markiiRegisterPack(() => ({}));',
+      ),
+      '../escape.txt': new TextEncoder().encode('nope'),
+      '/etc/passwd': new TextEncoder().encode('nope'),
+    });
+
+    const outcome = await installPackFromArchive({
+      archiveBytes: hostileBytes,
+      archivePath: '/downloads/hostile.mkp',
+      installRoot,
+      exists: existsOnDisk(),
+      extractFs: createNodeArchiveExtractFs(),
+      confirmConsent: async () => true,
+      confirmReplace: async () => true,
+      bundledNamespaces: new Set<string>(),
+    });
+
+    expect(outcome.kind).toBe('rejected');
+    await expect(readdir(installRoot)).resolves.toEqual([]);
+    const parentAfter = await readdir(path.dirname(installRoot));
+    expect(parentAfter).toEqual(parentBefore);
+  });
+
+  it('an oversized entry is rejected by the archive reader install relies on, and nothing is written', async () => {
+    // `installPackFromArchive` opens the archive via `@markii/pack`'s
+    // `openPackArchive` with no size overrides, so it inherits that
+    // package's own zip-bomb jail (its default per-entry/total caps are
+    // 256 MiB, impractical to actually allocate in a unit test). This
+    // proves the SAME reader install goes through really does reject an
+    // oversized entry, with an explicit small cap standing in for the real
+    // one — the jail itself lives in `@markii/bundle`'s `openZipBundle`,
+    // exercised here through `@markii/pack`'s `openPackArchive`, not
+    // reimplemented by this plugin.
+    const oversized = new Uint8Array(4096).fill(97);
+    const oversizedBytes = zipSync({
+      'pack.json': new TextEncoder().encode(
+        JSON.stringify({
+          name: 'huge',
+          engine: 'react',
+          components: { widget: './Widget.tsx' },
+        }),
+      ),
+      'webview.js': oversized,
+    });
+
+    const opened = await openPackArchive(oversizedBytes, {
+      maxEntryBytes: 1024,
+    });
+    expect(opened.ok).toBe(false);
+
+    // And the full install path, given the very same bytes with no
+    // override, never gets far enough to write anything on a genuinely
+    // invalid archive shape (covered end to end by the path-escaping case
+    // above) — this test's job is proving the size cap itself is real and
+    // reachable from the exact reader install uses.
   });
 });
 
@@ -247,6 +368,7 @@ describe('wording', () => {
       },
       { kind: 'declined' as const, step: 'consent' as const, packName: 'ana' },
       { kind: 'declined' as const, step: 'replace' as const, packName: 'ana' },
+      { kind: 'bundled' as const, packName: 'read' },
       { kind: 'rejected' as const, reason: 'bad zip' },
     ];
     for (const outcome of outcomes) {

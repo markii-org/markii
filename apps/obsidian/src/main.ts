@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { readFile as nodeReadFile } from 'node:fs/promises';
+import { readFile as nodeReadFile, rm as nodeRm } from 'node:fs/promises';
 import {
   FileSystemAdapter,
   MarkdownView,
@@ -20,12 +20,18 @@ import {
 } from './local-settings.js';
 import type { LocalSettings } from './local-settings.js';
 import {
-  DEFAULT_PACK_SETTINGS,
-  PACK_SETTINGS_STORAGE_KEY,
-  appendPackFolder,
-  normalizePackSettings,
-} from './packs/pack-settings.js';
-import type { PackSettings } from './packs/pack-settings.js';
+  DEFAULT_PACK_TRUST_LIST,
+  PACK_TRUST_STORAGE_KEY,
+  normalizePackTrustList,
+  trustPack,
+  untrustPack,
+} from './packs/pack-trust.js';
+import type { PackTrustList } from './packs/pack-trust.js';
+import {
+  createNodePackDirLister,
+  selectLoadablePackFolders,
+} from './packs/installed-packs.js';
+import type { LoadablePackFolder } from './packs/installed-packs.js';
 import {
   createBrowserWorkerSetup,
   type BrowserWorkerSetup,
@@ -40,6 +46,7 @@ import {
 } from '@markii/host';
 import type {
   CascadeLinkResolver,
+  DiscoveredPack,
   ExportImageReader,
   InsertableComponent,
 } from '@markii/host';
@@ -74,13 +81,24 @@ import {
   SCRIPTS_DISABLED_CONFIRMATION,
   SCRIPTS_ENABLED_CONFIRMATION,
 } from './script-execution.js';
-import { buildPackRegistrationScript } from '@markii/host';
 import type { Registry } from '@markii/react';
 import { defaultRegistry } from '@markii/react/components';
 import { loadPackContext } from './packs/pack-context.js';
 import type { PackContext } from './packs/pack-context.js';
-import { createPackRegistrationBuilder } from './packs/pack-compilation.js';
-import { formatPackDiagnosticLines } from './packs/pack-diagnostics.js';
+import {
+  formatPackDiagnosticLines,
+  notEnabledPackLine,
+  packCollisionNotice,
+  packEnabledNotice,
+  packLoadFailureNotice,
+  packRemoveFolderFailedNotice,
+  packRemovedNotice,
+  skippedPackCount,
+} from './packs/pack-diagnostics.js';
+import {
+  applyPackStylesheets,
+  removePackStylesheets,
+} from './packs/pack-styles.js';
 import { registerReadingView } from './reading-view.js';
 import { pickPackArchiveFile } from './pick-folder.js';
 import { confirmModal } from './run-modals.js';
@@ -98,9 +116,9 @@ import {
  * `obsidian`), per this plugin's file-scope split (see
  * `src/obsidian-import-guard.test.ts`). Every piece of logic worth testing
  * in isolation (the document -> React render, the settings shapes, the
- * worker-path resolution, the grant memento) already lives in plain
- * modules; this file, `src/view.tsx`, `src/settings-tab.ts`, and
- * `src/run-modals.ts` are wiring only.
+ * worker-path resolution, the grant memento, the pack trust list) already
+ * lives in plain modules; this file, `src/view.tsx`, `src/settings-tab.ts`,
+ * and `src/run-modals.ts` are wiring only.
  */
 export default class MarkiiPlugin extends Plugin {
   /** Cosmetic-only, vault-synced settings (`loadData`/`saveData`) — see `src/settings.ts`'s PERSISTENCE TIER note. */
@@ -114,12 +132,26 @@ export default class MarkiiPlugin extends Plugin {
    */
   localSettings: LocalSettings = DEFAULT_LOCAL_SETTINGS;
   /**
-   * DEVICE-LOCAL (`app.saveLocalStorage`, NEVER `saveData`) — the list of
-   * folders this device trusts as installed component packs. See
-   * `src/packs/pack-settings.ts`'s top comment for why: this setting
-   * authorizes code execution, exactly like a network grant.
+   * DEVICE-LOCAL (`app.saveLocalStorage`, NEVER `saveData`) — which
+   * installed-pack namespaces this device trusts to load. See
+   * `src/packs/pack-trust.ts`'s top comment for why: this list authorizes
+   * code execution, exactly like a network grant.
    */
-  packSettings: PackSettings = DEFAULT_PACK_SETTINGS;
+  packTrust: PackTrustList = DEFAULT_PACK_TRUST_LIST;
+  /**
+   * This plugin's currently loaded packs (docs/packs.md, AGENTS.md's Host
+   * positioning: Obsidian is archive-only, no compiler) — loaded ONCE here
+   * rather than once per view, so the preview pane, Reading view, export,
+   * Insert Component, and directive completion all read the SAME registry
+   * instead of each loading their own copy. `undefined` before the first
+   * load completes; every reader treats that exactly like "no packs
+   * loaded" (`readingViewRegistry`, `exportRegistryContext`), never
+   * blocking on it. Refreshed by `reloadPacks` (install, remove, enable,
+   * the "Reload Markii packs" command, and once on plugin load).
+   */
+  packContext: PackContext | undefined;
+  /** Every namespace present on disk under `packs/` but not trusted on this device (`./packs/installed-packs.ts`) — the settings tab's "present, not enabled" rows. Refreshed alongside `packContext`. */
+  notEnabledPackNamespaces: readonly string[] = [];
   /**
    * The Web Worker isolate this host runs scripts in, plus the blob URLs it
    * owns. The worker's bytes ship base64-embedded inside `main.js` itself
@@ -138,29 +170,24 @@ export default class MarkiiPlugin extends Plugin {
   browserWorker: BrowserWorkerSetup | undefined;
 
   /**
-   * The directive-autocompletion catalog (GitHub issue #27, slice 3): every
-   * standard component plus every configured pack's components, the same
-   * pairing `insertComponent` below builds fresh on each invocation. This
-   * copy is held on the plugin instance and refreshed by
-   * `refreshCompletionCatalog` (on load, and again from `savePackSettings`)
-   * rather than rebuilt per keystroke, since `MarkiiCompletionSuggest`'s
-   * `onTrigger` runs on every keypress in a `.mk.md` note and cannot afford
-   * a pack-discovery filesystem walk each time. Starts empty so the
-   * suggester has a well-formed, if temporarily incomplete, catalog before
-   * the first async refresh settles.
+   * The directive-autocompletion catalog (every standard component plus
+   * every loaded pack's components), refreshed alongside `packContext` by
+   * `reloadPacks` rather than rebuilt per keystroke, since
+   * `MarkiiCompletionSuggest`'s `onTrigger` runs on every keypress in a
+   * `.mk.md` note. Starts empty so the suggester has a well-formed, if
+   * temporarily incomplete, catalog before the first load settles.
    */
   private completionCatalog: readonly InsertableComponent[] = [];
 
   override async onload(): Promise<void> {
     await this.loadSettings();
     this.loadLocalSettings();
-    this.loadPackSettings();
+    this.loadPackTrust();
     this.browserWorker = this.createBrowserWorker();
-    // Not awaited: pack discovery touches the filesystem, and the
-    // completion catalog is allowed to arrive a moment after the note does
-    // (`onTrigger` simply sees an empty/standard-only catalog until then)
-    // rather than blocking activation on it.
-    void this.refreshCompletionCatalog();
+    // Not awaited: pack loading touches the filesystem, and every reader
+    // of `packContext`/`completionCatalog` already treats "not loaded yet"
+    // the same as "no packs" rather than blocking on it.
+    void this.reloadPacks(false);
 
     this.registerView(
       MARKII_PREVIEW_VIEW_TYPE,
@@ -281,18 +308,20 @@ export default class MarkiiPlugin extends Plugin {
     });
 
     this.addCommand({
+      id: 'reload-markii-packs',
+      name: 'Reload Markii packs',
+      callback: () => {
+        void this.reloadPacks(true);
+      },
+    });
+
+    this.addCommand({
       id: 'show-markii-diagnostics',
       name: 'Show Markii diagnostics',
       callback: () => {
-        const view = this.activePreviewView();
-        if (!view) {
-          new Notice(
-            'Markii: diagnostics are per preview, so open a preview first.',
-          );
-          return;
-        }
-        view.logPackDiagnostics();
-        new Notice('Markii: pack diagnostics printed to the console.');
+        this.logPackDiagnostics();
+        this.activePreviewView()?.logRunDiagnostics();
+        new Notice('Markii: diagnostics printed to the console.');
       },
     });
   }
@@ -363,78 +392,27 @@ export default class MarkiiPlugin extends Plugin {
 
   /**
    * The engine an export renders through (GitHub issue #28 slice 2): this
-   * open preview's already-loaded pack registry when one is open, or a
-   * pack context loaded on demand when none is, so an export is
-   * pack-complete without requiring a preview to be open first. Returns
-   * `undefined` for "render statically": no preview is open and either no
-   * pack folders are configured or the on-demand load ended up with zero
-   * loaded packs, in which case the exported file is byte-identical to
-   * slice 1's, which is deliberate.
-   *
-   * The on-demand path never injects its stylesheets into `document.head`
-   * and never shows a pack `Notice` — an export only needs the registry
-   * and the stylesheet text to embed, not a live preview's styling. Its
-   * diagnostics still go to the console, this host's diagnostics surface,
-   * and a load failure degrades to "no packs" rather than failing the
-   * export command.
+   * plugin's currently loaded pack registry, when it has any packs, or
+   * `undefined` for "render statically" (no packs loaded at all). Unlike
+   * before centralizing pack loading onto the plugin, there is no
+   * "on-demand load" branch any more — `packContext` is always the one,
+   * shared load `reloadPacks` maintains, so an export simply reads it.
    */
-  private async exportRegistryContext(): Promise<
+  private exportRegistryContext():
     | {
         registry: Registry;
         stylesheets: PackContext['stylesheets'];
         packCount: number;
       }
-    | undefined
-  > {
-    const preview = this.activePreviewView();
-    const fromPreview = preview?.exportPackContext();
-    if (fromPreview) return fromPreview;
-    const bundledAssets = bundledPackAssets();
-    if (
-      preview ||
-      (bundledAssets.length === 0 && this.packSettings.packFolders.length === 0)
-    ) {
+    | undefined {
+    if (!this.packContext || this.packContext.packs.length === 0) {
       return undefined;
     }
-
-    try {
-      const cacheDir = this.packCacheDir();
-      const browserModulePath = this.esbuildBrowserModulePath();
-      const wasmBinaryPath = this.esbuildWasmBinaryPath();
-      const context = await loadPackContext(
-        this.packSettings.packFolders,
-        this.vaultBasePath(),
-        defaultRegistry,
-        {
-          cacheDir,
-          bundledPacks: bundledAssets,
-          buildRegistrationScript:
-            cacheDir === undefined
-              ? undefined
-              : createPackRegistrationBuilder({
-                  esbuildBrowserModulePath: browserModulePath,
-                  esbuildWasmBinaryPath: wasmBinaryPath,
-                  compile: (pack, dir) =>
-                    buildPackRegistrationScript(pack, dir, {
-                      esbuildBrowserModulePath: browserModulePath,
-                      esbuildWasmBinaryPath: wasmBinaryPath,
-                    }),
-                }),
-        },
-      );
-      for (const line of formatPackDiagnosticLines(context)) {
-        console.log(`[markii] export: ${line}`);
-      }
-      if (context.packs.length === 0) return undefined;
-      return {
-        registry: context.registry,
-        stylesheets: context.stylesheets,
-        packCount: context.packs.length,
-      };
-    } catch (error) {
-      console.error('[markii] export: on-demand pack load failed', error);
-      return undefined;
-    }
+    return {
+      registry: this.packContext.registry,
+      stylesheets: this.packContext.stylesheets,
+      packCount: this.packContext.packs.length,
+    };
   }
 
   /**
@@ -491,7 +469,7 @@ export default class MarkiiPlugin extends Plugin {
         },
       );
       const values = readPersistedValues(memento, file.path);
-      const packContext = await this.exportRegistryContext();
+      const packContext = this.exportRegistryContext();
       const request = {
         notePath: file.path,
         text,
@@ -589,7 +567,7 @@ export default class MarkiiPlugin extends Plugin {
           this.app.saveLocalStorage(key, value);
         },
       );
-      const packContext = await this.exportRegistryContext();
+      const packContext = this.exportRegistryContext();
       outcome = await exportNoteCascade({
         rootPath: file.path,
         readNote: this.readNoteText,
@@ -666,56 +644,31 @@ export default class MarkiiPlugin extends Plugin {
 
   /**
    * The registry `src/reading-view.ts` renders a note's components with:
-   * the currently open Markii Preview's loaded pack registry, when one
-   * exists, so a note's namespaced directives resolve the same way in both
-   * surfaces; otherwise the plain standard set. Deliberately never triggers
-   * an on-demand pack load the way `exportRegistryContext` does for an
-   * export command: Reading view's post processor fires on every scroll
-   * and every edit, so paying a filesystem walk there would be far too
-   * eager. A note whose packs are not yet loaded anywhere still renders
-   * fully: its pack directives fall back to the standard unknown-component
-   * box, per architecture rule 3.
+   * this plugin's currently loaded pack registry, or the plain standard
+   * set before the first load completes / when nothing is loaded. A note
+   * whose packs are not (yet) loaded still renders fully: its pack
+   * directives fall back to the standard unknown-component box, per
+   * architecture rule 3.
    */
   readingViewRegistry(): Registry {
-    return (
-      this.activePreviewView()?.exportPackContext()?.registry ?? defaultRegistry
-    );
+    return this.packContext?.registry ?? defaultRegistry;
   }
 
   /**
-   * The "Insert Markii component" command (`insert-markii-component`,
-   * GitHub issue #17, slice 1): offers every standard component plus every
-   * configured pack's components, and inserts the chosen one's directive
-   * skeleton at the cursor. Every testable piece (the suggestion shape,
-   * every user-facing string) lives in `./insert-component.ts`; the
-   * catalog and skeleton builders are `@markii/host`'s (shared with the VS
-   * Code extension). This method is wiring only — the command's
-   * `checkCallback` in `onload` already guarded that an active
-   * `MarkdownView` with an editor exists.
-   *
-   * A pack-discovery failure never blocks the command:
-   * `discoverConfiguredPacks` already degrades quietly (a bad folder is
-   * simply skipped, never thrown), so a caught error here still falls back
-   * to the standard set alone rather than failing the whole command.
+   * The "Insert Markii component" command (GitHub issue #17, slice 1):
+   * offers every standard component plus every loaded pack's components,
+   * and inserts the chosen one's directive skeleton at the cursor. Reuses
+   * `completionCatalog` (kept fresh by `reloadPacks`) rather than
+   * rediscovering packs on every invocation — packs are loaded once now,
+   * not per view or per command.
    */
   private async insertComponent(view: MarkdownView): Promise<void> {
     const editor = view.editor;
 
-    let packs: Awaited<ReturnType<typeof discoverConfiguredPacks>> = [];
-    try {
-      packs = await discoverConfiguredPacks(
-        this.packSettings.packFolders,
-        this.vaultBasePath(),
-      );
-    } catch {
-      packs = [];
-    }
-
-    const catalog = buildComponentCatalog([
-      ...bundledDiscoveredPacks(),
-      ...packs,
-    ]);
-    const chosen = await pickInsertableComponent(this.app, catalog);
+    const chosen = await pickInsertableComponent(
+      this.app,
+      this.completionCatalog,
+    );
     if (!chosen) return; // dismissed
 
     const skeleton = componentSkeleton(
@@ -768,36 +721,7 @@ export default class MarkiiPlugin extends Plugin {
   }
 
   /**
-   * Rebuilds `completionCatalog` from every configured pack plus the
-   * standard set, the same discovery + catalog pairing `insertComponent`
-   * uses. Called from `onload` and again from `savePackSettings`, so
-   * adding or removing a pack folder updates what completes without a
-   * plugin reload.
-   *
-   * A pack-discovery failure never leaves the catalog stale with a broken
-   * promise: `discoverConfiguredPacks` already degrades quietly (a bad
-   * folder is simply skipped, never thrown), so a caught error here still
-   * falls back to the standard set alone, matching `insertComponent`'s
-   * posture exactly.
-   */
-  private async refreshCompletionCatalog(): Promise<void> {
-    let packs: Awaited<ReturnType<typeof discoverConfiguredPacks>> = [];
-    try {
-      packs = await discoverConfiguredPacks(
-        this.packSettings.packFolders,
-        this.vaultBasePath(),
-      );
-    } catch {
-      packs = [];
-    }
-    this.completionCatalog = buildComponentCatalog([
-      ...bundledDiscoveredPacks(),
-      ...packs,
-    ]);
-  }
-
-  /**
-   * The plugin's own on-disk folder — a REAL directory inside the vault
+   * This plugin's own on-disk folder — a REAL directory inside the vault
    * (`<vault>/.obsidian/plugins/markii/`), as opposed to this workspace's
    * source layout. `FileSystemAdapter` is desktop-only (this plugin
    * declares `isDesktopOnly: true` in `manifest.json`), so this is safe to
@@ -810,11 +734,7 @@ export default class MarkiiPlugin extends Plugin {
   }
 
   /**
-   * The vault's own base path — what a relative pack-folder setting entry
-   * resolves against (`src/packs/pack-paths.ts`'s `resolvePackPaths`),
-   * mirroring `apps/vscode/src/packs/resolve-pack-paths.ts`'s "resolve
-   * against the open workspace folder" rule with this host's closest
-   * analogue, the open vault. Desktop-only, same as `pluginDir` above.
+   * The vault's own base path. Desktop-only, same as `pluginDir` above.
    */
   vaultBasePath(): string | undefined {
     const adapter = this.app.vault.adapter;
@@ -824,29 +744,198 @@ export default class MarkiiPlugin extends Plugin {
   }
 
   /**
-   * This plugin's own install destination for "Install Markii pack from
-   * file" (GitHub issue #16): a subdirectory of the plugin's own on-disk
-   * folder, never the workspace, never a folder the user chose, matching
-   * `packCacheDir`'s "plugin machinery, not the user's authored note tree"
-   * posture immediately below. Each installed pack lands under its own
-   * namespace (`./packs/install-pack.ts`), so a device that installs it can
-   * point a new pack-folder-list entry straight at the resulting directory.
+   * This plugin's own installed-pack store: one subdirectory per namespace,
+   * under the plugin's own on-disk folder, never the workspace, never a
+   * folder the user chose (AGENTS.md's cleanliness rule). "Install Markii
+   * pack from file" (`./installPackFromFile`) writes here; `reloadPacks`
+   * reads its immediate subdirectories. Named `packs`, not the earlier
+   * `installed-packs`: with the user-managed pack-folder list removed,
+   * this is now the only place packs live.
    */
   private installedPacksDir(): string | undefined {
     const dir = this.pluginDir();
-    return dir ? path.join(dir, 'installed-packs') : undefined;
+    return dir ? path.join(dir, 'packs') : undefined;
   }
 
   /**
-   * The "Install Markii pack from file" command (GitHub issue #16): picks a
-   * `.mkp` archive, validates it, asks consent to run its code, asks before
-   * replacing an already-installed pack of the same namespace, and unzips
-   * it into `installedPacksDir()`. Every decision and every user-facing
-   * string lives in `./packs/install-pack.ts`; this method is wiring only.
-   * A successful install still adds the extracted directory to this
-   * device's pack-folder list, the same write `settings-tab.ts`'s "Add a
-   * pack folder" button makes, so the preview actually loads it on next
-   * open.
+   * Every namespace on disk under `installedPacksDir()`, split into
+   * loadable (trusted on this device) and present-but-not-enabled
+   * (`./packs/installed-packs.ts`'s pure `selectLoadablePackFolders`).
+   * `[]`/`[]` when the plugin has no filesystem-backed directory at all.
+   */
+  private installedPackFolders(): {
+    readonly loadable: readonly LoadablePackFolder[];
+    readonly notEnabled: readonly string[];
+  } {
+    const installRoot = this.installedPacksDir();
+    if (installRoot === undefined) return { loadable: [], notEnabled: [] };
+    const onDisk = createNodePackDirLister()(installRoot);
+    return selectLoadablePackFolders(installRoot, onDisk, this.packTrust);
+  }
+
+  /** Every namespace a bundled pack already claims — an install or an enable naming one of these is refused/moot, since the bundled pack always wins that namespace (docs/packs.md). */
+  private bundledNamespaces(): ReadonlySet<string> {
+    return new Set(bundledDiscoveredPacks().map((pack) => pack.manifest.name));
+  }
+
+  /**
+   * Reads an installed pack's declared `version`, if it has one — used to
+   * populate the trust list's optional version field at install and
+   * enable time. Never throws: a missing or malformed `pack.json` simply
+   * yields `undefined`, matching every other pack-loading step's
+   * "degrade, don't fail" posture.
+   */
+  private async readInstalledPackVersion(
+    installedDir: string,
+  ): Promise<string | undefined> {
+    try {
+      const text = await nodeReadFile(
+        path.join(installedDir, 'pack.json'),
+        'utf8',
+      );
+      const parsed = JSON.parse(text) as { version?: unknown };
+      return typeof parsed.version === 'string' ? parsed.version : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * Loads this device's installed, trusted packs (plus the bundled set)
+   * into `packContext`, swapping in their stylesheets — removing the
+   * previous load's first, so a reload never leaks a stale pack's CSS
+   * (AGENTS.md's cleanliness rule). Never throws: `loadPackContext`
+   * already degrades quietly to "this pack didn't load, here's why."
+   */
+  private async loadPacks(): Promise<void> {
+    if (this.packContext) {
+      removePackStylesheets(
+        document,
+        this.packContext.stylesheets.map((sheet) => sheet.namespace),
+      );
+    }
+    const { loadable, notEnabled } = this.installedPackFolders();
+    this.notEnabledPackNamespaces = notEnabled;
+
+    const context = await loadPackContext(
+      loadable.map((entry) => entry.folder),
+      defaultRegistry,
+      { bundledPacks: bundledPackAssets() },
+    );
+    this.packContext = context;
+    applyPackStylesheets(document, context.stylesheets);
+  }
+
+  /**
+   * Rebuilds `completionCatalog`: every loaded pack's manifest (a cheap,
+   * eval-free discovery — `./packs/discover-configured-packs.ts` — rather
+   * than reusing `packContext`, so this catalog stays correct even for a
+   * pack that is discoverable but whose script failed to evaluate) plus
+   * the standard set, the same catalog `insertComponent` and directive
+   * completion (`src/complete-suggest.ts`) both read. Never throws:
+   * `discoverConfiguredPacks` already degrades quietly.
+   */
+  private async refreshCompletionCatalog(): Promise<void> {
+    const { loadable } = this.installedPackFolders();
+    let packs: readonly DiscoveredPack[] = [];
+    try {
+      packs = await discoverConfiguredPacks(
+        loadable.map((entry) => entry.folder),
+      );
+    } catch {
+      packs = [];
+    }
+    this.completionCatalog = buildComponentCatalog([
+      ...bundledDiscoveredPacks(),
+      ...packs,
+    ]);
+  }
+
+  /**
+   * Writes this pack load's diagnostic lines (`src/packs/pack-diagnostics.ts`)
+   * to the console — one line per successfully loaded pack, one per skipped
+   * folder with its reason, one per present-but-not-enabled namespace, plus
+   * any registration warnings. AGENTS.md's cleanliness principle: "every
+   * failure needs a full diagnostic somewhere a user can find it." Obsidian
+   * has no output channel, so `console` is that "somewhere" (paired with
+   * `Notice` for failures a user must act on). Public so "Show Markii
+   * diagnostics" can call it without requiring an open preview — pack
+   * loading no longer belongs to any one view.
+   */
+  logPackDiagnostics(): void {
+    console.log(`[markii] pack load at ${new Date().toISOString()}`);
+    const lines = this.packContext
+      ? formatPackDiagnosticLines(this.packContext)
+      : [];
+    if (lines.length === 0 && this.notEnabledPackNamespaces.length === 0) {
+      console.log('[markii]   no packs installed');
+    }
+    for (const line of lines) {
+      console.log(`[markii]   ${line}`);
+    }
+    for (const namespace of this.notEnabledPackNamespaces) {
+      console.log(`[markii]   ${notEnabledPackLine(namespace)}`);
+    }
+  }
+
+  /** A `Notice` for pack failures a user must act on — a skipped folder, or two packs sharing a namespace. All wording lives in `./packs/pack-diagnostics.ts`. */
+  private notifyPackFailures(): void {
+    if (!this.packContext) return;
+    const failedCount = skippedPackCount(this.packContext);
+    if (failedCount > 0) {
+      new Notice(packLoadFailureNotice(failedCount));
+    }
+    if (this.packContext.registrationCollisions.length > 0) {
+      new Notice(packCollisionNotice(this.packContext.registrationCollisions));
+    }
+  }
+
+  /** Re-renders every open Markii surface with the current `packContext`: every open Markii Preview pane, and every open markdown leaf currently showing Reading view (`previewMode.rerender(true)`, the way `settings-tab.ts`'s `applyInlineReadingView` already does). Used after install, remove, enable, and the "Reload Markii packs" command. */
+  private reloadOpenViews(): void {
+    for (const leaf of this.app.workspace.getLeavesOfType(
+      MARKII_PREVIEW_VIEW_TYPE,
+    )) {
+      if (leaf.view instanceof MarkiiPreviewView) {
+        void leaf.view.refresh();
+      }
+    }
+    for (const leaf of this.app.workspace.getLeavesOfType('markdown')) {
+      const view = leaf.view;
+      if (view instanceof MarkdownView) {
+        view.previewMode.rerender(true);
+      }
+    }
+  }
+
+  /**
+   * Reloads this device's installed packs and re-renders every open Markii
+   * view. Used on plugin load, after install/remove/enable, and by the
+   * "Reload Markii packs" command. `showNotice` is true only for that
+   * explicit manual command; install/remove/enable already show their own
+   * outcome notice, and the load-on-startup call stays quiet on success
+   * (failures still reach both of AGENTS.md's two homes either way).
+   */
+  async reloadPacks(showNotice: boolean): Promise<void> {
+    await this.loadPacks();
+    await this.refreshCompletionCatalog();
+    this.logPackDiagnostics();
+    this.notifyPackFailures();
+    this.reloadOpenViews();
+    if (showNotice) {
+      new Notice('Markii: packs reloaded.');
+    }
+  }
+
+  /**
+   * The "Install Markii pack from file" command (AGENTS.md's Host
+   * positioning: the ONLY way a pack enters this plugin). Picks a `.mkp`
+   * archive, validates it, refuses one whose namespace is already a
+   * bundled pack's, asks consent to run its code, asks before replacing an
+   * already-installed pack of the same namespace, and unzips it into
+   * `installedPacksDir()`. Every decision and every user-facing string
+   * lives in `./packs/install-pack.ts`; this method is wiring only. A
+   * successful install adds the namespace to this device's trust list and
+   * reloads every open view immediately — no "reopen the preview" step.
    */
   private async installPackFromFile(): Promise<void> {
     const archivePath = await pickPackArchiveFile();
@@ -886,6 +975,7 @@ export default class MarkiiPlugin extends Plugin {
         confirmModal(this.app, installConsentMessage(name)),
       confirmReplace: (name) =>
         confirmModal(this.app, installReplaceConfirmMessage(name)),
+      bundledNamespaces: this.bundledNamespaces(),
     });
 
     for (const line of installPackDiagnosticLines(outcome, archivePath)) {
@@ -894,54 +984,66 @@ export default class MarkiiPlugin extends Plugin {
     new Notice(installPackNoticeText(outcome, archivePath));
 
     if (outcome.kind === 'installed') {
-      const nextFolders = appendPackFolder(
-        this.packSettings.packFolders,
-        outcome.installedDir,
-      );
-      if (nextFolders) {
-        this.savePackSettings({ packFolders: nextFolders });
-      }
+      const version = await this.readInstalledPackVersion(outcome.installedDir);
+      this.savePackTrust(trustPack(this.packTrust, outcome.packName, version));
+      await this.reloadPacks(false);
     }
   }
 
   /**
-   * A plugin-owned directory a pack's compiled registration script may be
-   * cached under — NEVER a pack's own folder (AGENTS.md's cleanliness
-   * rule). Obsidian plugins have no per-extension "global storage" outside
-   * a vault the way `vscode.ExtensionContext.globalStorageUri` does, so
-   * this sits under the plugin's own installed folder
-   * (`<vault>/.obsidian/plugins/markii/pack-cache/`) — inside Obsidian's
-   * own machinery directory, not the user's authored note tree, matching
-   * the spirit of the cleanliness rule even though it is technically
-   * inside the vault.
+   * The settings tab's "Enable" control for a pack folder that is present
+   * on disk but not yet trusted on this device (arrived via Sync, or a
+   * hand copy). Asks the SAME consent prompt "Install Markii pack from
+   * file" asks, since enabling it is exactly as consequential: its code
+   * will run inside the preview from this point on.
    */
-  packCacheDir(): string | undefined {
-    const dir = this.pluginDir();
-    return dir ? path.join(dir, 'pack-cache') : undefined;
+  async enablePresentPack(namespace: string): Promise<void> {
+    const consented = await confirmModal(
+      this.app,
+      installConsentMessage(namespace),
+    );
+    if (!consented) return;
+
+    const installRoot = this.installedPacksDir();
+    if (installRoot === undefined) return;
+    const version = await this.readInstalledPackVersion(
+      path.join(installRoot, namespace),
+    );
+    this.savePackTrust(trustPack(this.packTrust, namespace, version));
+    await this.reloadPacks(false);
+    new Notice(packEnabledNotice(namespace));
   }
 
   /**
-   * Absolute path to a REAL, unbundled `esbuild-wasm/lib/browser.js` next
-   * to the packaged plugin (`esbuild.config.mjs` copies it there — see
-   * that file's doc comment), or `undefined` if not present (dev, before
-   * `npm run build` has produced it this way) — `@markii/host`'s
-   * `packs/pack-build.ts`'s `loadEsbuildWasm` then falls back to plain
-   * `node_modules` resolution. Mirrors
-   * `apps/vscode/src/preview-panel.ts`'s `esbuildBrowserModulePath`.
+   * The settings tab's "Remove" control for an installed pack: deletes its
+   * folder and its trust entry, then reloads immediately. Never removes a
+   * bundled pack — the settings tab never offers this control for one.
    */
-  esbuildBrowserModulePath(): string | undefined {
-    const dir = this.pluginDir();
-    if (!dir) return undefined;
-    const candidate = path.join(dir, 'esbuild-wasm', 'lib', 'browser.js');
-    return existsSync(candidate) ? candidate : undefined;
-  }
-
-  /** Sibling of `esbuildBrowserModulePath()` — the `esbuild.wasm` binary `loadEsbuildWasm` compiles via `WebAssembly.compile`. Same fallback posture. */
-  esbuildWasmBinaryPath(): string | undefined {
-    const dir = this.pluginDir();
-    if (!dir) return undefined;
-    const candidate = path.join(dir, 'esbuild-wasm', 'esbuild.wasm');
-    return existsSync(candidate) ? candidate : undefined;
+  async removeInstalledPack(namespace: string): Promise<void> {
+    const installRoot = this.installedPacksDir();
+    if (installRoot === undefined) return;
+    const dir = path.join(installRoot, namespace);
+    let folderDeleted = true;
+    try {
+      await nodeRm(dir, { recursive: true, force: true });
+    } catch (err) {
+      folderDeleted = false;
+      console.error(
+        `[markii] could not remove pack folder "${dir}": ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+    // The trust entry goes either way: whatever happened to the folder,
+    // this device has withdrawn its authorization, so the pack stops
+    // loading on the reload below. What differs is what the user is told.
+    this.savePackTrust(untrustPack(this.packTrust, namespace));
+    await this.reloadPacks(false);
+    new Notice(
+      folderDeleted
+        ? packRemovedNotice(namespace)
+        : packRemoveFolderFailedNotice(namespace),
+    );
   }
 
   /**
@@ -1008,25 +1110,20 @@ export default class MarkiiPlugin extends Plugin {
   }
 
   /**
-   * DEVICE-LOCAL pack-folder setting (`src/packs/pack-settings.ts`'s top
-   * comment) — `app.loadLocalStorage`/`app.saveLocalStorage`, never
-   * `loadData`/`saveData`, for the same reason `loadLocalSettings`/
-   * `saveLocalSettings` above use it: this authorizes code execution.
+   * DEVICE-LOCAL pack trust list (`src/packs/pack-trust.ts`'s top comment)
+   * — `app.loadLocalStorage`/`app.saveLocalStorage`, never `loadData`/
+   * `saveData`, for the same reason `loadLocalSettings`/`saveLocalSettings`
+   * above use it: this authorizes code execution.
    */
-  loadPackSettings(): void {
-    this.packSettings = normalizePackSettings(
-      this.app.loadLocalStorage(PACK_SETTINGS_STORAGE_KEY),
+  loadPackTrust(): void {
+    this.packTrust = normalizePackTrustList(
+      this.app.loadLocalStorage(PACK_TRUST_STORAGE_KEY),
     );
   }
 
-  savePackSettings(next: PackSettings): void {
-    this.packSettings = next;
-    this.app.saveLocalStorage(PACK_SETTINGS_STORAGE_KEY, next);
-    // Adding or removing a pack folder should update what autocompletes
-    // without requiring a plugin reload. Not awaited, for the same reason
-    // `onload`'s call isn't: this is a settings-tab action, not something
-    // that should block on a filesystem walk.
-    void this.refreshCompletionCatalog();
+  savePackTrust(next: PackTrustList): void {
+    this.packTrust = next;
+    this.app.saveLocalStorage(PACK_TRUST_STORAGE_KEY, next);
   }
 
   private async openPreview(): Promise<void> {

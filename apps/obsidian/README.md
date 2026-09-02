@@ -18,6 +18,10 @@ Markii is not in the Obsidian community catalogue yet. Two routes install it
 from the plugin's release repository,
 [markii-obsidian](https://github.com/markii-org/markii-obsidian).
 
+The plugin is a plain three-file install: `main.js`, `manifest.json`, and
+`styles.css`. Both routes below end with the same three files in the same
+place, so there is no functional difference between them.
+
 ### Zip (recommended)
 
 1. Download `markii-{{VERSION}}.zip` from that repository's Releases page.
@@ -30,10 +34,6 @@ from the plugin's release repository,
 To update, download the newer zip and extract it over the same folder, then
 reload Obsidian.
 
-This route includes the esbuild-wasm runtime that component packs need in
-order to compile from source, so it works out of the box for any component
-pack that does not ship a prebuilt `webview.js`.
-
 ### BRAT
 
 1. Install the [obsidian42-BRAT](https://github.com/TfTHacker/obsidian42-brat)
@@ -43,20 +43,8 @@ pack that does not ship a prebuilt `webview.js`.
 3. BRAT fetches `manifest.json`, `main.js`, and `styles.css` from the
    latest release and keeps them updated automatically.
 
-With the BRAT install, note scripts and every built-in component work the
-same as the zip install. The one thing it cannot do is compile a component
-pack that ships source rather than a prebuilt `webview.js`: that needs the
-esbuild-wasm runtime, which BRAT does not fetch. Add it with the step below
-if you plan to install a pack like that.
-
-To add pack compilation to a BRAT install without reinstalling, download
-`esbuild-wasm.zip` from the release and extract it into your plugin folder
-next to `main.js`, then reload Obsidian. The plugin looks for that folder
-at load time, so this one extraction enables compiling every pack. BRAT
-updates leave the folder in place.
-
-Markii is desktop only. It runs note scripts inside a terminatable isolate and
-compiles component packs in process, and Obsidian on mobile supports neither.
+Markii is desktop only. It runs note scripts inside a terminatable isolate,
+and Obsidian on mobile does not support that.
 
 ## Commands
 
@@ -78,12 +66,18 @@ All of these are in the command palette.
   open a note with run on open enabled, or wait for a scheduled refresh. Your
   network and bundle grants are left exactly as they are.
 - **Install Markii pack from file** installs a pack you were given as a single
-  `.mkp` file. It checks the archive first, then asks before going ahead,
-  because a pack's code runs inside the preview. If a pack of the same name is
-  already installed it asks again before replacing it, and an archive it cannot
-  read installs nothing.
-- **Show Markii diagnostics** prints the current preview's pack diagnostics to
-  the developer console.
+  `.mkp` file, the only way a pack enters this plugin. It checks the archive
+  first, then asks before going ahead, because a pack's code runs inside the
+  preview. If a pack of the same name is already installed it asks again
+  before replacing it, and an archive it cannot read installs nothing. Once
+  installed, it loads immediately, in every open preview and every open
+  Reading view.
+- **Reload Markii packs** reloads every installed pack on demand and
+  re-renders every open Markii view. Install, Remove, and Enable already do
+  this for you; use this command if a pack folder changed outside the
+  plugin, for example after a Sync.
+- **Show Markii diagnostics** prints the plugin's pack diagnostics, and the
+  active preview's last run failures, to the developer console.
 
 ## Reading view
 
@@ -107,18 +101,30 @@ how a note reads once you are looking at it read-only.
 
 Three packs ship with the plugin and need no installation: `read` for
 reading and annotation notes, `dash` for dashboards, and `prep` for revision
-notes. They are compiled in and embedded in `main.js` at build time, so they
-work on every install, including the BRAT route's three loose files. A note
-uses them the same way it would any other pack, for example `:::read_source`.
+notes. They are built in and embedded in `main.js`, so they work on every
+install. A note uses them the same way it would any other pack, for example
+`:::read_source`.
 
-You can add your own packs from Settings, under **Scripting**: point the
-device-local pack-folder list at a folder on disk. An entry in that list can
-also be a single `.mkp` file, which is read where it sits and never compiled,
-so it works on an install that carries no compiler. **Install Markii pack
-from file** copies one into the plugin's own pack folder and adds it to the
-list for you. A pack you add there that claims a namespace one of the three
-bundled packs already holds is skipped; the bundled pack wins, and **Show
-Markii diagnostics** says so. See
+This plugin installs packs only from a `.mkp` archive, with the **Install
+Markii pack from file** command. There is no pack-folder setting and no
+compiler: a pack always arrives prebuilt, exported from VS Code's Export
+Pack command, or shared by someone who built it there. If you used to point
+this plugin at a folder of pack sources, export that pack as a `.mkp` from
+VS Code and install it here instead.
+
+Manage installed packs from Settings, under **Component packs**: each one
+lists its name and version, with a control to remove it. Removing a pack
+deletes its files and takes effect immediately, in every open view.
+
+A pack folder can end up on this device without being trusted here, for
+example one that arrived through Obsidian Sync. Settings lists it as
+"present, not enabled", with an Enable button that asks the same consent
+"Install Markii pack from file" asks, since enabling it is just as
+consequential: its code will run inside the preview from that point on.
+
+A pack that claims the namespace of a bundled pack (`read`, `dash`, `prep`)
+is refused at install time and named in the notice; the bundled pack always
+wins that name. See
 [docs/packs.md](https://github.com/markii-org/markii/blob/main/docs/packs.md)
 for the full pack contract.
 

@@ -164,8 +164,8 @@ export function installPackResultMessage(
     return `Markii: install cancelled for pack "${outcome.packName}". Nothing was installed.`;
   }
   return outcome.replaced
-    ? `Markii: reinstalled pack "${outcome.packName}". Reopen the preview to load the new version.`
-    : `Markii: installed pack "${outcome.packName}". Reopen the preview to load it.`;
+    ? `Markii: reinstalled pack "${outcome.packName}".`
+    : `Markii: installed pack "${outcome.packName}".`;
 }
 
 /** The full diagnostics-channel detail for one install attempt (AGENTS.md's "clean is not silent": the other of a failure's two homes). */

@@ -10,7 +10,6 @@ export declare function buildEmbeddedAssets(
   wasmGlueBase64: string;
   watchFiles: string[];
 }>;
-export declare function copyEsbuildWasm(): void;
 export declare function buildEmbeddedBundledPacks(): Promise<{
   payloadBase64: string;
   watchFiles: string[];

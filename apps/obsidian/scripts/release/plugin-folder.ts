@@ -16,37 +16,21 @@ import {
 } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 
-// The esbuild-wasm compiler runtime: pack compilation. Without these two
-// files, installing a component pack that ships source rather than a
-// prebuilt webview.js fails to compile
-// (apps/obsidian/src/packs/pack-compilation.ts degrades that cleanly rather
-// than breaking). Also attached to a release as its own asset
-// (esbuild-wasm.zip, see build-release.ts's runtime-staging step and
-// .github/workflows/obsidian-release.yml) so a BRAT install, which only ever
-// fetches loose files, can add pack compilation without a full reinstall.
-export const ESBUILD_RUNTIME_FILES: readonly string[] = [
-  'esbuild-wasm/lib/browser.js',
-  'esbuild-wasm/esbuild.wasm',
-];
-
 // Every entry here is load-bearing at runtime, not merely part of the build
-// output:
-//   - main.js is the plugin entry point Obsidian actually loads. It now
+// output. This plugin is a plain three-file install (AGENTS.md's Host
+// positioning: Obsidian is archive-only, with no pack compiler of its own,
+// so there is no esbuild-wasm runtime to stage or ship any more):
+//   - main.js is the plugin entry point Obsidian actually loads. It
 //     carries the Run path's isolate too: the worker bundle and its Lua
-//     wasm glue are base64-embedded inside it (GitHub issue #13 step 2), so
-//     worker.browser.js and glue.wasm are no longer emitted as separate
-//     files and are deliberately absent from this list.
+//     wasm glue are base64-embedded inside it, as are the three bundled
+//     packs (read, dash, prep) — none of those are ever emitted as
+//     separate files.
 //   - manifest.json and styles.css are read by Obsidian itself (id/version
 //     detection, and the document stylesheet the preview depends on).
-//   - ESBUILD_RUNTIME_FILES stay required here because they must be present
-//     in the assembled plugin folder before anything can stage or zip them
-//     as a release asset, even though they now also ship separately as
-//     esbuild-wasm.zip (see above) rather than only inside the plugin zip.
 export const REQUIRED_PLUGIN_FILES: readonly string[] = [
   'main.js',
   'manifest.json',
   'styles.css',
-  ...ESBUILD_RUNTIME_FILES,
 ];
 
 export function listFilesRecursively(dir: string): string[] {
@@ -130,37 +114,4 @@ export function assemblePluginFolder(options: {
   }
 
   return { pluginDir, files };
-}
-
-// Stages the esbuild-wasm compiler runtime out of an already-assembled
-// plugin folder (see assemblePluginFolder above) into its own output
-// directory, preserving the `esbuild-wasm/...` relative layout so zipping
-// that directory produces a single `esbuild-wasm/` folder that sits next to
-// main.js when extracted. This is the release-asset path (issue #25,
-// variant A): the plugin never downloads this itself, CI attaches it to the
-// release as esbuild-wasm.zip instead.
-export function stageEsbuildRuntime(options: {
-  pluginDir: string;
-  outDir: string;
-}): { files: string[] } {
-  const { pluginDir, outDir } = options;
-
-  const missing = ESBUILD_RUNTIME_FILES.filter(
-    (relPath) => !existsSync(join(pluginDir, relPath)),
-  );
-  if (missing.length > 0) {
-    throw new Error(
-      `plugin folder ${pluginDir} is missing required esbuild-wasm runtime file(s): ${missing.join(', ')} — run "npm run build -w markii-obsidian" first so dist/ is up to date`,
-    );
-  }
-
-  for (const relPath of ESBUILD_RUNTIME_FILES) {
-    const dest = join(outDir, relPath);
-    mkdirSync(join(dest, '..'), { recursive: true });
-    copyFileSync(join(pluginDir, relPath), dest);
-  }
-
-  const files = [...ESBUILD_RUNTIME_FILES];
-  files.sort();
-  return { files };
 }

@@ -16,7 +16,6 @@ describe('isSnapshotSource', () => {
 
   it('excludes build output', () => {
     expect(isSnapshotSource('dist/main.js')).toBe(false);
-    expect(isSnapshotSource('dist/esbuild-wasm/esbuild.wasm')).toBe(false);
   });
 
   it('excludes node_modules and .git', () => {
@@ -57,25 +56,21 @@ describe('mirrorReadme', () => {
     expect(readme).not.toContain('—');
   });
 
-  it('documents both the zip and BRAT install routes', () => {
+  it('documents both the zip and BRAT install routes as equivalent', () => {
     const readme = mirrorReadme('0.2.0');
     expect(readme).toContain('markii-0.2.0.zip');
     expect(readme).toContain('obsidian42-BRAT');
     expect(readme).toContain('https://github.com/markii-org/markii-obsidian');
+    expect(readme).toContain('no functional difference');
   });
 
-  it('states the pack-compilation caveat for the BRAT route', () => {
+  it('states packs install only from a .mkp archive, with no compiler', () => {
     const readme = mirrorReadme('0.2.0');
-    expect(readme).toContain('webview.js');
-    expect(readme).toContain('esbuild-wasm');
+    expect(readme).toContain('.mkp');
+    expect(readme).toContain('no pack-folder setting and no');
   });
 
-  it('points the BRAT pack-compilation workaround at esbuild-wasm.zip', () => {
-    const readme = mirrorReadme('0.2.0');
-    expect(readme).toContain('esbuild-wasm.zip');
-  });
-
-  it('lists every command the plugin registers, exports included', () => {
+  it('lists every command the plugin registers, exports and pack reload included', () => {
     const readme = mirrorReadme('0.2.0');
     for (const command of [
       'Open Markii Preview',
@@ -84,6 +79,8 @@ describe('mirrorReadme', () => {
       'Export Markii note as HTML',
       'Export Markii note as PDF',
       'Toggle Markii script execution',
+      'Install Markii pack from file',
+      'Reload Markii packs',
       'Show Markii diagnostics',
     ]) {
       expect(readme).toContain(command);

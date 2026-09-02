@@ -2,7 +2,7 @@
   "name": "markii-vscode",
   "displayName": "Markii",
   "description": "Preview for Markii (.mk.md) documents: CommonMark plus directives that render components.",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "private": true,
   "license": "MIT",
   "publisher": "markii",
@@ -64,6 +64,11 @@
       {
         "command": "markii.installPack",
         "title": "Install Pack from File…",
+        "category": "Markii"
+      },
+      {
+        "command": "markii.removeInstalledPack",
+        "title": "Remove Installed Pack…",
         "category": "Markii"
       },
       {
@@ -155,6 +160,9 @@
         },
         {
           "command": "markii.installPack"
+        },
+        {
+          "command": "markii.removeInstalledPack"
         },
         {
           "command": "markii.enableScheduledRefresh"

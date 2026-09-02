@@ -4,19 +4,13 @@ All notable changes to Markii and the `@markii/*` packages are recorded here. Th
 format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.12.0] - 2026-09-02
+
+The `@markii/*` packages and the VS Code extension ship this release as
+0.12.0, the Obsidian plugin as 0.9.0.
 
 ### Added
 
-- **VS Code: `.mkp` pack archives.** A `markii.packs` entry may now name a
-  `.mkp` file directly instead of a folder. It loads read-only from the
-  archive (validated with `@markii/pack`'s `openPackArchive`), in its
-  prebuilt form only, and is never compiled from source: the archive's
-  contents are extracted into the extension's own pack-cache directory,
-  wiped and rewritten on every load, so an edited or reinstalled archive
-  never leaves stale files behind. A namespace collision between an archive
-  pack and a folder pack is rejected the same way two folder packs
-  colliding already was.
 - **VS Code: `Markii: Install Pack from File…` (`markii.installPack`).**
   Picks a `.mkp` file, validates it, asks the user to confirm that
   installing it will let its code run inside every Markii preview, asks
@@ -24,7 +18,14 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
   it into the extension's own `installed-packs` directory under
   `globalStorage`, and adds that directory to `markii.packs`. A rejected
   archive reports the reason on the Markii output channel and installs
-  nothing.
+  nothing. An archive is the only way a pack enters a host this way: a
+  `markii.packs` entry always names a folder.
+- **VS Code: `Markii: Remove Installed Pack…`
+  (`markii.removeInstalledPack`).** Lists the packs installed under
+  `globalStorage`, each with the version its manifest declares, asks for
+  confirmation, then deletes the pack's directory and removes its
+  `markii.packs` entry in one step, so an installed pack can be taken back
+  out without finding the storage folder by hand.
 - **VS Code: `Markii: Export Pack` gains an archive output.** Alongside
   today's folder export, the command now offers a single `.mkp` file,
   built by `@markii/host`'s new `exportPackArchive` (the same compile,
@@ -45,14 +46,28 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
   install carry them, with no esbuild-wasm runtime required at load time.
   They behave as ordinary packs: namespaced (`read_source`, and so on),
   listed by a note's `uses:`, and shown in the Insert Component and
-  completion catalogs. They load before any user-configured pack, and a
-  configured pack that claims a namespace one of the three already holds is
-  skipped, with a line on both the console and a `Notice`: the bundled pack
-  wins the namespace, matching the ordinary collision rule rather than
-  making an exception to it. The pack contract itself is unchanged; only
+  completion catalogs. They load before any installed pack, and an
+  installed pack that claims a namespace one of the three already holds is
+  refused at install time: the bundled pack wins the namespace, matching
+  the ordinary collision rule rather than making an exception to it. The pack contract itself is unchanged; only
   `apps/obsidian`'s build and pack-loading pipeline gained a bundled-pack
   source ahead of its on-disk one.
 
+- **Obsidian: an app-managed pack store.** Installed packs live in the
+  plugin's own directory, one folder per namespace, and the settings tab
+  lists them with the version each manifest declares, a Remove control that
+  deletes the folder and the device's trust entry together, and an Enable
+  control for a pack folder that is present without being installed here.
+  Which namespaces this device loads is recorded device-locally, never in
+  plugin data, so a synced or shared vault carries none of those decisions.
+  A pack folder that arrives another way, through Sync or a hand copy, sits
+  inert until it is enabled, and enabling asks the same consent question
+  installing asks. A folder whose `pack.json` declares some other namespace
+  than the folder's own name is not loaded at all.
+- **Obsidian: `Reload Markii packs`.** Installing, removing, and enabling a
+  pack already reload every open preview and Reading view on the spot; this
+  command does the same on demand, and each reload writes what loaded and
+  what was skipped to the diagnostics console.
 - **A `table` standard component**, data-bound like `stat`, `progress`, and
   `chart`. It handles four bound shapes: an array of objects (columns from
   the union of keys, in first-seen order), an array of arrays (rows as
@@ -162,6 +177,22 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Obsidian: packs are installed, not configured.** A `.mkp` archive
+  installed with "Install Markii pack from file" is now the only way a pack
+  enters the plugin. The device-local pack-folder list is gone and its
+  entries are no longer read, and with them the ability to compile a pack
+  from source: the plugin loads the prebuilt form only, which is what an
+  archive carries. To carry a source pack over, export it from VS Code with
+  "Markii: Export Pack" as a `.mkp` and install that file. VS Code is
+  unchanged here: it is the authoring host and still loads source folders.
+- **Obsidian: the plugin is three files again.** Dropping the compiler
+  removes the `esbuild-wasm` runtime from the plugin folder, so an install
+  is `main.js`, `manifest.json`, and `styles.css` by either route, and the
+  release no longer attaches a separate runtime asset. The Obsidian Sync
+  file-size caveat that runtime carried is gone with it.
+- **VS Code: a pack change takes effect at once.** Installing a pack,
+  removing one, or editing `markii.packs` now reloads the open preview's
+  packs and re-renders it, instead of asking you to reopen the preview.
 - **The four `width=` presets are themeable.** `--mk-width-fit`,
   `--mk-width-narrow`, `--mk-width-wide`, and `--mk-width-full` join the
   Tier 1 token contract, bringing it to 19 properties, so a host can widen

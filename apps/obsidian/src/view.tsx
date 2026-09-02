@@ -4,7 +4,6 @@ import { createRoot, type Root } from 'react-dom/client';
 import { createValueStore } from '@markii/runtime';
 import type { RunTrigger, StoredValue } from '@markii/runtime';
 import {
-  buildPackRegistrationScript,
   mergeArrivingValue,
   readPersistedValues,
   runOnce,
@@ -14,7 +13,6 @@ import {
 import type { RunOnceResult, SpawnRunOptions } from '@markii/host';
 import { extractFrontmatterUses } from '@markii/core';
 import { resolveUses } from '@markii/pack';
-import { defaultRegistry } from '@markii/react/components';
 import { renderDocument } from './render-document.js';
 import {
   VaultImageDocument,
@@ -29,22 +27,6 @@ import {
 } from './run-modals.js';
 import { refreshIntervalMsFromSeconds } from './local-settings.js';
 import { emitValuesChanged } from './run/run-events.js';
-import { loadPackContext } from './packs/pack-context.js';
-import type { PackContext } from './packs/pack-context.js';
-import { bundledPackAssets } from './packs/bundled-packs.js';
-import {
-  PACK_COMPILATION_UNAVAILABLE_NOTICE,
-  compilationUnavailableSkipCount,
-  formatPackDiagnosticLines,
-  packCollisionNotice,
-  packLoadFailureNotice,
-  skippedPackCount,
-} from './packs/pack-diagnostics.js';
-import { createPackRegistrationBuilder } from './packs/pack-compilation.js';
-import {
-  applyPackStylesheets,
-  removePackStylesheets,
-} from './packs/pack-styles.js';
 import {
   HIDE_SCRIPT_BLOCKS_CLASS,
   PREVIEW_WIDTH_CLASSES,
@@ -93,15 +75,6 @@ export class MarkiiPreviewView extends ItemView {
   /** At-most-once run-on-open, for this view's whole lifetime — mirrors `apps/vscode/src/preview-panel.ts`'s `ActivePreview.ranOnOpen` (panel-lifetime, not per-document: switching notes in the same view does not re-trigger it). */
   private ranOnOpen = false;
   private refreshTimer: ReturnType<typeof setInterval> | undefined;
-  /**
-   * This preview's currently-loaded component packs (docs/packs.md) —
-   * loaded once per preview open (see `onOpen` below and
-   * `src/settings-tab.ts`'s note that reloading a pack requires reopening
-   * the preview). `undefined` before the first load completes, in which
-   * case `refresh()` renders with the plain `defaultRegistry` and no
-   * `uses:` marker, exactly as if no packs were configured.
-   */
-  private packContext: PackContext | undefined;
   /** The last completed run's failure details (`RunOnceResult.failureDetails`), kept so the "Show Markii diagnostics" command can replay them on demand — diagnostics-surface only, never rendered into the page. */
   private lastRunFailures: RunOnceResult['failureDetails'] = [];
 
@@ -118,37 +91,6 @@ export class MarkiiPreviewView extends ItemView {
       console.warn(line);
     },
   );
-
-  /**
-   * This preview's currently-loaded pack registry and stylesheets, for
-   * `main.ts`'s export commands (GitHub issue #28, slice 2): an export
-   * reuses whatever this open preview already loaded rather than loading
-   * a second copy. `undefined` before the first load completes, or once
-   * the view has closed and torn its pack context down, exactly the cases
-   * `refresh()` itself treats as "no packs".
-   *
-   * Also `undefined` when the load found no packs at all. An export with
-   * nothing to add to the standard set renders through `@markii/html`
-   * instead, which produces the same document the static engine has
-   * always produced for a pack-free note: the React path exists to bring
-   * pack components along, so it is not worth taking when there are none.
-   */
-  exportPackContext():
-    | {
-        registry: PackContext['registry'];
-        stylesheets: PackContext['stylesheets'];
-        packCount: number;
-      }
-    | undefined {
-    if (!this.packContext || this.packContext.packs.length === 0) {
-      return undefined;
-    }
-    return {
-      registry: this.packContext.registry,
-      stylesheets: this.packContext.stylesheets,
-      packCount: this.packContext.packs.length,
-    };
-  }
 
   constructor(leaf: WorkspaceLeaf, plugin: MarkiiPlugin) {
     super(leaf);
@@ -225,13 +167,10 @@ export class MarkiiPreviewView extends ItemView {
       }, intervalMs);
     }
 
-    // Component packs (docs/packs.md): loaded once per preview open, before
-    // the first render, so the very first `refresh()` already has the
-    // merged registry and any pack stylesheets in place. A failure here
-    // never blocks the preview — `loadPackContext` degrades quietly to "no
-    // packs" the same way an empty pack-folder setting would.
-    await this.loadPacks();
-
+    // Component packs (docs/packs.md): the plugin loads them once, on its
+    // own load, and again on install/remove/enable/manual reload — never
+    // per preview open any more. This view just reads
+    // `this.plugin.packContext`, whatever it currently is.
     await this.refresh();
   }
 
@@ -239,13 +178,6 @@ export class MarkiiPreviewView extends ItemView {
     if (this.refreshTimer !== undefined) {
       clearInterval(this.refreshTimer);
       this.refreshTimer = undefined;
-    }
-    if (this.packContext) {
-      removePackStylesheets(
-        document,
-        this.packContext.stylesheets.map((sheet) => sheet.namespace),
-      );
-      this.packContext = undefined;
     }
     this.root?.unmount();
     this.root = null;
@@ -292,101 +224,24 @@ export class MarkiiPreviewView extends ItemView {
   }
 
   /**
-   * Loads this preview's component packs (docs/packs.md) from the plugin's
-   * device-local pack-folder setting, merges their components into a
-   * render registry, and injects their stylesheets. Never throws — every
-   * step `loadPackContext` composes already degrades quietly to "this pack
-   * didn't load, here's why" (`PackContext.skipped`), never a crash or an
-   * error dump in the preview (AGENTS.md's cleanliness principle).
+   * Writes this view's last completed run's failure details to the
+   * console, for the "Show Markii diagnostics" command
+   * (`../main.ts`, which prints pack diagnostics itself first — pack
+   * loading belongs to the plugin now, not to any one view). Diagnostics-
+   * surface only, never rendered into the page.
    */
-  private async loadPacks(): Promise<void> {
-    const cacheDir = this.plugin.packCacheDir();
-    const browserModulePath = this.plugin.esbuildBrowserModulePath();
-    const wasmBinaryPath = this.plugin.esbuildWasmBinaryPath();
-
-    const context = await loadPackContext(
-      this.plugin.packSettings.packFolders,
-      this.plugin.vaultBasePath(),
-      defaultRegistry,
-      {
-        cacheDir,
-        bundledPacks: bundledPackAssets(),
-        // Not `buildPackRegistrationScript` directly: on a three-file
-        // install (BRAT, later the community catalogue) the esbuild-wasm
-        // runtime is simply not there, since it is deliberately not
-        // embedded into `main.js` the way the Run path's worker bundle is.
-        // `createPackRegistrationBuilder` turns that into a clean, named
-        // refusal per pack instead of letting the real builder fail with a
-        // raw module-resolution error — see `./packs/pack-compilation.ts`.
-        buildRegistrationScript:
-          cacheDir === undefined
-            ? undefined
-            : createPackRegistrationBuilder({
-                esbuildBrowserModulePath: browserModulePath,
-                esbuildWasmBinaryPath: wasmBinaryPath,
-                compile: (pack, dir) =>
-                  buildPackRegistrationScript(pack, dir, {
-                    esbuildBrowserModulePath: browserModulePath,
-                    esbuildWasmBinaryPath: wasmBinaryPath,
-                  }),
-              }),
-      },
+  logRunDiagnostics(): void {
+    if (this.lastRunFailures.length === 0) {
+      console.log('[markii] no run failures recorded for this preview');
+      return;
+    }
+    console.log(
+      `[markii] last run's ${String(this.lastRunFailures.length)} failure(s):`,
     );
-
-    this.packContext = context;
-    applyPackStylesheets(document, context.stylesheets);
-    this.logPackDiagnostics();
-    this.notifyPackFailures(context);
-  }
-
-  /**
-   * Writes this pack load's diagnostic lines (`src/packs/pack-diagnostics.ts`)
-   * to the console — one line per successfully loaded pack, one per skipped
-   * folder with its reason, plus any CSS-lint or registration warnings.
-   * AGENTS.md's cleanliness principle: "every failure needs a full
-   * diagnostic somewhere a user can find it." Obsidian has no output
-   * channel, so `console` is that "somewhere" (paired with `Notice` for
-   * failures a user must act on — see `notifyPackFailures`). Public so
-   * `main.ts`'s "Show Markii diagnostics" command can call it on demand.
-   */
-  logPackDiagnostics(): void {
-    console.log(`[markii] pack load at ${new Date().toISOString()}`);
-    if (!this.packContext) {
-      console.log('[markii]   no packs loaded yet for this preview');
-      return;
-    }
-    const lines = formatPackDiagnosticLines(this.packContext);
-    if (lines.length === 0) {
-      console.log('[markii]   no pack folders configured');
-      return;
-    }
-    for (const line of lines) {
-      console.log(`[markii]   ${line}`);
-    }
-    if (this.lastRunFailures.length > 0) {
+    for (const failure of this.lastRunFailures) {
       console.log(
-        `[markii] last run's ${String(this.lastRunFailures.length)} failure(s):`,
+        `[markii]   ${failure.name} (${failure.kind}): ${failure.message}`,
       );
-      for (const failure of this.lastRunFailures) {
-        console.log(
-          `[markii]   ${failure.name} (${failure.kind}): ${failure.message}`,
-        );
-      }
-    }
-  }
-
-  /** A `Notice` for pack failures a user must act on — a skipped folder, or two packs sharing a namespace — never for the routine "nothing configured" case. All wording lives in `./packs/pack-diagnostics.ts`; each failure gets exactly ONE notice (a no-compiler skip gets the notice naming that cause, never additionally the generic one). */
-  private notifyPackFailures(context: PackContext): void {
-    const noCompiler = compilationUnavailableSkipCount(context);
-    const otherSkips = skippedPackCount(context) - noCompiler;
-    if (noCompiler > 0) {
-      new Notice(PACK_COMPILATION_UNAVAILABLE_NOTICE);
-    }
-    if (otherSkips > 0) {
-      new Notice(packLoadFailureNotice(otherSkips));
-    }
-    if (context.registrationCollisions.length > 0) {
-      new Notice(packCollisionNotice(context.registrationCollisions));
     }
   }
 
@@ -496,8 +351,8 @@ export class MarkiiPreviewView extends ItemView {
     try {
       const text = await this.app.vault.cachedRead(file);
       const packModules =
-        this.packContext && this.packContext.packs.length > 0
-          ? this.packContext.packModules
+        this.plugin.packContext && this.plugin.packContext.packs.length > 0
+          ? this.plugin.packContext.packModules
           : undefined;
       const result = await runOnce({
         documentKey,
@@ -605,7 +460,7 @@ export class MarkiiPreviewView extends ItemView {
     }
   }
 
-  private async refresh(): Promise<void> {
+  async refresh(): Promise<void> {
     this.applyPreviewWidth();
     this.applyScriptBlockVisibility();
     const file = this.app.workspace.getActiveFile();
@@ -646,7 +501,7 @@ export class MarkiiPreviewView extends ItemView {
       this.values && Object.keys(this.values).length > 0
         ? createValueStore(this.values)
         : undefined;
-    const registry = this.packContext?.registry;
+    const registry = this.plugin.packContext?.registry;
 
     // docs/packs.md's `uses:` surfacing: a note declaring a pack that is
     // not installed still renders fully (its directives already fall back
@@ -655,7 +510,7 @@ export class MarkiiPreviewView extends ItemView {
     // setting was even read.
     const usesResolution = resolveUses(
       extractFrontmatterUses(text),
-      this.packContext?.namespaces ?? [],
+      this.plugin.packContext?.namespaces ?? [],
     );
 
     this.root.render(

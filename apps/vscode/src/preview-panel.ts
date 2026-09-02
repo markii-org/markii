@@ -1009,6 +1009,44 @@ async function presentSource(
 }
 
 /**
+ * Reloads the pack state of the currently open preview, so an installed
+ * pack, a removed pack, or an edited `markii.packs` setting takes effect
+ * immediately rather than waiting for the user to reopen the preview by
+ * hand. `localResourceRoots` cannot be widened on an existing
+ * `WebviewPanel` (the same VS Code restriction `retargetToDocument` above
+ * already works around), so a fresh pack list can only be picked up by a
+ * fresh panel: this disposes the current one and recreates it in the same
+ * view column, exactly like `retargetToDocument`'s own recreation path.
+ * That re-runs `loadCurrentPackContext` (fresh `packContext`), rebuilds
+ * `localResourceRoots` and the webview HTML (fresh pack script/style
+ * URIs), logs the reload's pack diagnostics (`createPreview` already calls
+ * `logPackDiagnostics`), and re-renders the panel's current source once the
+ * recreated webview signals `ready`.
+ *
+ * A no-op with no preview open. Never throws at the caller: a pack load
+ * failure already degrades to a diagnostics line and a quiet marker inside
+ * `loadCurrentPackContext`/`createPreview`, and this function does not add
+ * a new way for a caller (install, remove, a settings-change listener) to
+ * be broken by a reload gone wrong.
+ */
+export async function reloadActivePreviewPacks(
+  context: vscode.ExtensionContext,
+): Promise<void> {
+  const preview = active;
+  if (!preview) return;
+  const viewColumn = preview.panel.viewColumn;
+  const source = preview.source;
+  preview.panel.dispose();
+  try {
+    await createPreview(context, source, viewColumn);
+  } catch (err) {
+    diagnosticsChannel?.appendLine(
+      `Markii: reloading packs for the open preview failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+}
+
+/**
  * Wires up the singleton panel's full lifecycle: the ready/update
  * handshake, following text edits (debounced, `document` sources only) and
  * the active editor (immediately), and rehydration when the panel becomes

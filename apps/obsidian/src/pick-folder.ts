@@ -1,20 +1,12 @@
 /**
- * A native folder picker for the pack-folder setting, matching what the VS
- * Code extension gets for free from `vscode.window.showOpenDialog`
- * (`apps/vscode/src/extension.ts`). Typing an absolute path by hand is how
- * a shell-escaped path like `Obsidian\ Github` ends up in the list, naming
- * a folder that does not exist; picking one cannot produce that.
+ * A native file picker for "Install Markii pack from file"
+ * (`pickPackArchiveFile`, `../main.ts`), aimed at a single `.mkp` file.
  *
- * `pickPackArchiveFile` (GitHub issue #16) is the same reach, aimed at a
- * single `.mkp` file instead of a folder, for "Install Markii pack from
- * file" (`../main.ts`).
- *
- * Obsidian's own API has no folder picker, so this reaches for Electron's
+ * Obsidian's own API has no such picker, so this reaches for Electron's
  * dialog, which the desktop app's renderer exposes. That reach is
  * DEFENSIVE on purpose: the module is resolved at call time, every shape it
  * has been exposed under is tried, and anything unexpected degrades to
- * `undefined` rather than throwing. The caller keeps its text field, so a
- * runtime where this fails is inconvenient, never broken.
+ * `undefined` rather than throwing.
  *
  * Deliberately NOT importing `obsidian` (this plugin's file-scope split,
  * `src/obsidian-import-guard.test.ts`), which also keeps it unit-testable:
@@ -57,47 +49,6 @@ export function loadElectron(): unknown {
 }
 
 /**
- * Opens a native directory chooser and resolves with the absolute path
- * picked, or `undefined` when the user cancelled or no picker is available.
- * Never throws and never rejects: a failure here must leave the settings
- * tab exactly as it was.
- */
-export async function pickFolder(
-  load: () => unknown = loadElectron,
-): Promise<string | undefined> {
-  let dialog: OpenDialogLike | undefined;
-  try {
-    dialog = dialogFrom(load());
-  } catch {
-    return undefined;
-  }
-  if (!dialog) return undefined;
-
-  try {
-    const result = await dialog.showOpenDialog({
-      properties: ['openDirectory'],
-      title: 'Choose a pack folder',
-    });
-    if (result.canceled) return undefined;
-    const first = result.filePaths[0];
-    return typeof first === 'string' && first.length > 0 ? first : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-/** Whether a native picker is available at all — lets the caller show the Browse button only when it would work. */
-export function folderPickerAvailable(
-  load: () => unknown = loadElectron,
-): boolean {
-  try {
-    return dialogFrom(load()) !== undefined;
-  } catch {
-    return false;
-  }
-}
-
-/**
  * Opens a native file chooser filtered to `.mkp` pack archives, and
  * resolves with the absolute path picked, or `undefined` when the user
  * cancelled or no picker is available. Same never-throw, never-reject
@@ -128,9 +79,13 @@ export async function pickPackArchiveFile(
   }
 }
 
-/** Whether a native file picker is available at all — same purpose as `folderPickerAvailable`, for the "Install Markii pack from file" command. */
+/** Whether a native file picker is available at all, for the "Install Markii pack from file" command. */
 export function packArchivePickerAvailable(
   load: () => unknown = loadElectron,
 ): boolean {
-  return folderPickerAvailable(load);
+  try {
+    return dialogFrom(load()) !== undefined;
+  } catch {
+    return false;
+  }
 }

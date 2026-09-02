@@ -1,15 +1,14 @@
 #!/usr/bin/env node
-// The release CLI for the Obsidian plugin (issue #13 step 1). Given a
-// release tag, it:
+// The release CLI for the Obsidian plugin. Given a release tag, it:
 //   1. checks the tag against manifest.json/package.json (version gate,
 //      see scripts/release/version.ts for why this is strict);
-//   2. assembles the installable plugin folder (scripts/release/plugin-folder.ts);
-//   3. stages the esbuild-wasm compiler runtime out of that plugin folder
-//      (issue #25 variant A: it ships as its own release asset,
-//      esbuild-wasm.zip, never auto-downloaded by the plugin);
-//   4. builds the read-only source mirror snapshot (scripts/release/mirror-snapshot.ts);
-//   5. reports what it produced, and, under GitHub Actions, exposes the
-//      version, plugin directory, and runtime directory as step outputs.
+//   2. assembles the installable plugin folder (scripts/release/plugin-folder.ts)
+//      — exactly three files (main.js, manifest.json, styles.css); this
+//      plugin is archive-only, with no pack compiler of its own (AGENTS.md's
+//      Host positioning), so there is no separate compiler runtime to stage;
+//   3. builds the read-only source mirror snapshot (scripts/release/mirror-snapshot.ts);
+//   4. reports what it produced, and, under GitHub Actions, exposes the
+//      version and plugin directory as step outputs.
 //
 // Usage: node scripts/build-release.ts --tag <tag> --out <dir>
 //
@@ -20,10 +19,7 @@ import { appendFileSync, existsSync, readFileSync, rmSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkReleaseVersions } from './release/version.ts';
-import {
-  assemblePluginFolder,
-  stageEsbuildRuntime,
-} from './release/plugin-folder.ts';
+import { assemblePluginFolder } from './release/plugin-folder.ts';
 import { buildMirrorSnapshot } from './release/mirror-snapshot.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -87,7 +83,7 @@ function main(): void {
   console.log(`  tag: ${args.tag}`);
   console.log(`  out: ${outDir}`);
 
-  console.log('\n[1/5] checking release versions...');
+  console.log('\n[1/3] checking release versions...');
   const manifestVersion = readJsonVersion(join(appDir, 'manifest.json'));
   const packageVersion = readJsonVersion(join(appDir, 'package.json'));
   const { version, problems } = checkReleaseVersions({
@@ -111,7 +107,7 @@ function main(): void {
     rmSync(outDir, { recursive: true, force: true });
   }
 
-  console.log('\n[2/5] assembling plugin folder...');
+  console.log('\n[2/3] assembling plugin folder...');
   const pluginOut = join(outDir, 'plugin');
   const { pluginDir, files: pluginFiles } = assemblePluginFolder({
     appDir,
@@ -119,15 +115,7 @@ function main(): void {
   });
   console.log(`  ok: ${pluginDir} (${String(pluginFiles.length)} files)`);
 
-  console.log('\n[3/5] staging esbuild-wasm runtime...');
-  const runtimeOut = join(outDir, 'runtime');
-  const { files: runtimeFiles } = stageEsbuildRuntime({
-    pluginDir,
-    outDir: runtimeOut,
-  });
-  console.log(`  ok: ${runtimeOut} (${String(runtimeFiles.length)} files)`);
-
-  console.log('\n[4/5] building mirror snapshot...');
+  console.log('\n[3/3] building mirror snapshot...');
   const mirrorOut = join(outDir, 'mirror');
   const { files: mirrorFiles } = buildMirrorSnapshot({
     appDir,
@@ -137,17 +125,15 @@ function main(): void {
   });
   console.log(`  ok: ${mirrorOut} (${String(mirrorFiles.length)} files)`);
 
-  console.log('\n[5/5] summary');
+  console.log('\nsummary');
   console.log(`  version: ${version}`);
   console.log(`  plugin files: ${String(pluginFiles.length)}`);
-  console.log(`  runtime files: ${String(runtimeFiles.length)}`);
   console.log(`  mirror files: ${String(mirrorFiles.length)}`);
 
   const githubOutput = process.env.GITHUB_OUTPUT;
   if (githubOutput !== undefined && githubOutput.length > 0) {
     appendFileSync(githubOutput, `version=${version}\n`);
     appendFileSync(githubOutput, `plugin_dir=${pluginDir}\n`);
-    appendFileSync(githubOutput, `runtime_dir=${runtimeOut}\n`);
   }
   console.log(`version=${version}`);
 }

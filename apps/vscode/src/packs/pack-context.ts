@@ -10,7 +10,6 @@
  */
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
-import * as path from 'node:path';
 import {
   createNodeFileReader,
   discoverPacks,
@@ -28,11 +27,6 @@ import type {
   SkippedPackFolder,
 } from '@markii/host';
 import { discoverBundledPacks, mergeBundledPacks } from './bundled-packs.js';
-import {
-  mergeArchiveAndFolderPacks,
-  partitionConfiguredPackPaths,
-  resolveArchivePacksForPreview,
-} from './archive-packs.js';
 
 export interface PackContext {
   /** Every validated, non-colliding discovered pack. */
@@ -169,34 +163,16 @@ export async function loadPackContext(
     homeDir,
   );
   const relativeEntries = relativePackEntries(configuredPacks, homeDir);
-  const { folderPaths, archivePaths } =
-    partitionConfiguredPackPaths(resolvedPaths);
-  const userResult = await discoverPacks(folderPaths, createNodeFileReader());
-  // `.mkp` archive entries (GitHub issue #16): loaded read-only from the
-  // archive, prebuilt form only, never compiled. See `./archive-packs.ts`.
-  // Materialized under a sibling of the pack build cache so it never
-  // touches the workspace or the archive's own folder.
-  const archiveCacheDir =
-    cacheDir !== undefined ? path.join(cacheDir, 'archives') : undefined;
-  const archiveResult = await resolveArchivePacksForPreview(
-    archivePaths,
-    archiveCacheDir,
-  );
-  const combinedUserResult = mergeArchiveAndFolderPacks(
-    userResult.packs,
-    archiveResult.packs,
-  );
+  const userResult = await discoverPacks(resolvedPaths, createNodeFileReader());
   const bundled =
     extensionPath !== undefined
       ? await discoverBundledPacks(extensionPath)
       : [];
-  const merged = mergeBundledPacks(bundled, combinedUserResult.packs);
+  const merged = mergeBundledPacks(bundled, userResult.packs);
   const packModules = await loadPackModules(merged.packs);
 
   const skipped: SkippedPackFolder[] = [
     ...userResult.skipped,
-    ...archiveResult.skipped,
-    ...combinedUserResult.skipped,
     ...merged.skipped,
   ];
   const webviewPacks: DiscoveredPack[] = [];

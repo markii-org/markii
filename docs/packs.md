@@ -173,9 +173,10 @@ components are namespaced like any other, so `read`'s `source` component is
 written `read_source`. A note lists them in `uses:` the same way. They
 appear in the insert catalog and in directive completion.
 
-They are registered before any pack a user configured. If a user pack claims
-a namespace a bundled pack already holds, the user pack is skipped and the
-host says so on its diagnostics surface. The bundled pack wins. This follows
+They are registered before any pack a user configured. A user pack that
+claims a namespace a bundled pack already holds does not load, and a host
+that installs packs refuses it at install time rather than accepting it and
+skipping it later. Either way the host says so, and the bundled pack wins. This follows
 the ordinary collision rule above rather than making an exception to it: two
 packs still cannot share a namespace, and the tie is broken by load order
 instead of by rejecting both.
@@ -195,24 +196,17 @@ which namespaces each component and rejects two packs that claim the same
 namespace. You pass the merged registry to `renderMark`. Nothing loads at
 runtime: the pack is part of your bundle like any other import.
 
-In an editor host, packs are installed by naming folders you trust. The VS
-Code extension uses the `markii.packs` setting, which lives in your user
-settings only, so a project you open can never add a pack on your behalf.
-The Obsidian plugin keeps its list in device-local storage rather than in
-plugin data, so a vault you sync or share carries none of your decisions
-about which code may run.
+In an editor host, a pack is installed per device, because a pack decides
+what code may run in your previews. The two reference hosts differ in how a
+pack gets there, and the difference follows what each host is for.
 
-Each folder holds a `pack.json`, the component sources it names, and an
-optional `scripts/` folder of shared Lua. A host validates each manifest and
-rejects namespace collisions, then does two things: it makes the pack's Lua
-modules reachable from `require "name/..."` in the Run path, and it loads
-the pack's components so they render. A note that names a pack you have not
-installed still reads: its components show the labeled fallback, and a quiet
-marker notes the missing pack.
-
-A configured folder may either be a pack itself or hold several. If the
-folder has no `pack.json` of its own, each immediate subfolder that has one
-is treated as a pack, so a single entry covers a directory of them:
+The VS Code extension is the authoring host. It reads the `markii.packs`
+setting, a list of folders you trust, which lives in your user settings
+only, so a project you open can never add a pack on your behalf. An entry
+always names a folder, never an archive file. It may name a pack folder
+directly, or a folder that holds several: if the folder has no `pack.json`
+of its own, each immediate subfolder that has one is treated as a pack, so
+a single entry covers a directory of them.
 
 ```
 packs/            <- one entry in the setting
@@ -221,32 +215,55 @@ packs/            <- one entry in the setting
 ```
 
 The scan goes one level down and no further. A relative entry resolves
-against the open workspace or vault, so the same entry loads a different
-folder in each one you open. That can be exactly what you want (a pack
-kept inside the vault it serves) or a surprise (a pack that vanishes in
-the next vault), so a host notes relative entries in its diagnostics. For
+against the open workspace, so the same entry loads a different folder in
+each workspace you open. That can be exactly what you want, a pack kept
+inside the project it serves, or a surprise, a pack that vanishes in the
+next project, so the host notes relative entries in its diagnostics. For
 one shared folder across projects, use an absolute path; a leading `~`
 expands to your home directory, which keeps an absolute entry short.
 
-### Naming a pack, or installing one
+VS Code also installs an archive for you. "Markii: Install Pack from File"
+copies a `.mkp`'s contents into the extension's own storage and adds that
+folder to `markii.packs`, and "Markii: Remove Installed Pack" takes one
+back out, deleting the folder and its entry together.
 
-A host's pack list names each pack by path. An entry may point at a pack
-folder, or straight at a `.mkp` file. An archive entry is read-only and
-prebuilt-only: the host reads it where it sits and never compiles anything
-out of it, so pointing at an archive is the lightest way to use a pack you
-did not write.
+The Obsidian plugin is the consuming host, and it manages its packs itself.
+There is no folder list to edit. A pack arrives as a `.mkp` archive through
+"Install Markii pack from file", and the plugin unpacks it into its own
+directory, one folder per namespace. Which namespaces this device loads is
+recorded device-locally, never in plugin data, so a vault you sync or share
+carries none of your decisions about which code may run. A pack folder that
+appears without being installed on this device, arriving through sync or
+copied in by hand, is not loaded: the settings tab lists it as present but
+not enabled here, and enabling it asks the same question installing asks.
+The settings tab is also where an installed pack is removed, which deletes
+its folder and its trust entry in one step.
 
-A host may also offer to install one. Installing copies the archive's
-contents into the host's own pack directory and adds it to the pack list,
-which is stored per device, because a pack list decides what code runs.
+Each pack folder holds a `pack.json`, the component sources or the prebuilt
+script it names, and an optional `scripts/` folder of shared Lua. A host
+validates each manifest and rejects namespace collisions, then does two
+things: it makes the pack's Lua modules reachable from `require "name/..."`
+in the Run path, and it loads the pack's components so they render. A note
+that names a pack you have not installed still reads: its components show
+the labeled fallback, and a quiet marker notes the missing pack.
 
-Installing runs someone else's code in your previews, so it asks first, and
-the question says exactly that rather than talking about files. The order
-matters and is part of the contract: the archive is validated first, then
-consent is asked, then a namespace already in use asks before it is
+### Installing a pack
+
+Installing runs someone else's code in your previews, so a host asks first,
+and the question says exactly that rather than talking about files. The
+order matters and is part of the contract: the archive is validated first,
+then consent is asked, then a namespace already in use asks before it is
 replaced, and only after all of those does anything reach disk. An archive
 that fails validation is reported and installs nothing, so a rejected pack
 never leaves a half-written directory behind.
+
+A namespace one of the host's own bundled packs already holds is refused at
+install time. The host says so as it refuses, rather than accepting the
+pack and skipping it quietly on the next load.
+
+Installing, removing, and enabling all take effect at once. The host
+reloads its packs and re-renders what is open, so a pack you just installed
+renders without reopening anything.
 
 ### Two ways to run a pack: prebuilt and from source
 
@@ -267,13 +284,14 @@ confined to the pack's own folder. This is the form for developing a pack:
 edit a component, reopen the preview, see the change, with no toolchain of
 your own.
 
-Compiling from source is an optional host capability, because the compiler
-is a sizeable runtime the host may not carry. An install without it (for
-example, an Obsidian install fetched by an automated installer, which
-downloads only the plugin's three core files) cannot build a pack that
-ships source. The host reports that on its diagnostics surface, naming the
-install that would restore the capability, rather than failing silently or
-dumping a compiler error. A prebuilt pack loads either way.
+Compiling from source is an optional host capability, and the reference
+hosts split on it deliberately. VS Code is the authoring host and compiles
+a source pack at load time. Obsidian is the consuming host and never
+compiles: it loads the prebuilt form only, which is exactly what a `.mkp`
+archive carries. A pack you develop in VS Code reaches Obsidian by
+exporting it as an archive and installing that. A host that does not
+compile reports a source-only pack on its diagnostics surface, naming what
+it could not load, rather than failing silently.
 
 When a pack folder holds both a `webview.js` and sources, the prebuilt
 script wins and the sources are ignored. The host says so on its
@@ -433,12 +451,7 @@ replacing them, and it reports where it wrote and how large the result is.
 
 The pack's own source folder is never touched. Obsidian has no export
 command: VS Code is the authoring host and owns pack packaging, while
-Obsidian loads a pack another host produced, either from source or as an
-exported prebuilt folder.
-
-The command needs the compiler, so an install that does not carry one
-cannot run it. It says so plainly and names the install that would restore
-it.
+Obsidian installs a pack another host produced, as a `.mkp` archive.
 
 ## A pack as a single file
 

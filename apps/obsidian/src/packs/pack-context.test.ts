@@ -2,10 +2,8 @@ import { describe, expect, it, afterEach } from 'vitest';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
-import { zipSync } from 'fflate';
 import { createRegistry } from '@markii/react';
 import { loadPackContext } from './pack-context.js';
-import type { PackCompileBuilder } from './pack-context.js';
 import type { BundledPackAsset } from './bundled-packs.js';
 
 const tempDirs: string[] = [];
@@ -47,7 +45,7 @@ function registeringScript(name: string): string {
 }
 
 describe('loadPackContext', () => {
-  it('discovers a real on-disk pack, its Lua module, and registers its prebuilt script into the registry', async () => {
+  it('loads a real, installed prebuilt pack and its Lua module into the registry', async () => {
     const root = await makeTempDir();
     const packDir = path.join(root, 'demo');
     await writePackManifest(packDir, 'demo');
@@ -58,7 +56,7 @@ describe('loadPackContext', () => {
     );
     await writeFile(path.join(packDir, 'scripts', 'util.lua'), 'return 1');
 
-    const context = await loadPackContext(['demo'], root, createRegistry());
+    const context = await loadPackContext([packDir], createRegistry());
 
     expect(context.namespaces).toEqual(['demo']);
     expect(context.packs).toHaveLength(1);
@@ -69,34 +67,27 @@ describe('loadPackContext', () => {
     expect(context.registrationCollisions).toEqual([]);
   });
 
-  it('keeps a pack discovered even with no prebuilt script and no cacheDir — the base registry is unchanged', async () => {
+  it('skips a discovered pack with no prebuilt webview.js — it is never compiled', async () => {
     const root = await makeTempDir();
     const packDir = path.join(root, 'nopreview');
     await writePackManifest(packDir, 'nopreview');
 
     const base = createRegistry();
-    const context = await loadPackContext(['nopreview'], root, base);
+    const context = await loadPackContext([packDir], base);
 
-    expect(context.packs).toHaveLength(1);
+    expect(context.packs).toHaveLength(1); // still discovered
     expect(context.registry).toBe(base);
-    expect(context.skipped).toEqual([]);
+    expect(context.skipped).toHaveLength(1);
+    expect(context.skipped[0]!.reason).toContain('no prebuilt webview.js');
+    expect(context.skipped[0]!.reason).not.toMatch(/esbuild/i);
   });
 
-  it('quietly skips a configured folder with no pack.json', async () => {
+  it('quietly skips a folder with no pack.json', async () => {
     const root = await makeTempDir();
-    const context = await loadPackContext(['missing'], root, createRegistry());
+    const missing = path.join(root, 'missing');
+    const context = await loadPackContext([missing], createRegistry());
     expect(context.packs).toEqual([]);
     expect(context.skipped).toHaveLength(1);
-  });
-
-  it('resolves relative entries against the given vault root', async () => {
-    const root = await makeTempDir();
-    const packDir = path.join(root, 'sub', 'demo');
-    await writePackManifest(packDir, 'demo');
-
-    const context = await loadPackContext(['sub/demo'], root, createRegistry());
-    expect(context.packs).toHaveLength(1);
-    expect(context.relativeEntries).toEqual(['sub/demo']);
   });
 
   it('a pack whose script throws while running is skipped, with a reason, and never crashes the whole load', async () => {
@@ -108,7 +99,7 @@ describe('loadPackContext', () => {
       'throw new Error("boom");',
     );
 
-    const context = await loadPackContext(['broken'], root, createRegistry());
+    const context = await loadPackContext([packDir], createRegistry());
 
     expect(context.packs).toHaveLength(1); // still discovered
     expect(context.skipped).toHaveLength(1);
@@ -117,144 +108,7 @@ describe('loadPackContext', () => {
   });
 });
 
-describe('loadPackContext — compiling a pack with no prebuilt script', () => {
-  it('never invokes buildRegistrationScript when no cacheDir is configured', async () => {
-    const root = await makeTempDir();
-    const packDir = path.join(root, 'nopreview');
-    await writePackManifest(packDir, 'nopreview');
-
-    let called = false;
-    const buildRegistrationScript: PackCompileBuilder = async () => {
-      called = true;
-      return { kind: 'skipped' };
-    };
-
-    const context = await loadPackContext(
-      ['nopreview'],
-      root,
-      createRegistry(),
-      {
-        buildRegistrationScript,
-      },
-    );
-
-    expect(called).toBe(false);
-    expect(context.skipped).toEqual([]);
-  });
-
-  it('uses a successfully built script and merges its registration', async () => {
-    const root = await makeTempDir();
-    const packDir = path.join(root, 'built');
-    await writePackManifest(packDir, 'built');
-    const cacheDir = await makeTempDir();
-    const compiledPath = path.join(cacheDir, 'built-abc123.js');
-    await writeFile(compiledPath, registeringScript('built'));
-
-    const buildRegistrationScript: PackCompileBuilder = async () => ({
-      kind: 'built',
-      scriptPath: compiledPath,
-      warnings: [],
-    });
-
-    const context = await loadPackContext(['built'], root, createRegistry(), {
-      cacheDir,
-      buildRegistrationScript,
-    });
-
-    expect(context.registry['built_widget']).toBeDefined();
-    expect(context.skipped).toEqual([]);
-    expect(context.cssWarnings).toEqual([]);
-  });
-
-  it('carries a built stylesheet through to the stylesheets list, keyed by namespace', async () => {
-    const root = await makeTempDir();
-    const packDir = path.join(root, 'styled');
-    await writePackManifest(packDir, 'styled');
-    const cacheDir = await makeTempDir();
-    const compiledPath = path.join(cacheDir, 'styled-abc123.js');
-    const stylesheetPath = path.join(cacheDir, 'styled-abc123.css');
-    await writeFile(compiledPath, registeringScript('styled'));
-    await writeFile(
-      stylesheetPath,
-      '.mk-styled-widget { color: var(--mk-fg); }',
-    );
-
-    const buildRegistrationScript: PackCompileBuilder = async () => ({
-      kind: 'built',
-      scriptPath: compiledPath,
-      stylesheetPath,
-      warnings: [
-        'pack "styled" CSS uses a raw color literal in "color: #fff;"',
-      ],
-    });
-
-    const context = await loadPackContext(['styled'], root, createRegistry(), {
-      cacheDir,
-      buildRegistrationScript,
-    });
-
-    expect(context.stylesheets).toEqual([
-      {
-        namespace: 'styled',
-        cssText: '.mk-styled-widget { color: var(--mk-fg); }',
-      },
-    ]);
-    expect(context.cssWarnings).toEqual([
-      'pack "styled" CSS uses a raw color literal in "color: #fff;"',
-    ]);
-  });
-
-  it('records a build failure in skipped and never throws', async () => {
-    const root = await makeTempDir();
-    const packDir = path.join(root, 'broken');
-    await writePackManifest(packDir, 'broken');
-    const cacheDir = await makeTempDir();
-
-    const buildRegistrationScript: PackCompileBuilder = async () => ({
-      kind: 'failed',
-      reason: 'Unexpected token in Widget.tsx',
-    });
-
-    const context = await loadPackContext(['broken'], root, createRegistry(), {
-      cacheDir,
-      buildRegistrationScript,
-    });
-
-    expect(context.packs).toHaveLength(1);
-    expect(context.skipped).toHaveLength(1);
-    expect(context.skipped[0]!.reason).toContain(
-      'Unexpected token in Widget.tsx',
-    );
-    expect(Object.keys(context.registry)).not.toContain('broken_widget');
-  });
-
-  it('prefers a prebuilt script over compiling, and never calls buildRegistrationScript for it', async () => {
-    const root = await makeTempDir();
-    const packDir = path.join(root, 'demo');
-    await writePackManifest(packDir, 'demo');
-    await writeFile(
-      path.join(packDir, 'webview.js'),
-      registeringScript('demo'),
-    );
-    const cacheDir = await makeTempDir();
-
-    let called = false;
-    const buildRegistrationScript: PackCompileBuilder = async () => {
-      called = true;
-      return { kind: 'skipped' };
-    };
-
-    const context = await loadPackContext(['demo'], root, createRegistry(), {
-      cacheDir,
-      buildRegistrationScript,
-    });
-
-    expect(called).toBe(false);
-    expect(context.registry['demo_widget']).toBeDefined();
-  });
-});
-
-describe('loadPackContext — prebuilt pack (issue #15)', () => {
+describe('loadPackContext — prebuilt pack shape', () => {
   it('a prebuilt pack with a sibling webview.css contributes a stylesheet keyed by its namespace', async () => {
     const root = await makeTempDir();
     const packDir = path.join(root, 'styled');
@@ -268,7 +122,7 @@ describe('loadPackContext — prebuilt pack (issue #15)', () => {
       '.mk-styled-widget { color: var(--mk-fg); }',
     );
 
-    const context = await loadPackContext(['styled'], root, createRegistry());
+    const context = await loadPackContext([packDir], createRegistry());
 
     expect(context.registry['styled_widget']).toBeDefined();
     expect(context.stylesheets).toEqual([
@@ -290,7 +144,7 @@ describe('loadPackContext — prebuilt pack (issue #15)', () => {
       registeringScript('plain'),
     );
 
-    const context = await loadPackContext(['plain'], root, createRegistry());
+    const context = await loadPackContext([packDir], createRegistry());
 
     expect(context.registry['plain_widget']).toBeDefined();
     expect(context.stylesheets).toEqual([]);
@@ -309,7 +163,7 @@ describe('loadPackContext — prebuilt pack (issue #15)', () => {
       'export default function Widget() { return null; }',
     );
 
-    const context = await loadPackContext(['shadowed'], root, createRegistry());
+    const context = await loadPackContext([packDir], createRegistry());
 
     expect(context.registry['shadowed_widget']).toBeDefined();
     expect(context.prebuiltShadowedPacks).toEqual([
@@ -317,53 +171,39 @@ describe('loadPackContext — prebuilt pack (issue #15)', () => {
     ]);
     expect(context.skipped).toEqual([]);
   });
+});
 
-  it('a prebuilt pack whose sources are not on disk is not reported as shadowed', async () => {
+describe('loadPackContext — folder name and namespace must agree', () => {
+  it('does not load a folder whose pack.json declares a different namespace', async () => {
     const root = await makeTempDir();
-    const packDir = path.join(root, 'clean');
-    await writePackManifest(packDir, 'clean');
+    // A hand copy: the folder is named `demo`, which is what a trust
+    // entry would authorize, but the manifest inside claims `other`.
+    const packDir = path.join(root, 'demo');
+    await writePackManifest(packDir, 'other');
     await writeFile(
       path.join(packDir, 'webview.js'),
-      registeringScript('clean'),
+      registeringScript('other'),
     );
 
-    const context = await loadPackContext(['clean'], root, createRegistry());
+    const context = await loadPackContext([packDir], createRegistry());
 
-    expect(context.prebuiltShadowedPacks).toEqual([]);
-  });
-
-  it('the from-source build path is unchanged: no prebuilt script still goes through buildRegistrationScript', async () => {
-    const root = await makeTempDir();
-    const packDir = path.join(root, 'built');
-    await writePackManifest(packDir, 'built');
-    const cacheDir = await makeTempDir();
-    const compiledPath = path.join(cacheDir, 'built-abc123.js');
-    await writeFile(compiledPath, registeringScript('built'));
-
-    let called = false;
-    const buildRegistrationScript: PackCompileBuilder = async () => {
-      called = true;
-      return { kind: 'built', scriptPath: compiledPath, warnings: [] };
-    };
-
-    const context = await loadPackContext(['built'], root, createRegistry(), {
-      cacheDir,
-      buildRegistrationScript,
-    });
-
-    expect(called).toBe(true);
-    expect(context.registry['built_widget']).toBeDefined();
-    expect(context.prebuiltShadowedPacks).toEqual([]);
+    expect(context.packs).toHaveLength(0);
+    expect(context.namespaces).toEqual([]);
+    expect(context.skipped.map((entry) => entry.reason).join(' ')).toContain(
+      'declares namespace "other"',
+    );
   });
 });
 
 describe('loadPackContext — namespace collision', () => {
   it('two packs sharing a namespace: both discovered but neither registers, and the base registry is untouched', async () => {
     const root = await makeTempDir();
-    await writePackManifest(path.join(root, 'a'), 'demo');
-    await writePackManifest(path.join(root, 'b'), 'demo');
+    const a = path.join(root, 'a');
+    const b = path.join(root, 'b');
+    await writePackManifest(a, 'demo');
+    await writePackManifest(b, 'demo');
 
-    const context = await loadPackContext(['a', 'b'], root, createRegistry());
+    const context = await loadPackContext([a, b], createRegistry());
 
     expect(context.packs).toEqual([]); // discover.ts itself already rejects the collision
     expect(context.skipped).toHaveLength(2);
@@ -391,9 +231,9 @@ function bundledAsset(
   };
 }
 
-describe('loadPackContext — bundled packs (docs/packs.md, issue #15)', () => {
-  it('folds a bundled pack in even with no user pack folders configured, ahead of the base registry', async () => {
-    const context = await loadPackContext([], undefined, createRegistry(), {
+describe('loadPackContext — bundled packs', () => {
+  it('folds a bundled pack in even with no installed packs, ahead of the base registry', async () => {
+    const context = await loadPackContext([], createRegistry(), {
       bundledPacks: [bundledAsset('read')],
     });
 
@@ -404,15 +244,16 @@ describe('loadPackContext — bundled packs (docs/packs.md, issue #15)', () => {
     expect(context.skipped).toEqual([]);
   });
 
-  it('registers bundled packs before user-configured packs — bundled first in packs/namespaces order', async () => {
+  it('registers bundled packs before installed packs — bundled first in packs/namespaces order', async () => {
     const root = await makeTempDir();
-    await writePackManifest(path.join(root, 'demo'), 'demo');
+    const demoDir = path.join(root, 'demo');
+    await writePackManifest(demoDir, 'demo');
     await writeFile(
-      path.join(root, 'demo', 'webview.js'),
+      path.join(demoDir, 'webview.js'),
       registeringScript('demo'),
     );
 
-    const context = await loadPackContext(['demo'], root, createRegistry(), {
+    const context = await loadPackContext([demoDir], createRegistry(), {
       bundledPacks: [bundledAsset('read'), bundledAsset('dash')],
     });
 
@@ -427,26 +268,23 @@ describe('loadPackContext — bundled packs (docs/packs.md, issue #15)', () => {
     expect(context.registry['demo_widget']).toBeDefined();
   });
 
-  it('a user pack claiming a namespace a bundled pack already holds is skipped, with a reason, and the bundled pack still loads', async () => {
+  it('an installed pack claiming a namespace a bundled pack already holds is skipped, with a reason, and the bundled pack still loads', async () => {
     const root = await makeTempDir();
-    await writePackManifest(path.join(root, 'user-read'), 'read');
+    // Named `read`, like every installed pack folder: a folder whose name
+    // and manifest namespace disagree is rejected earlier, by its own rule.
+    const userReadDir = path.join(root, 'read');
+    await writePackManifest(userReadDir, 'read');
     await writeFile(
-      path.join(root, 'user-read', 'webview.js'),
-      // A registering script for a DIFFERENT component name, so a test
-      // assertion that this script never ran can't be confused with the
-      // bundled pack's own "widget" component.
+      path.join(userReadDir, 'webview.js'),
       `window.__markiiRegisterPack(
         JSON.stringify({ name: 'read', engine: 'react', components: { impostor: './Impostor.tsx' } }),
         { impostor: { component: function () { return null; }, inline: false } },
       );`,
     );
 
-    const context = await loadPackContext(
-      ['user-read'],
-      root,
-      createRegistry(),
-      { bundledPacks: [bundledAsset('read')] },
-    );
+    const context = await loadPackContext([userReadDir], createRegistry(), {
+      bundledPacks: [bundledAsset('read')],
+    });
 
     // Bundled pack wins the namespace outright.
     expect(context.packs).toHaveLength(1);
@@ -454,24 +292,22 @@ describe('loadPackContext — bundled packs (docs/packs.md, issue #15)', () => {
     expect(context.registry['read_widget']).toBeDefined();
     expect(context.registry['read_impostor']).toBeUndefined();
 
-    // The user pack is skipped with a locatable reason naming the real folder.
+    // The installed pack is skipped with a locatable reason naming the real folder.
     expect(context.skipped).toHaveLength(1);
-    expect(context.skipped[0]!.folder).toBe(path.join(root, 'user-read'));
+    expect(context.skipped[0]!.folder).toBe(userReadDir);
     expect(context.skipped[0]!.reason).toContain(
       'already used by a bundled pack',
     );
   });
 
-  it("merges a bundled pack's Lua modules into packModules alongside user packs'", async () => {
+  it("merges a bundled pack's Lua modules into packModules alongside installed packs'", async () => {
     const root = await makeTempDir();
-    await writePackManifest(path.join(root, 'demo'), 'demo');
-    await mkdir(path.join(root, 'demo', 'scripts'), { recursive: true });
-    await writeFile(
-      path.join(root, 'demo', 'scripts', 'a.lua'),
-      'return "user"',
-    );
+    const demoDir = path.join(root, 'demo');
+    await writePackManifest(demoDir, 'demo');
+    await mkdir(path.join(demoDir, 'scripts'), { recursive: true });
+    await writeFile(path.join(demoDir, 'scripts', 'a.lua'), 'return "user"');
 
-    const context = await loadPackContext(['demo'], root, createRegistry(), {
+    const context = await loadPackContext([demoDir], createRegistry(), {
       bundledPacks: [
         bundledAsset('read', { luaModules: { 'b.lua': 'return "bundled"' } }),
       ],
@@ -481,25 +317,8 @@ describe('loadPackContext — bundled packs (docs/packs.md, issue #15)', () => {
     expect(context.packModules.demo).toEqual({ 'a.lua': 'return "user"' });
   });
 
-  it("a bundled pack whose stylesheet is present contributes it to stylesheets, ahead of user packs'", async () => {
-    const root = await makeTempDir();
-    await writePackManifest(path.join(root, 'demo'), 'demo');
-    await writeFile(
-      path.join(root, 'demo', 'webview.js'),
-      registeringScript('demo'),
-    );
-
-    const context = await loadPackContext(['demo'], root, createRegistry(), {
-      bundledPacks: [bundledAsset('read', { cssText: '.mk-read_widget {}' })],
-    });
-
-    expect(context.stylesheets).toEqual([
-      { namespace: 'read', cssText: '.mk-read_widget {}' },
-    ]);
-  });
-
   it('a bundled pack whose script throws is skipped, with a reason, and never crashes the load', async () => {
-    const context = await loadPackContext([], undefined, createRegistry(), {
+    const context = await loadPackContext([], createRegistry(), {
       bundledPacks: [
         bundledAsset('read', { scriptText: 'throw new Error("boom");' }),
       ],
@@ -512,7 +331,7 @@ describe('loadPackContext — bundled packs (docs/packs.md, issue #15)', () => {
   });
 
   it('a malformed bundled manifest is recorded as invalid rather than crashing the load', async () => {
-    const context = await loadPackContext([], undefined, createRegistry(), {
+    const context = await loadPackContext([], createRegistry(), {
       bundledPacks: [bundledAsset('bad', { manifestJson: 'not json' })],
     });
 
@@ -523,134 +342,16 @@ describe('loadPackContext — bundled packs (docs/packs.md, issue #15)', () => {
 
   it('with no bundledPacks option at all, behaves exactly as before (backward compatible default)', async () => {
     const root = await makeTempDir();
-    await writePackManifest(path.join(root, 'demo'), 'demo');
+    const demoDir = path.join(root, 'demo');
+    await writePackManifest(demoDir, 'demo');
+    await writeFile(
+      path.join(demoDir, 'webview.js'),
+      registeringScript('demo'),
+    );
 
-    const context = await loadPackContext(['demo'], root, createRegistry());
+    const context = await loadPackContext([demoDir], createRegistry());
 
     expect(context.packs).toHaveLength(1);
     expect(context.packs[0]!.manifest.name).toBe('demo');
-  });
-});
-
-/** Builds a well-formed `.mkp` archive's bytes for a pack of `name` (GitHub issue #16). */
-function archiveBytes(options: {
-  name: string;
-  withStylesheet?: boolean;
-  withScript?: boolean;
-  scriptText?: string;
-}): Uint8Array {
-  const encoder = new TextEncoder();
-  const files: Record<string, Uint8Array> = {
-    'pack.json': encoder.encode(
-      JSON.stringify({
-        name: options.name,
-        engine: 'react',
-        components: { widget: './Widget.tsx' },
-      }),
-    ),
-    'webview.js': encoder.encode(
-      options.scriptText ?? registeringScript(options.name),
-    ),
-  };
-  if (options.withStylesheet) {
-    files['webview.css'] = encoder.encode(`.${options.name}_widget {}`);
-  }
-  if (options.withScript) {
-    files['scripts/util.lua'] = encoder.encode('return "archived"');
-  }
-  return zipSync(files);
-}
-
-describe('loadPackContext — a configured entry naming a .mkp archive file', () => {
-  it('loads a valid .mkp entirely from the archive: registers its component, its stylesheet, and its Lua module, never compiling anything', async () => {
-    const root = await makeTempDir();
-    const archivePath = path.join(root, 'ana.mkp');
-    await writeFile(
-      archivePath,
-      archiveBytes({ name: 'ana', withStylesheet: true, withScript: true }),
-    );
-
-    const context = await loadPackContext(['ana.mkp'], root, createRegistry());
-
-    expect(context.namespaces).toEqual(['ana']);
-    expect(context.packs).toHaveLength(1);
-    expect(context.skipped).toEqual([]);
-    expect(context.registry['ana_widget']).toBeDefined();
-    expect(context.stylesheets).toEqual([
-      { namespace: 'ana', cssText: '.ana_widget {}' },
-    ]);
-    expect(context.packModules.ana).toEqual({
-      'util.lua': 'return "archived"',
-    });
-  });
-
-  it('a folder pack and a .mkp archive pack both load in the same pass', async () => {
-    const root = await makeTempDir();
-    const packDir = path.join(root, 'demo');
-    await writePackManifest(packDir, 'demo');
-    await writeFile(
-      path.join(packDir, 'webview.js'),
-      registeringScript('demo'),
-    );
-    const archivePath = path.join(root, 'ana.mkp');
-    await writeFile(archivePath, archiveBytes({ name: 'ana' }));
-
-    const context = await loadPackContext(
-      ['demo', 'ana.mkp'],
-      root,
-      createRegistry(),
-    );
-
-    expect(context.namespaces.slice().sort()).toEqual(['ana', 'demo']);
-    expect(context.registry['demo_widget']).toBeDefined();
-    expect(context.registry['ana_widget']).toBeDefined();
-    expect(context.skipped).toEqual([]);
-  });
-
-  it('an invalid .mkp is skipped with a reason, and never crashes the load', async () => {
-    const root = await makeTempDir();
-    const archivePath = path.join(root, 'bad.mkp');
-    await writeFile(archivePath, new TextEncoder().encode('not a zip'));
-
-    const context = await loadPackContext(['bad.mkp'], root, createRegistry());
-
-    expect(context.packs).toEqual([]);
-    expect(context.skipped).toHaveLength(1);
-  });
-
-  it('a .mkp archive pack sharing a namespace with a folder pack drops both, with a diagnostics line for each', async () => {
-    const root = await makeTempDir();
-    const packDir = path.join(root, 'ana');
-    await writePackManifest(packDir, 'ana');
-    const archivePath = path.join(root, 'ana.mkp');
-    await writeFile(archivePath, archiveBytes({ name: 'ana' }));
-
-    const context = await loadPackContext(
-      ['ana', 'ana.mkp'],
-      root,
-      createRegistry(),
-    );
-
-    expect(context.packs).toEqual([]);
-    expect(context.skipped).toHaveLength(2);
-    expect(context.registry['ana_widget']).toBeUndefined();
-  });
-
-  it('a .mkp claiming a namespace a bundled pack already holds is skipped, and the bundled pack wins', async () => {
-    const root = await makeTempDir();
-    const archivePath = path.join(root, 'read.mkp');
-    await writeFile(archivePath, archiveBytes({ name: 'read' }));
-
-    const context = await loadPackContext(
-      ['read.mkp'],
-      root,
-      createRegistry(),
-      { bundledPacks: [bundledAsset('read')] },
-    );
-
-    expect(context.namespaces).toEqual(['read']);
-    expect(context.skipped.some((s) => s.reason.includes('bundled'))).toBe(
-      true,
-    );
   });
 });

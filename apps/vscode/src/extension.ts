@@ -8,11 +8,23 @@ import {
   installedPacksDir,
   openPreview,
   packCacheDir,
+  reloadActivePreviewPacks,
   resetScriptGrants,
   runScripts,
   setDiagnosticsChannel,
 } from './preview-panel.js';
 import { appendPackFolder } from './packs/add-pack-folder.js';
+import {
+  listInstalledPacks,
+  installedPackQuickPickLabel,
+  NO_INSTALLED_PACKS_MESSAGE,
+  removeInstalledPack,
+  removeInstalledPackDiagnosticLines,
+  removeInstalledPackResultMessage,
+  removePackConfirmMessage,
+  removePackListEntry,
+} from './packs/remove-installed-pack.js';
+import type { InstalledPackEntry } from './packs/remove-installed-pack.js';
 import {
   archiveExportNameValidationMessage,
   archiveFileExists,
@@ -95,7 +107,7 @@ import type { FenceTextEdit } from './fence-edits.js';
  * and tells the user to reopen the preview, since a pack is loaded when the
  * panel is (re)created, not live.
  */
-async function addPackFolder(): Promise<void> {
+async function addPackFolder(context: vscode.ExtensionContext): Promise<void> {
   const picked = await vscode.window.showOpenDialog({
     canSelectFolders: true,
     canSelectFiles: false,
@@ -117,9 +129,8 @@ async function addPackFolder(): Promise<void> {
     return;
   }
   await config.update('packs', next, vscode.ConfigurationTarget.Global);
-  void vscode.window.showInformationMessage(
-    'Markii: pack folder added. Reopen the preview to load it.',
-  );
+  await reloadActivePreviewPacks(context);
+  void vscode.window.showInformationMessage('Markii: pack folder added.');
 }
 
 /**
@@ -212,12 +223,123 @@ async function installPackCommand(
   if (next) {
     await config.update('packs', next, vscode.ConfigurationTarget.Global);
   }
+  await reloadActivePreviewPacks(context);
   void vscode.window.showInformationMessage(message);
 }
 
 /** Reads a `.mkp` file's raw bytes via `vscode.workspace.fs`, so a remote/virtual workspace file system is honored the same way every other file read in this extension is. */
 async function readVscodeFileBytes(archivePath: string): Promise<Uint8Array> {
   return vscode.workspace.fs.readFile(vscode.Uri.file(archivePath));
+}
+
+/** Names of the immediate subdirectories of `absolutePath` via `vscode.workspace.fs`, or an empty list if it does not exist / cannot be read. Never rejects. */
+async function listVscodeDirectoryNames(
+  absolutePath: string,
+): Promise<string[]> {
+  try {
+    const entries = await vscode.workspace.fs.readDirectory(
+      vscode.Uri.file(absolutePath),
+    );
+    return entries
+      .filter(([, type]) => type === vscode.FileType.Directory)
+      .map(([name]) => name);
+  } catch {
+    return [];
+  }
+}
+
+/** A file's UTF-8 text via `vscode.workspace.fs`, or `undefined` if it does not exist / cannot be read. Never rejects. */
+async function readVscodeTextFile(
+  absolutePath: string,
+): Promise<string | undefined> {
+  try {
+    const bytes = await vscode.workspace.fs.readFile(
+      vscode.Uri.file(absolutePath),
+    );
+    return new TextDecoder().decode(bytes);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The `markii.removeInstalledPack` command ("Markii: Remove Installed
+ * Pack…"): a quick pick over the packs installed under this extension's
+ * own `installedPacksDir` (the same directory `markii.installPack` writes
+ * into), a confirmation, then deletes the pack's directory and removes its
+ * entry from `markii.packs` (the same GLOBAL, user-scoped write install
+ * makes), then reloads the open preview so the removal takes effect right
+ * away. Every decision worth testing (listing, the delete outcome, the
+ * config-entry removal, the wording) lives in
+ * `./packs/remove-installed-pack.ts`; this function is `vscode` wiring
+ * only.
+ */
+async function removeInstalledPackCommand(
+  context: vscode.ExtensionContext,
+  diagnosticsChannel: vscode.OutputChannel,
+): Promise<void> {
+  const installRoot = installedPacksDir(context);
+  const packs = await listInstalledPacks(
+    installRoot,
+    listVscodeDirectoryNames,
+    readVscodeTextFile,
+  );
+  if (packs.length === 0) {
+    void vscode.window.showInformationMessage(NO_INSTALLED_PACKS_MESSAGE);
+    return;
+  }
+
+  const picked = await vscode.window.showQuickPick(
+    packs.map((pack) => ({
+      label: installedPackQuickPickLabel(pack),
+      pack,
+    })),
+    {
+      title: 'Select an installed Markii pack to remove',
+      placeHolder: 'Choose a pack to remove',
+    },
+  );
+  if (!picked) return;
+  const target: InstalledPackEntry = picked.pack;
+
+  const outcome = await removeInstalledPack({
+    pack: target,
+    removeDirectory: async (absolutePath) => {
+      await vscode.workspace.fs.delete(vscode.Uri.file(absolutePath), {
+        recursive: true,
+        useTrash: false,
+      });
+    },
+    confirmRemove: async (pack) => {
+      const choice = await vscode.window.showWarningMessage(
+        removePackConfirmMessage(pack),
+        { modal: true },
+        'Remove',
+      );
+      return choice === 'Remove';
+    },
+  });
+
+  for (const line of removeInstalledPackDiagnosticLines(outcome)) {
+    diagnosticsChannel.appendLine(line);
+  }
+  const message = removeInstalledPackResultMessage(outcome);
+  if (outcome.kind === 'failed') {
+    void vscode.window.showWarningMessage(message);
+    return;
+  }
+  if (outcome.kind === 'declined') {
+    return; // the cancel itself is feedback enough; nothing changed
+  }
+
+  const config = vscode.workspace.getConfiguration('markii');
+  const existing = config.get<string[]>('packs', []);
+  const next = removePackListEntry(existing, target.directory);
+  if (next) {
+    await config.update('packs', next, vscode.ConfigurationTarget.Global);
+  }
+  await reloadActivePreviewPacks(context);
+  void vscode.window.showInformationMessage(message);
 }
 
 /**
@@ -875,13 +997,19 @@ export function activate(context: vscode.ExtensionContext): void {
   const addPackFolderCommand = vscode.commands.registerCommand(
     'markii.addPackFolder',
     () => {
-      void addPackFolder();
+      void addPackFolder(context);
     },
   );
   const installPackCommandHandle = vscode.commands.registerCommand(
     'markii.installPack',
     () => {
       void installPackCommand(context, diagnosticsChannel);
+    },
+  );
+  const removeInstalledPackCommandHandle = vscode.commands.registerCommand(
+    'markii.removeInstalledPack',
+    () => {
+      void removeInstalledPackCommand(context, diagnosticsChannel);
     },
   );
   const enableScheduledRefreshCommand = vscode.commands.registerCommand(
@@ -949,7 +1077,10 @@ export function activate(context: vscode.ExtensionContext): void {
   );
   const packsConfigChangeListener = vscode.workspace.onDidChangeConfiguration(
     (event) => {
-      if (event.affectsConfiguration('markii.packs')) catalogCache.invalidate();
+      if (event.affectsConfiguration('markii.packs')) {
+        catalogCache.invalidate();
+        void reloadActivePreviewPacks(context);
+      }
     },
   );
   const workspaceFoldersChangeListener =
@@ -965,6 +1096,7 @@ export function activate(context: vscode.ExtensionContext): void {
     resetScriptGrantsCommand,
     addPackFolderCommand,
     installPackCommandHandle,
+    removeInstalledPackCommandHandle,
     enableScheduledRefreshCommand,
     toggleRunOnOpenCommand,
     toggleScriptExecutionCommand,

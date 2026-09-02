@@ -267,14 +267,26 @@ importance:
     say so on the diagnostics surface. That keeps the ordinary rule that two
     packs cannot share a namespace, and settles the tie by load order rather
     than by refusing both.
-    A pack path may also name a `.mkp` archive rather than a folder. Read one
-    where it sits, prebuilt-only, and never compile out of it. If you offer to
-    install one, treat it as a consent step, because installing decides what
-    code runs in a preview: validate the archive, then ask in words that say
-    the pack's code will run, then ask again before replacing a namespace
-    already installed, and write nothing until all of those have passed. A
-    rejected archive is reported on the diagnostics surface and leaves nothing
-    behind.
+    A pack list names folders, never archive files. A `.mkp` archive enters
+    a host through an install step instead, and installing is a consent
+    step, because it decides what code runs in a preview: validate the
+    archive, then ask in words that say the pack's code will run, then ask
+    again before replacing a namespace already installed, and write nothing
+    until all of those have passed. A rejected archive is reported on the
+    diagnostics surface and leaves nothing behind, and a namespace one of
+    your own shipped packs holds is refused as you refuse it, not accepted
+    and skipped on the next load.
+    A host that installs packs owns where they live: its own directory, one
+    folder per namespace, never a folder the reader chose and never their
+    content tree. The folder name is the namespace, since that is what the
+    per-device record authorizes and what a remove control acts on, so a
+    folder whose manifest declares a different namespace does not load and
+    is reported instead. Which namespaces actually load is a per-device decision,
+    recorded beside the other decisions that authorize execution (item 12
+    below), so a pack folder that arrives another way, copied in by hand or
+    carried by a sync service, does not load until that device says so.
+    Installing, removing, and enabling take effect at once: reload packs and
+    re-render what is open rather than asking the reader to reopen it.
 11. **Pack compilation, if you compile packs from source.** A pack ships
     component sources and no build step of its own, so a host that offers
     source packs compiles them at load time with `esbuild-wasm`, and it
@@ -287,17 +299,16 @@ importance:
     directory is never written to. The runtime costs roughly fourteen
     megabytes, which is enough that a host may reasonably choose not to
     embed it. A host without it is still a working host: it loads prebuilt
-    packs normally and degrades cleanly for source packs, saying on its
-    diagnostics surface that compilation is unavailable rather than
-    reporting a broken pack. The reference hosts split exactly here, and
-    the split is deliberate. VS Code is the authoring host and compiles
-    from source; Obsidian consumes prebuilt packs as its normal path and
-    keeps source compilation only where the runtime is present beside it.
+    packs normally and reports a source-only pack on its diagnostics
+    surface rather than presenting it as broken. The reference hosts split
+    exactly here, and the split is deliberate. VS Code is the authoring
+    host and compiles from source; Obsidian is the consuming host, carries
+    no compiler at all, and loads the prebuilt form only.
 12. **Storage that does not travel.** Anything that authorizes execution or
-    network access, meaning grants, auto-run, any scheduled interval, and
-    any switch that decides whether scripts run at all, is stored per user
-    and per device, never anywhere that moves with the
-    content. VS Code's application-scoped settings and global state satisfy
+    network access, meaning grants, auto-run, any scheduled interval, the
+    list of packs a device loads, and any switch that decides whether
+    scripts run at all, is stored per user and per device, never anywhere
+    that moves with the content. VS Code's application-scoped settings and global state satisfy
     this. Obsidian has no equivalent, because plugin data lives inside the
     vault and rides Sync, so the plugin uses device-local storage instead.
     Getting this wrong hands whoever receives a copy of the content

@@ -37,11 +37,13 @@
  * plugin and `src/run/embedded-assets.ts`/`src/run/browser-worker.ts` for
  * the decode-and-blob-URL half on the consuming side.
  *
- * `dist/esbuild-wasm/` is still written as real files (`copyEsbuildWasm`
- * below) — at roughly 14 MB it is deliberately NOT embedded; pack
- * compilation degrades gracefully without it rather than bloating every
- * install by an order of magnitude. So the full `dist/` a build produces
- * today is just `main.js` and `esbuild-wasm/`.
+ * There is no esbuild-wasm runtime in `dist/` at all: this plugin is
+ * archive-only, with no pack compiler of its own (AGENTS.md's Host
+ * positioning — VS Code is the authoring host and owns pack compilation
+ * and packaging). A pack loads only in its prebuilt form
+ * (`src/packs/pack-context.ts`); a folder with no prebuilt `webview.js` is
+ * skipped, never compiled. So the full `dist/` a build produces is just
+ * `main.js`.
  *
  * `@markii/*` resolves to each package's `src/`, exactly like
  * `scripts/workspace-aliases.config.ts` does for Vite/Vitest, and exactly
@@ -54,7 +56,6 @@
  * if a package this plugin uses changes location.
  */
 import {
-  copyFileSync,
   mkdirSync,
   readFileSync,
   readdirSync,
@@ -624,18 +625,14 @@ export function createMainBuild() {
     format: 'cjs',
     target: 'es2020',
     jsx: 'automatic',
-    // `esbuild-wasm`, alongside `obsidian`: `@markii/host`'s
-    // `src/packs/pack-build.ts` `require()`s esbuild-wasm's browser entry
-    // (`lib/browser.js`, the in-process WebAssembly build path — see that
-    // file's top doc comment for why the Node child-process entry,
-    // `lib/main.js`, is not used, and can't be: Obsidian's renderer ships no
-    // `node` binary on its `PATH`) at runtime rather than importing it
-    // normally, so a real, unbundled copy must be resolvable the same way in
-    // dev, under Vitest, and once bundled into this plugin. `copyEsbuildWasm`
-    // below copies `lib/browser.js` and the `esbuild.wasm` binary next to
-    // `dist/main.js`; `main.ts`'s `esbuildBrowserModulePath`/
-    // `esbuildWasmBinaryPath` point `pack-build.ts`'s `loadEsbuildWasm` at
-    // them. Mirrors `apps/vscode/esbuild.config.mjs`'s identical comment.
+    // `esbuild-wasm` stays external even though nothing in this plugin's
+    // runtime calls it any more (no pack compiler here — AGENTS.md's Host
+    // positioning): `@markii/host`'s `src/packs/pack-build.ts`, part of the
+    // shared module graph, still `require()`s it dynamically behind a
+    // runtime check. Marking it external keeps that dynamic require
+    // unresolved at bundle time rather than esbuild trying (and failing, or
+    // bloating the bundle) to inline the whole package; the call itself is
+    // simply never reached from this plugin's own code paths.
     external: [
       'obsidian',
       'electron',
@@ -655,33 +652,4 @@ export function createMainBuild() {
     logOverride: { 'empty-import-meta': 'silent' },
     plugins: [embedRuntimeAssets, embedBundledPacks],
   };
-}
-
-const esbuildWasmOutDir = path.join(here, 'dist', 'esbuild-wasm');
-
-/**
- * Copies the REAL, unbundled `esbuild-wasm/lib/browser.js` (the in-process
- * WebAssembly entry — see `createMainBuild`'s `external` comment above)
- * next to `dist/main.js` (`dist/esbuild-wasm/lib/browser.js`), plus the
- * `esbuild.wasm` binary it compiles at runtime via `WebAssembly.compile` —
- * so `pack-build.ts`'s `loadEsbuildWasm`, given these two paths (from
- * `main.ts`'s `esbuildBrowserModulePath`/`esbuildWasmBinaryPath`), can
- * `require()`/read them directly at runtime without depending on
- * `node_modules/esbuild-wasm` still being present relative to the
- * installed plugin folder. Only these two files: the child-process half of
- * the package (`bin/esbuild`, `wasm_exec*.js`) is not needed at all, and
- * the rest (`.d.ts` files, docs) is dead weight either way. Mirrors
- * `apps/vscode/esbuild.config.mjs`'s `copyEsbuildWasm` exactly.
- */
-export function copyEsbuildWasm() {
-  mkdirSync(path.join(esbuildWasmOutDir, 'lib'), { recursive: true });
-  const packageDir = path.join(repoRoot, 'node_modules', 'esbuild-wasm');
-  copyFileSync(
-    path.join(packageDir, 'lib', 'browser.js'),
-    path.join(esbuildWasmOutDir, 'lib', 'browser.js'),
-  );
-  copyFileSync(
-    path.join(packageDir, 'esbuild.wasm'),
-    path.join(esbuildWasmOutDir, 'esbuild.wasm'),
-  );
 }

@@ -1,23 +1,22 @@
 /**
  * `obsidian`-free logic behind the "Install Markii pack from file" command
- * (GitHub issue #16): validates a `.mkp` archive the user picked, asks for
- * consent (its code will run in the preview), asks before replacing an
- * already-installed pack of the same namespace, and unzips it into this
- * plugin's own `installed-packs` directory (`../main.ts`'s
- * `installedPacksDir`, under the plugin's own on-disk folder, never a
- * folder the user chose and never the user's authored note tree — the same
- * "plugin machinery, not content" posture `../main.ts`'s `packCacheDir`
- * already takes). A successfully installed pack still needs to be ADDED to
- * this device's pack-folder list for the preview to actually load it; that
- * write stays in `../main.ts` (only `main.ts`/`view.tsx`/`settings-tab.ts`/
+ * (AGENTS.md's Host positioning: this is the ONLY way a pack enters this
+ * plugin): validates a `.mkp` archive the user picked, refuses one whose
+ * namespace is already a bundled pack's, asks for consent (its code will
+ * run in the preview), asks before replacing an already-installed pack of
+ * the same namespace, and unzips it into this plugin's own `packs`
+ * directory (`../main.ts`'s `installedPacksDir`, under the plugin's own
+ * on-disk folder, never a folder the user chose and never the user's
+ * authored note tree — AGENTS.md's cleanliness rule). A successfully
+ * installed pack still needs to be ADDED to this device's trust list
+ * (`./pack-trust.ts`) for the preview to actually load it; that write
+ * stays in `../main.ts` (only `main.ts`/`view.tsx`/`settings-tab.ts`/
  * `run-modals.ts`/`insert-modals.ts`/`complete-suggest.ts`/
- * `reading-view.ts` may import `obsidian`), reusing
- * `./pack-settings.ts`'s `appendPackFolder` exactly like the settings tab's
- * own "Add a pack folder" button does.
+ * `reading-view.ts` may import `obsidian`).
  *
  * A rejected archive installs nothing: `installPackFromArchive` never
- * writes to disk until validation, consent, and (when needed) the replace
- * confirmation have all already succeeded.
+ * writes to disk until every check (bundled-namespace refusal, consent,
+ * and, when needed, the replace confirmation) has already passed.
  */
 import * as path from 'node:path';
 import { openPackArchive } from '@markii/pack';
@@ -43,6 +42,8 @@ export interface InstallPackFromArchiveOptions {
   readonly extractFs: ArchiveExtractFs;
   readonly confirmConsent: ConfirmPackInstallConsent;
   readonly confirmReplace: ConfirmPackReplace;
+  /** Every namespace a bundled pack (read, dash, prep) already claims (`../packs/bundled-packs.ts`'s `bundledDiscoveredPacks`). An archive naming one of these is refused before any write, and before the consent prompt — a bundled pack cannot be shadowed by an install. */
+  readonly bundledNamespaces: ReadonlySet<string>;
 }
 
 export type InstallPackOutcome =
@@ -57,6 +58,7 @@ export type InstallPackOutcome =
       readonly step: 'consent' | 'replace';
       readonly packName: string;
     }
+  | { readonly kind: 'bundled'; readonly packName: string }
   | { readonly kind: 'rejected'; readonly reason: string };
 
 function describeThrown(err: unknown): string {
@@ -82,6 +84,7 @@ export async function installPackFromArchive(
     extractFs,
     confirmConsent,
     confirmReplace,
+    bundledNamespaces,
   } = options;
 
   const opened = await openPackArchive(archiveBytes);
@@ -93,6 +96,10 @@ export async function installPackFromArchive(
   }
 
   const packName = opened.archive.manifest.name;
+
+  if (bundledNamespaces.has(packName)) {
+    return { kind: 'bundled', packName };
+  }
 
   let consented: boolean;
   try {
@@ -163,14 +170,17 @@ export function installPackNoticeText(
   if (outcome.kind === 'rejected') {
     return `Markii: could not install a pack from "${archivePath}". Open the Markii diagnostics for details.`;
   }
+  if (outcome.kind === 'bundled') {
+    return `Markii: "${outcome.packName}" is built in and cannot be installed. Nothing was installed.`;
+  }
   if (outcome.kind === 'declined') {
     return outcome.step === 'consent'
       ? `Markii: install of "${outcome.packName}" cancelled. Nothing was installed.`
       : `Markii: install of "${outcome.packName}" cancelled. The existing pack was kept.`;
   }
   return outcome.replaced
-    ? `Markii: reinstalled pack "${outcome.packName}". Reopen the preview to load the new version.`
-    : `Markii: installed pack "${outcome.packName}". Reopen the preview to load it.`;
+    ? `Markii: reinstalled pack "${outcome.packName}". Markii packs reloaded.`
+    : `Markii: installed pack "${outcome.packName}". Markii packs reloaded.`;
 }
 
 /** The full diagnostics-console detail for one install attempt (AGENTS.md's "clean is not silent": the other of a failure's two homes). */
@@ -181,6 +191,11 @@ export function installPackDiagnosticLines(
   if (outcome.kind === 'rejected') {
     return [
       `Install Markii pack from file rejected "${archivePath}": ${outcome.reason}`,
+    ];
+  }
+  if (outcome.kind === 'bundled') {
+    return [
+      `Install Markii pack from file refused "${archivePath}": pack "${outcome.packName}" is a bundled namespace and cannot be installed.`,
     ];
   }
   if (outcome.kind === 'declined') {

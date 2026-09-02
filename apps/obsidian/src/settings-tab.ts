@@ -6,11 +6,7 @@ import {
   MIN_REFRESH_INTERVAL_SECONDS,
   normalizeLocalSettings,
 } from './local-settings.js';
-import { appendPackFolder, removePackFolder } from './packs/pack-settings.js';
-import { resolvePackPaths } from '@markii/host';
-import { existsSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { folderPickerAvailable, pickFolder } from './pick-folder.js';
+import { bundledDiscoveredPacks } from './packs/bundled-packs.js';
 
 /**
  * Imports `obsidian` — kept in its own file, alongside `src/main.ts`,
@@ -150,79 +146,69 @@ export class MarkiiSettingTab extends PluginSettingTab {
 
     containerEl.createEl('h3', { text: 'Component packs' });
     containerEl.createEl('p', {
-      text: 'Adding a folder lets its code run. Only add folders you trust.',
+      text: 'Install a pack with the "Install Markii pack from file" command. Installing lets its code run.',
       cls: 'setting-item-description',
     });
 
-    // Show what each entry actually RESOLVES to, not the raw string the
-    // user typed: a `~` or `./` entry means nothing on its own, and a
-    // folder that does not exist would otherwise fail silently at load
-    // time with the settings tab still looking correct. A path that is
-    // shell-escaped (`Obsidian\ Github`) is the common way to get a
-    // missing folder here, and this is what makes that visible.
-    const configured = this.plugin.packSettings.packFolders;
-    const resolved = resolvePackPaths(
-      configured,
-      this.plugin.vaultBasePath(),
-      homedir(),
+    containerEl.createEl('h4', { text: 'Built in' });
+    for (const pack of bundledDiscoveredPacks()) {
+      new Setting(containerEl)
+        .setName(pack.manifest.name)
+        .setDesc('Built in. Cannot be removed.');
+    }
+
+    containerEl.createEl('h4', { text: 'Installed packs' });
+    const bundledNamespaces = new Set(
+      bundledDiscoveredPacks().map((pack) => pack.manifest.name),
     );
-    for (const [index, folder] of configured.entries()) {
-      const absolute = resolved[index] ?? folder;
-      const found = existsSync(absolute);
+    const installed = (this.plugin.packContext?.packs ?? []).filter(
+      (pack) => !bundledNamespaces.has(pack.manifest.name),
+    );
+    if (installed.length === 0) {
+      containerEl.createEl('p', {
+        text: 'No packs installed.',
+        cls: 'setting-item-description',
+      });
+    }
+    for (const pack of installed) {
       const row = new Setting(containerEl)
-        .setName(absolute)
-        .setDesc(found ? '' : 'Folder not found.');
-      if (!found) row.descEl.addClass('mod-warning');
+        .setName(pack.manifest.name)
+        .setDesc(
+          pack.manifest.version
+            ? `Version ${pack.manifest.version}`
+            : 'No declared version.',
+        );
       row.addExtraButton((button) => {
         button
           .setIcon('trash')
-          .setTooltip('Remove this pack folder')
+          .setTooltip('Remove this pack')
           .onClick(() => {
-            this.applyPackFolderChange(removePackFolder(configured, folder));
+            void this.plugin
+              .removeInstalledPack(pack.manifest.name)
+              .then(() => this.display());
           });
       });
     }
 
-    let newFolderValue = '';
-    const addFolder = new Setting(containerEl)
-      .setName('Add a pack folder')
-      .setDesc('One pack, or a folder of packs. "~" and "./" both work.')
-      .addText((text) => {
-        text.setPlaceholder('/absolute/path/to/pack').onChange((value) => {
-          newFolderValue = value;
-        });
+    if (this.plugin.notEnabledPackNamespaces.length > 0) {
+      containerEl.createEl('h4', { text: 'Present, not enabled' });
+      containerEl.createEl('p', {
+        text: 'These folders were found on this device but are not trusted here yet, likely from Sync or a hand copy.',
+        cls: 'setting-item-description',
       });
-
-    if (folderPickerAvailable()) {
-      addFolder.addButton((button) => {
-        button.setButtonText('Browse').onClick(() => {
-          void pickFolder().then((picked) => {
-            if (picked === undefined) return;
-            this.applyPackFolderChange(
-              appendPackFolder(this.plugin.packSettings.packFolders, picked),
-            );
+      for (const namespace of this.plugin.notEnabledPackNamespaces) {
+        new Setting(containerEl)
+          .setName(namespace)
+          .setDesc('Present, not enabled on this device.')
+          .addButton((button) => {
+            button.setButtonText('Enable').onClick(() => {
+              void this.plugin
+                .enablePresentPack(namespace)
+                .then(() => this.display());
+            });
           });
-        });
-      });
+      }
     }
-
-    addFolder.addButton((button) => {
-      button.setButtonText('Add').onClick(() => {
-        this.applyPackFolderChange(
-          appendPackFolder(
-            this.plugin.packSettings.packFolders,
-            newFolderValue,
-          ),
-        );
-      });
-    });
-  }
-
-  /** Writes a new pack-folder list (or does nothing when the change was a no-op, e.g. adding a duplicate or removing an absent entry — see `appendPackFolder`/`removePackFolder`'s own doc comments) and redraws the tab so the list reflects it immediately. */
-  private applyPackFolderChange(next: string[] | undefined): void {
-    if (next === undefined) return;
-    this.plugin.savePackSettings({ packFolders: next });
-    this.display();
   }
 
   /**

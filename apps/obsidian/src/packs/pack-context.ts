@@ -1,11 +1,18 @@
 /**
  * Composes every pack-loading piece (`@markii/host`'s `discoverPacks`,
- * `loadPackModules`, `resolvePackPaths`, `buildRenderRegistry`,
- * `packs/pack-build.ts`, `./pack-runtime.ts`) into the one thing
- * `view.tsx` needs: everything about the currently configured, installed
- * packs, loaded once per preview open (docs/packs.md: "reloading a pack
- * requires reopening the preview" — see `../settings-tab.ts`'s note to that
- * effect).
+ * `loadPackModules`, `resolvePrebuiltPack`, `buildRenderRegistry`,
+ * `./pack-runtime.ts`) into the one thing `../main.ts` needs: everything
+ * about the currently loadable, installed packs, loaded once and shared by
+ * every view (the preview pane, Reading view, export, Insert Component,
+ * completion) rather than each reloading its own copy.
+ *
+ * ARCHIVE-ONLY, NO COMPILER (AGENTS.md's Host positioning: Obsidian is a
+ * consuming host, prebuilt archives are its only path). A pack folder
+ * loads only when it already carries a prebuilt `webview.js` sibling to
+ * its `pack.json` (`@markii/host`'s `resolvePrebuiltPack`) — there is no
+ * compile step here at all, unlike VS Code, which also live-compiles
+ * source packs. A folder with no prebuilt script is skipped with a plain
+ * reason, never an attempt to build it.
  *
  * The pack-loading pieces this composes are shared, host-neutral logic
  * hoisted into `@markii/host` (used the same way by
@@ -18,14 +25,14 @@
  * webview process to do that on this host.
  *
  * `obsidian`-free — every Obsidian-specific step (reading the device-local
- * pack-folder setting, resolving the vault base path, injecting the pack
- * stylesheets into `document.head`) stays in `../view.tsx`/`../main.ts`;
- * this module only takes the already-read setting value, the vault root,
- * and a base `Registry`, all as plain values.
+ * trust list, resolving the plugin's install directory, injecting the
+ * pack stylesheets into `document.head`) stays in `../main.ts`; this
+ * module only takes already-resolved, absolute pack folders and a base
+ * `Registry`, all as plain values.
  */
 import { existsSync } from 'node:fs';
+import * as path from 'node:path';
 import { readFile as nodeReadFile } from 'node:fs/promises';
-import { homedir } from 'node:os';
 import type { Registry } from '@markii/react';
 import {
   buildRenderRegistry,
@@ -33,13 +40,10 @@ import {
   discoverPacks,
   installedNamespaces,
   loadPackModules,
-  relativePackEntries,
-  resolvePackPaths,
   resolvePrebuiltPack,
 } from '@markii/host';
 import type {
   DiscoveredPack,
-  PackBuildOutcome,
   PackModulesMap,
   PackPathExists,
   SkippedPackFolder,
@@ -51,13 +55,6 @@ import {
 } from './pack-runtime.js';
 import { resolveBundledPacks } from './bundled-packs.js';
 import type { BundledPackAsset } from './bundled-packs.js';
-import {
-  createNodePackBytesReader,
-  mergeArchiveAndFolderPacks,
-  partitionConfiguredPackPaths,
-  resolveArchivePacks,
-} from './archive-packs.js';
-import type { PackBytesReader, ResolvedArchivePack } from './archive-packs.js';
 
 /** One pack stylesheet ready to inject (`../packs/pack-styles.ts`), keyed by the pack's namespace so it can be removed again by the same key. */
 export interface PackStylesheet {
@@ -76,17 +73,13 @@ export interface PackContext {
   readonly stylesheets: readonly PackStylesheet[];
   /** Every discovered pack's namespace — what `resolveUses` (`@markii/pack`) checks a note's `uses:` declaration against. */
   readonly namespaces: readonly string[];
-  /** Configured folders that produced no usable pack, and why (developer-facing only). Also carries a build-failure or script-evaluation-failure reason for a pack whose compiled script never registered — it still counts toward `packs`/`packModules`, just not `registry`. */
+  /** Folders that produced no usable pack, and why (developer-facing only): no `pack.json`, a manifest that failed validation, no prebuilt `webview.js`, or a script that threw while running. Still counts toward `packs`/`packModules` when the pack was at least discovered — just not toward `registry`. */
   readonly skipped: readonly SkippedPackFolder[];
-  /** Pack-folder setting entries that are relative (`./pack-paths.ts`'s `relativePackEntries`) — an informational diagnostics note, never a behavior change. */
-  readonly relativeEntries: readonly string[];
-  /** Pack CSS authoring warnings (`@markii/host`'s `packs/pack-css-lint.ts`) against every built pack's emitted stylesheet. Warnings only, developer-facing. */
-  readonly cssWarnings: readonly string[];
-  /** One line per malformed pack registration, dropped rather than installed (`./pack-render-registry.ts`). */
+  /** One line per malformed pack registration, dropped rather than installed (`@markii/host`'s `buildRenderRegistry`). */
   readonly invalidRegistrationReasons: readonly string[];
   /** Namespaces shared by two or more registered packs — when non-empty, `registry` fell back to `defaultRegistry` alone (docs/packs.md's install-time all-or-nothing rejection rule). */
   readonly registrationCollisions: readonly string[];
-  /** Composed directive names two DIFFERENTLY named packs both claimed (`./pack-render-registry.ts`'s `DuplicateComposedName`) — the first pack keeps the name, the later pack's component is skipped. Expected to stay empty under ordinary pack composition; kept as a defense-in-depth invariant. */
+  /** Composed directive names two DIFFERENTLY named packs both claimed (`@markii/host`'s `DuplicateComposedName`) — the first pack keeps the name, the later pack's component is skipped. Expected to stay empty under ordinary pack composition; kept as a defense-in-depth invariant. */
   readonly duplicateComposedNames: readonly {
     readonly composedName: string;
     readonly keptPack: string;
@@ -94,12 +87,13 @@ export interface PackContext {
   }[];
   /**
    * Packs that ship BOTH a prebuilt `webview.js` and component sources on
-   * disk (`@markii/host`'s `resolvePrebuiltPack`, issue #15). Informational
-   * only: the prebuilt script is what actually loads, and the sources next
-   * to it are never compiled or read. This is a supported distribution
-   * shape (a pack author who ships the built artifact alongside its
-   * sources for reference), never a failure — it contributes nothing to
-   * `skipped` and nothing to `../view.tsx`'s `notifyPackFailures`.
+   * disk (`@markii/host`'s `resolvePrebuiltPack`). Informational only: the
+   * prebuilt script is what actually loads, and any sources next to it are
+   * never read. Every pack this host installs (`./install-pack.ts`) writes
+   * only `pack.json`/`webview.js`/`webview.css`/`scripts/*`, so this is
+   * expected to stay empty for a pack that arrived through this plugin's
+   * own install command; it stays a defense-in-depth check for a folder a
+   * user placed by hand.
    */
   readonly prebuiltShadowedPacks: readonly {
     readonly name: string;
@@ -107,7 +101,7 @@ export interface PackContext {
   }[];
 }
 
-/** Reads one file's UTF-8 text, or `undefined` if unreadable — reused for both a compiled script and its sibling stylesheet. */
+/** Reads one file's UTF-8 text, or `undefined` if unreadable — reused for both a pack's compiled script and its sibling stylesheet. */
 export type PackArtifactReader = (
   absolutePath: string,
 ) => Promise<string | undefined>;
@@ -120,180 +114,130 @@ const defaultArtifactReader: PackArtifactReader = async (absolutePath) => {
   }
 };
 
-/** Builds one pack's compiled registration script from source — injected so this module stays testable without a real esbuild-wasm invocation, and so `view.tsx`/`main.ts` can wire up the real `@markii/host`'s `buildPackRegistrationScript` with the plugin's own esbuild-wasm asset paths. */
-export type PackCompileBuilder = (
-  pack: DiscoveredPack,
-  cacheDir: string,
-) => Promise<PackBuildOutcome>;
-
-/** The default: never attempts a build. A pack with no prebuilt `webview.js` is simply excluded from the render registry, with nothing added to `skipped` (a `'skipped'` outcome is not a failure). */
-const noopBuilder: PackCompileBuilder = async () => ({ kind: 'skipped' });
-
 export interface LoadPackContextOptions {
-  /** An plugin-owned directory a compiled registration script may be cached under (never a pack's own folder — AGENTS.md's cleanliness rule). Required for `buildRegistrationScript` to ever be called at all. */
-  readonly cacheDir?: string;
-  /** Defaults to `noopBuilder`. `../view.tsx` passes `@markii/host`'s `buildPackRegistrationScript`, wired to the plugin's copied `esbuild-wasm` assets. */
-  readonly buildRegistrationScript?: PackCompileBuilder;
-  /** Reads a compiled script's or stylesheet's text. Defaults to real `node:fs`. Injected for testability. */
+  /** Reads a pack's compiled script's or stylesheet's text. Defaults to real `node:fs`. Injected for testability. */
   readonly readArtifact?: PackArtifactReader;
-  /** Whether an absolute path exists on disk — used to detect a prebuilt `webview.js`/`webview.css` (`@markii/host`'s `resolvePrebuiltPack`). Defaults to real `node:fs`'s `existsSync`. Injected so this module stays testable without disk, matching `readArtifact`/`buildRegistrationScript` above. */
+  /** Whether an absolute path exists on disk — used to detect a prebuilt `webview.js`/`webview.css` (`@markii/host`'s `resolvePrebuiltPack`). Defaults to real `node:fs`'s `existsSync`. Injected so this module stays testable without disk. */
   readonly pathExists?: PackPathExists;
   /**
-   * The three bundled packs (docs/packs.md's "Bundled packs" section,
-   * issue #15), already decoded from `./bundled-packs-embedded.ts`'s
-   * base64 payload. Defaults to `[]` — every existing caller and test that
-   * never passed this keeps working unchanged, seeing no bundled packs
-   * (exactly what a dev/Vitest run's empty placeholder embed already
-   * decodes to). `../view.tsx`/`../main.ts` pass `bundledPackAssets()`.
+   * The three bundled packs (docs/packs.md's "Bundled packs" section),
+   * already decoded from `./bundled-packs-embedded.ts`'s base64 payload.
+   * Defaults to `[]` — every existing caller and test that never passed
+   * this keeps working unchanged, seeing no bundled packs (exactly what a
+   * dev/Vitest run's empty placeholder embed already decodes to).
+   * `../main.ts` passes `bundledPackAssets()`.
    *
-   * Registered BEFORE any user-configured pack (docs/packs.md): evaluated
-   * first, so their entries land first in the registration queue
-   * `buildRenderRegistry` folds left-to-right, and any user pack whose
-   * namespace a bundled pack already claims is dropped from discovery
-   * before it is ever compiled or evaluated, with a line recorded in
+   * Registered BEFORE any installed pack (docs/packs.md): evaluated first,
+   * so their entries land first in the registration queue
+   * `buildRenderRegistry` folds left-to-right, and any installed pack
+   * whose namespace a bundled pack already claims is dropped from
+   * discovery before it is ever evaluated, with a line recorded in
    * `skipped` — the bundled pack wins the namespace outright rather than
-   * the two rejecting each other the way two colliding user packs would.
+   * the two rejecting each other the way two colliding installed packs
+   * would. `./install-pack.ts` also refuses this collision up front, at
+   * install time, so it should only ever be reached here for a folder a
+   * user placed by hand outside the install command.
    */
   readonly bundledPacks?: readonly BundledPackAsset[];
-  /**
-   * Reads a `.mkp` archive's raw bytes (`./archive-packs.ts`'s
-   * `PackBytesReader`), for a configured pack-folder-list entry that names
-   * a `.mkp` FILE directly rather than a folder (GitHub issue #16). Defaults
-   * to real `node:fs`. Injected for testability, matching `readArtifact`/
-   * `pathExists` above.
-   */
-  readonly readArchiveBytes?: PackBytesReader;
 }
 
-/** One compiled pack's script text plus, if it has one, its stylesheet text — read once so evaluation and stylesheet collection do not each hit disk separately. */
-interface CompiledPack {
+/** One resolved pack's script text plus, if it has one, its stylesheet text — read once so evaluation and stylesheet collection do not each hit disk separately. */
+interface ResolvedPack {
   readonly pack: DiscoveredPack;
   readonly scriptText: string;
   readonly cssText: string | undefined;
 }
 
-/**
- * Resolves the usable compiled script (and stylesheet, if any) for every
- * discovered pack: a prebuilt `webview.js` sibling to `pack.json` if one
- * exists (`@markii/host`'s `resolvePrebuiltPack`, whose optional sibling
- * `webview.css` becomes this pack's `stylesheetPath` when present),
- * otherwise a build via `buildRegistrationScript` when `cacheDir` is
- * configured. A pack that fails either step is recorded in `skipped`
- * (mutated in place) and excluded from the returned list — never thrown. A
- * pack whose prebuilt script shadows component sources still present on
- * disk is recorded in `prebuiltShadowedPacks` (mutated in place) —
- * informational only, never a failure.
- */
-interface ResolveCompiledPacksResult {
-  readonly compiled: readonly CompiledPack[];
-  readonly cssWarnings: readonly string[];
+interface ResolveInstalledPacksResult {
+  readonly resolved: readonly ResolvedPack[];
 }
 
-async function resolveCompiledPacks(
+/**
+ * Resolves the prebuilt script (and stylesheet, if any) for every
+ * discovered, installed pack. A pack with no prebuilt `webview.js` is
+ * recorded in `skipped` (mutated in place) and excluded from the returned
+ * list — never a compile attempt. A pack whose prebuilt script shadows
+ * component sources still present on disk is recorded in
+ * `prebuiltShadowedPacks` (mutated in place) — informational only, never a
+ * failure.
+ */
+async function resolveInstalledPacks(
   packs: readonly DiscoveredPack[],
   skipped: SkippedPackFolder[],
   prebuiltShadowedPacks: { readonly name: string; readonly folder: string }[],
-  cacheDir: string | undefined,
-  buildRegistrationScript: PackCompileBuilder,
   readArtifact: PackArtifactReader,
   pathExists: PackPathExists,
-): Promise<ResolveCompiledPacksResult> {
-  const compiled: CompiledPack[] = [];
-  const cssWarnings: string[] = [];
+): Promise<ResolveInstalledPacksResult> {
+  const resolved: ResolvedPack[] = [];
 
   for (const pack of packs) {
-    let scriptPath = pack.scriptPath;
-    let stylesheetPath = pack.stylesheetPath;
-    let warnings: readonly string[] = [];
-
     const prebuilt = await resolvePrebuiltPack(pack, pathExists);
-    if (prebuilt) {
-      scriptPath = prebuilt.scriptPath;
-      stylesheetPath = prebuilt.stylesheetPath;
-      if (prebuilt.shadowedComponentSources.length > 0) {
-        prebuiltShadowedPacks.push({
-          name: pack.manifest.name,
-          folder: pack.folder,
-        });
-      }
-    } else {
-      if (cacheDir === undefined) continue;
-      const outcome = await buildRegistrationScript(pack, cacheDir);
-      if (outcome.kind === 'built') {
-        scriptPath = outcome.scriptPath;
-        stylesheetPath = outcome.stylesheetPath;
-        warnings = outcome.warnings;
-      } else if (outcome.kind === 'failed') {
-        skipped.push({
-          folder: pack.folder,
-          reason: `pack "${pack.manifest.name}" registration script build failed (${outcome.reason})`,
-        });
-        continue;
-      } else {
-        continue;
-      }
+    if (!prebuilt) {
+      skipped.push({
+        folder: pack.folder,
+        reason: `pack "${pack.manifest.name}" has no prebuilt webview.js and cannot be compiled on this host`,
+      });
+      continue;
+    }
+    if (prebuilt.shadowedComponentSources.length > 0) {
+      prebuiltShadowedPacks.push({
+        name: pack.manifest.name,
+        folder: pack.folder,
+      });
     }
 
-    const scriptText = await readArtifact(scriptPath);
+    const scriptText = await readArtifact(prebuilt.scriptPath);
     if (scriptText === undefined) {
       skipped.push({
         folder: pack.folder,
-        reason: `pack "${pack.manifest.name}" registration script "${scriptPath}" could not be read`,
+        reason: `pack "${pack.manifest.name}" registration script "${prebuilt.scriptPath}" could not be read`,
       });
       continue;
     }
 
     const cssText =
-      stylesheetPath !== undefined
-        ? await readArtifact(stylesheetPath)
+      prebuilt.stylesheetPath !== undefined
+        ? await readArtifact(prebuilt.stylesheetPath)
         : undefined;
 
-    compiled.push({
-      pack: { ...pack, scriptPath, stylesheetPath },
+    resolved.push({
+      pack: {
+        ...pack,
+        scriptPath: prebuilt.scriptPath,
+        ...(prebuilt.stylesheetPath !== undefined
+          ? { stylesheetPath: prebuilt.stylesheetPath }
+          : {}),
+      },
       scriptText,
       cssText,
     });
-    if (warnings.length > 0) {
-      cssWarnings.push(...warnings);
-    }
   }
 
-  return { compiled, cssWarnings };
+  return { resolved };
 }
 
 /**
- * Loads everything about the packs named by `configuredFolders` (this
- * plugin's device-local pack-folder setting, unresolved) resolved against
- * `vaultRoot`. Never throws: every step it composes already degrades
- * quietly.
+ * Loads everything about the packs found under `installedFolders` (already
+ * resolved, absolute, trusted-on-this-device folders — `../main.ts`'s
+ * `selectLoadablePackFolders`). Never throws: every step it composes
+ * already degrades quietly.
  */
 export async function loadPackContext(
-  configuredFolders: readonly string[],
-  vaultRoot: string | undefined,
+  installedFolders: readonly string[],
   defaultRegistry: Registry,
   options: LoadPackContextOptions = {},
 ): Promise<PackContext> {
   const {
-    cacheDir,
-    buildRegistrationScript = noopBuilder,
     readArtifact = defaultArtifactReader,
     pathExists = existsSync,
     bundledPacks: bundledAssets = [],
-    readArchiveBytes = createNodePackBytesReader(),
   } = options;
-  const homeDir = homedir();
-  const folders = resolvePackPaths(configuredFolders, vaultRoot, homeDir);
-  const relativeEntries = relativePackEntries(configuredFolders, homeDir);
-  // A configured entry may name a `.mkp` FILE directly rather than a folder
-  // (docs/packs.md's "A pack as a single file", GitHub issue #16): it loads
-  // read-only from the archive, prebuilt form only, and is never compiled.
-  const { folderPaths, archivePaths } = partitionConfiguredPackPaths(folders);
 
   // Bundled packs (docs/packs.md's "Bundled packs" section) resolve first,
-  // and never touch disk or the esbuild-wasm builder — they arrive already
-  // compiled, embedded into `main.js` at build time. `skipped` starts from
-  // whatever `resolveBundledPacks` itself rejected (a malformed embed, or
-  // two bundled assets sharing a namespace — should never happen from this
+  // and never touch disk — they arrive already compiled, embedded into
+  // `main.js` at build time. `skipped` starts from whatever
+  // `resolveBundledPacks` itself rejected (a malformed embed, or two
+  // bundled assets sharing a namespace — should never happen from this
   // repo's own build, but validated rather than trusted).
   const { resolved: bundledResolved, invalid: bundledInvalid } =
     resolveBundledPacks(bundledAssets);
@@ -302,64 +246,50 @@ export async function loadPackContext(
   );
   const skipped: SkippedPackFolder[] = [...bundledInvalid];
 
-  const discovery = await discoverPacks(folderPaths, createNodeFileReader());
+  const discovery = await discoverPacks(
+    installedFolders,
+    createNodeFileReader(),
+  );
   skipped.push(...discovery.skipped);
 
-  // `.mkp` archives (docs/packs.md's "A pack as a single file"): resolved
-  // entirely in memory, never compiled — see `./archive-packs.ts`'s top
-  // doc comment for why this plugin needs no on-disk extraction for the
-  // preview path, unlike `apps/vscode`'s equivalent.
-  const { resolved: archiveResolved, skipped: archiveSkipped } =
-    await resolveArchivePacks(archivePaths, readArchiveBytes);
-  skipped.push(...archiveSkipped);
-  const archiveResolvedByFolder = new Map<string, ResolvedArchivePack>(
-    archiveResolved.map((entry) => [entry.pack.folder, entry]),
-  );
-
-  // Folder discovery and archive resolution each check for collisions only
-  // WITHIN their own source, so a namespace shared BETWEEN the two would
-  // otherwise go undetected — `mergeArchiveAndFolderPacks` applies the same
-  // "both claimants dropped" rule across the combined set.
-  const merged = mergeArchiveAndFolderPacks(
-    discovery.packs,
-    archiveResolved.map((entry) => entry.pack),
-  );
-  skipped.push(...merged.skipped);
-
-  // A user-configured pack claiming a namespace a bundled pack already
-  // holds is skipped outright, before it is ever compiled or evaluated —
-  // the bundled pack wins the namespace (docs/packs.md: "This follows the
-  // ordinary collision rule above rather than making an exception to it").
-  // Filtering here, rather than letting both flow into the shared
-  // registration queue, matters because `buildRenderRegistry`'s own
-  // namespace-collision rule rejects BOTH claimants and falls back to
-  // `defaultRegistry` alone — which would also cost the bundled pack its
-  // slot, the opposite of "bundled wins".
-  const userPacks: DiscoveredPack[] = [];
-  for (const pack of merged.packs) {
-    if (bundledNamespaces.has(pack.manifest.name)) {
+  // An installed pack claiming a namespace a bundled pack already holds is
+  // skipped outright, before it is ever evaluated — the bundled pack wins
+  // the namespace (docs/packs.md: "This follows the ordinary collision
+  // rule above rather than making an exception to it"). Filtering here,
+  // rather than letting both flow into the shared registration queue,
+  // matters because `buildRenderRegistry`'s own namespace-collision rule
+  // rejects BOTH claimants and falls back to `defaultRegistry` alone —
+  // which would also cost the bundled pack its slot, the opposite of
+  // "bundled wins". `./install-pack.ts` refuses this at install time, so
+  // it should only be reached here for a hand-placed folder.
+  const installedPacks: DiscoveredPack[] = [];
+  for (const pack of discovery.packs) {
+    // An installed pack's folder is named by its namespace: that is what
+    // `./install-pack.ts` writes, and it is what the trust list
+    // (`./pack-trust.ts`) authorizes, so the settings tab can offer
+    // Remove for a name and have it delete the right folder. A folder
+    // whose `pack.json` declares some other namespace can only come from
+    // a hand copy or a hand edit, and loading it would mean running code
+    // under a name this device never enabled, so it is skipped and said
+    // so.
+    if (path.basename(pack.folder) !== pack.manifest.name) {
       skipped.push({
         folder: pack.folder,
-        reason: `pack namespace "${pack.manifest.name}" is already used by a bundled pack and was not installed`,
+        reason: `pack folder "${pack.folder}" declares namespace "${pack.manifest.name}" and was not loaded: an installed pack folder is named by its namespace`,
       });
       continue;
     }
-    userPacks.push(pack);
+    if (bundledNamespaces.has(pack.manifest.name)) {
+      skipped.push({
+        folder: pack.folder,
+        reason: `pack namespace "${pack.manifest.name}" is already used by a bundled pack and was not loaded`,
+      });
+      continue;
+    }
+    installedPacks.push(pack);
   }
 
-  // Archive packs never need `loadPackModules`'s directory read (their Lua
-  // modules were already decoded from the archive in memory) or
-  // `resolveCompiledPacks`'s prebuilt/build resolution (their script and
-  // stylesheet text are already decoded too) — only the folder-discovered
-  // packs go through either step.
-  const folderUserPacks = userPacks.filter(
-    (pack) => !archiveResolvedByFolder.has(pack.folder),
-  );
-  const archiveUserPacks = userPacks.filter((pack) =>
-    archiveResolvedByFolder.has(pack.folder),
-  );
-
-  const userPackModules = await loadPackModules(folderUserPacks);
+  const installedPackModules = await loadPackModules(installedPacks);
   const packModules: PackModulesMap = {
     ...Object.fromEntries(
       bundledResolved.map((entry) => [
@@ -367,46 +297,26 @@ export async function loadPackContext(
         entry.luaModules,
       ]),
     ),
-    ...Object.fromEntries(
-      archiveUserPacks.map((pack) => [
-        pack.manifest.name,
-        archiveResolvedByFolder.get(pack.folder)!.luaModules,
-      ]),
-    ),
-    ...userPackModules,
+    ...installedPackModules,
   };
 
   const prebuiltShadowedPacks: {
     readonly name: string;
     readonly folder: string;
   }[] = [];
-  const { compiled: folderCompiledPacks, cssWarnings } =
-    await resolveCompiledPacks(
-      folderUserPacks,
-      skipped,
-      prebuiltShadowedPacks,
-      cacheDir,
-      buildRegistrationScript,
-      readArtifact,
-      pathExists,
-    );
-  const compiledPacks: CompiledPack[] = [
-    ...archiveUserPacks.map((pack) => {
-      const archived = archiveResolvedByFolder.get(pack.folder)!;
-      return {
-        pack,
-        scriptText: archived.scriptText,
-        cssText: archived.cssText,
-      };
-    }),
-    ...folderCompiledPacks,
-  ];
+  const { resolved: resolvedInstalledPacks } = await resolveInstalledPacks(
+    installedPacks,
+    skipped,
+    prebuiltShadowedPacks,
+    readArtifact,
+    pathExists,
+  );
 
   installPackRuntime();
   const evalFailureNames = new Set<string>();
   // Bundled packs evaluate FIRST, so their registrations land first in the
   // queue `buildRenderRegistry` folds left-to-right (docs/packs.md: "They
-  // are registered before any pack a user configured").
+  // are registered before any installed pack").
   for (const { pack, scriptText } of bundledResolved) {
     const result = evaluatePackScript(scriptText);
     if (!result.ok) {
@@ -417,7 +327,7 @@ export async function loadPackContext(
       evalFailureNames.add(pack.manifest.name);
     }
   }
-  for (const { pack, scriptText } of compiledPacks) {
+  for (const { pack, scriptText } of resolvedInstalledPacks) {
     const result = evaluatePackScript(scriptText);
     if (!result.ok) {
       skipped.push({
@@ -440,7 +350,7 @@ export async function loadPackContext(
         namespace: entry.pack.manifest.name,
         cssText: entry.cssText!,
       })),
-    ...compiledPacks
+    ...resolvedInstalledPacks
       .filter(
         (entry) =>
           entry.cssText !== undefined &&
@@ -457,7 +367,7 @@ export async function loadPackContext(
 
   const packs: DiscoveredPack[] = [
     ...bundledResolved.map((entry) => entry.pack),
-    ...userPacks,
+    ...installedPacks,
   ];
 
   return {
@@ -467,8 +377,6 @@ export async function loadPackContext(
     stylesheets,
     namespaces: installedNamespaces(packs),
     skipped,
-    relativeEntries,
-    cssWarnings,
     invalidRegistrationReasons: invalidReasons,
     registrationCollisions: collisions,
     duplicateComposedNames,

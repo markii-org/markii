@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { createRegistry } from '@markii/react';
 import {
-  PACK_COMPILATION_UNAVAILABLE_NOTICE,
-  compilationUnavailableSkipCount,
+  notEnabledPackLine,
+  packEnabledNotice,
+  packRemoveFolderFailedNotice,
+  packRemovedNotice,
   formatPackDiagnosticLines,
-  hasPackCompilationUnavailable,
   packCollisionNotice,
-  packCompilationUnavailableReason,
   packLoadFailureNotice,
   skippedPackCount,
 } from './pack-diagnostics.js';
@@ -29,8 +29,6 @@ function pack(name: string, componentCount: number): DiscoveredPack {
 function context(
   packs: readonly DiscoveredPack[],
   skipped: readonly SkippedPackFolder[],
-  relativeEntries: readonly string[] = [],
-  cssWarnings: readonly string[] = [],
   invalidRegistrationReasons: readonly string[] = [],
   registrationCollisions: readonly string[] = [],
   prebuiltShadowedPacks: readonly {
@@ -50,8 +48,6 @@ function context(
     stylesheets: [],
     namespaces: packs.map((p) => p.manifest.name),
     skipped,
-    relativeEntries,
-    cssWarnings,
     invalidRegistrationReasons,
     registrationCollisions,
     prebuiltShadowedPacks,
@@ -89,42 +85,29 @@ describe('formatPackDiagnosticLines', () => {
     expect(lines[1]).toContain('/packs/broken');
   });
 
-  it('reports one informational line per vault-relative pack-folder entry, naming the entry', () => {
-    const lines = formatPackDiagnosticLines(context([], [], ['packs/demo']));
-    expect(lines).toHaveLength(1);
-    expect(lines[0]).toContain('packs/demo');
-    expect(lines[0]).toContain('vault-relative');
-  });
-
-  it('lists pack CSS warnings, then invalid-registration reasons, then a collision line, after everything else', () => {
+  it('lists invalid-registration reasons then a collision line, after everything else', () => {
     const lines = formatPackDiagnosticLines(
       context(
         [pack('ana', 1)],
         [{ folder: '/packs/broken', reason: 'x' }],
-        ['packs/demo'],
-        ['pack "ana" CSS uses a raw color literal in "color: #fff;"'],
         [
           'pack registration #0 did not provide a manifest JSON string; ignored.',
         ],
         ['gh'],
       ),
     );
-    expect(lines).toHaveLength(6);
+    expect(lines).toHaveLength(4);
     expect(lines[0]).toContain('ana');
     expect(lines[1]).toContain('/packs/broken');
-    expect(lines[2]).toContain('packs/demo');
-    expect(lines[3]).toContain('raw color literal');
-    expect(lines[4]).toContain('manifest JSON string');
-    expect(lines[5]).toContain('gh');
-    expect(lines[5]).toContain('namespace');
+    expect(lines[2]).toContain('manifest JSON string');
+    expect(lines[3]).toContain('gh');
+    expect(lines[3]).toContain('namespace');
   });
 
   it('reports one line per duplicate composed name, naming both packs, after the collision line', () => {
     const lines = formatPackDiagnosticLines(
       context(
         [pack('ana', 1)],
-        [],
-        [],
         [],
         [],
         [],
@@ -138,7 +121,7 @@ describe('formatPackDiagnosticLines', () => {
     expect(lines[1]).toContain('"a"');
   });
 
-  it('an empty cssWarnings/invalidRegistrationReasons/registrationCollisions list contributes nothing', () => {
+  it('an empty invalidRegistrationReasons/registrationCollisions list contributes nothing', () => {
     const lines = formatPackDiagnosticLines(context([pack('ana', 1)], []));
     expect(lines).toHaveLength(1);
   });
@@ -147,8 +130,6 @@ describe('formatPackDiagnosticLines', () => {
     const lines = formatPackDiagnosticLines(
       context(
         [pack('ana', 1)],
-        [],
-        [],
         [],
         [],
         [],
@@ -161,25 +142,6 @@ describe('formatPackDiagnosticLines', () => {
     expect(lines[1]).toContain('webview.js');
   });
 
-  it('the shadow line sits between the relative-entry lines and the CSS warnings', () => {
-    const lines = formatPackDiagnosticLines(
-      context(
-        [pack('ana', 1)],
-        [],
-        ['packs/demo'],
-        ['pack "ana" CSS uses a raw color literal in "color: #fff;"'],
-        [],
-        [],
-        [{ name: 'ana', folder: '/packs/ana' }],
-      ),
-    );
-    expect(lines).toHaveLength(4);
-    expect(lines[0]).toContain('ana');
-    expect(lines[1]).toContain('vault-relative');
-    expect(lines[2]).toContain('prebuilt');
-    expect(lines[3]).toContain('raw color literal');
-  });
-
   it('is absent when no pack shadows anything', () => {
     const lines = formatPackDiagnosticLines(context([pack('ana', 1)], []));
     expect(lines.some((line) => line.includes('prebuilt'))).toBe(false);
@@ -188,8 +150,6 @@ describe('formatPackDiagnosticLines', () => {
   it('does not affect skippedPackCount', () => {
     const withShadow = context(
       [pack('ana', 1)],
-      [],
-      [],
       [],
       [],
       [],
@@ -213,58 +173,39 @@ describe('skippedPackCount', () => {
   });
 });
 
-describe('packCompilationUnavailableReason', () => {
-  it('names the pack and points at the releases URL', () => {
-    const reason = packCompilationUnavailableReason('ana');
-    expect(reason).toContain('ana');
-    expect(reason).toContain(
-      'https://github.com/markii-org/markii-obsidian/releases',
-    );
-  });
-});
-
-describe('hasPackCompilationUnavailable', () => {
-  it('is true for a context carrying the pack-compilation-unavailable reason', () => {
-    const skipped: SkippedPackFolder[] = [
-      { folder: '/packs/ana', reason: packCompilationUnavailableReason('ana') },
-    ];
-    expect(hasPackCompilationUnavailable(context([], skipped))).toBe(true);
-  });
-
-  it('is false for a context carrying an unrelated skipped reason', () => {
-    const skipped: SkippedPackFolder[] = [
-      { folder: '/packs/broken', reason: 'invalid pack.json (missing name)' },
-    ];
-    expect(hasPackCompilationUnavailable(context([], skipped))).toBe(false);
-  });
-
-  it('is false for an empty context', () => {
-    expect(hasPackCompilationUnavailable(context([], []))).toBe(false);
-  });
-});
-
-describe('compilationUnavailableSkipCount', () => {
-  it('counts only the no-compiler skips, not other failures', () => {
-    const skipped: SkippedPackFolder[] = [
-      { folder: '/packs/ana', reason: packCompilationUnavailableReason('ana') },
-      { folder: '/packs/bob', reason: packCompilationUnavailableReason('bob') },
-      { folder: '/packs/broken', reason: 'invalid pack.json (missing name)' },
-    ];
-    expect(compilationUnavailableSkipCount(context([], skipped))).toBe(2);
+describe('notEnabledPackLine', () => {
+  it('names the namespace and points at the settings tab', () => {
+    const line = notEnabledPackLine('read');
+    expect(line).toContain('read');
+    expect(line).toContain('not enabled');
+    expect(line).toContain('Component packs');
   });
 });
 
 describe('notice wording', () => {
   const notices = [
-    PACK_COMPILATION_UNAVAILABLE_NOTICE,
     packLoadFailureNotice(1),
     packLoadFailureNotice(3),
     packCollisionNotice(['ana', 'bob']),
+    packRemovedNotice('ana'),
+    packRemoveFolderFailedNotice('ana'),
+    packEnabledNotice('ana'),
   ];
 
   it('pluralizes the load-failure notice', () => {
     expect(packLoadFailureNotice(1)).toContain('a pack failed');
     expect(packLoadFailureNotice(3)).toContain('3 packs failed');
+  });
+
+  it('says a removed pack no longer loads even when its folder survived', () => {
+    expect(packRemovedNotice('ana')).toContain('removed the pack ana');
+    const failed = packRemoveFolderFailedNotice('ana');
+    expect(failed).toContain('no longer loads');
+    expect(failed).toContain('could not be deleted');
+  });
+
+  it('names the pack it enabled', () => {
+    expect(packEnabledNotice('ana')).toContain('enabled the pack ana');
   });
 
   it('names the colliding namespaces', () => {
