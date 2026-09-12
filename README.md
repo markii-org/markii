@@ -9,7 +9,7 @@
   <a href="https://www.npmjs.com/package/@markii/react"><img alt="npm" src="https://img.shields.io/npm/v/@markii/react?logo=npm&label=npm" /></a>
   <a href="LICENSE"><img alt="license: MIT" src="https://img.shields.io/badge/license-MIT-green" /></a>
   <a href="docs/README.md"><img alt="docs" src="https://img.shields.io/badge/docs-read-1E3A5F" /></a>
-  <a href="https://sadigaxund.github.io/markii-vault/"><img alt="playground" src="https://img.shields.io/badge/playground-try%20it-F28C1E" /></a>
+  <a href="https://markii-org.github.io/markii-vault/"><img alt="playground" src="https://img.shields.io/badge/playground-try%20it-F28C1E" /></a>
   <a href="docs/spec.md"><img alt="spec" src="https://img.shields.io/badge/spec-read-E0A82E" /></a>
 </p>
 
@@ -40,7 +40,7 @@ facebook/react has :value[repo.stars] stars.
 ````
 
 > [!TIP]
-> For more details on how Markii works, try the [guided tour](https://sadigaxund.github.io/markii-vault/#tour) in the vault playground.
+> For more details on how Markii works, try the [guided tour](https://markii-org.github.io/markii-vault/#tour) in the vault playground.
 
 Delete every directive and script and a coherent note remains. That is the
 line Markii holds: components and scripts feed the document; they never become
