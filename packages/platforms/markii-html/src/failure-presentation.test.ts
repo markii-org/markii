@@ -4,7 +4,37 @@ import {
   failureKindClass,
   failurePhrase,
   failureTitle,
+  invalidAttributeValueTitle,
+  unsafeImageSrcTitle,
+  NOTICE_ATTRIBUTE,
 } from './failure-presentation.js';
+
+describe('the silent-value-drop notice wording (#56, #60)', () => {
+  it('NOTICE_ATTRIBUTE is the documented data attribute', () => {
+    expect(NOTICE_ATTRIBUTE).toBe('data-mk-notice');
+  });
+
+  it('invalidAttributeValueTitle names the directive, value, and attribute', () => {
+    expect(invalidAttributeValueTitle('card', 'text', 'Hey')).toBe(
+      'card: "Hey" is not a valid text value (ignored)',
+    );
+  });
+
+  it('unsafeImageSrcTitle names the directive', () => {
+    expect(unsafeImageSrcTitle('figure')).toBe(
+      'figure: image source was refused as unsafe and was not shown',
+    );
+  });
+
+  it("matches @markii/react's wording word for word", () => {
+    // Both engines are independent implementations of the same
+    // presentation contract; this pins them to identical wording without
+    // one importing the other.
+    expect(invalidAttributeValueTitle('row', 'text', 'diagonal')).toBe(
+      'row: "diagonal" is not a valid text value (ignored)',
+    );
+  });
+});
 
 describe('failurePhrase', () => {
   it('returns the short phrase for each taxonomy member', () => {

@@ -13,6 +13,7 @@
 import {
   extractScriptBlocks,
   scanRunRequirementHosts,
+  scriptDeclaredHosts,
 } from './script-requirements.js';
 import { resolveStoredGrant, runGrantFlow } from './grant-flow.js';
 import type {
@@ -312,12 +313,14 @@ export interface RunOnceResult {
   }[];
   /**
    * Consent unification (SECURITY-RELEVANT): lines describing any mismatch
-   * between a bundle manifest's declared `permissions.net` and the hosts
-   * this run's scripts actually reach, from `./bundle-run.ts`'s
-   * `netDeclarationDiagnostics`. Always `[]` for a bare `.mk.md` document
-   * (no manifest to compare against) or a bundle whose declaration and
-   * scan agree. For the host's diagnostics surface only — never the
-   * rendered page — same posture as `failureDetails` above.
+   * between what is DECLARED (a bundle manifest's `permissions.net`, and/or
+   * an individual script's own `permissions` fence attribute — batch 7
+   * #47) and the hosts this run's scripts actually reach, from
+   * `./bundle-run.ts`'s `netDeclarationDiagnostics`. `[]` when there is
+   * nothing to compare against (no bundle manifest and no script declares
+   * `permissions`) or every declared host agrees with the scan. For the
+   * host's diagnostics surface only — never the rendered page — same
+   * posture as `failureDetails` above.
    */
   netDeclarationDiagnostics: string[];
 }
@@ -366,14 +369,20 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
       : undefined,
   );
 
-  // The manifest's declared `permissions.net` is DECLARED INTENT only: it
-  // never widens or narrows `scannedHosts` above. A mismatch between the
-  // two is surfaced as diagnostics lines instead (host's diagnostics
-  // surface only, never the rendered page) — see
-  // `netDeclarationDiagnostics`'s doc comment.
-  const declaredNetHosts = options.bundle
-    ? manifestNetHosts(options.bundle.manifest)
-    : [];
+  // The manifest's declared `permissions.net` (for a bundle) and each
+  // script's own `permissions` fence attribute are BOTH declared intent
+  // only: neither widens or narrows `scannedHosts` above. A mismatch
+  // between what is declared (either source) and what is scanned is
+  // surfaced as diagnostics lines instead (host's diagnostics surface
+  // only, never the rendered page) — see `netDeclarationDiagnostics`'s
+  // doc comment. The two declared sets are merged into one comparison:
+  // a host a script declares but a bundle manifest does not (or vice
+  // versa) is not itself a mismatch worth its own line, only a mismatch
+  // against what actually runs.
+  const declaredNetHosts = [
+    ...(options.bundle ? manifestNetHosts(options.bundle.manifest) : []),
+    ...scriptDeclaredHosts(scripts),
+  ];
   const netDiagnostics = netDeclarationDiagnostics(
     declaredNetHosts,
     scannedHosts,
@@ -410,6 +419,7 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
           requirements: grantRequirements,
           memento: options.memento,
           promptHost: options.promptHost,
+          declaredHosts: scriptDeclaredHosts(scripts),
           promptUnknownHosts: options.promptUnknownHosts,
           promptManyHosts: options.promptManyHosts,
         })

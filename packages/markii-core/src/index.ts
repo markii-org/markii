@@ -4,7 +4,7 @@
 // subpath instead of here so a browser bundler consuming `@markii/core` (e.g.
 // via `@markii/react`) never has to reason about Node built-ins reachable from
 // its entry point.
-export { parse } from './parse.js';
+export { parse, isRecognizedTextDirective } from './parse.js';
 export {
   extractFrontmatter,
   extractFrontmatterUses,

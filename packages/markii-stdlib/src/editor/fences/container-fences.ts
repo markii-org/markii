@@ -22,7 +22,7 @@
  * how a note renders.
  *
  * Pure and host-neutral: no editor API, no filesystem, no `node:*`. It is
- * exported from `@markii/host/browser` and
+ * re-exported from `@markii/host/browser`, and
  * `apps/vscode/src/browser-entry.probe.test.ts` is the gate for that.
  */
 
@@ -329,4 +329,75 @@ export function fenceExtensionEdits(
   }
 
   return edits.sort((a, b) => a.line - b.line);
+}
+
+/**
+ * Whether `lineText` (the text of `documentText`'s line at `lineIndex`) is a
+ * bare colon run that CLOSES a container currently open above it, using the
+ * same textbook-pairing scan `enclosingContainerFences` uses (GitHub issue
+ * #57). A directive-name completion popup has no way on its own to tell a
+ * just-typed opener (`:::`, offer the catalog) from a pasted or typed
+ * CLOSING fence (`:::`, offer nothing) because both are the exact same bare
+ * shape; this predicate is the missing piece a completion trigger checks
+ * before opening the popup. `completionAt` itself is unaffected: it keeps
+ * offering the full catalog for a bare colon run, since it has no document
+ * context to tell the two apart.
+ *
+ * `false` for anything but a clean, currently-open match: a bare colon run
+ * with nothing open above it (a genuine opener, still worth completing), a
+ * colon run that also carries a directive name or other trailing content
+ * (`:::card`, never a closer), one whose count does not match the nearest
+ * open fence exactly, or a document whose fences do not pair cleanly above
+ * this line (an unterminated code fence, a dangling opener, an ambiguous
+ * fence) — the same "do not touch" conservatism `enclosingContainerFences`
+ * applies elsewhere in this module.
+ */
+export function closesOpenContainerFence(
+  documentText: string,
+  lineIndex: number,
+  lineText: string,
+): boolean {
+  if (typeof documentText !== 'string' || typeof lineText !== 'string') {
+    return false;
+  }
+  if (!Number.isInteger(lineIndex) || lineIndex < 0) return false;
+
+  const classified = classifyFenceLine(
+    stripCarriageReturn(lineText),
+    lineIndex,
+  );
+  if (classified === undefined || classified.kind !== 'close') return false;
+
+  const lines = documentText.split('\n');
+  const stack: OpenFence[] = [];
+  let codeFence: CodeFenceState | undefined;
+
+  for (let line = 0; line < lineIndex && line < lines.length; line++) {
+    const text = stripCarriageReturn(lines[line] ?? '');
+    const stepped = stepCodeFence(codeFence, text);
+    codeFence = stepped.state;
+    if (stepped.isCode) continue;
+
+    const classifiedAbove = classifyFenceLine(text, line);
+    if (classifiedAbove === undefined) continue;
+    if (classifiedAbove.kind === 'ambiguous') return false;
+
+    if (classifiedAbove.kind === 'open') {
+      const parent = stack[stack.length - 1];
+      if (parent && classifiedAbove.fence.colonCount >= parent.colonCount) {
+        return false;
+      }
+      stack.push(classifiedAbove.fence);
+      continue;
+    }
+
+    const opener = stack.pop();
+    if (!opener) return false;
+    if (opener.colonCount !== classifiedAbove.fence.colonCount) return false;
+  }
+
+  if (codeFence !== undefined) return false;
+
+  const top = stack[stack.length - 1];
+  return top !== undefined && top.colonCount === classified.fence.colonCount;
 }

@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { buildComponentCatalog, completionAt, hoverAt } from '@markii/host';
+import { buildComponentCatalog } from '@markii/host';
+import type { DiscoveredPack } from '@markii/host';
+import { completionAt, hoverAt } from '@markii/stdlib/editor';
 import type {
   CompletionItem,
   ComponentDocumentation,
-  DiscoveredPack,
-} from '@markii/host';
+} from '@markii/stdlib/editor';
 import {
   MARKII_COMPLETION_TRIGGER_CHARACTERS,
   completionFilterText,
@@ -237,38 +238,6 @@ describe('completionSortText', () => {
   });
 });
 
-describe('completionFilterText', () => {
-  it('prefixes the label with the colon run the replace range starts on', () => {
-    // A directive-name context replaces from column 0, so VS Code scores
-    // the row against ":::cal" and would reject a bare "callout".
-    expect(completionFilterText(':::cal', 0, 'callout')).toBe(':::callout');
-    expect(completionFilterText('::sta', 0, 'stat')).toBe('::stat');
-    expect(completionFilterText(':kb', 0, 'kbd')).toBe(':kbd');
-  });
-
-  it('keeps a leading-whitespace block opener aligned with the typed text', () => {
-    expect(completionFilterText('  :::cal', 2, 'callout')).toBe(':::callout');
-  });
-
-  it('returns the label unchanged when the range starts on a name', () => {
-    // The trailing-content case: the range covers the bare name only.
-    expect(completionFilterText(':::cal{type=info}', 3, 'callout')).toBe(
-      'callout',
-    );
-  });
-
-  it('returns the label unchanged for an attribute name or value range', () => {
-    expect(completionFilterText(':::callout{ty', 11, 'type')).toBe('type');
-    expect(completionFilterText(':::callout{type="in', 17, 'info')).toBe(
-      'info',
-    );
-  });
-
-  it('returns the label unchanged for an out-of-range start', () => {
-    expect(completionFilterText(':::cal', 99, 'callout')).toBe('callout');
-  });
-});
-
 /**
  * End to end over the pure modules for a PACK component's declared
  * attributes (issue #27 slice 4): `@markii/host` decides what completes,
@@ -339,5 +308,42 @@ describe('pack attribute metadata reaches the VS Code rows', () => {
         '```',
       ].join('\n'),
     );
+  });
+});
+
+describe('completionFilterText', () => {
+  it('prefixes the label with the span between the replace start and the name token', () => {
+    // A directive-name context replaces from column 0, so VS Code scores
+    // the row against ":::cal" and would reject a bare "callout".
+    expect(completionFilterText(':::cal', 0, 3, 'callout')).toBe(':::callout');
+    expect(completionFilterText('::sta', 0, 2, 'stat')).toBe('::stat');
+    expect(completionFilterText(':kb', 0, 1, 'kbd')).toBe(':kbd');
+  });
+
+  it('keeps a leading-whitespace block opener aligned with the typed text', () => {
+    expect(completionFilterText('  :::cal', 2, 5, 'callout')).toBe(
+      ':::callout',
+    );
+  });
+
+  it('returns the label unchanged when the range starts on the token', () => {
+    expect(completionFilterText(':::callout{ty', 11, 11, 'type')).toBe('type');
+  });
+
+  it('takes its prefix from the real context offsets', () => {
+    const line = ':::ca';
+    const ctx = completionAt(line, line.length, buildComponentCatalog([]));
+    expect(ctx.kind).toBe('directive-name');
+    expect(ctx.tokenStart).toBe(3);
+    const first = ctx.items[0];
+    expect(first).toBeDefined();
+    expect(
+      completionFilterText(
+        line,
+        ctx.replaceStart,
+        ctx.tokenStart ?? ctx.replaceStart,
+        first?.label ?? '',
+      ),
+    ).toBe(`:::${first?.label ?? ''}`);
   });
 });

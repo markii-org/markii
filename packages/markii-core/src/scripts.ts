@@ -19,6 +19,22 @@ import type { Code, Root } from 'mdast';
  * ` ```lua {src=scripts/etl.lua name=stars}` ` with an empty body"); `code`
  * is still the fence's own body (empty for a `src=` reference).
  *
+ * `permissions`, when present, is the script fence's own declared list of
+ * hostnames (` ```lua {name=gh permissions=api.github.com}` `, or
+ * comma-separated for more than one:
+ * `permissions=api.github.com,api.weather.com`). It is DISPLAY-ONLY: a
+ * grant prompt may show it next to the hosts a static scan actually finds
+ * ("declares: ..."), and a mismatch between the two is a diagnostics line,
+ * mirroring how a bundle manifest's `permissions.net` is already
+ * display-only against the same scan
+ * (`@markii/host`'s `script-requirements.ts`). It is NEVER an input to
+ * what gets granted — the literal-URL closure scan stays the only source
+ * of truth for that. Absent for a script with no `permissions` attribute
+ * at all; an empty comma-separated list (`permissions=`, or a value with
+ * no non-empty segment) is treated the same as absent, not as "declares
+ * nothing", since the format's script names are lowercase-hostname-shaped
+ * text with no way to write an empty entry on purpose.
+ *
  * `publish`, when present, is always `true` — docs/scripting.md: "**Publishing is
  * declarative**: the bare `publish` attribute on the script fence, no API to
  * call." "Bare" is load-bearing: it is set ONLY when the fence spells the
@@ -47,6 +63,8 @@ export interface ScriptBlock {
   src?: string;
   code: string;
   publish?: true;
+  /** See `permissions`'s doc comment above. Omitted, never an empty array, when the fence declares none. */
+  permissions?: string[];
   position?: Code['position'];
 }
 
@@ -195,6 +213,25 @@ export function isBareAttribute(
 }
 
 /**
+ * Splits a script fence's `permissions` attribute value into a list of
+ * declared hostnames: comma-separated, each segment trimmed and
+ * lowercased (matching `@markii/host`'s `manifestNetHosts` case-folding
+ * for the bundle-manifest equivalent, so the two declared-vs-scanned
+ * comparisons stay on the same footing), empty segments dropped. Returns
+ * `undefined` for a missing/empty attribute or one with no non-empty
+ * segment, per `ScriptBlock.permissions`'s doc comment — never an empty
+ * array.
+ */
+function parsePermissions(raw: string | undefined): string[] | undefined {
+  if (!raw) return undefined;
+  const hosts = raw
+    .split(',')
+    .map((host) => host.trim().toLowerCase())
+    .filter((host) => host.length > 0);
+  return hosts.length > 0 ? hosts : undefined;
+}
+
+/**
  * Walks a parsed mdast `Root` and returns every script block, in document
  * order. A `code` node is a script iff its `meta` carries a `{...}`
  * attribute group with a non-empty `name` that also matches the script-name
@@ -218,6 +255,8 @@ export function extractScripts(tree: Root): ScriptBlock[] {
       code: node.value,
     };
     if (attrs.src) block.src = attrs.src;
+    const permissions = parsePermissions(attrs.permissions);
+    if (permissions) block.permissions = permissions;
     // Bare-only, per `ScriptBlock.publish`'s doc comment and
     // `isBareAttribute`'s: a plain `attrs.publish === ''` check can't tell
     // `{publish}` from `{publish=""}` (both flatten to `''`), so this asks

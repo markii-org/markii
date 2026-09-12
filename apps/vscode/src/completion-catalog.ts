@@ -7,7 +7,8 @@
  * itself, so this module stays unit-testable with no filesystem.
  */
 import { buildComponentCatalog } from '@markii/host';
-import type { DiscoveredPack, InsertableComponent } from '@markii/host';
+import type { DiscoveredPack } from '@markii/host';
+import type { InsertableComponent } from '@markii/stdlib/editor';
 
 export interface CatalogCache {
   /**

@@ -197,6 +197,30 @@ function scanForHosts(
   }
 }
 
+/**
+ * Bare, already-lowercased hostnames every script block in `scripts`
+ * declares via its own `permissions` fence attribute
+ * (`@markii/core`'s `ScriptBlock.permissions`), deduplicated, in
+ * first-seen (document, then per-script list) order. Mirrors
+ * `./bundle-run.ts`'s `manifestNetHosts` for the bundle-manifest
+ * equivalent: this is DECLARED INTENT only, exactly like a manifest's
+ * `permissions.net` — `scanRunRequirementHosts` above stays the ONLY
+ * source of the hostnames a run is actually prompted for. A caller
+ * compares this against the scanned set with
+ * `./bundle-run.ts`'s `netDeclarationDiagnostics` (the same
+ * declared-vs-scanned diff a bundle manifest already gets), and may show
+ * it next to the scanned hosts in a grant prompt as "declares: ...".
+ */
+export function scriptDeclaredHosts(scripts: readonly ScriptBlock[]): string[] {
+  const hosts = new Set<string>();
+  for (const block of scripts) {
+    for (const host of block.permissions ?? []) {
+      hosts.add(host);
+    }
+  }
+  return [...hosts];
+}
+
 function toGrantClosureScript(block: ScriptBlock): GrantClosureScript {
   const script: GrantClosureScript = {
     name: block.name,

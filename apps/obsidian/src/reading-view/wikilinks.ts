@@ -93,3 +93,80 @@ export function convertWikilinksToMarkdown(
   }
   return result;
 }
+
+/**
+ * The subset of one of Obsidian's `LinkCache`/`EmbedCache` entries this
+ * module reads, declared structurally so the collection step below stays
+ * `obsidian`-free like the conversion above it. Obsidian's own types
+ * satisfy it without a cast.
+ */
+export interface WikilinkCacheItem {
+  readonly link: string;
+  readonly displayText?: string;
+  readonly position: {
+    readonly start: { readonly offset: number };
+    readonly end: { readonly offset: number };
+  };
+}
+
+/** The subset of Obsidian's `CachedMetadata` that carries wikilinks and embeds. */
+export interface WikilinkMetadata {
+  readonly links?: WikilinkCacheItem[];
+  readonly embeds?: WikilinkCacheItem[];
+}
+
+/**
+ * Every wikilink and embed a note's metadata carries, in the shape
+ * `convertWikilinksToMarkdown` takes. A note with neither, and a cache the
+ * host has not built yet, both give an empty list, which makes the
+ * conversion a no-op.
+ */
+export function collectWikilinkReferences(
+  cache: WikilinkMetadata | null | undefined,
+): WikilinkReference[] {
+  if (!cache) return [];
+  return [
+    ...(cache.links ?? []).map((link) => toWikilinkReference(link, false)),
+    ...(cache.embeds ?? []).map((embed) => toWikilinkReference(embed, true)),
+  ];
+}
+
+function toWikilinkReference(
+  cacheItem: WikilinkCacheItem,
+  isEmbed: boolean,
+): WikilinkReference {
+  return {
+    link: cacheItem.link,
+    ...(cacheItem.displayText !== undefined
+      ? { displayText: cacheItem.displayText }
+      : {}),
+    isEmbed,
+    offset: {
+      start: cacheItem.position.start.offset,
+      end: cacheItem.position.end.offset,
+    },
+  };
+}
+
+/**
+ * One note's text with its wikilinks and embeds converted: the whole step
+ * both of this plugin's rendering surfaces run before handing text to the
+ * parser, so the same note cannot render an image on one surface and inert
+ * literal text on the other.
+ *
+ * `resolveLinkpath` is the host's own link resolution (Obsidian's
+ * `getFirstLinkpathDest`, bound to the note being rendered). A link it
+ * cannot resolve keeps pointing at its own raw text, so a dead link stays
+ * inert rather than breaking the render.
+ */
+export function convertNoteWikilinks(
+  rawText: string,
+  cache: WikilinkMetadata | null | undefined,
+  resolveLinkpath: (link: string) => string | undefined,
+): string {
+  return convertWikilinksToMarkdown(
+    rawText,
+    collectWikilinkReferences(cache),
+    (link) => resolveLinkpath(link) ?? link,
+  );
+}

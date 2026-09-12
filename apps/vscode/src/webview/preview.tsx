@@ -1,6 +1,7 @@
 import { Component, useEffect, useMemo, useState } from 'react';
 import type { ErrorInfo, ReactElement, ReactNode } from 'react';
 import { renderMark } from '@markii/react';
+import { createRenderDiagnosticCollector } from '@markii/host/browser';
 import type { Registry } from '@markii/react';
 import { createValueStore } from '@markii/runtime';
 import type { StoredValue } from '@markii/runtime';
@@ -346,14 +347,27 @@ export function Preview({ registry }: PreviewProps): ReactElement {
   // `src`. Included in this memo's own dependencies (not just `state.text`)
   // so a folder change alone, with the same document text, still produces a
   // freshly resolved tree.
-  const rendered = useMemo(
-    () =>
-      renderMark(state.text, registry, store, undefined, {
-        resolveImageSrc: (src) =>
-          resolveDocumentUrl(src, state.baseUri, state.assets),
-      }),
-    [state.text, registry, store, state.baseUri, state.assets],
-  );
+  const { rendered, diagnosticLines } = useMemo(() => {
+    // The render's own quiet markers are collected here and posted to the
+    // extension host below, so the reason behind a marker reaches the
+    // Markii output channel rather than only a tooltip. Deduped by the
+    // collector, since this memo recomputes on every keystroke.
+    const collector = createRenderDiagnosticCollector();
+    const element = renderMark(state.text, registry, store, undefined, {
+      resolveImageSrc: (src) =>
+        resolveDocumentUrl(src, state.baseUri, state.assets),
+      onDiagnostic: collector.onDiagnostic,
+    });
+    return { rendered: element, diagnosticLines: collector.lines() };
+  }, [state.text, registry, store, state.baseUri, state.assets]);
+
+  useEffect(() => {
+    if (diagnosticLines.length === 0) return;
+    getVsCodeApi().postMessage({
+      type: 'render-diagnostics',
+      lines: diagnosticLines,
+    });
+  }, [diagnosticLines]);
 
   /**
    * GitHub issue #3 slice 5 (docs/packs.md's `uses:` surfacing): resolves

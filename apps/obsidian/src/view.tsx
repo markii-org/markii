@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { createValueStore } from '@markii/runtime';
 import type { RunTrigger, StoredValue } from '@markii/runtime';
 import {
+  createRenderDiagnosticReporter,
   mergeArrivingValue,
   readPersistedValues,
   runOnce,
@@ -37,6 +38,7 @@ import {
   scriptsDisabledDiagnosticLine,
   scriptsDisabledNotice,
 } from './script-execution.js';
+import { convertNoteWikilinks } from './reading-view/wikilinks.js';
 import type MarkiiPlugin from './main.js';
 
 export const MARKII_PREVIEW_VIEW_TYPE = 'markii-preview';
@@ -89,6 +91,18 @@ export class MarkiiPreviewView extends ItemView {
   private readonly reportUnresolvedImage = createUnresolvedImageReporter(
     (line) => {
       console.warn(line);
+    },
+  );
+
+  /**
+   * The render's own quiet markers, reported once each to the console,
+   * which is this plugin's diagnostics surface (docs/integration.md's host
+   * checklist). A marker in the page says a value was declined; this says
+   * which value and why, without the reader having to hover it.
+   */
+  private readonly reportRenderDiagnostic = createRenderDiagnosticReporter(
+    (line) => {
+      console.warn(`[markii] ${line}`);
     },
   );
 
@@ -496,7 +510,20 @@ export class MarkiiPreviewView extends ItemView {
           : undefined;
     }
 
-    const text = await this.app.vault.cachedRead(file);
+    const rawText = await this.app.vault.cachedRead(file);
+    // GitHub issue #59: Reading view already converts wikilinks
+    // (`[[Page]]`) and embeds (`![[image.png]]`) into ordinary CommonMark
+    // links and images before rendering (`src/reading-view.ts`); this pane
+    // did not, so the same note showed a picture in Reading view and inert
+    // literal text here. `./reading-view/wikilinks.ts` is the shared,
+    // `obsidian`-free conversion; only the cache lookup and href resolution
+    // above it are Obsidian-specific and live in this file.
+    const text = convertNoteWikilinks(
+      rawText,
+      this.app.metadataCache.getFileCache(file),
+      (link) =>
+        this.app.metadataCache.getFirstLinkpathDest(link, file.path)?.path,
+    );
     const store =
       this.values && Object.keys(this.values).length > 0
         ? createValueStore(this.values)
@@ -532,7 +559,13 @@ export class MarkiiPreviewView extends ItemView {
         createElement(
           'div',
           { className: 'doc', key: file.path },
-          renderDocument(text, store, registry, resolveImageSrc),
+          renderDocument(
+            text,
+            store,
+            registry,
+            resolveImageSrc,
+            this.reportRenderDiagnostic,
+          ),
         ),
         usesResolution.missing.length > 0
           ? createElement(

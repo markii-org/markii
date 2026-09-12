@@ -672,6 +672,19 @@ function logPackDiagnostics(packContext: PackContext): void {
 }
 
 /**
+ * Writes the render's own quiet-marker reasons to the "Markii" output
+ * channel. The webview has already worded and deduped each line through
+ * `@markii/host`'s `renderDiagnosticLine`, so this is transport only: the
+ * marker in the page says a value was declined, and this says which value
+ * and why, where a reader can actually read it.
+ */
+function logRenderDiagnostics(lines: readonly string[]): void {
+  if (!diagnosticsChannel) return;
+  if (lines.length === 0) return;
+  for (const line of lines) diagnosticsChannel.appendLine(`  ${line}`);
+}
+
+/**
  * Writes a run's per-script failures to the "Markii" output channel
  * (GitHub issue #37, `./run-diagnostics.ts`), so a failure a collapsed or
  * hidden marker buries is still discoverable without hovering. A clean run
@@ -1132,6 +1145,8 @@ async function createPreview(
         maybeRunOnOpen(context, preview);
       } else if (raw.type === 'pack-diagnostics') {
         logPackRegistrationDiagnostics(raw);
+      } else if (raw.type === 'render-diagnostics') {
+        logRenderDiagnostics(raw.lines);
       }
     }),
 
@@ -1455,9 +1470,12 @@ async function openPreviewForUri(
 }
 
 /** Prompts once for a specific host, with the normative modal wording (`run/grant-flow.ts`'s `hostPromptMessage`) and the Allow / Don't allow button pair. */
-async function promptHostAdapter(host: string): Promise<boolean> {
+async function promptHostAdapter(
+  host: string,
+  declaredHosts: readonly string[],
+): Promise<boolean> {
   const choice = await vscode.window.showInformationMessage(
-    hostPromptMessage(host),
+    hostPromptMessage(host, declaredHosts),
     { modal: true },
     ALLOW_LABEL,
     DONT_ALLOW_LABEL,

@@ -344,15 +344,15 @@ describe('issue #12 / item 3: a scheduled/auto run never contacts an ungranted h
       expect(server.hits()).toBe(0);
       expect(result.values.a?.status).toBe('error');
       // With NO host ever granted for GET (empty allowlist), @markii/lua's
-      // buildCapabilities never wires `net.fetch_json` as a Lua function at
-      // all (see capabilities.ts: the whole `net.fetch_json` block is
-      // gated on `netGrants.get.length > 0`) — so this is an ordinary
-      // "attempt to call a nil value" script error, not a per-host
-      // capability-denied classification (that classification is reserved
-      // for a call that reaches the wired function but names a host
-      // outside the allowlist — see the two-host test below). Either way
-      // the security property holds: the real assertion is `hits() === 0`.
-      expect(result.values.a?.failureKind).toBe('script-error');
+      // `net.fetch_json` is always wired as a real Lua function (batch 7
+      // #47: the `net` table and every one of its methods now always
+      // exist, so a script that feature-detects with `if net then` sees a
+      // table regardless of grants) -- but calling it with an ungranted
+      // host classifies as a proper capability denial, exactly like the
+      // two-host test below, never an ordinary "attempt to call a nil
+      // value" script error. Either way the security property holds: the
+      // real assertion is `hits() === 0`.
+      expect(result.values.a?.failureKind).toBe('capability-denied');
     } finally {
       await server.close();
     }
@@ -375,7 +375,7 @@ describe('issue #12 / item 3: a scheduled/auto run never contacts an ungranted h
         timeoutMs: 15000,
       });
       expect(server.hits()).toBe(0);
-      expect(result.values.a?.failureKind).toBe('script-error'); // see comment above
+      expect(result.values.a?.failureKind).toBe('capability-denied'); // see comment above
     } finally {
       await server.close();
     }
@@ -443,9 +443,9 @@ describe('issue #12 / item 3: a scheduled/auto run never contacts an ungranted h
         timeoutMs: 15000,
       });
       // The swapped script's ONLY host reference is now unreachable at all
-      // (empty allowlist for this run) -- same 'script-error' shape as the
-      // no-grant-at-all cases above, see that comment.
-      expect(swappedResult.values.a?.failureKind).toBe('script-error');
+      // (empty allowlist for this run) -- same 'capability-denied' shape as
+      // the no-grant-at-all cases above, see that comment.
+      expect(swappedResult.values.a?.failureKind).toBe('capability-denied');
       expect(server.hits()).toBe(2); // unchanged — the edited script never reached the server
     } finally {
       await server.close();

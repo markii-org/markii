@@ -207,17 +207,79 @@ async function tryLoadPackAt(
  * DOES have a `pack.json` but fails validation is skipped individually, by
  * its own (child) folder path.
  */
+/**
+ * When a `ManifestAttempt` succeeded (`kind: 'found'`) but the manifest's
+ * `engine` does not match `supportedEngine` (batch 7 #46), downgrades it to
+ * a `SkippedPackFolder` instead of a `DiscoveredPack` — same effect
+ * `@markii/react`'s `loadPack` already has for an unsupported engine
+ * (nothing registered for that namespace, unknown-component fallback for
+ * every directive under it), but recorded here too so it also drops out of
+ * a host's Insert Component / completion catalog (`discoverConfiguredPacks`
+ * consumers) instead of offering a snippet for a component nothing can
+ * ever render, and so the skip reaches the SAME diagnostics line every
+ * other skip does — never silent.
+ */
+function checkEngine(
+  pack: DiscoveredPack,
+  supportedEngine: string | undefined,
+):
+  | { readonly kind: 'found'; readonly pack: DiscoveredPack }
+  | { readonly kind: 'invalid'; readonly reason: string } {
+  if (
+    supportedEngine === undefined ||
+    pack.manifest.engine === supportedEngine
+  ) {
+    return { kind: 'found', pack };
+  }
+  return {
+    kind: 'invalid',
+    reason: `pack engine "${pack.manifest.engine}" is not supported here (expected "${supportedEngine}"); its components fall back to the unknown-component box`,
+  };
+}
+
+/**
+ * Discovers and validates a pack in each of `folders`, in order, then
+ * removes (and reports via `collisions`) every pack whose namespace repeats
+ * across the set. Duplicate folder entries in `folders` collapse to one
+ * discovery attempt each (`Set`), so a repeated setting entry can never
+ * itself manufacture a spurious collision.
+ *
+ * `supportedEngine`, when given, additionally skips (rather than
+ * discovers) any pack whose manifest names a different `engine` — see
+ * `checkEngine`. Omitted (the default), a pack's engine is not checked
+ * here at all, matching this function's behavior before this parameter
+ * existed; a caller that only lists packs for a purpose engine-agnostic
+ * (e.g. `@markii/pack`'s own tooling) is unaffected.
+ *
+ * ONE-LEVEL PARENT-FOLDER SCAN: when a configured folder has no `pack.json`
+ * of its own (not "has one that fails validation" — see `ManifestAttempt`'s
+ * doc comment), its immediate subfolders are probed the same way, and each
+ * one that DOES have a valid `pack.json` counts as its own discovered pack
+ * (`folder` set to the child path). This lets a user configure one parent
+ * (`packs`) that holds several pack folders (`packs/pack1`, `packs/pack2`)
+ * instead of listing each one in the host's setting. Exactly one level
+ * deep, never recursive: a grandchild's `pack.json` is never found this
+ * way. A parent with neither its own manifest nor any child manifest is
+ * skipped exactly as before ("no readable pack.json"), and a child that
+ * DOES have a `pack.json` but fails validation is skipped individually, by
+ * its own (child) folder path.
+ */
 export async function discoverPacks(
   folders: readonly string[],
   readFile: PackFileReader,
   listDirectory: PackDirectoryLister = createNodeDirectoryLister(),
+  supportedEngine?: string,
 ): Promise<DiscoverPacksResult> {
   const uniqueFolders = [...new Set(folders)];
   const found: DiscoveredPack[] = [];
   const skipped: SkippedPackFolder[] = [];
 
   for (const folder of uniqueFolders) {
-    const attempt = await tryLoadPackAt(folder, readFile);
+    const rawAttempt = await tryLoadPackAt(folder, readFile);
+    const attempt =
+      rawAttempt.kind === 'found'
+        ? checkEngine(rawAttempt.pack, supportedEngine)
+        : rawAttempt;
 
     if (attempt.kind === 'found') {
       found.push(attempt.pack);
@@ -241,7 +303,11 @@ export async function discoverPacks(
     for (const entry of entries.slice(0, MAX_CHILD_FOLDERS_PER_PARENT)) {
       if (!entry.isDirectory) continue;
       const childFolder = path.join(folder, entry.name);
-      const childAttempt = await tryLoadPackAt(childFolder, readFile);
+      const rawChildAttempt = await tryLoadPackAt(childFolder, readFile);
+      const childAttempt =
+        rawChildAttempt.kind === 'found'
+          ? checkEngine(rawChildAttempt.pack, supportedEngine)
+          : rawChildAttempt;
       if (childAttempt.kind === 'found') {
         found.push(childAttempt.pack);
         anyChildManifest = true;

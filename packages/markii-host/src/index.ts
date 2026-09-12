@@ -316,19 +316,18 @@ export type {
 } from './packs/pack-render-registry.js';
 export { buildRenderRegistry } from './packs/pack-render-registry.js';
 
-// "Insert Component" (issue #17, slice 1): the shared skeleton-building and
-// catalog logic both hosts' insert commands use — pure, host-neutral, no
-// `vscode`/`obsidian`. See `./insert/component-skeleton.ts` and
-// `./insert/component-catalog.ts`.
-export type {
-  ComponentSkeleton,
-  LineColumn,
-} from './insert/component-skeleton.js';
-export {
-  componentSkeleton,
-  offsetToLineColumn,
-} from './insert/component-skeleton.js';
-export type { InsertableComponent } from './insert/component-catalog.js';
+// "Insert Component" (issue #17, slice 1): the skeleton builder, the
+// standard-set catalog, directive autocompletion, and fence auto-extension
+// are ALL now `@markii/stdlib/editor` (GitHub issue #41) — pure,
+// host-neutral, zero dependencies, no `vscode`/`obsidian`. Re-exported here
+// so nothing importing them off `@markii/host` has to change; a new
+// consumer should import `@markii/stdlib/editor` directly instead. The
+// PACK-AWARE catalog builder stays in this package (see
+// `./insert/component-catalog.ts`): it needs `@markii/pack` to compose a
+// pack's declared components onto the standard-set list.
+export type { ComponentSkeleton, LineColumn } from '@markii/stdlib/editor';
+export { componentSkeleton, offsetToLineColumn } from '@markii/stdlib/editor';
+export type { InsertableComponent } from '@markii/stdlib/editor';
 // Re-exported so a host reading `InsertableComponent.attributes` names the
 // type through this seam rather than reaching past it into `@markii/pack`.
 export type { PackComponentAttribute } from '@markii/pack';
@@ -336,7 +335,7 @@ export { buildComponentCatalog } from './insert/component-catalog.js';
 
 // Directive autocompletion (issue #27, slice 1): pure line/column parsing
 // over the insert catalog and `@markii/stdlib` contracts, plus hover
-// documentation. See `./complete/index.ts`.
+// documentation.
 export type {
   CompletionContext,
   CompletionContextKind,
@@ -344,25 +343,36 @@ export type {
   CompletionItemKind,
   ComponentDocumentation,
   HoverInfo,
-} from './complete/index.js';
+} from '@markii/stdlib/editor';
 export {
   completionAt,
   componentDocumentation,
   formatComponentDocumentation,
   hoverAt,
-} from './complete/index.js';
+} from '@markii/stdlib/editor';
 
 // Fence auto-extension on insert: the pure scan that finds the container
 // fence pairs enclosing an insertion point, and the minimal set of fence
-// lines to lengthen so a newly inserted container still nests legally.
-// Both hosts apply the returned edits in ONE undoable edit together with
-// the insertion. See `./fences/container-fences.ts`.
+// lines to lengthen so a newly inserted container still nests legally, plus
+// the predicate (issue #57) that tells a completion trigger a bare colon
+// run CLOSES an open container rather than opening a new one. Both hosts
+// apply the fence edits in ONE undoable edit together with the insertion.
 export type {
   EnclosingContainerFence,
   FenceLineEdit,
-} from './fences/container-fences.js';
+} from '@markii/stdlib/editor';
 export {
+  closesOpenContainerFence,
   enclosingContainerFences,
   fenceExtensionEdits,
   insertedContainerColonCount,
-} from './fences/container-fences.js';
+} from '@markii/stdlib/editor';
+
+// Render-time diagnostics: one event from either renderer's `onDiagnostic`
+// option becomes the one line both hosts write to their diagnostics
+// surface.
+export {
+  createRenderDiagnosticCollector,
+  createRenderDiagnosticReporter,
+  renderDiagnosticLine,
+} from './diagnostics/render-diagnostics.js';

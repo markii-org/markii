@@ -6,6 +6,132 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-09-13
+
+The `@markii/*` packages and the VS Code extension ship this release as
+0.14.0, the Obsidian plugin as 0.11.0.
+
+### Added
+
+- **`@markii/stdlib`: an `./editor` subpath.** The pure editor helpers move
+  here from the private `@markii/host`, so a third-party editor host can
+  install the behavior the two reference hosts have. It holds directive
+  completion and hover (`completionAt`, `hoverAt`, the directive-context
+  scanner), the Insert Component skeleton builder and the standard-set
+  catalog, and container fence lengthening. The package still has zero
+  dependencies, so a host that only wants to complete the standard
+  components does not pull in pack loading, a bundler, or the script
+  runtime. `@markii/host` re-exports all of it unchanged.
+- **`@markii/stdlib/editor`: `CompletionContext.tokenStart`.** The offset
+  where a directive name begins, after the colon run, beside the existing
+  `replaceStart`. A completion widget that filters candidates against typed
+  text anchors on `tokenStart` and edits from `replaceStart`; both reference
+  hosts previously derived this value themselves.
+- **`@markii/stdlib/editor`: `closesOpenContainerFence`.** Tells a host's
+  completion trigger that a bare colon run closes a container already open
+  above it rather than starting a new one, so accepting a suggestion cannot
+  insert a component into a closing fence. `completionAt` is unchanged and
+  still offers the catalog for a bare opener.
+- **`@markii/stdlib`: `INTERACTIVE_ATTRIBUTE` and the diagnostic envelope.**
+  `INTERACTIVE_ATTRIBUTE` (`data-mk-interactive`) is the one spelling both
+  renderers, and packs, mark a genuinely interactive element with.
+  `DiagnosticEvent`, `DiagnosticKind`, `OnDiagnostic` and `reportDiagnostic`
+  are the neutral shape behind both renderers' `onDiagnostic` option;
+  `reportDiagnostic` keeps a throwing host callback from breaking a render.
+- **`@markii/core`: `isRecognizedTextDirective`.** The post-parse word-start
+  rule that decides whether a tokenized inline directive is kept or demoted
+  back to plain text, exported for an editor grammar that has to make the
+  same call. It is the demotion rule only: the colon-run and bracket rules
+  live in the upstream directive parser.
+- **`@markii/core`: `ScriptBlock.permissions`.** An optional list of
+  hostnames a script fence declares through a `permissions` attribute. It is
+  display only, never an input to what is granted, mirroring how a bundle
+  manifest's `permissions.net` is already treated.
+- **`@markii/react` and `@markii/html`: `resolveHref`.** The link twin of
+  `resolveImageSrc`, applied to an ordinary markdown link's `href`, sharing
+  the same dangerous-scheme refusal rather than a second copy of it.
+- **`@markii/react` and `@markii/html`: whole-document rendering.**
+  `renderMarkNode` and `renderMarkNodeToHtml` now accept the `Root` `parse`
+  returns as well as a single node, so a host does not loop over top-level
+  children itself.
+- **`@markii/react` and `@markii/html`: `renderMarkInline` and
+  `renderMarkInlineToHtml`.** Renders source that is exactly one paragraph
+  holding one inline directive without the paragraph wrapper; any other
+  source falls back to the ordinary render unchanged.
+- **`@markii/react` and `@markii/html`: `onDiagnostic`.** Called once for
+  each quiet marker a render produces for a value it recognized and
+  declined, with the kind, directive, attribute, and the marker's own
+  wording, so a host can route it to its diagnostics surface. An unknown
+  attribute name never triggers it.
+- **`@markii/react` and `@markii/html`: `store` and `vault` on the render
+  options.** The same values the third and fourth positional arguments take,
+  available on the options object instead. The option wins when both forms
+  are given.
+- **`@markii/react` and `@markii/html`: a quiet marker for a recognized and
+  declined value.** A known attribute whose value is outside its closed set,
+  and a figure source refused as unsafe, still render, now carrying a
+  `data-mk-notice` attribute and a `title` explaining why instead of
+  discarding the value in silence.
+- **`@markii/react` and `@markii/html`: `data-mk-interactive`** on tabs'
+  buttons, a details summary, and the collapsed script marker's summary.
+
+### Changed
+
+- **`@markii/react`: `loadPack` returns `{ registry, dropped? }`** instead
+  of a bare `Registry`, and `installPacks`'s success result carries
+  `dropped: { name, engine }[]`. A pack built for another renderer was
+  previously discarded with no record a caller could read. This is a
+  breaking change to `loadPack`'s return type.
+- **`@markii/lua`: an ungranted capability denies instead of vanishing.**
+  With no grants at all, `net` and its methods exist and record a denial
+  through the same non-spoofable channel a wrong-host call already used, so
+  the run's outcome is a capability failure rather than a Lua nil-index
+  error. Observable: a script that feature-detects with `if net then` now
+  always sees a table.
+
+### Fixed
+
+- **`@markii/pack`: a `.mkp` zipped as a folder says so.** An archive whose
+  entries all sit under one top-level directory is reported by naming that
+  directory, instead of claiming there is no `pack.json` when there is one a
+  level down. `__MACOSX` entries are ignored when making that call.
+- **`doc.css`: an `align=` wrapper no longer collapses a block inside a
+  `:::row`.** The automatic inline margin is cancelled for a row grid item
+  that carries no `width=` preset, so the item keeps its column instead of
+  shrinking to its content.
+- **`doc.css`: a host that renders into its own container keeps the derived
+  tokens.** The Tier 2 derivations and the other rules that were scoped to
+  `.doc` (vertical rhythm, base typography, tables, code, task lists) now
+  also apply under `[data-mk-root]`, which a host adds to its own container.
+  The table rule is the scroll container a wide table needs, so a non-`.doc`
+  host was losing that too.
+
+### VS Code extension (0.14.0)
+
+- Directive completion no longer opens on a line that closes a container,
+  and the popup filters on the directive name rather than on the colon run.
+- Insert Component and completion insert no empty `{}` for a component with
+  no required attributes, and put the cursor in the body of a container or
+  after the name of a leaf.
+- Add Pack Folder validates the folder before adding it, says what it found,
+  and writes the reason for anything skipped to the Markii output channel.
+- Completion, hover and Insert Component only offer components from packs
+  built for this renderer.
+- A render's quiet markers reach the Markii output channel, deduplicated,
+  instead of living only in a tooltip.
+
+### Obsidian plugin (0.11.0)
+
+- The Markii Preview header action appears on a freshly created `.mk.md`
+  note, without the view having to be split first.
+- The Markii Preview pane converts wikilinks and image embeds the way
+  Reading view does, so a note renders the same on both surfaces.
+- Directive completion no longer opens on a line that closes a container.
+- Insert Component and completion offer only components from packs built for
+  this renderer.
+- A render's quiet markers reach the console, deduplicated, alongside the
+  plugin's other diagnostics.
+
 ## [0.13.0] - 2026-09-03
 
 The `@markii/*` packages and the VS Code extension ship this release as

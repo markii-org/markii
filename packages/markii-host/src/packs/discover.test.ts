@@ -293,3 +293,66 @@ describe('discoverPacks — one-level parent-folder scan', () => {
     expect(result.collisions).toEqual(['demo']);
   });
 });
+
+describe('discoverPacks — supportedEngine gating (batch 7 #46)', () => {
+  const OTHER_ENGINE_MANIFEST = JSON.stringify({
+    name: 'demo',
+    engine: 'vue',
+    components: { widget: './Widget.vue' },
+  });
+
+  it('omitted supportedEngine: a pack with any engine is discovered, unchanged from before this parameter existed', async () => {
+    const folder = '/packs/demo';
+    const reader = readerFor({
+      [path.join(folder, 'pack.json')]: OTHER_ENGINE_MANIFEST,
+    });
+
+    const result = await discoverPacks([folder], reader);
+
+    expect(result.skipped).toEqual([]);
+    expect(result.packs).toHaveLength(1);
+  });
+
+  it('a pack whose manifest engine does not match supportedEngine is skipped, not discovered', async () => {
+    const folder = '/packs/demo';
+    const reader = readerFor({
+      [path.join(folder, 'pack.json')]: OTHER_ENGINE_MANIFEST,
+    });
+
+    const result = await discoverPacks([folder], reader, undefined, 'react');
+
+    expect(result.packs).toEqual([]);
+    expect(result.skipped).toHaveLength(1);
+    expect(result.skipped[0]?.folder).toBe(folder);
+    expect(result.skipped[0]?.reason).toContain('vue');
+    expect(result.skipped[0]?.reason).toContain('react');
+  });
+
+  it('a pack whose manifest engine matches supportedEngine is discovered normally', async () => {
+    const folder = '/packs/demo';
+    const reader = readerFor({
+      [path.join(folder, 'pack.json')]: VALID_MANIFEST,
+    });
+
+    const result = await discoverPacks([folder], reader, undefined, 'react');
+
+    expect(result.skipped).toEqual([]);
+    expect(result.packs).toHaveLength(1);
+  });
+
+  it('gates a child pack found via the one-level parent-folder scan the same way', async () => {
+    const parent = '/packs/all';
+    const reader = readerFor({
+      [path.join(parent, 'child', 'pack.json')]: OTHER_ENGINE_MANIFEST,
+    });
+    const lister = listerFor({
+      [parent]: [{ name: 'child', isDirectory: true }],
+    });
+
+    const result = await discoverPacks([parent], reader, lister, 'react');
+
+    expect(result.packs).toEqual([]);
+    expect(result.skipped).toHaveLength(1);
+    expect(result.skipped[0]?.folder).toBe(path.join(parent, 'child'));
+  });
+});

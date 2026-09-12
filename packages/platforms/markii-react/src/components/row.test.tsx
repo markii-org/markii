@@ -112,16 +112,19 @@ describe('renderMark — :::row{text=...} cascades into cells', () => {
     },
   );
 
-  it('an invalid text value degrades silently to a plain row', () => {
+  it('an invalid text value still renders a plain row, wrapped in a quiet notice marker', () => {
     const { container } = render(
       renderMark(
         ':::row{cols=2 text=diagonal}\ncell one\n\ncell two\n:::',
         defaultRegistry,
       ),
     );
-    expect(container.firstElementChild?.className).toBe(
-      'mk-row mk-row--cols-2',
+    const wrapper = container.firstElementChild;
+    expect(wrapper?.hasAttribute('data-mk-notice')).toBe(true);
+    expect(wrapper?.getAttribute('title')).toBe(
+      'row: "diagonal" is not a valid text value (ignored)',
     );
+    expect(wrapper?.firstElementChild?.className).toBe('mk-row mk-row--cols-2');
   });
 
   it('text never reaches the DOM as an attribute', () => {

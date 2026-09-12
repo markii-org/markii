@@ -7,19 +7,21 @@
  * (`../insert/component-skeleton.ts`) — this module never builds directive
  * text by hand, it reuses that skeleton builder.
  */
-import type { PackComponentAttribute } from '@markii/pack';
-import type { AttributeSchema, ComponentKind } from '@markii/stdlib';
+import type { AttributeSchema, ComponentKind } from '../../contracts.js';
+import { getContract } from '../../contracts.js';
 import {
   LAYOUT_ATTRIBUTES,
   LAYOUT_ATTRIBUTE_KEYS,
-  getContract,
   layoutWrapperAxis,
   otherLayoutAxis,
-} from '@markii/stdlib';
-import type { LayoutAxis } from '@markii/stdlib';
+} from '../../layout.js';
+import type { LayoutAxis } from '../../layout.js';
 import { componentSkeleton } from '../insert/component-skeleton.js';
 import type { ComponentSkeleton } from '../insert/component-skeleton.js';
-import type { InsertableComponent } from '../insert/component-catalog.js';
+import type {
+  EditorComponentAttribute,
+  InsertableComponent,
+} from '../insert/component-catalog.js';
 import { firstSentence } from '../insert/first-sentence.js';
 import {
   clampColumn,
@@ -159,6 +161,7 @@ function directiveNameCompletionContext(
     kind: 'directive-name',
     replaceStart,
     replaceEnd: ctx.replaceEnd,
+    tokenStart: ctx.tokenStart,
     items,
   };
 }
@@ -191,7 +194,7 @@ function packAttributesFor(
   directiveName: string,
   form: DirectiveForm,
   catalog: readonly InsertableComponent[],
-): readonly PackComponentAttribute[] {
+): readonly EditorComponentAttribute[] {
   const entry = findCatalogEntry(catalog, directiveName);
   if (entry?.source !== 'pack' || entry.attributes === undefined) return [];
   if (form === 'inline') return entry.attributes;
@@ -209,7 +212,7 @@ function packAttributesFor(
  * lines in `./documentation.ts`.
  */
 function schemaForPackAttribute(
-  attribute: PackComponentAttribute,
+  attribute: EditorComponentAttribute,
 ): AttributeSchema {
   return {
     type: 'string',

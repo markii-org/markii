@@ -92,8 +92,11 @@ export function confirmModal(app: App, message: string): Promise<boolean> {
 }
 
 /** Prompts once for a specific host, worded exactly as `@markii/host`'s `hostPromptMessage`. */
-export function promptHostModal(app: App): (host: string) => Promise<boolean> {
-  return (host: string) => new ConfirmModal(app, hostPromptMessage(host)).ask();
+export function promptHostModal(
+  app: App,
+): (host: string, declaredHosts: readonly string[]) => Promise<boolean> {
+  return (host: string, declaredHosts: readonly string[]) =>
+    new ConfirmModal(app, hostPromptMessage(host, declaredHosts)).ask();
 }
 
 /** Prompts once for the "this note builds a network address dynamically" consent gate. */

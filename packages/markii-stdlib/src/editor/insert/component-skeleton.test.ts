@@ -2,13 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { componentSkeleton, offsetToLineColumn } from './component-skeleton.js';
 
 describe('componentSkeleton', () => {
-  it('container with no required attributes: cursor on the empty middle line', () => {
+  it('container with no required attributes: no empty {}, cursor on the empty middle line', () => {
     const skeleton = componentSkeleton('callout', 'container', []);
-    expect(skeleton.text).toBe(':::callout{}\n\n:::');
-    expect(skeleton.cursorOffset).toBe(':::callout{}\n'.length);
-    expect(skeleton.text.slice(0, skeleton.cursorOffset)).toBe(
-      ':::callout{}\n',
-    );
+    expect(skeleton.text).toBe(':::callout\n\n:::');
+    expect(skeleton.cursorOffset).toBe(':::callout\n'.length);
+    expect(skeleton.text.slice(0, skeleton.cursorOffset)).toBe(':::callout\n');
     expect(skeleton.text[skeleton.cursorOffset]).toBe('\n');
   });
 
@@ -18,10 +16,10 @@ describe('componentSkeleton', () => {
     expect(skeleton.cursorOffset).toBe(':::figure{src="'.length);
   });
 
-  it('leaf with no required attributes: cursor between the braces', () => {
+  it('leaf with no required attributes: no empty {}, cursor after the name', () => {
     const skeleton = componentSkeleton('rating', 'leaf', []);
-    expect(skeleton.text).toBe('::rating{}');
-    expect(skeleton.cursorOffset).toBe('::rating{'.length);
+    expect(skeleton.text).toBe('::rating');
+    expect(skeleton.cursorOffset).toBe('::rating'.length);
   });
 
   it('leaf with required attributes: cursor inside the first quotes', () => {

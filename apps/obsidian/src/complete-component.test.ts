@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { buildComponentCatalog, completionAt } from '@markii/host';
-import type {
-  CompletionContext,
-  CompletionItem,
-  DiscoveredPack,
-} from '@markii/host';
+import { buildComponentCatalog } from '@markii/host';
+import type { DiscoveredPack } from '@markii/host';
+import { completionAt } from '@markii/stdlib/editor';
+import type { CompletionContext, CompletionItem } from '@markii/stdlib/editor';
 import {
   completionOriginTag,
   completionQuery,
@@ -115,23 +113,25 @@ describe('completionSuggestions', () => {
 });
 
 describe('completionQuery', () => {
-  it('strips a leading colon run for a directive-name context', () => {
+  it('slices from tokenStart, past the colon run, for a directive-name context', () => {
     const line = ':::cal';
     const context: CompletionContext = {
       kind: 'directive-name',
       replaceStart: 0,
       replaceEnd: 6,
+      tokenStart: 3,
       items: [],
     };
     expect(completionQuery(line, context, line.length)).toBe('cal');
   });
 
-  it('strips a four-colon run the same way', () => {
+  it('slices from tokenStart for a four-colon run the same way', () => {
     const line = '::::tab';
     const context: CompletionContext = {
       kind: 'directive-name',
       replaceStart: 0,
       replaceEnd: 7,
+      tokenStart: 4,
       items: [],
     };
     expect(completionQuery(line, context, line.length)).toBe('tab');

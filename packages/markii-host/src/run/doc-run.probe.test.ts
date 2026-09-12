@@ -94,7 +94,7 @@ describe('doc probe (host) — a script reads the note it runs in', () => {
       fence(
         'read',
         `return { n = #doc.directives(), a = doc.directives()[1].attributes.a,
-                  net = tostring(net), bundle = tostring(bundle) }`,
+                  net = type(net), bundle = tostring(bundle) }`,
       );
 
     const result = await spawnRun({
@@ -107,10 +107,13 @@ describe('doc probe (host) — a script reads the note it runs in', () => {
     });
 
     expect(result.failures).toEqual([]);
+    // `net` is always a table now (batch 7 #47: a denial stub, never
+    // omitted, so a script that feature-detects with `if net then` sees a
+    // table with zero grants); `bundle` stays nil with no bundle wired.
     expect(result.values.read?.value).toEqual({
       n: 1,
       a: '1',
-      net: 'nil',
+      net: 'table',
       bundle: 'nil',
     });
   });

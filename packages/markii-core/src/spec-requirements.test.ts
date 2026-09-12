@@ -188,7 +188,7 @@ const RENDER_ALLOWED_IDS = new Set([
  * AST or a render-time fact at all (a dependency constraint, or a naming
  * rule enforced by a different package's own tests).
  */
-const OTHER_ALLOWED_IDS = new Set(['S1-11', 'S1-14']);
+const OTHER_ALLOWED_IDS = new Set(['S1-11', 'S1-14', 'S5-03']);
 
 describe('docs/spec.md §9: every requirement is pinned to a real fixture', () => {
   const spec = readFileSync(specPath(), 'utf8');

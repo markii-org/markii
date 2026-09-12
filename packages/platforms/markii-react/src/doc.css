@@ -4,7 +4,7 @@
  * paragraphs, headings, and components alike — so new components always
  * sit correctly in the flow with zero per-component tuning.
  */
-.doc > * + * {
+:where(.doc, [data-mk-root]) > * + * {
   margin-block-start: 1rem;
 }
 
@@ -198,8 +198,21 @@
  * red))`, redefined via the real mix. A modern browser or either Electron
  * host gets live derivation that tracks a remapped Tier 1 palette; an old
  * email client silently keeps exactly today's light palette.
+ *
+ * Scoped to `:where(.doc, [data-mk-root])`, not `.doc` alone: a host that
+ * renders into its own container class (not `.doc`) sets its Tier 1
+ * overrides on that same element, and can opt this derivation layer (and
+ * every other `.doc`-scoped rule below that a document needs — rhythm,
+ * base typography, table/code/list styling) onto it by adding a bare
+ * `data-mk-root` attribute, with no class rename and no forked stylesheet.
+ * `:where()` keeps the added selector at zero specificity, so a host theme
+ * layer that redeclares these on plain `.doc` still wins exactly as
+ * before. Never hoisted to `:root`: a custom property resolves where it is
+ * declared, so a `:root` derivation would freeze to whichever palette is
+ * in scope there and could not re-derive for a differently themed
+ * descendant.
  */
-.doc {
+:where(.doc, [data-mk-root]) {
   /* ---- literal light-mode fallback (used verbatim where color-mix is unsupported) ---- */
   --mk-info-fill: #eff6ff;
   --mk-info-strong-fill: #dbeafe;
@@ -227,7 +240,7 @@
 }
 
 @supports (color: color-mix(in srgb, red, red)) {
-  .doc {
+  :where(.doc, [data-mk-root]) {
     --mk-shadow-sm: color-mix(in srgb, var(--mk-fg) 8%, transparent);
 
     --mk-info-fill: color-mix(in srgb, var(--mk-info) 14%, var(--mk-bg));
@@ -261,7 +274,7 @@
   }
 }
 
-.doc {
+:where(.doc, [data-mk-root]) {
   color: var(--mk-fg);
   font-family:
     system-ui,
@@ -271,21 +284,21 @@
   line-height: 1.6;
 }
 
-.doc pre {
+:where(.doc, [data-mk-root]) pre {
   overflow-x: auto;
   background: var(--mk-surface);
   padding: 0.75rem 1rem;
   border-radius: 6px;
 }
 
-.doc code {
+:where(.doc, [data-mk-root]) code {
   background: var(--mk-surface-strong);
   border-radius: 3px;
   padding: 0.1em 0.35em;
   font-size: 0.9em;
 }
 
-.doc pre code {
+:where(.doc, [data-mk-root]) pre code {
   background: none;
   padding: 0;
 }
@@ -299,26 +312,26 @@
  * column — the table box becomes independently scrollable content, the
  * same trick used by GitHub's own Markdown rendering.
  */
-.doc table {
+:where(.doc, [data-mk-root]) table {
   display: block;
   overflow-x: auto;
   border-collapse: collapse;
   font-size: 0.95em;
 }
 
-.doc th,
-.doc td {
+:where(.doc, [data-mk-root]) th,
+:where(.doc, [data-mk-root]) td {
   border: 1px solid var(--mk-border);
   padding: 0.4rem 0.75rem;
   text-align: left;
 }
 
-.doc th {
+:where(.doc, [data-mk-root]) th {
   font-weight: 600;
   background: var(--mk-surface-strong);
 }
 
-.doc tr:nth-child(even) {
+:where(.doc, [data-mk-root]) tr:nth-child(even) {
   background: var(--mk-surface);
 }
 
@@ -330,12 +343,12 @@
  * its normal bullet/number, since GFM only adds a leading `<input>` to
  * items that used `- [ ]`/`- [x]` syntax.
  */
-.doc li:has(> input[type='checkbox']) {
+:where(.doc, [data-mk-root]) li:has(> input[type='checkbox']) {
   list-style: none;
   margin-inline-start: -1.5em;
 }
 
-.doc li > input[type='checkbox'] {
+:where(.doc, [data-mk-root]) li > input[type='checkbox'] {
   margin-inline-end: 0.5em;
   vertical-align: middle;
 }
@@ -958,6 +971,48 @@
 }
 
 /*
+ * `align=` with NO width preset is a documented no-op (docs/format.md): the
+ * wrapper above fills its container exactly like an unwrapped block, so
+ * `margin-inline: auto` has zero free space to distribute and moves
+ * nothing. That is fine in normal flow, where "no free space" simply means
+ * "nothing visibly happens" — but a `.mk-row`/`.mk-row--cols-*` track is a
+ * GRID, and a grid item with an auto inline margin is pulled OUT of the
+ * default stretch alignment regardless of whether that margin has any space
+ * to consume (CSS Box Alignment's "auto margins win over alignment" rule),
+ * so the item shrinks to its own content size instead of filling its
+ * column. For a card with no body that content size is just its padding,
+ * which reads as the card collapsing into itself (#56) the instant
+ * `align=` is added, even though `align=` alone was never supposed to
+ * change the card's size.
+ *
+ * These three rules restore the no-op, but only inside `.mk-row`, and only
+ * when no `mk-width-*` preset also applies: the margin goes back to a
+ * literal `0`, so the item has no auto margin left to suppress stretch and
+ * fills its column exactly as it would with no `align=` at all. The
+ * `:not()` list is what lets `{width=narrow align=right}` keep shrinking
+ * and moving inside a row: that combination still matches the base rules
+ * above, since a width preset means the wrapper carries a real size for the
+ * auto margin to act on rather than a no-op default full-column width.
+ * `.mk-layout.mk-align-*` (the `:::center`/`:::left`/`:::right` wrappers)
+ * are covered by the same plain `.mk-align-*` class, since a selector on
+ * one class matches an element carrying several.
+ */
+.mk-row
+  > .mk-align-left:not(.mk-width-fit):not(.mk-width-narrow):not(
+    .mk-width-wide
+  ):not(.mk-width-full),
+.mk-row
+  > .mk-align-center:not(.mk-width-fit):not(.mk-width-narrow):not(
+    .mk-width-wide
+  ):not(.mk-width-full),
+.mk-row
+  > .mk-align-right:not(.mk-width-fit):not(.mk-width-narrow):not(
+    .mk-width-wide
+  ):not(.mk-width-full) {
+  margin-inline: 0;
+}
+
+/*
  * The `:::center`/`:::left`/`:::right`/`:::wide`/`:::narrow`/`:::full`/`:::fit`
  * layout wrappers (docs/format.md, `layout-wrapper.tsx`) reuse the `mk-width-*`/
  * `mk-align-*` classes above and add `mk-layout` on top for the rules below,
@@ -1129,6 +1184,24 @@
  */
 .mk-inline-empty {
   border-bottom: 1px dashed var(--mk-faint);
+}
+
+/* ---------- recognized-and-declined value marker ---------- */
+
+/*
+ * The generic marker for a value the render pipeline recognized and
+ * declined to use, rather than silently dropping it (AGENTS.md's "clean is
+ * not silent"): a known attribute's value outside its closed enum, or a
+ * `figure` `src` refused as unsafe (`failure-presentation.ts`'s
+ * `NOTICE_ATTRIBUTE`). The component underneath renders exactly as it
+ * would otherwise, wrapped in a plain `<span>` (inline directive) or
+ * `<div>` (block directive) carrying this attribute and a `title` with the
+ * reason. Styled as an attribute selector, not a class, so the same rule
+ * applies no matter which element the wrapper turns out to be.
+ */
+[data-mk-notice] {
+  outline: 1px dashed var(--mk-faint);
+  outline-offset: 2px;
 }
 
 /* ---------- unknown directive fallback ---------- */

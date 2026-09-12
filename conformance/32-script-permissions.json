@@ -1,0 +1,43 @@
+{
+  "children": [
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "A script block declaring its intended capabilities. The "
+        },
+        {
+          "type": "inlineCode",
+          "value": "permissions"
+        },
+        {
+          "type": "text",
+          "value": "\nattribute is display-only: it never affects what is actually granted, and\nat the parse layer it is ordinary fence-meta text like any other attribute."
+        }
+      ],
+      "type": "paragraph"
+    },
+    {
+      "lang": "lua",
+      "meta": "{name=stars permissions=api.github.com}",
+      "type": "code",
+      "value": "local repo = net.fetch_json(\"https://api.github.com/repos/x/y\")\nreturn repo.stargazers_count"
+    },
+    {
+      "children": [
+        {
+          "type": "text",
+          "value": "A script can declare more than one host, comma-separated with no spaces:"
+        }
+      ],
+      "type": "paragraph"
+    },
+    {
+      "lang": "lua",
+      "meta": "{name=weather permissions=api.weather.com,api.geocode.com}",
+      "type": "code",
+      "value": "return net.fetch_json(\"https://api.weather.com/now\")"
+    }
+  ],
+  "type": "root"
+}

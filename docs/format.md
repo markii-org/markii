@@ -82,6 +82,13 @@ a space, punctuation, or the start of the line). Writing `:kbd[x]` after a
 space, inside parentheses, or inside emphasis all work as expected;
 `word:kbd[x]` glued to the previous word is literal text.
 
+`@markii/core` exports that word-start rule as `isRecognizedTextDirective`,
+for a tool such as an editor grammar that has to make the same call. It is
+the demotion rule only: it decides whether something already read as an
+inline directive is kept or turned back into text. The rules about how many
+colons open a fence, and where the bracket content ends, live in the
+upstream directive parser rather than in this predicate.
+
 ### Closing containers
 
 Two pairing rules decide which fence closes what. A bare closing fence

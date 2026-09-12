@@ -104,7 +104,25 @@ const STARTS_WITH_LETTER = /^[A-Za-z]/;
 /** ASCII letter-or-digit check for the character immediately before the colon. */
 const IS_WORD_CHARACTER = /[A-Za-z0-9]/;
 
-function isRecognizedTextDirective(
+/**
+ * The word-start DEMOTION rule (GitHub issue #43): whether an already
+ * tokenized text directive (`remark-directive` has already decided a run
+ * of text looks like `:name[...]`) should be KEPT as a directive or
+ * demoted back to plain text, per `demoteInvalidTextDirectives` above.
+ *
+ * This is scoped narrowly on purpose: it is not the rule that decides
+ * where a directive starts. That decision, and the colon-run and bracket
+ * grammar (how many colons open which directive form, what counts as a
+ * closing bracket), live entirely in `remark-directive` upstream and are
+ * not exposed here. This function only answers the one question this
+ * module adds on top: given a text directive `remark-directive` already
+ * found, does its name start with a letter, and does its colon sit at a
+ * word start? A third-party tokenizer (a Lezer grammar, for instance) that
+ * adopts this predicate gets parity on that one word-start rule and
+ * nothing more — it still needs its own colon-run and bracket handling to
+ * match `remark-directive`'s grammar.
+ */
+export function isRecognizedTextDirective(
   name: string,
   colonOffset: number,
   source: string,

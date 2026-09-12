@@ -127,6 +127,20 @@ packages/markii-stdlib  standard component contracts (docs/integration.md) — n
                      differently
   src/table-shape.ts deriveTableShape: the ::table shape logic both renderers
                      share (array of objects/arrays/primitives, single object)
+  src/interactive.ts INTERACTIVE_ATTRIBUTE (data-mk-interactive): the one
+                     spelling both engines, and packs, mark a real control with
+  src/diagnostics.ts DiagnosticEvent/OnDiagnostic/reportDiagnostic: the neutral
+                     envelope behind both renderers' onDiagnostic option; the
+                     wording stays in each engine's failure-presentation module
+  src/editor/        the @markii/stdlib/editor subpath: the pure,
+                     dependency-free editor seam. complete/ (completionAt,
+                     hoverAt, the directive-context scanner, CompletionContext's
+                     replaceStart + tokenStart pair), insert/ (componentSkeleton,
+                     firstSentence, standardComponentCatalog),
+                     fences/container-fences.ts (enclosingContainerFences,
+                     fenceExtensionEdits, closesOpenContainerFence). Nothing
+                     here imports @markii/pack; a pack-aware host composes its
+                     catalog on top of standardComponentCatalog
 packages/markii-bundle  .mkz bundle handling (docs/bundles.md, L2) — no React, no parsing:
   src/manifest.ts    manifest.json types + hand-rolled validation (no schema deps)
   src/paths.ts       path-jail: bundle-relative path normalization/rejection
@@ -217,9 +231,16 @@ packages/markii-host    PRIVATE, never published (no npm presence, absent from
                      path jail. Used by the bundled-pack build and composed
                      through by pack-export-archive.ts; not a user command on
                      its own. A pack's SOURCE folder is never written to
-  src/insert/        the insert-component seam (issue #17): skeleton builder
-                     (container/leaf/inline forms per @markii/stdlib kind)
-                     + catalog (stdlib + installed packs) both hosts consume
+  src/insert/        the PACK-AWARE half of the insert catalog:
+                     buildComponentCatalog composes @markii/stdlib/editor's
+                     standardComponentCatalog() with each discovered pack's
+                     declared components. It stays here because it needs
+                     @markii/pack
+  src/diagnostics/   render-diagnostics.ts: one DiagnosticEvent from either
+                     renderer's onDiagnostic option becomes the one line both
+                     hosts write, deduped per note. Node-free, exported from
+                     @markii/host/browser too, since the React render runs in
+                     the VS Code webview
   src/export/        note export (issue #28): buildNoteHtmlExport renders a
                      note through @markii/html into a self-contained HTML
                      document (doc.css embedded, last-run values baked in,
@@ -228,12 +249,6 @@ packages/markii-host    PRIVATE, never published (no npm presence, absent from
                      embedder behind an injected reader seam, and the
                      cascade walk/link-rewrite/zip logic both hosts can
                      adopt; main entry only, since it pulls the HTML engine
-  src/complete/      directive completion + hover (issue #27): the pure
-                     line/column context parser (directive name, attribute
-                     name, attribute value), completionAt/hoverAt over the
-                     insert catalog, stdlib contracts, and stdlib's layout
-                     presets; structured ComponentDocumentation both hosts
-                     format. Node-free, exported from @markii/host/browser
 packages/markii-lua     Lua sandbox runtime (docs/security.md, L3) — no React, no parsing:
   src/globals.ts     empty-env whitelist: curated string/table/math only
   src/capabilities.ts net/cache/bundle tables; two-tier (manual vs auto) gating
@@ -648,6 +663,17 @@ same commit as the change that triggers them:
 - **New export from `@markii/host/browser`** → it must stay Node-free
   transitively; `apps/vscode/src/browser-entry.probe.test.ts` is the gate.
   A module needing `node:*` stays behind the main entry.
+- **Editor-seam change** (completion, hover, the insert skeleton or catalog,
+  fence lengthening) → it lives in `@markii/stdlib/editor`, a PUBLISHED
+  subpath, so it needs a CHANGELOG entry and the editor-support section of
+  `docs/integration.md` in the same commit. `@markii/host` only re-exports
+  it; do not add a second copy there.
+- **A renderer that recognizes a value and declines to use it** (an
+  out-of-enum attribute value, a refused source) → it renders anyway with a
+  quiet marker, reports the same wording through `onDiagnostic`, and both
+  hosts route that to their diagnostics surface. An unknown attribute NAME
+  stays silent: packs and later format versions use names this version does
+  not know.
 - **Security probe suites are product code** → colocated `*probe*` suites are
   committed and kept green in CI (the documented hang/deadlock repros are the
   one exception: they are covered by dedicated tests rather than re-executed,

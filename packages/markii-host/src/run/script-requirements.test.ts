@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { computeGrantKey, type GrantClosure } from '@markii/runtime';
-import { extractRunRequirements } from './script-requirements';
+import {
+  extractRunRequirements,
+  scriptDeclaredHosts,
+} from './script-requirements';
 
 function fence(name: string, body: string): string {
   return '```lua {name=' + name + '}\n' + body + '\n```\n';
@@ -159,5 +162,26 @@ describe('extractRunRequirements — grantScripts / computeGrantKey stability', 
     const keyBefore = await computeGrantKey(closureFrom(before.grantScripts));
     const keyAfter = await computeGrantKey(closureFrom(after.grantScripts));
     expect(keyBefore).not.toBe(keyAfter);
+  });
+});
+
+describe('scriptDeclaredHosts — display-only, mirrors manifestNetHosts (batch 7 #47)', () => {
+  it('collects each script block’s declared hosts, deduplicated, in first-seen order', () => {
+    const { scripts } = extractRunRequirements(
+      '```lua {name=a permissions=b.example.com,a.example.com}\nreturn 1\n```\n' +
+        '```lua {name=b permissions=a.example.com,c.example.com}\nreturn 1\n```\n',
+    );
+    expect(scriptDeclaredHosts(scripts)).toEqual([
+      'b.example.com',
+      'a.example.com',
+      'c.example.com',
+    ]);
+  });
+
+  it('is empty when no script declares `permissions`', () => {
+    const { scripts } = extractRunRequirements(
+      '```lua {name=a}\nreturn 1\n```\n',
+    );
+    expect(scriptDeclaredHosts(scripts)).toEqual([]);
   });
 });

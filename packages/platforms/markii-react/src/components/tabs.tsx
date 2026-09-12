@@ -4,6 +4,13 @@ import { readDirectiveChild } from '../render.js';
 import type { MarkComponentProps } from '../registry.js';
 import { DEFAULT_TAB_LABEL, TabPanel } from './tab.js';
 
+// `data-mk-interactive` matches `@markii/stdlib`'s `INTERACTIVE_ATTRIBUTE`
+// (docs/integration.md's editor-host contract, #53): written as a JSX
+// literal, not the imported constant, because TypeScript only special-cases
+// a literal `data-*` name on a DOM intrinsic element. `contract-drift.test.ts`
+// reads the constant and checks every `role="tab"` element carries it, so
+// the two spellings cannot drift apart unnoticed.
+
 const TAB_DIRECTIVE_NAME = 'tab';
 
 interface TabEntry {
@@ -67,6 +74,7 @@ export function Tabs({ children }: MarkComponentProps): ReactElement | null {
             key={index}
             type="button"
             role="tab"
+            data-mk-interactive=""
             aria-selected={index === activeIndex}
             className={
               index === activeIndex

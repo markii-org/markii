@@ -20,7 +20,7 @@ describe('exportHtmlDocument', () => {
   it('embeds the real shared doc.css, not a placeholder', () => {
     const doc = exportHtmlDocument('body');
     // A handful of selectors that only exist in the real stylesheet.
-    expect(doc).toContain('.doc > * + *');
+    expect(doc).toContain(':where(.doc, [data-mk-root]) > * + *');
     expect(doc).toContain('.mk-callout');
     expect(doc).toContain('.mk-stat__value');
   });
@@ -46,11 +46,11 @@ describe('exportHtmlDocument', () => {
     const styleStart = doc.indexOf('<style>');
     const styleEnd = doc.indexOf('</style>');
     const styleBlock = doc.slice(styleStart, styleEnd);
-    expect(styleBlock).toContain('.doc > * + *');
+    expect(styleBlock).toContain(':where(.doc, [data-mk-root]) > * + *');
     expect(styleBlock).toContain('.custom { color: red; }');
-    expect(styleBlock.indexOf('.doc > * + *')).toBeLessThan(
-      styleBlock.indexOf('.custom'),
-    );
+    expect(
+      styleBlock.indexOf(':where(.doc, [data-mk-root]) > * + *'),
+    ).toBeLessThan(styleBlock.indexOf('.custom'));
   });
 
   it('wraps a real rendered document end to end, producing a document a browser could open', () => {

@@ -32,6 +32,7 @@ describe('parseCompletionContext — directive-name, block form', () => {
     expect(ctx.colonRun).toBe('::');
     expect(ctx.replaceStart).toBe(0);
     expect(ctx.replaceEnd).toBe(2);
+    expect(ctx.tokenStart).toBe(2);
     expect(ctx.partial).toBe('');
   });
 
@@ -41,6 +42,7 @@ describe('parseCompletionContext — directive-name, block form', () => {
     if (ctx.kind !== 'directive-name') return;
     expect(ctx.form).toBe('container');
     expect(ctx.colonRun).toBe(':::');
+    expect(ctx.tokenStart).toBe(3);
     expect(ctx.partial).toBe('cal');
   });
 
@@ -57,6 +59,7 @@ describe('parseCompletionContext — directive-name, block form', () => {
     expect(ctx.kind).toBe('directive-name');
     if (ctx.kind !== 'directive-name') return;
     expect(ctx.replaceStart).toBe(2);
+    expect(ctx.tokenStart).toBe(4);
   });
 
   it('does not fire for a block form preceded by non-whitespace text', () => {
@@ -86,6 +89,7 @@ describe('parseCompletionContext — directive-name, inline form', () => {
     expect(ctx.colonRun).toBe(':');
     expect(ctx.partial).toBe('kb');
     expect(ctx.replaceStart).toBe(0);
+    expect(ctx.tokenStart).toBe(1);
   });
 
   it('fires for a single colon preceded by whitespace', () => {
@@ -94,6 +98,7 @@ describe('parseCompletionContext — directive-name, inline form', () => {
     if (ctx.kind !== 'directive-name') return;
     expect(ctx.form).toBe('inline');
     expect(ctx.replaceStart).toBe(6);
+    expect(ctx.tokenStart).toBe(7);
   });
 
   it('does not fire when the colon is not at line start or after whitespace', () => {

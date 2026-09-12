@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  closesOpenContainerFence,
   enclosingContainerFences,
   fenceExtensionEdits,
   insertedContainerColonCount,
@@ -281,5 +282,37 @@ describe('fenceExtensionEdits', () => {
       { line: 0, column: 2, oldText: ':::', newText: '::::' },
       { line: 2, column: 2, oldText: ':::', newText: '::::' },
     ]);
+  });
+});
+
+describe('closesOpenContainerFence', () => {
+  it('an opener with no name typed yet is not a closer, even with nothing open above it', () => {
+    const text = doc(':::');
+    expect(closesOpenContainerFence(text, 0, ':::')).toBe(false);
+  });
+
+  it('a bare colon run that closes an open container is a closer', () => {
+    const text = doc(':::card', '', ':::');
+    expect(closesOpenContainerFence(text, 2, ':::')).toBe(true);
+  });
+
+  it('a closer with trailing content is not treated as a closer', () => {
+    const text = doc(':::card', '', ':::extra');
+    expect(closesOpenContainerFence(text, 2, ':::extra')).toBe(false);
+  });
+
+  it('a colon run whose count does not match the open fence is not a closer', () => {
+    const text = doc('::::card', '', ':::');
+    expect(closesOpenContainerFence(text, 2, ':::')).toBe(false);
+  });
+
+  it('a bare colon run with nothing open above it is not a closer', () => {
+    const text = doc('plain text', ':::');
+    expect(closesOpenContainerFence(text, 1, ':::')).toBe(false);
+  });
+
+  it('is false when the document has a dangling opener above it', () => {
+    const text = doc(':::card', 'body', ':::inner', '', ':::');
+    expect(closesOpenContainerFence(text, 4, ':::')).toBe(false);
   });
 });

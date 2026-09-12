@@ -1,7 +1,7 @@
 /**
  * `obsidian`-free logic behind directive autocompletion (GitHub issue #27,
- * slice 3): shapes `@markii/host`'s `CompletionContext`/`CompletionItem`
- * (issue #27 slice 1) into the row shape `./complete-suggest.ts`'s
+ * slice 3): shapes `@markii/stdlib/editor`'s `CompletionContext`/
+ * `CompletionItem` (issue #27 slice 1) into the row shape `./complete-suggest.ts`'s
  * `EditorSuggest` renders, and owns every user-facing string that popup
  * shows. Mirrors `./insert-component.ts`'s split for the Insert Markii
  * component command exactly: this is the wording/shaping home,
@@ -15,7 +15,7 @@
  * the behavior is identical: case-insensitive substring match on `label`,
  * empty query matches everything.
  */
-import type { CompletionContext, CompletionItem } from '@markii/host';
+import type { CompletionContext, CompletionItem } from '@markii/stdlib/editor';
 import {
   filterSuggestionsByLabel,
   LAYOUT_ORIGIN,
@@ -63,22 +63,25 @@ export function completionSuggestions(
 
 /**
  * The text Obsidian's `EditorSuggest` filters rows against, sliced from the
- * context's `replaceStart` to the current cursor column. A directive-name
- * context's `replaceStart` sits at the start of the COLON RUN (`:::`,
- * `::::`, ...), not at the directive name itself — `completionAt` needs the
- * full run to size the replacement correctly — so the raw slice for
- * `:::cal` would filter catalog labels like `callout` against a leading
- * `:::` and match nothing. Any leading colon run is stripped before
- * filtering. Attribute-name and attribute-value contexts have no colons in
- * their range, so the slice is returned unchanged.
+ * cursor's typed start to the current cursor column.
+ *
+ * A directive-name context's `replaceStart` sits at the start of the COLON
+ * RUN (`:::`, `::::`, ...), not at the directive name itself —
+ * `completionAt` needs the full run to size the replacement correctly — so
+ * filtering from `replaceStart` would compare catalog labels like `callout`
+ * against a leading `:::` and match nothing (GitHub issue #50). `tokenStart`
+ * is `@markii/stdlib/editor`'s answer to exactly this: the name token's own
+ * start, after the colon run. Falling back to `replaceStart` for every
+ * other context kind is a no-op, since `tokenStart` is only ever set for
+ * `'directive-name'` and every other context's `replaceStart` already sits
+ * on the token being replaced (no colons in range).
  */
 export function completionQuery(
   line: string,
   context: CompletionContext,
   column: number,
 ): string {
-  const raw = line.slice(context.replaceStart, column);
-  return raw.replace(/^:+/, '');
+  return line.slice(context.tokenStart ?? context.replaceStart, column);
 }
 
 /**

@@ -235,6 +235,17 @@ export default class MarkiiPlugin extends Plugin {
         this.addHeaderActions();
       }),
     );
+    // GitHub issue #58: creating a note reuses the current leaf, so the
+    // FILE changes while the leaf itself does not and `active-leaf-change`
+    // never fires. `file-open` fires whenever a leaf's shown file changes,
+    // including that case, so the header action appears on a freshly
+    // created `.mk.md` note without the reader having to split the view
+    // first (the workaround that was the only way to trigger a refresh).
+    this.registerEvent(
+      this.app.workspace.on('file-open', () => {
+        this.addHeaderActions();
+      }),
+    );
     this.addHeaderActions();
 
     this.addCommand({

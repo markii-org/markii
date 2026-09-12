@@ -162,6 +162,11 @@ A script name MUST match `[A-Za-z_][A-Za-z0-9_-]*`. A block with an invalid
 name is display-only, not an error. Script blocks may appear anywhere
 markdown may; all names land in one note-scoped value store.
 
+A script fence MAY carry `permissions=`, a comma-separated list of hostnames
+the block declares it intends to reach. It is declared intent only.
+Implementations MUST NOT treat it as an input to what is granted; what may
+be granted comes from the addresses the executable closure names literally.
+
 ## 6. Values
 
 Scripts return values; they never mutate the document. `:value[name]`
@@ -292,6 +297,7 @@ The `Fixtures` column uses one of five forms:
 | S4-12 | 4 | The fallback's form MUST follow the directive's own form, not the component's registered kind. | render:react:form-mismatch.test.tsx |
 | S5-01 | 5 | Implementations MUST fail closed on an unrecognized boolean fence-meta spelling: it never enables behavior. | core:publish-attribute.test.ts |
 | S5-02 | 5 | A script name MUST match `[A-Za-z_][A-Za-z0-9_-]*`. | 16 |
+| S5-03 | 5 | A script fence's `permissions=` list is declared intent only and MUST NOT widen or narrow what may be granted. | 32, other: the parse half is pinned by fixture 32; the non-widening half is host grant behavior, neither parse- nor render-observable, and is pinned by the shared host layer's own `run/run-flow.test.ts` |
 | S6-01 | 6 | The application MUST reject a second publisher of the same published name. | render:runtime:vault.test.ts |
 
 ## 10. Conformance

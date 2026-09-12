@@ -34,12 +34,22 @@ import type { ValueStore } from '@markii/runtime';
  * built rather than through a DOM pass afterward. Omitted for a document
  * with no vault to resolve against, in which case every image renders with
  * the source unchanged.
+ *
+ * `onDiagnostic` is the same kind of forward for the render's quiet
+ * markers: a known attribute given a value outside its enum, or a figure
+ * source refused as unsafe, still renders with a marker in the page, and
+ * this is how the reason reaches the plugin's diagnostics surface instead
+ * of living only in a tooltip.
  */
 export function renderDocument(
   text: string,
   store?: ValueStore,
   registry: Registry = defaultRegistry,
   resolveImageSrc?: RenderMarkOptions['resolveImageSrc'],
+  onDiagnostic?: RenderMarkOptions['onDiagnostic'],
 ): ReactElement {
-  return renderMark(text, registry, store, undefined, { resolveImageSrc });
+  return renderMark(text, registry, store, undefined, {
+    resolveImageSrc,
+    onDiagnostic,
+  });
 }

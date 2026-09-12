@@ -9,6 +9,9 @@ import {
   failureKindClass,
   failurePhrase,
   failureTitle,
+  invalidAttributeValueTitle,
+  unsafeImageSrcTitle,
+  NOTICE_ATTRIBUTE,
 } from './failure-presentation';
 
 /** A store holding one entry named `x`, so every case below can bind with `data=x`. */
@@ -228,5 +231,23 @@ describe('data-bound components mirror ValueDirective failure presentation', () 
       'requires manual run: auto tier may not run this script',
     );
     expect(marker?.textContent).toBe('{x}');
+  });
+});
+
+describe('the silent-value-drop notice wording (#56, #60)', () => {
+  it('NOTICE_ATTRIBUTE is the documented data attribute', () => {
+    expect(NOTICE_ATTRIBUTE).toBe('data-mk-notice');
+  });
+
+  it('invalidAttributeValueTitle names the directive, value, and attribute', () => {
+    expect(invalidAttributeValueTitle('card', 'text', 'Hey')).toBe(
+      'card: "Hey" is not a valid text value (ignored)',
+    );
+  });
+
+  it('unsafeImageSrcTitle names the directive', () => {
+    expect(unsafeImageSrcTitle('figure')).toBe(
+      'figure: image source was refused as unsafe and was not shown',
+    );
   });
 });

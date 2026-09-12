@@ -509,12 +509,12 @@ describe('doc probe — nothing beyond the three documented names', () => {
     });
   });
 
-  it('the note reaches Lua with no clock, no host and no file behind it', async () => {
+  it('the note reaches Lua with no clock, no bundle and no cache behind it; `net` is always present as a denial stub (batch 7 #47)', async () => {
     const result = await run(
-      `return tostring(os) .. "," .. tostring(io) .. "," .. tostring(net) ..
+      `return tostring(os) .. "," .. tostring(io) .. "," .. type(net) ..
        "," .. tostring(bundle) .. "," .. tostring(cache)`,
       { doc: docFor(SIMPLE) },
     );
-    expect(result).toEqual({ ok: true, value: 'nil,nil,nil,nil,nil' });
+    expect(result).toEqual({ ok: true, value: 'nil,nil,table,nil,nil' });
   });
 });

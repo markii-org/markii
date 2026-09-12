@@ -8,7 +8,7 @@ import type {
 } from 'mdast-util-directive';
 import type { Code, RootContent } from 'mdast';
 import type { Node } from 'unist';
-import { parse } from './parse';
+import { isRecognizedTextDirective, parse } from './parse';
 import { conformanceDir } from './corpus';
 
 function readFixture(name: string): string {
@@ -177,6 +177,38 @@ describe('parse', () => {
     ).not.toThrow();
     const tree = parse(readFixture('09-malformed-container.mk.md'));
     expect(tree.type).toBe('root');
+  });
+});
+
+describe('isRecognizedTextDirective (GitHub issue #43): the exported demotion predicate', () => {
+  it('rejects a name that does not start with an ASCII letter', () => {
+    expect(isRecognizedTextDirective('34', 5, 'time 12:34 pm')).toBe(false);
+  });
+
+  it('accepts a letter-led name at the very start of the source', () => {
+    expect(isRecognizedTextDirective('kbd', 0, ':kbd[x]')).toBe(true);
+  });
+
+  it('accepts a letter-led name whose colon follows whitespace or punctuation', () => {
+    expect(isRecognizedTextDirective('kbd', 4, 'see :kbd[x]')).toBe(true);
+    expect(isRecognizedTextDirective('kbd', 1, '(:kbd[x])')).toBe(true);
+  });
+
+  it('rejects a letter-led name whose colon immediately follows a letter or digit', () => {
+    expect(isRecognizedTextDirective('kbd', 4, 'word:kbd[x]')).toBe(false);
+    expect(isRecognizedTextDirective('kbd', 2, '12:kbd[x]')).toBe(false);
+  });
+
+  it('matches what `parse` itself does end to end, for the same inputs', () => {
+    // Same rule, exercised through the public predicate and through the
+    // full parser, so the two can never silently drift apart.
+    const kept = parse('see :kbd[x] ok');
+    expect(findAll(kept, 'textDirective')).toHaveLength(1);
+    expect(isRecognizedTextDirective('kbd', 4, 'see :kbd[x] ok')).toBe(true);
+
+    const demoted = parse('word:kbd[x]');
+    expect(findAll(demoted, 'textDirective')).toHaveLength(0);
+    expect(isRecognizedTextDirective('kbd', 4, 'word:kbd[x]')).toBe(false);
   });
 });
 

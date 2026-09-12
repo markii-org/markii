@@ -4,8 +4,9 @@ import { forwardRef, memo } from 'react';
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { conformanceDir } from '@markii/core/corpus';
+import { parse } from '@markii/core';
 import { createValueStore, createVaultStore } from '@markii/runtime';
-import { renderMark } from './render';
+import { renderMark, renderMarkNode, renderMarkInline } from './render';
 import { defaultRegistry } from './components';
 import type {
   DirectiveAttributes,
@@ -1122,6 +1123,22 @@ describe('renderMark — render-level conformance fixtures (conformance/render/)
     );
     expect(images).toEqual(['resolved/cat.png', 'resolved/dog.png']);
   });
+
+  it('07-notice: the silent-value-drop notice marker on an enum mismatch and a refused figure src', () => {
+    const { container } = render(
+      renderMark(readRenderFixture('07-notice'), defaultRegistry),
+    );
+    const cardNotice = container.querySelector('[data-mk-notice]');
+    expect(cardNotice?.getAttribute('title')).toBe(
+      'card: "Hey" is not a valid text value (ignored)',
+    );
+    expect(cardNotice?.querySelector('.mk-card')).not.toBeNull();
+
+    const figure = container.querySelector('figure');
+    expect(figure?.hasAttribute('data-mk-notice')).toBe(true);
+    expect(figure?.querySelector('img')).toBeNull();
+    expect(figure?.querySelector('figcaption')).toHaveTextContent('caption');
+  });
 });
 
 describe('renderMark — resolveImageSrc option', () => {
@@ -1305,6 +1322,259 @@ describe('renderMark — resolveImageSrc option', () => {
   });
 });
 
+describe('renderMark — resolveHref option (#44b)', () => {
+  it('resolves a relative markdown link', () => {
+    const { container } = render(
+      renderMark('[a note](note.md)', defaultRegistry, undefined, undefined, {
+        resolveHref: (href) =>
+          href === 'note.md' ? 'https://cdn.test/note.html' : undefined,
+      }),
+    );
+    expect(container.querySelector('a')).toHaveAttribute(
+      'href',
+      'https://cdn.test/note.html',
+    );
+  });
+
+  it('never offers a scheme-carrying href to the resolver', () => {
+    const called: string[] = [];
+    render(
+      renderMark(
+        '[example](https://example.com)',
+        defaultRegistry,
+        undefined,
+        undefined,
+        {
+          resolveHref: (href) => {
+            called.push(href);
+            return undefined;
+          },
+        },
+      ),
+    );
+    expect(called).toEqual([]);
+  });
+
+  it('refuses a resolver returning a javascript: URL', () => {
+    const { container } = render(
+      renderMark('[a note](note.md)', defaultRegistry, undefined, undefined, {
+        resolveHref: () => 'javascript:alert(1)',
+      }),
+    );
+    expect(container.querySelector('a')).toHaveAttribute('href', 'note.md');
+  });
+
+  it('never breaks the render when the resolver throws', () => {
+    const { container } = render(
+      renderMark('[a note](note.md)', defaultRegistry, undefined, undefined, {
+        resolveHref: () => {
+          throw new Error('boom');
+        },
+      }),
+    );
+    expect(container.querySelector('a')).toHaveAttribute('href', 'note.md');
+  });
+
+  it('leaves every link untouched with no options at all', () => {
+    const { container } = render(
+      renderMark('[a note](note.md)', defaultRegistry),
+    );
+    expect(container.querySelector('a')).toHaveAttribute('href', 'note.md');
+  });
+});
+
+describe('renderMarkNode — accepting a whole Root (#44a)', () => {
+  it('renders every top-level child of a parsed document, in order', () => {
+    const root = parse('# Title\n\nSome *text*.\n\n:badge[New]');
+    const { container } = render(renderMarkNode(root, defaultRegistry));
+    expect(container.querySelector('h1')?.textContent).toBe('Title');
+    expect(container.querySelector('em')?.textContent).toBe('text');
+    expect(container.querySelector('.mk-badge')).not.toBeNull();
+  });
+
+  it('still accepts a single MarkNode exactly as before', () => {
+    const root = parse(':badge[New]');
+    const node = root.children[0]!;
+    const { container } = render(renderMarkNode(node, defaultRegistry));
+    expect(container.querySelector('.mk-badge')?.textContent).toBe('New');
+  });
+});
+
+describe('renderMarkInline (#44c)', () => {
+  it('renders a lone inline directive WITHOUT the paragraph wrapper', () => {
+    const { container } = render(
+      renderMarkInline(':badge[New]', defaultRegistry),
+    );
+    expect(container.querySelector('p')).toBeNull();
+    expect(container.querySelector('.mk-badge')?.textContent).toBe('New');
+  });
+
+  it('falls back to the ordinary render for prose alongside a directive', () => {
+    const { container } = render(
+      renderMarkInline('See :badge[New] here.', defaultRegistry),
+    );
+    expect(container.querySelector('p')).not.toBeNull();
+    expect(container.querySelector('.mk-badge')?.textContent).toBe('New');
+  });
+
+  it('falls back to the ordinary render for plain prose', () => {
+    const { container } = render(
+      renderMarkInline('Just some text.', defaultRegistry),
+    );
+    expect(container.querySelector('p')?.textContent).toBe('Just some text.');
+  });
+
+  it('falls back to the ordinary render for more than one top-level block', () => {
+    const { container } = render(
+      renderMarkInline(':badge[New]\n\nAnother paragraph.', defaultRegistry),
+    );
+    expect(container.querySelectorAll('p')).toHaveLength(2);
+  });
+
+  it('falls back to the ordinary render for an empty document', () => {
+    const { container } = render(renderMarkInline('', defaultRegistry));
+    expect(container.innerHTML).toBe('');
+  });
+});
+
+describe('renderMark — the silent-value-drop notice mechanism', () => {
+  it('renders a quiet marker for a known attribute value outside its enum', () => {
+    const { container } = render(
+      renderMark(':::card{text="Hey"}\nbody\n:::', defaultRegistry),
+    );
+    const wrapper = container.firstElementChild;
+    expect(wrapper?.hasAttribute('data-mk-notice')).toBe(true);
+    expect(wrapper?.getAttribute('title')).toBe(
+      'card: "Hey" is not a valid text value (ignored)',
+    );
+    expect(wrapper?.querySelector('.mk-card')).not.toBeNull();
+  });
+
+  it('stays silent for an unrecognized attribute NAME', () => {
+    const { container } = render(
+      renderMark(':::card{spork="Hey"}\nbody\n:::', defaultRegistry),
+    );
+    expect(container.querySelector('[data-mk-notice]')).toBeNull();
+  });
+
+  it('renders a quiet marker when a figure src is refused as unsafe', () => {
+    const { container } = render(
+      renderMark(
+        ':::figure{src="javascript:alert(1)"}\ncaption\n:::',
+        defaultRegistry,
+      ),
+    );
+    const figure = container.querySelector('figure');
+    expect(figure?.hasAttribute('data-mk-notice')).toBe(true);
+    expect(figure?.querySelector('img')).toBeNull();
+    expect(figure?.querySelector('figcaption')?.textContent).toBe('caption');
+  });
+
+  it('calls onDiagnostic with the enum-mismatch event', () => {
+    const events: unknown[] = [];
+    render(
+      renderMark(
+        ':::card{text="Hey"}\nbody\n:::',
+        defaultRegistry,
+        undefined,
+        undefined,
+        { onDiagnostic: (event) => events.push(event) },
+      ),
+    );
+    expect(events).toEqual([
+      {
+        kind: 'invalid-attribute-value',
+        directive: 'card',
+        attribute: 'text',
+        message: 'card: "Hey" is not a valid text value (ignored)',
+      },
+    ]);
+  });
+
+  it('calls onDiagnostic with the unsafe-image-src event', () => {
+    const events: unknown[] = [];
+    render(
+      renderMark(
+        ':::figure{src="javascript:alert(1)"}\ncaption\n:::',
+        defaultRegistry,
+        undefined,
+        undefined,
+        { onDiagnostic: (event) => events.push(event) },
+      ),
+    );
+    expect(events).toEqual([
+      {
+        kind: 'unsafe-image-src',
+        directive: 'figure',
+        message: 'figure: image source was refused as unsafe and was not shown',
+      },
+    ]);
+  });
+
+  it('never breaks the render when onDiagnostic throws', () => {
+    const { container } = render(
+      renderMark(
+        ':::card{text="Hey"}\nbody\n:::',
+        defaultRegistry,
+        undefined,
+        undefined,
+        {
+          onDiagnostic: () => {
+            throw new Error('boom');
+          },
+        },
+      ),
+    );
+    expect(container.querySelector('.mk-card')).not.toBeNull();
+  });
+});
+
 // URL-sanitization behavior is a `toHast` (@markii/core) concern and is tested
 // at the hast level in @markii/core's `to-hast.test.ts` — no React/jsdom
 // involved there. This file only covers React-facing rendering behavior.
+
+describe('renderMark — store and vault on the options object', () => {
+  it('reads a value from a store passed as an option instead of positionally', () => {
+    const store = createValueStore({
+      stars: { value: 42, status: 'fresh', ranAt: 1000 },
+    });
+    const { container } = render(
+      renderMark(
+        'Repo has :value[stars] stars.',
+        defaultRegistry,
+        undefined,
+        undefined,
+        {
+          store,
+        },
+      ),
+    );
+    expect(container.querySelector('.mk-value')).toHaveTextContent('42');
+  });
+
+  it('lets the option win when both forms are given', () => {
+    const positional = createValueStore({
+      stars: { value: 1, status: 'fresh', ranAt: 1000 },
+    });
+    const fromOptions = createValueStore({
+      stars: { value: 2, status: 'fresh', ranAt: 1000 },
+    });
+    const { container } = render(
+      renderMark(':value[stars]', defaultRegistry, positional, undefined, {
+        store: fromOptions,
+      }),
+    );
+    expect(container.querySelector('.mk-value')).toHaveTextContent('2');
+  });
+
+  it('reads a vault value from the options object too', () => {
+    const { store: vault, writer } = createVaultStore();
+    void writer.publish('shared', { value: 'hello', status: 'fresh' });
+    const { container } = render(
+      renderMark(':value[@shared]', defaultRegistry, undefined, undefined, {
+        vault,
+      }),
+    );
+    expect(container.querySelector('.mk-value')).toHaveTextContent('hello');
+  });
+});

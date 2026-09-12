@@ -20,6 +20,7 @@ import {
   resolvePackPaths,
 } from '@markii/host';
 import type { DiscoveredPack } from '@markii/host';
+import { REACT_ENGINE_ID } from '@markii/react';
 import { discoverBundledPacks, mergeBundledPacks } from './bundled-packs.js';
 
 /**
@@ -45,7 +46,15 @@ export async function discoverConfiguredPacks(
     workspaceRoot,
     homeDir,
   );
-  const result = await discoverPacks(resolvedPaths, createNodeFileReader());
+  // Engine-gated like the render path (`@markii/react`'s `loadPack`), so
+  // Insert Component and completion never offer a component this renderer
+  // could not render if it were accepted.
+  const result = await discoverPacks(
+    resolvedPaths,
+    createNodeFileReader(),
+    undefined,
+    REACT_ENGINE_ID,
+  );
   if (extensionPath === undefined) {
     return result.packs;
   }

@@ -6,9 +6,11 @@
 export {
   renderMarkToHtml,
   renderMarkNodeToHtml,
+  renderMarkInlineToHtml,
   type RenderMarkOptions,
 } from './render.js';
 export { type ResolveImageSrc } from './image-resolve.js';
+export { type ResolveHref } from './href-resolve.js';
 export { escapeHtml } from './escape.js';
 export {
   exportHtmlDocument,

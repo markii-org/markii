@@ -10,7 +10,10 @@
  * it maps this module's plain strings onto `vscode.CompletionItem` /
  * `vscode.MarkdownString` / `vscode.SnippetString`.
  */
-import type { CompletionItem, ComponentDocumentation } from '@markii/host';
+import type {
+  CompletionItem,
+  ComponentDocumentation,
+} from '@markii/stdlib/editor';
 import {
   LAYOUT_SECTION_LABEL,
   STANDARD_SECTION_LABEL,
@@ -129,27 +132,32 @@ export function completionSortText(index: number): string {
 }
 
 /**
- * The text VS Code filters a row on, which is NOT always its label.
+ * The text VS Code filters a row on, which is not always its label.
  *
- * VS Code scores an item's `filterText` (defaulting to its label) against
- * the typed text running from the item's own replace range to the cursor.
- * In a directive-name context that range starts at the COLON RUN, so the
- * typed text is `:::cal` while the label is `callout`: the first character
- * does not match, the fuzzy scorer rejects it, and every component row
- * disappears from a popup that should have been showing them. Prefixing
- * the label with the same colon run makes the two line up again.
+ * VS Code scores an item against the typed text running from the item's
+ * own replace range to the cursor. A directive-name context replaces from
+ * the COLON RUN, so that typed text is `:::cal` while the label is
+ * `callout`: the first character does not match, the fuzzy scorer rejects
+ * the row, and a popup that should be full opens empty. Prefixing the
+ * label with exactly the span between the replace start and the name token
+ * lines the two up again.
  *
- * The colon run is read off the line at `replaceStart` rather than passed
- * in, so this stays a pure string function. An attribute-name or
- * attribute-value range never starts on a colon, and neither does a
- * directive-name range when there is trailing content on the line (that
- * one replaces the bare name), so both simply get the label back.
+ * That span comes from `completionAt`'s own `replaceStart` and `tokenStart`
+ * pair, so this no longer re-derives the colon run with a regex of its own.
+ * VS Code's insert-and-replace range form cannot carry the two offsets
+ * instead: its contract requires the insert range to start at the same
+ * position as the replace range, so one range start has to serve both the
+ * edit and the filter, and the filter is what gets adjusted here.
+ *
+ * An attribute-name or attribute-value context has no separate token start,
+ * and neither does a directive-name context with trailing content on the
+ * line (that one replaces the bare name), so both get the label back.
  */
 export function completionFilterText(
   lineText: string,
   replaceStart: number,
+  tokenStart: number,
   label: string,
 ): string {
-  const colonRun = /^:*/.exec(lineText.slice(replaceStart))?.[0] ?? '';
-  return `${colonRun}${label}`;
+  return `${lineText.slice(replaceStart, tokenStart)}${label}`;
 }

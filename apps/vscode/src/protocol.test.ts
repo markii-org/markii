@@ -1403,3 +1403,37 @@ describe('isNewerRevision', () => {
     expect(isNewerRevision(1.5, 2)).toBe(false);
   });
 });
+
+describe('isWebviewToHostMessage — render-diagnostics', () => {
+  it('accepts a well-formed line list', () => {
+    expect(
+      isWebviewToHostMessage({
+        type: 'render-diagnostics',
+        lines: ["Render in card's text: not in the enum"],
+      }),
+    ).toBe(true);
+  });
+
+  it('accepts an empty list, which simply logs nothing', () => {
+    expect(
+      isWebviewToHostMessage({ type: 'render-diagnostics', lines: [] }),
+    ).toBe(true);
+  });
+
+  it('rejects a message with no lines array', () => {
+    expect(isWebviewToHostMessage({ type: 'render-diagnostics' })).toBe(false);
+  });
+
+  it('rejects a non-string entry', () => {
+    expect(
+      isWebviewToHostMessage({ type: 'render-diagnostics', lines: [42] }),
+    ).toBe(false);
+  });
+
+  it('rejects an object that only inherits its type from its prototype', () => {
+    const proto = { type: 'render-diagnostics' };
+    const hostile = Object.create(proto) as Record<string, unknown>;
+    hostile.lines = ['x'];
+    expect(isWebviewToHostMessage(hostile)).toBe(false);
+  });
+});

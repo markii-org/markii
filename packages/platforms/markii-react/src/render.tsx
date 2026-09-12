@@ -3,6 +3,7 @@ import type { ComponentProps, ReactElement, ReactNode } from 'react';
 import { jsx, jsxs } from 'react/jsx-runtime';
 import { toJsxRuntime } from 'hast-util-to-jsx-runtime';
 import {
+  parse,
   toHast,
   nodeToHast,
   parseMetaAttributes,
@@ -10,6 +11,8 @@ import {
   isBareAttribute,
 } from '@markii/core';
 import type { MarkNode } from '@markii/core';
+import { getContract, reportDiagnostic } from '@markii/stdlib';
+import type { OnDiagnostic } from '@markii/stdlib';
 import type {
   FailureKind,
   ValueStatus,
@@ -34,10 +37,32 @@ import { ValueDirective } from './components/value-directive.js';
 import { resolveScopedPath } from './store-path.js';
 import { resolveImageAttribute } from './image-resolve.js';
 import type { ResolveImageSrc } from './image-resolve.js';
+import { resolveHrefAttribute } from './href-resolve.js';
+import type { ResolveHref } from './href-resolve.js';
 import {
   EMPTY_INLINE_MARKER_CLASS,
   emptyInlineTitle,
+  invalidAttributeValueTitle,
 } from './components/failure-presentation.js';
+
+// The wrapper below uses the literal `data-mk-notice` attribute name,
+// matching `failure-presentation.ts`'s `NOTICE_ATTRIBUTE` (see `figure.tsx`'s
+// top comment for why a JSX attribute name has to be a literal, not the
+// imported constant, on a DOM intrinsic element).
+
+/**
+ * A whole parsed document, as `@markii/core`'s `parse` returns it — the
+ * type `renderMarkNode`/`renderMarkTree` accept alongside a single
+ * `MarkNode` (#44a). Named locally rather than importing `mdast`'s `Root`
+ * directly: `@markii/core` already depends on `mdast`, and re-deriving the
+ * type from `parse`'s own return type means this file never needs its own
+ * `mdast` dependency to describe it.
+ */
+type MarkRoot = ReturnType<typeof parse>;
+
+function isMarkRoot(node: MarkNode | MarkRoot): node is MarkRoot {
+  return (node as { type?: unknown }).type === 'root';
+}
 
 function parseAttributes(json: string | undefined): DirectiveAttributes {
   if (!json) return {};
@@ -295,6 +320,40 @@ function isEmptyContent(children: ReactNode): boolean {
 }
 
 /**
+ * Whether one of `name`'s `@markii/stdlib` contract attributes with a
+ * closed `enum` is present in `attributes` with a value outside that enum
+ * — e.g. `card{text="Hey"}` (`text` only accepts `left`/`center`/`right`).
+ * Returns the first offending attribute/value pair found, or `undefined`
+ * when `name` has no contract, the contract declares no enum attributes, or
+ * every present enum attribute's value is one of its allowed values (which
+ * includes every attribute the directive simply didn't write at all —
+ * absence is never a violation).
+ *
+ * Schema-driven and generic on purpose: this checks every standard
+ * component's enum attributes from ONE place, rather than each component
+ * hand-rolling its own "is this value one I know" test, so a future
+ * contract addition is covered automatically. A directive whose resolved
+ * name is not a standard component (a pack, or a host's own registration)
+ * has no contract and is never checked — packs may use attribute values
+ * this format knows nothing about.
+ */
+function invalidEnumAttribute(
+  name: string,
+  attributes: DirectiveAttributes,
+): { attribute: string; value: string } | undefined {
+  const contract = getContract(name);
+  if (!contract) return undefined;
+  for (const [attribute, schema] of Object.entries(contract.attributes)) {
+    const enumValues = schema.enum;
+    if (!enumValues) continue;
+    const value = attributes[attribute];
+    if (value === undefined || value === null || value === '') continue;
+    if (!enumValues.includes(value)) return { attribute, value };
+  }
+  return undefined;
+}
+
+/**
  * Renders one directive's content (registry component, `:value[...]`
  * built-in, or the unknown-directive fallback) given its already
  * layout-stripped `attributes` — the part of `DirectiveElement` that does
@@ -313,6 +372,7 @@ function renderDirectiveContent(
   vault: VaultStore | undefined,
   layoutClassName: string | undefined,
   resolveImageSrc: ResolveImageSrc | undefined,
+  onDiagnostic: OnDiagnostic | undefined,
 ): ReactElement {
   // `:value[name]` (§8) is a renderer built-in, resolved before any
   // registry lookup — like the unknown-directive fallback, it is not
@@ -413,16 +473,46 @@ function renderDirectiveContent(
   // at all. It is only ever non-undefined for an entry registered with
   // `layout` (see `createDirectiveElement`).
   const layoutProps = layoutClassName === undefined ? {} : { layoutClassName };
-  const rendered = (
+  let rendered = (
     <Component
       attributes={binding.attributes}
       {...dataProps}
       {...layoutProps}
       resolveImageSrc={resolveImageSrc}
+      onDiagnostic={onDiagnostic}
     >
       {children}
     </Component>
   );
+
+  // The silent-value-drop mechanism (AGENTS.md "clean is not silent"): a
+  // known attribute's value outside its closed enum still renders the
+  // component exactly as registered — nothing is destroyed — wrapped in a
+  // quiet marker whose `title` carries the reason, and `onDiagnostic` gets
+  // the same event for a host's own diagnostics surface. Checked against
+  // the FINAL attributes the component actually received (`binding
+  // .attributes`, after `data=` was split off), not the raw ones, so this
+  // agrees with what the component saw.
+  const invalidEnum = invalidEnumAttribute(name, binding.attributes);
+  if (invalidEnum) {
+    const message = invalidAttributeValueTitle(
+      name,
+      invalidEnum.attribute,
+      invalidEnum.value,
+    );
+    reportDiagnostic(onDiagnostic, {
+      kind: 'invalid-attribute-value',
+      directive: name,
+      attribute: invalidEnum.attribute,
+      message,
+    });
+    const Wrapper = inline ? 'span' : 'div';
+    rendered = (
+      <Wrapper data-mk-notice="" title={message}>
+        {rendered}
+      </Wrapper>
+    );
+  }
 
   // ITEM 1 (AGENTS.md "clean is not silent"): an inline component that got
   // no content is an authoring mistake, not a rendering failure — the
@@ -467,6 +557,7 @@ function createDirectiveElement(
   store: ValueStore | undefined,
   vault: VaultStore | undefined,
   resolveImageSrc: ResolveImageSrc | undefined,
+  onDiagnostic: OnDiagnostic | undefined,
 ): (props: DirectiveElementProps) => ReactElement {
   return function DirectiveElement(props: DirectiveElementProps): ReactElement {
     const written = props['data-mk-name'] ?? '';
@@ -526,6 +617,7 @@ function createDirectiveElement(
       vault,
       isLayoutScope ? layoutClassName : undefined,
       resolveImageSrc,
+      onDiagnostic,
     );
 
     // The wrapper `<div>` applies ONLY to block directives (leaf/container),
@@ -687,6 +779,31 @@ function createImgElement(
   };
 }
 
+type AnchorElementProps = ComponentProps<'a'> & { node?: HastElement };
+
+/**
+ * The link-rewrite twin of `createImgElement` (#44b): overrides
+ * hast-util-to-jsx-runtime's default `<a>` conversion so an ordinary
+ * markdown link's `href` can be resolved by a host, the same shape as
+ * `resolveImageSrc` but for link targets. No standard component builds its
+ * own `<a>` today, so this only ever touches a link the parser itself
+ * produced. With no resolver at all this produces byte-identical output to
+ * the default handling.
+ */
+function createAnchorElement(
+  resolveHref: ResolveHref | undefined,
+): (props: AnchorElementProps) => ReactElement {
+  return function AnchorElement({
+    node: _node,
+    href,
+    ...rest
+  }: AnchorElementProps): ReactElement {
+    const resolvedHref =
+      typeof href === 'string' ? resolveHrefAttribute(href, resolveHref) : href;
+    return <a href={resolvedHref} {...rest} />;
+  };
+}
+
 /**
  * Converts an already-sanitized hast tree to a React element tree via
  * hast-util-to-jsx-runtime, with directive elements swapped for registry
@@ -702,12 +819,15 @@ function hastToReactTree(
   store: ValueStore | undefined,
   vault: VaultStore | undefined,
   resolveImageSrc: ResolveImageSrc | undefined,
+  resolveHref: ResolveHref | undefined,
+  onDiagnostic: OnDiagnostic | undefined,
 ): ReactElement {
   const DirectiveElement = createDirectiveElement(
     registry,
     store,
     vault,
     resolveImageSrc,
+    onDiagnostic,
   );
   return toJsxRuntime(hastTree, {
     Fragment,
@@ -718,8 +838,29 @@ function hastToReactTree(
       'mk-directive': DirectiveElement,
       pre: PreElement,
       img: createImgElement(resolveImageSrc),
+      a: createAnchorElement(resolveHref),
     },
   }) as ReactElement;
+}
+
+/**
+ * Converts a `MarkNode | MarkRoot` (#44a) to a sanitized hast tree via
+ * `@markii/core`'s `nodeToHast`. For a whole `MarkRoot`, each child is run
+ * through `nodeToHast` independently and the resulting hast children are
+ * concatenated — `nodeToHast` already wraps a single node in its own
+ * synthetic root internally, so this simply does that once per child rather
+ * than needing a second entry point in `@markii/core` for "a whole root".
+ * Each child gets the exact same tagging/preserve-meta/sanitize pipeline as
+ * a lone node would, since `@markii/core`'s `createProcessor` plugin list
+ * is what actually does that work, run once per child here.
+ */
+function nodeOrRootToHast(node: MarkNode | MarkRoot): HastRoot {
+  if (!isMarkRoot(node)) return nodeToHast(node);
+  const children: HastRoot['children'] = [];
+  for (const child of node.children) {
+    children.push(...nodeToHast(child).children);
+  }
+  return { type: 'root', children };
 }
 
 /**
@@ -775,15 +916,46 @@ function renderFailureFallback(error: unknown): ReactElement {
  * `Figure`) — to a URL a host can actually load: a document folder, an
  * embedded bundle asset, a vault lookup. It is never asked about a source
  * that already carries a scheme, a protocol-relative `//host/...`, a bare
- * `#fragment`, or an empty value, and its result is re-checked against
- * `@markii/core`'s `isSafeUrl` before use, so it cannot introduce a
- * `javascript:` URL the sanitizer would otherwise have dropped. Returning
- * `undefined`, or throwing, leaves the source exactly as the author wrote
- * it. Omitted entirely, every image renders with the source unchanged,
- * matching every render before this option existed.
+ * `#fragment`, or an empty value, and its result is re-checked against a
+ * narrow `javascript:`/`vbscript:` denylist before use (`./url-resolve.js`),
+ * so it cannot introduce a scheme the parser's own sanitizer would
+ * otherwise have dropped. Returning `undefined`, or throwing, leaves the
+ * source exactly as the author wrote it. Omitted entirely, every image
+ * renders with the source unchanged, matching every render before this
+ * option existed.
+ *
+ * `options.resolveHref` (#44b) is the identical seam for an ordinary
+ * markdown link's `<a href>`: same resolvability rule, same shared
+ * dangerous-scheme refusal, same fall-through-on-`undefined`-or-throw
+ * behavior. No standard component builds its own `<a>`, so this only ever
+ * touches a link the parser itself produced.
+ *
+ * `options.onDiagnostic`, when supplied, is called once for every quiet
+ * in-page marker this render produces for a value it recognized and
+ * declined to use outright — a known attribute's value outside its closed
+ * enum, or a `figure` `src` refused as unsafe — with
+ * `{ kind, directive, attribute, message }` (`@markii/stdlib`'s
+ * `DiagnosticEvent`), so a host can put the same information on its own
+ * diagnostics surface instead of relying on a reader hovering a tooltip.
+ * Never called for an unknown-attribute NAME (packs and future attributes
+ * use those legitimately) or for the unknown-directive/form-mismatch
+ * fallbacks, which already show themselves in the page. A callback that
+ * throws can never break the render: every call site goes through
+ * `@markii/stdlib`'s `reportDiagnostic`, which swallows it.
  */
 export interface RenderMarkOptions {
   readonly resolveImageSrc?: ResolveImageSrc;
+  readonly resolveHref?: ResolveHref;
+  readonly onDiagnostic?: OnDiagnostic;
+  /**
+   * The note's own last-run values, the same thing the third positional
+   * parameter takes. Offered here as well so a caller that already builds
+   * an options object does not have to fill positional slots it has no
+   * other use for. When both forms are given the option wins.
+   */
+  readonly store?: ValueStore;
+  /** Values other notes published, read by an `@`-prefixed name. Same positional twin and same precedence as `store`. */
+  readonly vault?: VaultStore;
 }
 
 export function renderMark(
@@ -798,9 +970,11 @@ export function renderMark(
     return hastToReactTree(
       hastTree,
       registry,
-      store,
-      vault,
+      options?.store ?? store,
+      options?.vault ?? vault,
       options?.resolveImageSrc,
+      options?.resolveHref,
+      options?.onDiagnostic,
     );
   } catch (error) {
     return renderFailureFallback(error);
@@ -809,45 +983,120 @@ export function renderMark(
 
 /**
  * The block-level twin of `renderMark`: renders one already-parsed mdast
- * node (`@markii/core`'s `MarkNode` — e.g. a single top-level child of a
- * `parse`d document) instead of a whole document's text. Same registry
- * resolution (`createDirectiveElement`/`renderDirectiveContent`, including
- * the unknown-directive and `Object.prototype`-name fallbacks), same
- * `:value[...]`/`data=` store and vault resolution, same script-fence
- * folding into `ScriptMarker` (`PreElement`), same never-throw "failed to
- * render document" fallback box, and the same purity guarantee — this
- * function has no state and no side effects, exactly like `renderMark`.
+ * node OR a whole already-parsed mdast document (`@markii/core`'s
+ * `MarkNode` — e.g. a single top-level child of a `parse`d document — or
+ * the `Root` `parse` itself returns; #44a) instead of raw document text.
+ * Same registry resolution (`createDirectiveElement`/
+ * `renderDirectiveContent`, including the unknown-directive and
+ * `Object.prototype`-name fallbacks), same `:value[...]`/`data=` store and
+ * vault resolution, same script-fence folding into `ScriptMarker`
+ * (`PreElement`), same never-throw "failed to render document" fallback
+ * box, and the same purity guarantee — this function has no state and no
+ * side effects, exactly like `renderMark`.
  *
- * Pipeline: `@markii/core`'s `nodeToHast` (deep-clones `node`, then the SAME
- * tag/preserve-meta/remark-rehype/sanitize steps `toHast` runs) ->
- * `hastToReactTree`, the one shared `toJsxRuntime` call site both this
- * function and `renderMark` use, so the two cannot diverge on which
+ * A `MarkNode` and a `Root` share ONE parameter (rather than a second
+ * exported `renderMarkTree`) because handing either one to
+ * `@markii/core`'s `nodeToHast` needs no new core API: a `Root`'s children
+ * are simply run through it one at a time and the resulting hast children
+ * concatenated (`nodeOrRootToHast`) — the smaller surface for callers, who
+ * reach for `renderMarkNode` either way instead of choosing between two
+ * near-identical exports first.
+ *
+ * Pipeline: `nodeOrRootToHast` (`@markii/core`'s `nodeToHast`, run once per
+ * node — the SAME tag/preserve-meta/remark-rehype/sanitize steps `toHast`
+ * runs) -> `hastToReactTree`, the one shared `toJsxRuntime` call site this
+ * function and `renderMark` both use, so the two cannot diverge on which
  * `components` map or options either one passes. Positions on any element
  * that carries them come straight from the parser (`@markii/core`'s
  * `parse`), unchanged by this function or by `nodeToHast`.
  *
- * This is a pure, one-shot render of a static node — not a cell, not
+ * This is a pure, one-shot render of already-parsed input — not a cell, not
  * unrender-to-edit, not a live-preview surface, and it carries no
  * memoization or state of its own; a caller that wants any of that builds it
  * on top, out of scope for this function.
  */
 export function renderMarkNode(
-  node: MarkNode,
+  node: MarkNode | MarkRoot,
   registry: Registry,
   store?: ValueStore,
   vault?: VaultStore,
   options?: RenderMarkOptions,
 ): ReactElement {
   try {
-    const hastTree = nodeToHast(node);
+    const hastTree = nodeOrRootToHast(node);
     return hastToReactTree(
       hastTree,
       registry,
-      store,
-      vault,
+      options?.store ?? store,
+      options?.vault ?? vault,
       options?.resolveImageSrc,
+      options?.resolveHref,
+      options?.onDiagnostic,
     );
   } catch (error) {
     return renderFailureFallback(error);
   }
+}
+
+/**
+ * Whether `root` is exactly one paragraph holding exactly one text
+ * directive (`:name[...]`) and nothing else — the shape `renderMarkInline`
+ * (#44c) treats specially. Returns that inner directive node when so,
+ * `undefined` otherwise (including for an EMPTY paragraph, an ordinary
+ * paragraph of prose, or a document with more than one top-level block —
+ * frontmatter, for instance, adds a `yaml` sibling and disqualifies it).
+ * `leafDirective`/`containerDirective` never appear inside a paragraph
+ * (they are block-level directive forms in their own right), so a text
+ * directive is the only directive kind that can ever be a paragraph's sole
+ * child.
+ */
+function loneInlineDirective(root: MarkRoot): MarkNode | undefined {
+  if (root.children.length !== 1) return undefined;
+  const [only] = root.children;
+  if (!only || only.type !== 'paragraph') return undefined;
+  if (only.children.length !== 1) return undefined;
+  const [inner] = only.children;
+  // Compared against a widened `{ type?: unknown }` view, not `PhrasingContent`
+  // directly: `'textDirective'` only joins that union when something in the
+  // compilation imports `mdast-util-directive`'s ambient augmentation, which
+  // this file has no other reason to do (unlike `@markii/core`'s `to-hast.ts`,
+  // which imports its actual directive node types). Matches `isMarkRoot`'s
+  // identical widen-then-compare shape just above.
+  return inner && (inner as { type?: unknown }).type === 'textDirective'
+    ? (inner as unknown as MarkNode)
+    : undefined;
+}
+
+/**
+ * Renders `text` as a single, standalone inline directive when that is all
+ * it is: source whose only parsed block is a paragraph holding exactly one
+ * text directive (`:name[...]`) renders that directive alone, WITHOUT the
+ * paragraph wrapper `renderMark` would otherwise put around it (#44c) — the
+ * shape a host wants for a directive meant to stand alone rather than sit
+ * inside a sentence, e.g. a live-preview widget replacing one line of
+ * source. Any other source (prose, a directive alongside other text, more
+ * than one block, an empty document) falls back to the exact same rendering
+ * `renderMark` would produce, paragraph wrapper included — this function
+ * never changes what a non-lone-directive input renders as.
+ *
+ * Never throws: parsing is tolerant by construction, and both branches
+ * below already carry their own never-throw guarantee.
+ */
+export function renderMarkInline(
+  text: string,
+  registry: Registry,
+  store?: ValueStore,
+  vault?: VaultStore,
+  options?: RenderMarkOptions,
+): ReactElement {
+  try {
+    const root = parse(text);
+    const lone = loneInlineDirective(root);
+    if (lone) return renderMarkNode(lone, registry, store, vault, options);
+  } catch {
+    // Falls through to the ordinary whole-document render below, whose own
+    // try/catch produces the shared failure fallback if parsing (again) or
+    // rendering fails.
+  }
+  return renderMark(text, registry, store, vault, options);
 }

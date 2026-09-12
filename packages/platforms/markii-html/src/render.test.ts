@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { parse } from '@markii/core';
 import { createValueStore, createVaultStore } from '@markii/runtime';
-import { renderMarkToHtml, renderMarkNodeToHtml } from './render';
+import {
+  renderMarkToHtml,
+  renderMarkNodeToHtml,
+  renderMarkInlineToHtml,
+} from './render';
 import {
   createHtmlRegistry,
   type HtmlComponent,
   type HtmlRegistry,
 } from './registry';
+import { defaultHtmlRegistry } from './components/index.js';
 
 const empty = createHtmlRegistry();
 
@@ -178,7 +183,7 @@ describe('script-fence folding', () => {
     );
     expect(html).toContain('<details class="mk-script">');
     expect(html).toContain(
-      '<summary class="mk-script__summary">⚙ stars · lua</summary>',
+      '<summary class="mk-script__summary" data-mk-interactive="">⚙ stars · lua</summary>',
     );
     expect(html).toContain('<code>return 1</code>');
   });
@@ -569,5 +574,253 @@ describe('renderMarkToHtml — resolveImageSrc option', () => {
   it('leaves every image untouched with no options at all', () => {
     const html = renderMarkToHtml('![a cat](cat.png)', empty);
     expect(html).toContain('src="cat.png"');
+  });
+});
+
+describe('renderMarkToHtml — resolveHref option (#44b)', () => {
+  it('resolves a relative markdown link', () => {
+    const html = renderMarkToHtml(
+      '[a note](note.md)',
+      empty,
+      undefined,
+      undefined,
+      {
+        resolveHref: (href) =>
+          href === 'note.md' ? 'https://cdn.test/note.html' : undefined,
+      },
+    );
+    expect(html).toContain('href="https://cdn.test/note.html"');
+  });
+
+  it('never offers a scheme-carrying href to the resolver', () => {
+    const called: string[] = [];
+    renderMarkToHtml(
+      '[example](https://example.com)',
+      empty,
+      undefined,
+      undefined,
+      {
+        resolveHref: (href) => {
+          called.push(href);
+          return undefined;
+        },
+      },
+    );
+    expect(called).toEqual([]);
+  });
+
+  it('refuses a resolver returning a javascript: URL', () => {
+    const html = renderMarkToHtml(
+      '[a note](note.md)',
+      empty,
+      undefined,
+      undefined,
+      { resolveHref: () => 'javascript:alert(1)' },
+    );
+    expect(html).toContain('href="note.md"');
+  });
+
+  it('never breaks the render when the resolver throws', () => {
+    const html = renderMarkToHtml(
+      '[a note](note.md)',
+      empty,
+      undefined,
+      undefined,
+      {
+        resolveHref: () => {
+          throw new Error('boom');
+        },
+      },
+    );
+    expect(html).toContain('href="note.md"');
+  });
+
+  it('leaves every link untouched with no options at all', () => {
+    const html = renderMarkToHtml('[a note](note.md)', empty);
+    expect(html).toContain('href="note.md"');
+  });
+});
+
+describe('renderMarkNodeToHtml — accepting a whole Root (#44a)', () => {
+  it('renders every top-level child of a parsed document, in order', () => {
+    const root = parse('# Title\n\nSome *text*.\n\n:badge[New]');
+    const html = renderMarkNodeToHtml(root, withComponents);
+    expect(html).toContain('<h1>Title</h1>');
+    expect(html).toContain('<em>text</em>');
+    expect(html).toContain('<b>[New]</b>');
+  });
+
+  it('still accepts a single MarkNode exactly as before', () => {
+    const root = parse(':badge[New]');
+    const node = root.children[0]!;
+    const html = renderMarkNodeToHtml(node, withComponents);
+    expect(html).toContain('<b>[New]</b>');
+  });
+});
+
+describe('renderMarkInlineToHtml (#44c)', () => {
+  it('renders a lone inline directive WITHOUT the paragraph wrapper', () => {
+    const html = renderMarkInlineToHtml(':badge[New]', withComponents);
+    expect(html).not.toContain('<p>');
+    expect(html).toBe('<b>[New]</b>');
+  });
+
+  it('falls back to the ordinary render for prose alongside a directive', () => {
+    const html = renderMarkInlineToHtml(
+      'See :badge[New] here.',
+      withComponents,
+    );
+    expect(html).toContain('<p>');
+    expect(html).toContain('<b>[New]</b>');
+  });
+
+  it('falls back to the ordinary render for plain prose', () => {
+    const html = renderMarkInlineToHtml('Just some text.', withComponents);
+    expect(html).toBe('<p>Just some text.</p>');
+  });
+
+  it('falls back to the ordinary render for more than one top-level block', () => {
+    const html = renderMarkInlineToHtml(
+      ':badge[New]\n\nAnother paragraph.',
+      withComponents,
+    );
+    expect((html.match(/<p>/g) ?? []).length).toBe(2);
+  });
+
+  it('falls back to the ordinary render for an empty document', () => {
+    const html = renderMarkInlineToHtml('', withComponents);
+    expect(html).toBe('');
+  });
+});
+
+describe('renderMarkToHtml — the silent-value-drop notice mechanism', () => {
+  it('renders a quiet marker for a known attribute value outside its enum', () => {
+    const html = renderMarkToHtml(
+      ':::card{text="Hey"}\nbody\n:::',
+      defaultHtmlRegistry,
+    );
+    expect(html).toContain('data-mk-notice=""');
+    expect(html).toContain(
+      'title="card: &quot;Hey&quot; is not a valid text value (ignored)"',
+    );
+    expect(html).toContain('mk-card');
+  });
+
+  it('stays silent for an unrecognized attribute NAME', () => {
+    const html = renderMarkToHtml(
+      ':::card{spork="Hey"}\nbody\n:::',
+      defaultHtmlRegistry,
+    );
+    expect(html).not.toContain('data-mk-notice');
+  });
+
+  it('renders a quiet marker when a figure src is refused as unsafe', () => {
+    const html = renderMarkToHtml(
+      ':::figure{src="javascript:alert(1)"}\ncaption\n:::',
+      defaultHtmlRegistry,
+    );
+    expect(html).toContain('data-mk-notice=""');
+    expect(html).not.toContain('<img');
+    expect(html).toContain('caption');
+  });
+
+  it('calls onDiagnostic with the enum-mismatch event', () => {
+    const events: unknown[] = [];
+    renderMarkToHtml(
+      ':::card{text="Hey"}\nbody\n:::',
+      defaultHtmlRegistry,
+      undefined,
+      undefined,
+      { onDiagnostic: (event) => events.push(event) },
+    );
+    expect(events).toEqual([
+      {
+        kind: 'invalid-attribute-value',
+        directive: 'card',
+        attribute: 'text',
+        message: 'card: "Hey" is not a valid text value (ignored)',
+      },
+    ]);
+  });
+
+  it('calls onDiagnostic with the unsafe-image-src event', () => {
+    const events: unknown[] = [];
+    renderMarkToHtml(
+      ':::figure{src="javascript:alert(1)"}\ncaption\n:::',
+      defaultHtmlRegistry,
+      undefined,
+      undefined,
+      { onDiagnostic: (event) => events.push(event) },
+    );
+    expect(events).toEqual([
+      {
+        kind: 'unsafe-image-src',
+        directive: 'figure',
+        message: 'figure: image source was refused as unsafe and was not shown',
+      },
+    ]);
+  });
+
+  it('never breaks the render when onDiagnostic throws', () => {
+    const html = renderMarkToHtml(
+      ':::card{text="Hey"}\nbody\n:::',
+      defaultHtmlRegistry,
+      undefined,
+      undefined,
+      {
+        onDiagnostic: () => {
+          throw new Error('boom');
+        },
+      },
+    );
+    expect(html).toContain('mk-card');
+  });
+});
+
+describe('renderMarkToHtml — store and vault on the options object', () => {
+  it('reads a value from a store passed as an option instead of positionally', () => {
+    const store = createValueStore({ stars: { value: 42, status: 'fresh' } });
+    const html = renderMarkToHtml(
+      'stars: :value[stars]\n',
+      empty,
+      undefined,
+      undefined,
+      { store },
+    );
+    expect(html).toContain('<span class="mk-value">42</span>');
+  });
+
+  it('lets the option win when both forms are given', () => {
+    const positional = createValueStore({
+      stars: { value: 1, status: 'fresh' },
+    });
+    const fromOptions = createValueStore({
+      stars: { value: 2, status: 'fresh' },
+    });
+    const html = renderMarkToHtml(
+      ':value[stars]\n',
+      empty,
+      positional,
+      undefined,
+      {
+        store: fromOptions,
+      },
+    );
+    expect(html).toContain('<span class="mk-value">2</span>');
+  });
+
+  it('reads a vault value from the options object too', () => {
+    const { store: vault, writer } = createVaultStore();
+    void writer.publish('shared', { value: 'hello', status: 'fresh' });
+    const html = renderMarkToHtml(
+      ':value[@shared]\n',
+      empty,
+      undefined,
+      undefined,
+      {
+        vault,
+      },
+    );
+    expect(html).toContain('<span class="mk-value">hello</span>');
   });
 });

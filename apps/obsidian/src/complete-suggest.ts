@@ -7,8 +7,12 @@ import type {
   EditorSuggestTriggerInfo,
   TFile,
 } from 'obsidian';
-import type { InsertableComponent } from '@markii/host';
-import { completionAt, offsetToLineColumn } from '@markii/host';
+import type { InsertableComponent } from '@markii/stdlib/editor';
+import {
+  closesOpenContainerFence,
+  completionAt,
+  offsetToLineColumn,
+} from '@markii/stdlib/editor';
 import {
   completionQuery,
   completionSuggestions,
@@ -60,6 +64,16 @@ export class MarkiiCompletionSuggest extends EditorSuggest<CompletionSuggestion>
     if (!file?.path.endsWith('.mk.md')) return null;
 
     const line = editor.getLine(cursor.line);
+
+    // GitHub issue #57: a bare colon run that CLOSES a container already
+    // open above it (typed, or arriving via a paste) must not pop the
+    // catalog open — `completionAt` has no document context to tell a
+    // closer from a just-typed opener, so this trigger boundary does,
+    // reusing the same fence scan `./fence-edits.ts` builds on.
+    if (closesOpenContainerFence(editor.getValue(), cursor.line, line)) {
+      return null;
+    }
+
     const context = completionAt(line, cursor.ch, this.catalog());
     if (context.kind === 'none' || context.items.length === 0) return null;
 

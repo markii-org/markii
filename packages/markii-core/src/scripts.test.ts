@@ -243,6 +243,39 @@ describe('isBareAttribute', () => {
   });
 });
 
+describe('extractScripts — permissions (display-only, batch 7 #47)', () => {
+  it('parses a single declared host', () => {
+    const tree = parse(
+      '```lua {name=stars permissions=api.github.com}\nreturn 1\n```',
+    );
+    const scripts = extractScripts(tree);
+    expect(scripts[0]?.permissions).toEqual(['api.github.com']);
+  });
+
+  it('parses a comma-separated list, trimming and lowercasing each host', () => {
+    const tree = parse(
+      '```lua {name=weather permissions="API.weather.com, api.geocode.com"}\nreturn 1\n```',
+    );
+    const scripts = extractScripts(tree);
+    expect(scripts[0]?.permissions).toEqual([
+      'api.weather.com',
+      'api.geocode.com',
+    ]);
+  });
+
+  it('is omitted entirely (not an empty array) when the fence has no `permissions` attribute', () => {
+    const tree = parse('```lua {name=stars}\nreturn 1\n```');
+    const scripts = extractScripts(tree);
+    expect(scripts[0]?.permissions).toBeUndefined();
+  });
+
+  it('is omitted for an empty or all-empty-segment value', () => {
+    const tree = parse('```lua {name=stars permissions=","}\nreturn 1\n```');
+    const scripts = extractScripts(tree);
+    expect(scripts[0]?.permissions).toBeUndefined();
+  });
+});
+
 describe('isValidScriptName', () => {
   it.each([
     'x',

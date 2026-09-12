@@ -128,6 +128,17 @@ export interface BuildRenderRegistryResult {
   readonly collisions: readonly string[];
   /** One entry per composed directive name claimed by two different packs — see `DuplicateComposedName`. Always empty for registrations that went through ordinary composition; kept as an executable invariant, not dead code (see `./pack-render-registry.test.ts`'s constructed-collision test). */
   readonly duplicateComposedNames: readonly DuplicateComposedName[];
+  /**
+   * One entry per validated, non-colliding pack whose manifest declares an
+   * engine `@markii/react`'s `loadPack` cannot run (batch 7 #46). Before
+   * this field existed, such a pack installed as an empty contribution
+   * with no record anywhere that it had even been attempted — every
+   * directive under its namespace fell through to the ordinary
+   * unknown-component fallback, indistinguishable from a directive that
+   * was never a pack component at all. Always empty for an ordinary
+   * all-react-engine install.
+   */
+  readonly droppedEngines: readonly { name: string; engine: string }[];
 }
 
 /**
@@ -144,13 +155,22 @@ export interface BuildRenderRegistryResult {
 function mergePacksKeepingFirstClaim(
   packs: readonly PackToInstall[],
   base: Registry,
-): { registry: Registry; duplicateComposedNames: DuplicateComposedName[] } {
+): {
+  registry: Registry;
+  duplicateComposedNames: DuplicateComposedName[];
+  droppedEngines: { name: string; engine: string }[];
+} {
   const merged: Record<string, RegistryEntry> = { ...base };
   const owner = new Map<string, string>();
   const duplicateComposedNames: DuplicateComposedName[] = [];
+  const droppedEngines: { name: string; engine: string }[] = [];
 
   for (const pack of packs) {
-    const loaded = loadPack(pack.manifest, pack.componentModules);
+    const { registry: loaded, dropped } = loadPack(
+      pack.manifest,
+      pack.componentModules,
+    );
+    if (dropped) droppedEngines.push(dropped);
     for (const composedName of Object.keys(loaded)) {
       if (!Object.hasOwn(loaded, composedName)) continue;
       const existingOwner = owner.get(composedName);
@@ -167,7 +187,11 @@ function mergePacksKeepingFirstClaim(
     }
   }
 
-  return { registry: createRegistry(merged), duplicateComposedNames };
+  return {
+    registry: createRegistry(merged),
+    duplicateComposedNames,
+    droppedEngines,
+  };
 }
 
 /**
@@ -204,6 +228,7 @@ export function buildRenderRegistry(
       invalidReasons,
       collisions: [],
       duplicateComposedNames: [],
+      droppedEngines: [],
     };
   }
 
@@ -215,13 +240,18 @@ export function buildRenderRegistry(
       invalidReasons,
       collisions: namespaceCollisions.map((collision) => collision.namespace),
       duplicateComposedNames: [],
+      droppedEngines: [],
     };
   }
 
-  const { registry, duplicateComposedNames } = mergePacksKeepingFirstClaim(
-    packs,
-    defaultRegistry,
-  );
+  const { registry, duplicateComposedNames, droppedEngines } =
+    mergePacksKeepingFirstClaim(packs, defaultRegistry);
 
-  return { registry, invalidReasons, collisions: [], duplicateComposedNames };
+  return {
+    registry,
+    invalidReasons,
+    collisions: [],
+    duplicateComposedNames,
+    droppedEngines,
+  };
 }

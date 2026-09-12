@@ -4,9 +4,10 @@
  * `componentDocumentation`/`formatComponentDocumentation`
  * (`./documentation.ts`) are built against. Kept in their own module so
  * neither of those implementation files has to import the other just to
- * share a type — this is the one seam two other agents (the VS Code and
- * Obsidian completion providers) code against, so its names and shapes are
- * a contract, not an implementation detail.
+ * share a type — this is the one seam every editor host (a `@markii/*`
+ * host in this repo, or a third-party one importing `@markii/stdlib/editor`
+ * directly) codes against, so its names and shapes are a contract, not an
+ * implementation detail.
  */
 
 /** What a completion item inserts and where it came from. */
@@ -45,10 +46,37 @@ export type CompletionContextKind =
 
 export interface CompletionContext {
   readonly kind: CompletionContextKind;
-  /** Zero-based column an accepted item's `insertText` replaces FROM. Equals `replaceEnd` when `kind` is `'none'`. */
+  /**
+   * Zero-based column an accepted item's `insertText` replaces FROM. Equals
+   * `replaceEnd` when `kind` is `'none'`.
+   *
+   * `replaceStart` and `tokenStart` answer two different questions and a
+   * host that uses one for the other's job gets a working-looking popup
+   * that silently filters everything out (GitHub issue #50). `replaceStart`
+   * is the REPLACE-RANGE start: for a `'directive-name'` context on an
+   * otherwise-empty rest of the line, it sits at the start of the COLON RUN
+   * (`:::`), not at the directive name, because accepting an item there
+   * replaces the whole fence with the chosen component's skeleton. A host
+   * that also uses this value as the text a popup FILTERS candidates
+   * against (CodeMirror's `CompletionResult.from` is exactly that) ends up
+   * comparing the typed text `":::cal"` against labels like `"callout"`:
+   * the leading colons never match, and the popup opens empty. Use
+   * `tokenStart` for filtering; use `replaceStart` for the edit.
+   */
   readonly replaceStart: number;
   /** Zero-based column the replacement ends at. */
   readonly replaceEnd: number;
+  /**
+   * Zero-based column where the NAME token itself starts, i.e. `replaceStart`
+   * plus the colon run's length for a `'directive-name'` context (for
+   * `:::cal` with `replaceStart` 0, `tokenStart` is 3). This is the value a
+   * filtering completion host (one that scores candidates against the
+   * text between its own `from` and the cursor) should hand back as that
+   * `from`, since candidate labels never carry the leading colons.
+   * `undefined` for every other context kind, where `replaceStart` already
+   * sits at the token being replaced and there is nothing separate to name.
+   */
+  readonly tokenStart?: number;
   readonly items: readonly CompletionItem[];
 }
 

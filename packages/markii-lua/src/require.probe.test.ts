@@ -140,7 +140,7 @@ describe('require probe — no bytecode, ever', () => {
 });
 
 describe('require probe — network/filesystem escape attempts', () => {
-  it('a required module has no `net`/`bundle`/`io`/`os` surface beyond what the run itself already grants', async () => {
+  it('a required module has no `bundle`/`io`/`os` surface beyond what the run itself already grants, and sees `net` only as an always-present denial stub (batch 7 #47)', async () => {
     const view = bundleWithScripts({
       'probe.lua': `
         return {
@@ -159,7 +159,10 @@ describe('require probe — network/filesystem escape attempts', () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.value).toEqual({
-        net: 'nil',
+        // `net` is always a table now (see `capabilities.ts`'s "--- net
+        // ---" comment): with no provider configured, every one of its
+        // methods is still a denial stub, never a real network surface.
+        net: 'table',
         io: 'nil',
         os: 'nil',
         load: 'nil',

@@ -151,6 +151,28 @@ describe('formatPackDiagnosticLines', () => {
     });
     expect(lines).toHaveLength(1);
   });
+
+  it('one line per pack dropped for an unsupported engine, after duplicate-composed-name lines (batch 7 #46)', () => {
+    const lines = formatPackDiagnosticLines({
+      packs: [pack('ana', 1)],
+      skipped: [],
+      cssWarnings: [],
+      droppedEngines: [{ name: 'vega', engine: 'vue' }],
+    });
+    expect(lines).toHaveLength(2);
+    expect(lines[1]).toContain('vega');
+    expect(lines[1]).toContain('vue');
+  });
+
+  it('omitting droppedEngines entirely (or empty) contributes nothing', () => {
+    const lines = formatPackDiagnosticLines({
+      packs: [pack('ana', 1)],
+      skipped: [],
+      cssWarnings: [],
+      droppedEngines: [],
+    });
+    expect(lines).toHaveLength(1);
+  });
 });
 
 describe('skippedPackCount', () => {

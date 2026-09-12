@@ -86,3 +86,26 @@ export const EMPTY_INLINE_MARKER_CLASS = 'mk-inline-empty';
 export function emptyInlineTitle(name: string): string {
   return `${name}: no content (an attribute may have been used where directive text was expected)`;
 }
+
+/**
+ * The attribute both engines set on a component's own rendered output for a
+ * quiet marker over a recognized-and-declined value (a known attribute's
+ * value outside its enum, or a `figure` `src` refused as unsafe). Ported
+ * from `@markii/react`'s copy; see that copy's doc comment for the full
+ * rationale.
+ */
+export const NOTICE_ATTRIBUTE = 'data-mk-notice';
+
+/** The `title` tooltip for `NOTICE_ATTRIBUTE` on an enum mismatch. Ported verbatim from `@markii/react`. */
+export function invalidAttributeValueTitle(
+  directive: string,
+  attribute: string,
+  value: string,
+): string {
+  return `${directive}: "${value}" is not a valid ${attribute} value (ignored)`;
+}
+
+/** The `title` tooltip for `NOTICE_ATTRIBUTE` on a `figure` with a refused `src`. Ported verbatim from `@markii/react`. */
+export function unsafeImageSrcTitle(directive: string): string {
+  return `${directive}: image source was refused as unsafe and was not shown`;
+}

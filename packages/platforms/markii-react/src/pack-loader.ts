@@ -65,12 +65,28 @@ export type PackComponentModules = Record<string, RegistryEntry>;
  * `PackManifest` can exist, so this function does not re-validate that; it
  * only guards the *lookup*, not the manifest's own shape.
  */
+export interface LoadPackResult {
+  registry: Registry;
+  /**
+   * Present exactly when `manifest.engine` is not `REACT_ENGINE_ID`
+   * (batch 7 #46): this pack was dropped, contributing an empty registry,
+   * rather than silently discarded with no record at all. Before this
+   * field existed, a caller had no way to tell "this pack's engine is
+   * unsupported" apart from "this pack declares zero components" —
+   * both produced the identical empty `Registry`.
+   */
+  dropped?: { name: string; engine: string };
+}
+
 export function loadPack(
   manifest: PackManifest,
   componentModules: PackComponentModules,
-): Registry {
+): LoadPackResult {
   if (manifest.engine !== REACT_ENGINE_ID) {
-    return createRegistry();
+    return {
+      registry: createRegistry(),
+      dropped: { name: manifest.name, engine: manifest.engine },
+    };
   }
 
   const entries: Registry = {};
@@ -100,7 +116,7 @@ export function loadPack(
       kind === undefined ? module : { ...module, inline: kind === 'inline' };
   }
 
-  return createRegistry(entries);
+  return { registry: createRegistry(entries) };
 }
 
 /** One pack ready to install: its manifest plus its resolved component modules. */
@@ -111,8 +127,10 @@ export interface PackToInstall {
 
 /**
  * The result of `installPacks`: either every pack installed cleanly into a
- * merged `Registry`, or the install was rejected because two or more of the
- * given packs share a namespace.
+ * merged `Registry` (with `dropped` naming any pack that installed as an
+ * empty contribution because `@markii/react` cannot run its declared
+ * engine — see `loadPack`'s `LoadPackResult.dropped`), or the install was
+ * rejected because two or more of the given packs share a namespace.
  *
  * A result type rather than a thrown exception: which packs to install is
  * ordinarily host-controlled configuration data (not a programmer error at
@@ -122,7 +140,11 @@ export interface PackToInstall {
  * every caller into a try/catch for what is really a validation outcome.
  */
 export type InstallPacksResult =
-  | { ok: true; registry: Registry }
+  | {
+      ok: true;
+      registry: Registry;
+      dropped: { name: string; engine: string }[];
+    }
   | { ok: false; collisions: readonly string[] };
 
 /**
@@ -142,8 +164,9 @@ export type InstallPacksResult =
  *
  * Each pack that survives the collision check is loaded with `loadPack`
  * (so a non-react-engine pack among the set still contributes an empty
- * registry, never an error) and merged left-to-right with `mergeRegistries`,
- * `base` first.
+ * registry, never an error, and names itself in the returned `dropped`
+ * list — batch 7 #46, never a silent drop) and merged left-to-right with
+ * `mergeRegistries`, `base` first.
  */
 export function installPacks(
   packs: readonly PackToInstall[],
@@ -158,8 +181,11 @@ export function installPacks(
     };
   }
 
-  const loaded = packs.map((pack) =>
-    loadPack(pack.manifest, pack.componentModules),
-  );
-  return { ok: true, registry: mergeRegistries(base, ...loaded) };
+  const dropped: { name: string; engine: string }[] = [];
+  const loaded = packs.map((pack) => {
+    const result = loadPack(pack.manifest, pack.componentModules);
+    if (result.dropped) dropped.push(result.dropped);
+    return result.registry;
+  });
+  return { ok: true, registry: mergeRegistries(base, ...loaded), dropped };
 }

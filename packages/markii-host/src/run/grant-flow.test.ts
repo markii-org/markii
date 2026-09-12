@@ -590,6 +590,26 @@ describe('prompt wording', () => {
     expect(DONT_ALLOW_LABEL).toBe("Don't allow");
   });
 
+  it('appends the declared-hosts list, display-only, when given (batch 7 #47); omits it entirely when absent or empty', () => {
+    expect(hostPromptMessage('api.example.com', ['api.example.com'])).toBe(
+      "This note's scripts can send data to api.example.com. The note declares api.example.com. Allow?",
+    );
+    expect(
+      hostPromptMessage('api.example.com', [
+        'api.example.com',
+        'other.example.com',
+      ]),
+    ).toBe(
+      "This note's scripts can send data to api.example.com. The note declares api.example.com, other.example.com. Allow?",
+    );
+    expect(hostPromptMessage('api.example.com', [])).toBe(
+      "This note's scripts can send data to api.example.com. Allow?",
+    );
+    expect(hostPromptMessage('api.example.com', undefined)).toBe(
+      "This note's scripts can send data to api.example.com. Allow?",
+    );
+  });
+
   it('the many-hosts message names the exact count', () => {
     expect(manyHostsPromptMessage(42)).toBe(
       'This note requests network access to many hosts (42). Allow all or deny all?',
@@ -764,7 +784,7 @@ describe('runGrantFlow — N-6: stored grant hosts are re-validated at read time
     // the ordinary prompt flow, which never displays the unsafe host raw
     // (it folds into the unknown-hosts gate instead) and only grants hosts
     // that pass today's safety check.
-    expect(promptHost).toHaveBeenCalledWith('safe.example.com');
+    expect(promptHost).toHaveBeenCalledWith('safe.example.com', []);
     expect(promptHost).not.toHaveBeenCalledWith(unsafeHost);
     expect(promptUnknownHosts).toHaveBeenCalledTimes(1);
     expect(result.allowedHosts).toEqual(['safe.example.com']);

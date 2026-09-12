@@ -55,6 +55,14 @@ export interface PackDiagnosticsContext {
     readonly keptPack: string;
     readonly skippedPack: string;
   }[];
+  /**
+   * One entry per validated, non-colliding pack whose declared engine
+   * `@markii/react`'s `loadPack` cannot run (`./pack-render-registry.ts`'s
+   * `BuildRenderRegistryResult.droppedEngines`, batch 7 #46). Omitted (or
+   * empty) contributes nothing — the ordinary case where every registered
+   * pack's engine is supported.
+   */
+  readonly droppedEngines?: readonly { name: string; engine: string }[];
 }
 
 /** One line for each folder `discoverPacks`/a host's `loadPackContext` could not turn into a usable pack. */
@@ -91,6 +99,15 @@ function duplicateComposedNameLines(context: PackDiagnosticsContext): string[] {
   );
 }
 
+/** One line per pack dropped because this renderer cannot run its declared engine (batch 7 #46) — `[]` when there was none. */
+function droppedEngineLines(context: PackDiagnosticsContext): string[] {
+  const dropped = context.droppedEngines ?? [];
+  return dropped.map(
+    (entry) =>
+      `Pack "${entry.name}" declares engine "${entry.engine}", which this renderer cannot run; it installed with zero components (every directive under its namespace falls back to the unknown-component box).`,
+  );
+}
+
 /**
  * The full set of diagnostic lines for one pack-loading outcome: loaded
  * packs first (the confirmation that the setting is working at all), then
@@ -113,6 +130,7 @@ export function formatPackDiagnosticLines(
     ...(context.invalidRegistrationReasons ?? []),
     ...collisionLines(context),
     ...duplicateComposedNameLines(context),
+    ...droppedEngineLines(context),
   ];
 }
 

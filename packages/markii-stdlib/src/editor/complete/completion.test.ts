@@ -1,24 +1,37 @@
 import { describe, expect, it } from 'vitest';
-import type { PackComponentEntry } from '@markii/pack';
-import { WIDTH_PRESETS } from '@markii/stdlib';
-import { buildComponentCatalog } from '../insert/component-catalog.js';
-import type { DiscoveredPack } from '../packs/discover.js';
+import { WIDTH_PRESETS } from '../../index.js';
+import {
+  standardComponentCatalog,
+  type EditorComponentAttribute,
+  type InsertableComponent,
+} from '../insert/component-catalog.js';
 import { completionAt, hoverAt } from './completion.js';
 
-function pack(
-  name: string,
-  components: Record<string, PackComponentEntry>,
-): DiscoveredPack {
+/**
+ * A pack-shaped catalog entry, built directly as data rather than through a
+ * real pack manifest: this package has zero dependencies and never imports
+ * `@markii/pack`, so it cannot construct one. The composed directive name
+ * (`cat_card`, namespace + local name) is exactly what a host's own
+ * pack-aware catalog builder (`@markii/host`'s `insert/component-catalog.ts`)
+ * would have already produced by the time it reaches `completionAt`; that
+ * composition step itself, and namespace-collision handling, are tested
+ * there, not here — this file only proves `completionAt`/`hoverAt` handle a
+ * pack-sourced entry correctly once it exists.
+ */
+function packComponent(
+  overrides: Partial<InsertableComponent> & { directiveName: string },
+): InsertableComponent {
   return {
-    folder: `/packs/${name}`,
-    manifest: { name, engine: 'react', components },
-    componentPaths: {},
-    scriptsDir: `/packs/${name}/scripts`,
-    scriptPath: `/packs/${name}/webview.js`,
+    kind: 'container',
+    source: 'pack',
+    group: 'pack',
+    requiredAttributes: [],
+    kindDeclared: false,
+    ...overrides,
   };
 }
 
-const STANDARD_CATALOG = buildComponentCatalog([]);
+const STANDARD_CATALOG = standardComponentCatalog();
 
 function labels(items: readonly { label: string }[]): string[] {
   return items.map((i) => i.label).sort();
@@ -51,7 +64,7 @@ describe('completionAt — directive-name context', () => {
     const ctx = completionAt('::div', 5, STANDARD_CATALOG);
     const item = ctx.items.find((i) => i.label === 'divider');
     expect(item).toBeDefined();
-    expect(item?.insertText).toBe('::divider{}');
+    expect(item?.insertText).toBe('::divider');
   });
 
   it('includes the layout wrappers among container offerings', () => {
@@ -61,9 +74,10 @@ describe('completionAt — directive-name context', () => {
   });
 
   it('offers a kindDeclared:false pack component in every directive form', () => {
-    const catalog = buildComponentCatalog([
-      pack('cat', { card: './Card.tsx' }),
-    ]);
+    const catalog = [
+      ...STANDARD_CATALOG,
+      packComponent({ directiveName: 'cat_card', packName: 'cat' }),
+    ];
     const leaf = labels(completionAt('::cat', 5, catalog).items);
     const container = labels(completionAt(':::cat', 6, catalog).items);
     const inline = labels(completionAt(':cat', 4, catalog).items);
@@ -77,13 +91,14 @@ describe('completionAt — directive-name context', () => {
     // but that is a default and not a fact. Inserting a container skeleton
     // for an author who typed `::` would rewrite their two colons into a
     // two-colon fence, which is not a container at all.
-    const catalog = buildComponentCatalog([
-      pack('cat', { card: './Card.tsx' }),
-    ]);
+    const catalog = [
+      ...STANDARD_CATALOG,
+      packComponent({ directiveName: 'cat_card', packName: 'cat' }),
+    ];
     const leaf = completionAt('::cat', 5, catalog).items.find(
       (i) => i.label === 'cat_card',
     );
-    expect(leaf?.insertText).toBe('::cat_card{}');
+    expect(leaf?.insertText).toBe('::cat_card');
 
     const inline = completionAt(':cat', 4, catalog).items.find(
       (i) => i.label === 'cat_card',
@@ -93,13 +108,19 @@ describe('completionAt — directive-name context', () => {
     const container = completionAt(':::cat', 6, catalog).items.find(
       (i) => i.label === 'cat_card',
     );
-    expect(container?.insertText).toBe(':::cat_card{}\n\n:::');
+    expect(container?.insertText).toBe(':::cat_card\n\n:::');
   });
 
   it('offers a kindDeclared:true pack component only in its declared form', () => {
-    const catalog = buildComponentCatalog([
-      pack('cat', { profile: { source: './P.tsx', kind: 'leaf' } }),
-    ]);
+    const catalog = [
+      ...STANDARD_CATALOG,
+      packComponent({
+        directiveName: 'cat_profile',
+        packName: 'cat',
+        kind: 'leaf',
+        kindDeclared: true,
+      }),
+    ];
     const leaf = labels(completionAt('::cat', 5, catalog).items);
     const container = labels(completionAt(':::cat', 6, catalog).items);
     expect(leaf).toContain('cat_profile');
@@ -111,14 +132,44 @@ describe('completionAt — directive-name context', () => {
     const item = ctx.items.find((i) => i.label === 'callout')!;
     expect(ctx.replaceStart).toBe(0);
     expect(ctx.replaceEnd).toBe(6);
-    expect(item.insertText).toBe(':::callout{}\n\n:::');
-    expect(item.insertCursorOffset).toBe(':::callout{}\n'.length);
+    expect(item.insertText).toBe(':::callout\n\n:::');
+    expect(item.insertCursorOffset).toBe(':::callout\n'.length);
+  });
+
+  it('surfaces tokenStart as the name token start, after the colon run (GitHub issue #50)', () => {
+    // `replaceStart` sits at the colon run's start (the whole-fence replace
+    // range); `tokenStart` is the name's own start, which is what a
+    // filtering completion host (one that scores candidates against the
+    // text between its own `from` and the cursor) must use instead.
+    const ctx = completionAt(':::cal', 6, STANDARD_CATALOG);
+    expect(ctx.replaceStart).toBe(0);
+    expect(ctx.tokenStart).toBe(3);
+
+    const leaf = completionAt('::sta', 5, STANDARD_CATALOG);
+    expect(leaf.replaceStart).toBe(0);
+    expect(leaf.tokenStart).toBe(2);
+
+    const inline = completionAt(':kb', 3, STANDARD_CATALOG);
+    expect(inline.replaceStart).toBe(0);
+    expect(inline.tokenStart).toBe(1);
+  });
+
+  it('tokenStart is undefined for a non-directive-name context', () => {
+    expect(completionAt('::callout{', 10, STANDARD_CATALOG).tokenStart).toBe(
+      undefined,
+    );
+    expect(
+      completionAt('::callout{type=', 15, STANDARD_CATALOG).tokenStart,
+    ).toBe(undefined);
+    expect(completionAt('just prose', 3, STANDARD_CATALOG).tokenStart).toBe(
+      undefined,
+    );
   });
 
   it('emits a fence matching a typed four-colon nesting run', () => {
     const ctx = completionAt('::::tabs', 8, STANDARD_CATALOG);
     const item = ctx.items.find((i) => i.label === 'tabs');
-    expect(item?.insertText).toBe('::::tabs{}\n\n::::');
+    expect(item?.insertText).toBe('::::tabs\n\n::::');
   });
 
   it('inserts the bare name only when there is trailing content, replacing from the name start', () => {
@@ -140,13 +191,14 @@ describe('completionAt — directive-name context', () => {
     const item = ctx.items.find((i) => i.label === 'callout')!;
     expect(item.group).toBe('standard');
     expect(item.detail.length).toBeGreaterThan(0);
-    expect(item.documentation?.example).toBe(':::callout{}');
+    expect(item.documentation?.example).toBe(':::callout');
   });
 
   it('carries packName through for a pack component item', () => {
-    const catalog = buildComponentCatalog([
-      pack('cat', { card: './Card.tsx' }),
-    ]);
+    const catalog = [
+      ...STANDARD_CATALOG,
+      packComponent({ directiveName: 'cat_card', packName: 'cat' }),
+    ];
     const ctx = completionAt('::cat', 5, catalog);
     const item = ctx.items.find((i) => i.label === 'cat_card');
     expect(item?.packName).toBe('cat');
@@ -212,9 +264,10 @@ describe('completionAt — attribute-name context', () => {
   });
 
   it('offers only width/align for a pack component (no contract)', () => {
-    const catalog = buildComponentCatalog([
-      pack('cat', { card: './Card.tsx' }),
-    ]);
+    const catalog = [
+      ...STANDARD_CATALOG,
+      packComponent({ directiveName: 'cat_card', packName: 'cat' }),
+    ];
     const ctx = completionAt('::cat_card{', 11, catalog);
     expect(labels(ctx.items)).toEqual(['align', 'width']);
   });
@@ -424,28 +477,34 @@ describe('hoverAt', () => {
 });
 
 describe('completionAt: pack attribute metadata (issue #27 slice 4)', () => {
-  const ANA = pack('ana', {
-    timeline: {
-      source: './Timeline.tsx',
+  const timelineAttributes: EditorComponentAttribute[] = [
+    {
+      name: 'from',
+      description: 'First date shown. Inclusive.',
+      required: true,
+    },
+    { name: 'scale', values: ['days', 'weeks', 'months'], default: 'days' },
+    { name: 'label' },
+  ];
+  const CATALOG = [
+    ...STANDARD_CATALOG,
+    packComponent({
+      directiveName: 'ana_timeline',
+      packName: 'ana',
       kind: 'container',
+      kindDeclared: true,
       description: 'A dated timeline.',
-      attributes: [
-        {
-          name: 'from',
-          description: 'First date shown. Inclusive.',
-          required: true,
-        },
-        { name: 'scale', values: ['days', 'weeks', 'months'], default: 'days' },
-        { name: 'label' },
-      ],
-    },
-    tag: {
-      source: './Tag.tsx',
+      requiredAttributes: ['from'],
+      attributes: timelineAttributes,
+    }),
+    packComponent({
+      directiveName: 'ana_tag',
+      packName: 'ana',
       kind: 'inline',
+      kindDeclared: true,
       attributes: [{ name: 'width', values: ['tight', 'loose'] }],
-    },
-  });
-  const CATALOG = buildComponentCatalog([ANA]);
+    }),
+  ];
 
   it('offers the declared attribute names inside the braces', () => {
     const line = ':::ana_timeline{';
@@ -537,9 +596,10 @@ describe('completionAt: pack attribute metadata (issue #27 slice 4)', () => {
   });
 
   it('offers only the layout attributes for a pack component that declares none', () => {
-    const catalog = buildComponentCatalog([
-      pack('cat', { card: './Card.tsx' }),
-    ]);
+    const catalog = [
+      ...STANDARD_CATALOG,
+      packComponent({ directiveName: 'cat_card', packName: 'cat' }),
+    ];
     const line = ':::cat_card{';
     const ctx = completionAt(line, line.length, catalog);
     expect(labels(ctx.items)).toEqual(['align', 'width']);

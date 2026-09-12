@@ -123,7 +123,10 @@ export interface GrantMemento {
 }
 
 /** Prompts once for `host`, resolving `true` for Allow, `false` for Don't allow (or the prompt being dismissed). */
-export type PromptHost = (host: string) => Promise<boolean>;
+export type PromptHost = (
+  host: string,
+  declaredHosts: readonly string[],
+) => Promise<boolean>;
 
 /** Prompts once for the "this note builds a network address dynamically" consent gate. */
 export type PromptUnknownHosts = () => Promise<boolean>;
@@ -137,6 +140,14 @@ export interface GrantFlowOptions {
   requirements: GrantFlowRequirements;
   memento: GrantMemento;
   promptHost: PromptHost;
+  /**
+   * Hostnames the note's own scripts declare through their `permissions`
+   * fence attribute, for `hostPromptMessage` to show beside the host being
+   * asked about. Display only: what is actually prompted for, and what can
+   * be granted, comes from `requirements.hosts` (the literal-URL scan) and
+   * nothing else.
+   */
+  declaredHosts?: readonly string[];
   promptUnknownHosts: PromptUnknownHosts;
   /** Consolidated gate used instead of the per-host loop once the distinct static host count exceeds `MAX_HOST_PROMPTS` — see that constant's doc comment. */
   promptManyHosts: PromptManyHosts;
@@ -147,9 +158,27 @@ export interface GrantFlowResult {
   allowedHosts: string[];
 }
 
-/** Exact prompt wording — normative per the locked design comment. Exported so a test (and the adapter that renders it) both anchor on the same string. */
-export function hostPromptMessage(host: string): string {
-  return `This note's scripts can send data to ${host}. Allow?`;
+/**
+ * Exact prompt wording — normative per the locked design comment. Exported
+ * so a test (and the adapter that renders it) both anchor on the same
+ * string.
+ *
+ * `declaredHosts` is what the note's own scripts declare through their
+ * `permissions` fence attribute (`./script-requirements.ts`'s
+ * `scriptDeclaredHosts`). It is DISPLAY-ONLY: it never changes what is
+ * prompted for or granted, only what the user reads before answering, so
+ * a note cannot talk its way into a host the literal-URL scan did not
+ * find. `host` is always the one host this prompt asks about. With no
+ * declaration the wording is unchanged, so a host that does not pass the
+ * list sees exactly the message it saw before.
+ */
+export function hostPromptMessage(
+  host: string,
+  declaredHosts?: readonly string[],
+): string {
+  const ask = `This note's scripts can send data to ${host}. Allow?`;
+  if (!declaredHosts || declaredHosts.length === 0) return ask;
+  return `This note's scripts can send data to ${host}. The note declares ${declaredHosts.join(', ')}. Allow?`;
 }
 
 /** Exact wording of the one extra "hosts can't be listed in advance" prompt. */
@@ -366,6 +395,7 @@ export async function runGrantFlow(
     promptUnknownHosts,
     promptManyHosts,
   } = options;
+  const declaredHosts = options.declaredHosts ?? [];
 
   const key = await computeGrantKey(closureFrom(requirements));
   const stored = readGrant(memento, documentKey);
@@ -399,7 +429,7 @@ export async function runGrantFlow(
       // Each prompt is modal; they must appear one at a time, never all at
       // once, so this loop is deliberately sequential rather than
       // `Promise.all`-ed.
-      const allowed = await promptHost(host);
+      const allowed = await promptHost(host, declaredHosts);
       if (allowed) allowedHosts.push(host);
     }
   }

@@ -26,7 +26,7 @@ describe('loadPack', () => {
   it('registers a pack component under the namespaced directive name', () => {
     const timeline = entry();
     const modules: PackComponentModules = { timeline };
-    const registry = loadPack(anaManifest(), modules);
+    const { registry } = loadPack(anaManifest(), modules);
     expect(registry['ana_timeline']).toBe(timeline);
     // The bare local name must never be auto-registered (docs/packs.md:
     // "Nothing is auto-registered under a bare name").
@@ -34,22 +34,28 @@ describe('loadPack', () => {
   });
 
   it('returns a null-prototype registry', () => {
-    const registry = loadPack(anaManifest(), { timeline: entry() });
+    const { registry } = loadPack(anaManifest(), { timeline: entry() });
     expect(Object.getPrototypeOf(registry)).toBeNull();
   });
 
-  it('returns an empty registry when the manifest engine is not react', () => {
+  it('returns an empty registry and names the pack/engine in `dropped` when the manifest engine is not react (batch 7 #46)', () => {
     const manifest = anaManifest({ engine: 'vue' });
-    const registry = loadPack(manifest, { timeline: entry() });
+    const { registry, dropped } = loadPack(manifest, { timeline: entry() });
     expect(Object.keys(registry)).toHaveLength(0);
     expect(Object.hasOwn(registry, 'ana_timeline')).toBe(false);
+    expect(dropped).toEqual({ name: 'ana', engine: 'vue' });
+  });
+
+  it('does not set `dropped` for a supported (react) engine', () => {
+    const { dropped } = loadPack(anaManifest(), { timeline: entry() });
+    expect(dropped).toBeUndefined();
   });
 
   it('skips a manifest component with no matching module instead of throwing', () => {
     const manifest = anaManifest({
       components: { timeline: './Timeline.tsx', map: './Map.tsx' },
     });
-    const registry = loadPack(manifest, { timeline: entry() });
+    const { registry } = loadPack(manifest, { timeline: entry() });
     expect(Object.hasOwn(registry, 'ana_timeline')).toBe(true);
     expect(Object.hasOwn(registry, 'ana_map')).toBe(false);
   });
@@ -64,7 +70,7 @@ describe('loadPack', () => {
         badge: { source: './Badge.tsx', kind: 'inline' },
       },
     });
-    const registry = loadPack(manifest, {
+    const { registry } = loadPack(manifest, {
       badge: { component: stubComponent, inline: false },
     });
     expect(registry['ana_badge']?.inline).toBe(true);
@@ -77,7 +83,7 @@ describe('loadPack', () => {
         timeline: { source: './Timeline.tsx', kind: 'container' },
       },
     });
-    const registry = loadPack(manifest, {
+    const { registry } = loadPack(manifest, {
       timeline: { component: stubComponent, inline: true },
     });
     expect(registry['ana_timeline']?.inline).toBe(false);
@@ -88,14 +94,14 @@ describe('loadPack', () => {
       component: stubComponent,
       inline: true,
     };
-    const registry = loadPack(anaManifest(), { timeline: inlineModule });
+    const { registry } = loadPack(anaManifest(), { timeline: inlineModule });
     // No kind information: the registration renders unchanged (spec §4
     // rule 8), so the module keeps its own flag and its identity.
     expect(registry['ana_timeline']).toBe(inlineModule);
   });
 
   it('ignores a componentModules entry with no matching manifest component', () => {
-    const registry = loadPack(anaManifest(), {
+    const { registry } = loadPack(anaManifest(), {
       timeline: entry(),
       stray: entry(),
     });
@@ -105,7 +111,7 @@ describe('loadPack', () => {
 
   it('never throws and registers nothing for a fully empty module map', () => {
     expect(() => loadPack(anaManifest(), {})).not.toThrow();
-    const registry = loadPack(anaManifest(), {});
+    const { registry } = loadPack(anaManifest(), {});
     expect(Object.keys(registry)).toHaveLength(0);
   });
 
@@ -119,7 +125,7 @@ describe('loadPack', () => {
     const hostile = Object.create({
       timeline: entry(),
     }) as PackComponentModules;
-    const registry = loadPack(anaManifest(), hostile);
+    const { registry } = loadPack(anaManifest(), hostile);
     expect(Object.hasOwn(registry, 'ana_timeline')).toBe(false);
   });
 });
@@ -132,6 +138,7 @@ describe('installPacks', () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(Object.hasOwn(result.registry, 'ana_timeline')).toBe(true);
+      expect(result.dropped).toEqual([]);
     }
   });
 
@@ -178,7 +185,7 @@ describe('installPacks', () => {
     expect(result.ok).toBe(false);
   });
 
-  it('a non-react-engine pack among the set contributes an empty registry, not an error', () => {
+  it('a non-react-engine pack among the set contributes an empty registry, not an error, and is named in `dropped` (batch 7 #46)', () => {
     const reactPack = {
       manifest: anaManifest({ name: 'ana' }),
       componentModules: { timeline: entry() },
@@ -192,6 +199,17 @@ describe('installPacks', () => {
     if (result.ok) {
       expect(Object.hasOwn(result.registry, 'ana_timeline')).toBe(true);
       expect(Object.hasOwn(result.registry, 'vega_chart')).toBe(false);
+      expect(result.dropped).toEqual([{ name: 'vega', engine: 'vue' }]);
+    }
+  });
+
+  it('`dropped` is empty when every installed pack has a supported engine', () => {
+    const result = installPacks([
+      { manifest: anaManifest(), componentModules: { timeline: entry() } },
+    ]);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.dropped).toEqual([]);
     }
   });
 });

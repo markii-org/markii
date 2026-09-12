@@ -32,3 +32,12 @@ export {
 } from './value-format.js';
 
 export { deriveTableShape, type TableShape } from './table-shape.js';
+
+export {
+  reportDiagnostic,
+  type DiagnosticEvent,
+  type DiagnosticKind,
+  type OnDiagnostic,
+} from './diagnostics.js';
+
+export { INTERACTIVE_ATTRIBUTE } from './interactive.js';

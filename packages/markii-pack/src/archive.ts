@@ -94,6 +94,42 @@ export interface PackArchiveContents {
   readonly ignoredEntries: readonly string[];
 }
 
+/** macOS's zip metadata folder — never a real pack file, and never counted toward "is this archive a single wrapped folder" detection below (batch 7 #61). */
+const MACOSX_PREFIX = '__MACOSX/';
+
+/** Every entry in `paths` that isn't macOS's `__MACOSX` metadata folder or its bare directory entry. */
+function significantEntries(paths: readonly string[]): string[] {
+  return paths.filter(
+    (entry) => entry !== '__MACOSX' && !entry.startsWith(MACOSX_PREFIX),
+  );
+}
+
+/**
+ * When every significant entry (ignoring `__MACOSX`) sits under the SAME
+ * single top-level directory — the shape produced by zipping a folder
+ * rather than its contents — returns that directory's bare name (no
+ * trailing slash). Returns `undefined` when there is no such common
+ * folder (including: no significant entries at all, or at least one
+ * significant entry already sits at the archive root).
+ */
+function singleWrappingFolder(paths: readonly string[]): string | undefined {
+  const relevant = significantEntries(paths);
+  if (relevant.length === 0) return undefined;
+
+  let folder: string | undefined;
+  for (const entry of relevant) {
+    const slash = entry.indexOf('/');
+    if (slash === -1) return undefined; // already at the archive root
+    const top = entry.slice(0, slash);
+    if (folder === undefined) {
+      folder = top;
+    } else if (folder !== top) {
+      return undefined;
+    }
+  }
+  return folder;
+}
+
 function isScriptModulePath(path: string): boolean {
   return (
     path.startsWith(SCRIPTS_DIR_PREFIX) &&
@@ -149,6 +185,25 @@ export async function openPackArchive(
   const paths = await storage.list();
 
   if (!paths.includes(MANIFEST_ENTRY)) {
+    // Before reporting a bare "missing" (which reads as "there is no
+    // pack.json anywhere", and sends a user who zipped a FOLDER instead of
+    // its CONTENTS looking for a file that plainly exists one level down),
+    // check whether this archive is exactly that shape: every entry
+    // wrapped under one common top-level folder (batch 7 #61).
+    const wrappingFolder = singleWrappingFolder(paths);
+    if (
+      wrappingFolder !== undefined &&
+      paths.includes(`${wrappingFolder}/${MANIFEST_ENTRY}`)
+    ) {
+      return {
+        ok: false,
+        error: {
+          kind: 'missing-entry',
+          entry: MANIFEST_ENTRY,
+          message: `pack archive rejected: "${MANIFEST_ENTRY}" is inside the folder "${wrappingFolder}/", not at the archive root. Zip the pack's files themselves, not the folder containing them.`,
+        },
+      };
+    }
     return {
       ok: false,
       error: {

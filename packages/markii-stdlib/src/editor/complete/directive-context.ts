@@ -11,7 +11,7 @@
  * `column`, an empty line, an unterminated brace, and an unterminated quote
  * all produce a sensible "nothing here" result rather than throwing.
  */
-import type { ComponentKind } from '@markii/stdlib';
+import type { ComponentKind } from '../../contracts.js';
 
 /** Which of the three directive forms the text around the cursor is written as. Matches `ComponentKind`'s three values one-to-one. */
 export type DirectiveForm = ComponentKind;
@@ -51,6 +51,8 @@ export interface DirectiveNameParseResult {
   /** Start of the colon run. */
   readonly replaceStart: number;
   readonly replaceEnd: number;
+  /** Start of the NAME token, i.e. `replaceStart + colonRun.length` — after the colon run, where the partial name itself begins. See `CompletionContext.tokenStart`'s doc comment for why this is a separate field from `replaceStart`. */
+  readonly tokenStart: number;
   readonly partial: string;
 }
 
@@ -340,6 +342,7 @@ function parseBlockDirectiveName(
     colonRun: colons,
     replaceStart: colonStart,
     replaceEnd: nameEnd,
+    tokenStart: colonStart + colons.length,
     partial: name,
   };
 }
@@ -366,6 +369,7 @@ function parseInlineDirectiveName(
     colonRun: ':',
     replaceStart: colonIndex,
     replaceEnd: nameEnd,
+    tokenStart: nameStart,
     partial: line.slice(nameStart, column),
   };
 }

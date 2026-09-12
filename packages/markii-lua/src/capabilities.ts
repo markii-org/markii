@@ -333,66 +333,73 @@ export function buildCapabilities(config: CapabilityConfig): {
   // rather than behind one combined condition — an earlier version of
   // this function nested POST/PATCH wiring inside "if GET is granted",
   // which silently produced no `net.post` at all for a POST-only grant.
+  //
+  // The `net` table itself, and every one of its three methods, is now
+  // ALWAYS wired, regardless of grants, provider wiring, or tier (GitHub
+  // capability-stub finding, batch 7 #47). Before this, an ungranted
+  // script saw a missing global (`net` itself omitted when nothing was
+  // granted, or a missing method when a specific host/verb wasn't) and
+  // failed with an ordinary Lua "attempt to index/call a nil value" —
+  // indistinguishable, from inside the script and from a host reading
+  // `runScript`'s outcome, from a plain typo. A denied capability and a
+  // typo must never look the same (see `./errors`'s module doc comment).
+  // Each method below performs its own grant/tier check and records a
+  // denial through `recordDenial` (the non-spoofable `CapabilityDenials`
+  // handle `sandbox.ts` reads) before throwing — never a typed error
+  // string, and never anything a script's own `error()` call could forge;
+  // see `./errors.ts`'s `CAPABILITY_ERROR_TAG` doc comment for why the
+  // message text itself must never become a classification signal. One
+  // side effect, expected and documented in CHANGELOG: a script that does
+  // `if net then ... end` to feature-detect now always sees a table.
   const netGrants = config.netGrants ?? { get: [], post: [] };
-  // NOTE: no longer conditioned on `config.tier === 'manual'` for the POST
-  // half — under 'auto' with POST hosts granted, `net.post`/`net.patch` are
-  // now wired to TIER-BLOCKED STUBS below (not left undefined), so the
-  // `net` table itself must exist for those stubs to attach to.
-  const netTableNeeded =
-    config.net !== undefined &&
-    (netGrants.get.length > 0 || netGrants.post.length > 0);
+  preludeParts.push('net = net or {}\n');
 
-  if (netTableNeeded) {
-    preludeParts.push('net = net or {}\n');
-  }
+  rawGlobals.__smd_net_get_raw = (async (url: string) => {
+    const host = hostnameOf(url);
+    if (!config.net || !host || !netGrants.get.includes(host)) {
+      const message = `net access to host "${host ?? url}" not granted for GET`;
+      recordDenial('denied', message);
+      throw capabilityError(message);
+    }
+    const res = await callNetProvider(() => config.net!.get(url));
+    if (res.body.length > maxFetchBytes) {
+      const message = `fetch response for "${url}" exceeds the ${maxFetchBytes}-byte cap`;
+      recordDenial('denied', message);
+      throw capabilityError(message);
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(res.body);
+    } catch {
+      const message = `fetch response for "${url}" was not valid JSON`;
+      recordDenial('denied', message);
+      throw capabilityError(message);
+    }
+    // Depth/node budget, checked HERE on the plain parsed JS value and
+    // BEFORE the raw text is ever handed to Lua — see `./json-decode`'s
+    // doc comment (GitHub issue #6) for why decoding happens entirely in
+    // Lua, and `MarshalLimits`' doc comment above for why this reuses the
+    // same budget the return-value marshal walk already enforces.
+    const budgetCheck = checkJsonWithinLimits(parsed, marshalLimits);
+    if (!budgetCheck.ok) {
+      const message = `fetch response for "${url}" ${budgetCheck.message}`;
+      recordDenial('denied', message);
+      throw capabilityError(message);
+    }
+    // Hand back the RAW JSON TEXT, not the parsed JS value: any object or
+    // array crossing this JS->Lua boundary as-is would arrive in Lua as a
+    // wasmoon `js_proxy` userdata, not a genuine table (see
+    // `./json-decode`'s doc comment for the full mechanism and why that
+    // breaks `type()`/`#`/marshaling a nested return value, and silently
+    // raises on a `null` field read). Strings, unlike objects/arrays, are
+    // scalars and cross the boundary cleanly with no proxy involved; the
+    // prelude below decodes this text into a genuine Lua table entirely
+    // in Lua (`__smd_json_decode`, `./json-decode`).
+    return res.body;
+  }) as (...args: never[]) => Promise<unknown>;
 
-  if (config.net && netGrants.get.length > 0) {
-    rawGlobals.__smd_net_get_raw = (async (url: string) => {
-      const host = hostnameOf(url);
-      if (!host || !netGrants.get.includes(host)) {
-        const message = `net access to host "${host ?? url}" not granted for GET`;
-        recordDenial('denied', message);
-        throw capabilityError(message);
-      }
-      const res = await callNetProvider(() => config.net!.get(url));
-      if (res.body.length > maxFetchBytes) {
-        const message = `fetch response for "${url}" exceeds the ${maxFetchBytes}-byte cap`;
-        recordDenial('denied', message);
-        throw capabilityError(message);
-      }
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(res.body);
-      } catch {
-        const message = `fetch response for "${url}" was not valid JSON`;
-        recordDenial('denied', message);
-        throw capabilityError(message);
-      }
-      // Depth/node budget, checked HERE on the plain parsed JS value and
-      // BEFORE the raw text is ever handed to Lua — see `./json-decode`'s
-      // doc comment (GitHub issue #6) for why decoding happens entirely in
-      // Lua, and `MarshalLimits`' doc comment above for why this reuses the
-      // same budget the return-value marshal walk already enforces.
-      const budgetCheck = checkJsonWithinLimits(parsed, marshalLimits);
-      if (!budgetCheck.ok) {
-        const message = `fetch response for "${url}" ${budgetCheck.message}`;
-        recordDenial('denied', message);
-        throw capabilityError(message);
-      }
-      // Hand back the RAW JSON TEXT, not the parsed JS value: any object or
-      // array crossing this JS->Lua boundary as-is would arrive in Lua as a
-      // wasmoon `js_proxy` userdata, not a genuine table (see
-      // `./json-decode`'s doc comment for the full mechanism and why that
-      // breaks `type()`/`#`/marshaling a nested return value, and silently
-      // raises on a `null` field read). Strings, unlike objects/arrays, are
-      // scalars and cross the boundary cleanly with no proxy involved; the
-      // prelude below decodes this text into a genuine Lua table entirely
-      // in Lua (`__smd_json_decode`, `./json-decode`).
-      return res.body;
-    }) as (...args: never[]) => Promise<unknown>;
-
-    ensureJsonDecodePrelude();
-    preludeParts.push(`
+  ensureJsonDecodePrelude();
+  preludeParts.push(`
 local __smd_net_get = __smd_net_get_raw
 -- Captured into a local HERE, at prelude-definition time (this whole
 -- prelude runs once, before any untrusted script code) -- NOT resolved as
@@ -406,42 +413,45 @@ local __smd_net_get_json_decode = __smd_json_decode
 __smd_net_get_raw = nil
 net.fetch_json = function(url) return __smd_net_get_json_decode(__smd_net_get(url):await()) end
 `);
-  }
 
-  // POST/PATCH are effectful. Under the 'manual' tier, wired to the real
-  // provider for hosts the effective grant set allows for POST. Under
-  // 'auto', even when POST hosts ARE granted, they are wired to STUBS
-  // that record a 'tier-blocked' denial and throw WITHOUT EVER reaching
-  // `config.net.post`/`.patch` — this grants nothing new (the provider is
-  // never called), it only makes "granted but tier-forbidden" a
-  // classifiable, non-spoofable outcome instead of collapsing into an
-  // ordinary "attempt to call a nil value" runtime error (spec §8: "An
-  // effectful call under an auto trigger fails cleanly").
-  if (
-    config.tier === 'manual' &&
-    config.net?.post &&
-    netGrants.post.length > 0
-  ) {
-    rawGlobals.__smd_net_post_raw = (async (url: string, body: string) => {
-      const host = hostnameOf(url);
-      if (!host || !netGrants.post.includes(host)) {
-        const message = `net access to host "${host ?? url}" not granted for POST`;
-        recordDenial('denied', message);
-        throw capabilityError(message);
-      }
-      const res = await callNetProvider(() => config.net!.post!(url, body));
-      // As with `net.fetch_json` above (GitHub issue #6): a plain JS object
-      // (even one this shallow) crosses into Lua as a `js_proxy` userdata,
-      // not a genuine table. `status`/`body` are both scalars, so instead
-      // of proxying the whole response object, resolve with a
-      // `LuaMultiReturn` — `:await()` recognizes that and expands it into
-      // TWO separate Lua return values (see `wasmoon`'s promise
-      // `await`/`MultiReturn` handling) — and let the trusted prelude below
-      // rebuild a real `{status=..., body=...}` table out of ordinary Lua
-      // table-constructor syntax.
-      return LuaMultiReturn.of<string | number>(res.status, res.body);
-    }) as (...args: never[]) => Promise<unknown>;
-    preludeParts.push(`
+  // POST/PATCH are effectful. Wired unconditionally like GET above: the
+  // raw handler itself decides, in this order, whether the call is
+  // ungranted (`'denied'`), tier-forbidden (`'tier-blocked'`, only reached
+  // once the host/verb IS granted, under the read-only 'auto' tier — spec
+  // §8: "An effectful call under an auto trigger fails cleanly"), or has
+  // no provider wired for that verb at all (`'denied'`, since the host
+  // never offered it), before ever reaching `config.net.post`/`.patch`.
+  rawGlobals.__smd_net_post_raw = (async (url: string, body: string) => {
+    const host = hostnameOf(url);
+    if (!host || !netGrants.post.includes(host)) {
+      const message = `net access to host "${host ?? url}" not granted for POST`;
+      recordDenial('denied', message);
+      throw capabilityError(message);
+    }
+    if (config.tier === 'auto') {
+      const message =
+        'net.post is granted but not permitted under the read-only auto tier (requires a manual run)';
+      recordDenial('tier-blocked', message);
+      throw capabilityError(message);
+    }
+    if (!config.net?.post) {
+      const message = `net access to host "${host}" not granted for POST`;
+      recordDenial('denied', message);
+      throw capabilityError(message);
+    }
+    const res = await callNetProvider(() => config.net!.post!(url, body));
+    // As with `net.fetch_json` above (GitHub issue #6): a plain JS object
+    // (even one this shallow) crosses into Lua as a `js_proxy` userdata,
+    // not a genuine table. `status`/`body` are both scalars, so instead
+    // of proxying the whole response object, resolve with a
+    // `LuaMultiReturn` — `:await()` recognizes that and expands it into
+    // TWO separate Lua return values (see `wasmoon`'s promise
+    // `await`/`MultiReturn` handling) — and let the trusted prelude below
+    // rebuild a real `{status=..., body=...}` table out of ordinary Lua
+    // table-constructor syntax.
+    return LuaMultiReturn.of<string | number>(res.status, res.body);
+  }) as (...args: never[]) => Promise<unknown>;
+  preludeParts.push(`
 local __smd_net_post = __smd_net_post_raw
 __smd_net_post_raw = nil
 net.post = function(url, body)
@@ -449,50 +459,31 @@ net.post = function(url, body)
   return { status = status, body = respBody }
 end
 `);
-  } else if (
-    // Mirrors the 'manual' condition above EXACTLY except for the tier, so
-    // the read-only tier never exposes a wider method surface than the
-    // full-grant tier would: a stub appears only where a real `net.post`
-    // would have appeared under 'manual'. Without the `config.net?.post`
-    // half, a host whose provider implements no POST at all would still
-    // show `net.post` under 'auto' (as a tier-block stub) while showing
-    // nothing under 'manual' — an inconsistency a feature-detecting script
-    // (`if net.post then`) would read exactly backwards.
-    config.tier === 'auto' &&
-    config.net?.post &&
-    netGrants.post.length > 0
-  ) {
-    rawGlobals.__smd_net_post_tier_blocked_raw = (async () => {
+
+  rawGlobals.__smd_net_patch_raw = (async (url: string, body: string) => {
+    const host = hostnameOf(url);
+    if (!host || !netGrants.post.includes(host)) {
+      const message = `net access to host "${host ?? url}" not granted for PATCH`;
+      recordDenial('denied', message);
+      throw capabilityError(message);
+    }
+    if (config.tier === 'auto') {
       const message =
-        'net.post is granted but not permitted under the read-only auto tier (requires a manual run)';
+        'net.patch is granted but not permitted under the read-only auto tier (requires a manual run)';
       recordDenial('tier-blocked', message);
       throw capabilityError(message);
-    }) as (...args: never[]) => Promise<unknown>;
-    preludeParts.push(`
-local __smd_net_post_blocked = __smd_net_post_tier_blocked_raw
-__smd_net_post_tier_blocked_raw = nil
-net.post = function(url, body) return __smd_net_post_blocked(url, body):await() end
-`);
-  }
-
-  if (
-    config.tier === 'manual' &&
-    config.net?.patch &&
-    netGrants.post.length > 0
-  ) {
-    rawGlobals.__smd_net_patch_raw = (async (url: string, body: string) => {
-      const host = hostnameOf(url);
-      if (!host || !netGrants.post.includes(host)) {
-        const message = `net access to host "${host ?? url}" not granted for PATCH`;
-        recordDenial('denied', message);
-        throw capabilityError(message);
-      }
-      const res = await callNetProvider(() => config.net!.patch!(url, body));
-      // Same fix as `net.post` above (GitHub issue #6) — see that block's
-      // comment for the full mechanism.
-      return LuaMultiReturn.of<string | number>(res.status, res.body);
-    }) as (...args: never[]) => Promise<unknown>;
-    preludeParts.push(`
+    }
+    if (!config.net?.patch) {
+      const message = `net access to host "${host}" not granted for PATCH`;
+      recordDenial('denied', message);
+      throw capabilityError(message);
+    }
+    const res = await callNetProvider(() => config.net!.patch!(url, body));
+    // Same fix as `net.post` above (GitHub issue #6) — see that block's
+    // comment for the full mechanism.
+    return LuaMultiReturn.of<string | number>(res.status, res.body);
+  }) as (...args: never[]) => Promise<unknown>;
+  preludeParts.push(`
 local __smd_net_patch = __smd_net_patch_raw
 __smd_net_patch_raw = nil
 net.patch = function(url, body)
@@ -500,24 +491,6 @@ net.patch = function(url, body)
   return { status = status, body = respBody }
 end
 `);
-  } else if (
-    // Same mirroring as the POST stub above — see its comment.
-    config.tier === 'auto' &&
-    config.net?.patch &&
-    netGrants.post.length > 0
-  ) {
-    rawGlobals.__smd_net_patch_tier_blocked_raw = (async () => {
-      const message =
-        'net.patch is granted but not permitted under the read-only auto tier (requires a manual run)';
-      recordDenial('tier-blocked', message);
-      throw capabilityError(message);
-    }) as (...args: never[]) => Promise<unknown>;
-    preludeParts.push(`
-local __smd_net_patch_blocked = __smd_net_patch_tier_blocked_raw
-__smd_net_patch_tier_blocked_raw = nil
-net.patch = function(url, body) return __smd_net_patch_blocked(url, body):await() end
-`);
-  }
 
   // --- cache --------------------------------------------------------------
   // cache.get is implemented ENTIRELY IN LUA (see the prelude below),

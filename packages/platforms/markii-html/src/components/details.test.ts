@@ -8,7 +8,7 @@ describe('Details', () => {
   it('defaults the summary to "Details" and starts folded', () => {
     const html = Details({}, 'body', ctx);
     expect(html).toContain(
-      '<summary class="mk-details__summary">Details</summary>',
+      '<summary class="mk-details__summary" data-mk-interactive="">Details</summary>',
     );
     expect(html).not.toContain(' open');
   });
@@ -16,7 +16,7 @@ describe('Details', () => {
   it('uses the given title', () => {
     const html = Details({ title: 'More' }, 'body', ctx);
     expect(html).toContain(
-      '<summary class="mk-details__summary">More</summary>',
+      '<summary class="mk-details__summary" data-mk-interactive="">More</summary>',
     );
   });
 

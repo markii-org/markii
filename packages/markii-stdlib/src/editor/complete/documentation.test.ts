@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { STANDARD_COMPONENTS } from '@markii/stdlib';
-import { buildComponentCatalog } from '../insert/component-catalog.js';
+import { STANDARD_COMPONENTS } from '../../index.js';
+import { standardComponentCatalog } from '../insert/component-catalog.js';
 import type { InsertableComponent } from '../insert/component-catalog.js';
 import {
   componentDocumentation,
@@ -8,7 +8,9 @@ import {
 } from './documentation.js';
 
 function standardEntry(name: string): InsertableComponent {
-  const entry = buildComponentCatalog([]).find((c) => c.directiveName === name);
+  const entry = standardComponentCatalog().find(
+    (c) => c.directiveName === name,
+  );
   if (entry === undefined) throw new Error(`no standard component "${name}"`);
   return entry;
 }
@@ -52,7 +54,7 @@ describe('componentDocumentation — standard components', () => {
 
   it('builds a container example as just the opening fence line', () => {
     const doc = componentDocumentation(standardEntry('callout'));
-    expect(doc.example).toBe(':::callout{}');
+    expect(doc.example).toBe(':::callout');
     expect(doc.example).not.toContain('\n');
   });
 
@@ -82,7 +84,7 @@ describe('componentDocumentation — pack components', () => {
 
   it('builds an example from the pack component kind and directive name', () => {
     const doc = componentDocumentation(packEntry({ kind: 'leaf' }));
-    expect(doc.example).toBe('::cat_card{}');
+    expect(doc.example).toBe('::cat_card');
   });
 });
 
@@ -193,7 +195,7 @@ describe('componentDocumentation: declared pack attributes (issue #27 slice 4)',
         'Attributes:',
         '- scale: days | weeks',
         '',
-        'Example: :::cat_card{}',
+        'Example: :::cat_card',
       ].join('\n'),
     );
   });

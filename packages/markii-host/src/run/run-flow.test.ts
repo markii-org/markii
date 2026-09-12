@@ -273,7 +273,7 @@ describe('runOnce — bundle-backed run', () => {
     // The manifest's declared host is never prompted for, and never ends
     // up in the allowlist.
     expect(promptHost).toHaveBeenCalledTimes(1);
-    expect(promptHost).toHaveBeenCalledWith('scan.example.com');
+    expect(promptHost).toHaveBeenCalledWith('scan.example.com', []);
     const spawnArgs = spawnRun.mock.calls[0]?.[0];
     expect(spawnArgs?.netAllowlist).toEqual(['scan.example.com']);
   });
@@ -331,6 +331,85 @@ describe('runOnce — bundle-backed run', () => {
     });
 
     expect(result.netDeclarationDiagnostics).toEqual([]);
+  });
+
+  it('surfaces a mismatch between a script-declared `permissions` host and the scanned host, for a bare .mk.md document with no bundle (batch 7 #47)', async () => {
+    const memento = fakeMemento();
+    const spawnRun = () => Promise.resolve(fakeRunResult());
+
+    const result = await runOnce({
+      documentKey: 'file:///a.mk.md',
+      text:
+        '```lua {name=a permissions=declared.example.com}\n' +
+        'return net.fetch_json("https://scanned.example.com/x")\n' +
+        '```\n',
+      memento,
+      promptHost: () => Promise.resolve(true),
+      promptUnknownHosts: () => Promise.resolve(true),
+      promptManyHosts: () => Promise.resolve(true),
+      spawnRun,
+      timeoutMs: 15000,
+    });
+
+    expect(result.netDeclarationDiagnostics).toEqual([
+      'The manifest declares net access to declared.example.com. No script in this run uses that host.',
+      'A script in this run uses net access to scanned.example.com. The manifest does not declare that host.',
+    ]);
+  });
+
+  it('a script-declared `permissions` host that matches the scan produces no diagnostics', async () => {
+    const memento = fakeMemento();
+    const spawnRun = () => Promise.resolve(fakeRunResult());
+
+    const result = await runOnce({
+      documentKey: 'file:///a.mk.md',
+      text:
+        '```lua {name=a permissions=api.example.com}\n' +
+        'return net.fetch_json("https://api.example.com/x")\n' +
+        '```\n',
+      memento,
+      promptHost: () => Promise.resolve(true),
+      promptUnknownHosts: () => Promise.resolve(true),
+      promptManyHosts: () => Promise.resolve(true),
+      spawnRun,
+      timeoutMs: 15000,
+    });
+
+    expect(result.netDeclarationDiagnostics).toEqual([]);
+  });
+
+  it('a declared `permissions` host never widens or narrows what is actually granted', async () => {
+    const memento = fakeMemento();
+    const promptHost = vi.fn(() => Promise.resolve(true));
+    const spawnRun = vi.fn((_options: SpawnRunOptions): Promise<RunResult> =>
+      Promise.resolve(fakeRunResult()),
+    );
+
+    await runOnce({
+      documentKey: 'file:///a.mk.md',
+      text:
+        '```lua {name=a permissions=declared-only.example.com}\n' +
+        'return net.fetch_json("https://scanned.example.com/x")\n' +
+        '```\n',
+      memento,
+      promptHost,
+      promptUnknownHosts: () => Promise.resolve(true),
+      promptManyHosts: () => Promise.resolve(true),
+      spawnRun,
+      timeoutMs: 15000,
+    });
+
+    // Only the SCANNED host is ever prompted for or granted; the declared
+    // one that no script actually reaches is never prompted, never granted.
+    // It rides along as the prompt's second argument, which is display
+    // only: the prompt says what the note claims while asking about the
+    // host that is actually reached.
+    expect(promptHost).toHaveBeenCalledTimes(1);
+    expect(promptHost).toHaveBeenCalledWith('scanned.example.com', [
+      'declared-only.example.com',
+    ]);
+    const spawnArgs = spawnRun.mock.calls[0]?.[0];
+    expect(spawnArgs?.netAllowlist).toEqual(['scanned.example.com']);
   });
 
   it('forwards the manifest-declared bundle-fs grants to spawnRun with no prompt at all', async () => {
@@ -424,7 +503,7 @@ describe('runOnce — bundle-backed run', () => {
     });
 
     expect(result.failures).toEqual([]);
-    expect(promptHost).toHaveBeenCalledWith('resolved.example.com');
+    expect(promptHost).toHaveBeenCalledWith('resolved.example.com', []);
     // The host was resolved, so the "can't be listed in advance" gate never
     // needed to fire for this script.
     expect(promptUnknownHosts).not.toHaveBeenCalled();

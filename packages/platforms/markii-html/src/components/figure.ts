@@ -1,8 +1,11 @@
 import { isSafeUrl } from '@markii/core';
+import { reportDiagnostic } from '@markii/stdlib';
 import type { HtmlComponent } from '../registry.js';
 import { resolveImageAttribute } from '../image-resolve.js';
+import { unsafeImageSrcTitle } from '../failure-presentation.js';
 
 const DEFAULT_ALT = '';
+const DIRECTIVE_NAME = 'figure';
 
 /**
  * `:::figure{src="..." alt="..."} caption markdown :::` — an image with a
@@ -29,7 +32,8 @@ const DEFAULT_ALT = '';
 export const Figure: HtmlComponent = (attributes, childrenHtml, ctx) => {
   const rawSrc = attributes.src ?? null;
   const alt = attributes.alt ?? DEFAULT_ALT;
-  const safeSrc = rawSrc && isSafeUrl(rawSrc) ? rawSrc : null;
+  const refused = Boolean(rawSrc) && !isSafeUrl(rawSrc as string);
+  const safeSrc = rawSrc && !refused ? rawSrc : null;
   const src = safeSrc
     ? resolveImageAttribute(safeSrc, ctx.resolveImageSrc)
     : null;
@@ -37,9 +41,23 @@ export const Figure: HtmlComponent = (attributes, childrenHtml, ctx) => {
   const imgHtml = src
     ? `<img class="mk-figure__img" src="${ctx.esc(src)}" alt="${ctx.esc(alt)}">`
     : '';
+  const figcaptionHtml = `<figcaption class="mk-figure__caption">${childrenHtml}</figcaption>`;
 
-  return (
-    `<figure class="mk-figure">${imgHtml}` +
-    `<figcaption class="mk-figure__caption">${childrenHtml}</figcaption></figure>`
-  );
+  // AGENTS.md "clean is not silent": a refused `src` used to render a
+  // caption with no image and no explanation. Mirrors `@markii/react`'s
+  // `Figure`.
+  if (refused) {
+    const message = unsafeImageSrcTitle(DIRECTIVE_NAME);
+    reportDiagnostic(ctx.onDiagnostic, {
+      kind: 'unsafe-image-src',
+      directive: DIRECTIVE_NAME,
+      message,
+    });
+    return (
+      `<figure class="mk-figure" data-mk-notice="" title="${ctx.esc(message)}">` +
+      `${imgHtml}${figcaptionHtml}</figure>`
+    );
+  }
+
+  return `<figure class="mk-figure">${imgHtml}${figcaptionHtml}</figure>`;
 };

@@ -97,4 +97,36 @@ describe('buildRenderRegistry', () => {
     expect(result.invalidReasons).toHaveLength(1);
     expect(result.registry['demo_badge']).toBeUndefined();
   });
+
+  it('a validated pack whose engine is not react is named in droppedEngines, never silently dropped (batch 7 #46)', () => {
+    const vueManifest = JSON.stringify({
+      name: 'vega',
+      engine: 'vue',
+      components: { chart: './Chart.vue' },
+    });
+    const queued: QueuedPackRegistration[] = [
+      { manifestJson: vueManifest, componentModules: {} },
+    ];
+    const result = buildRenderRegistry(queued, createRegistry());
+    expect(result.invalidReasons).toEqual([]);
+    expect(result.collisions).toEqual([]);
+    expect(Object.keys(result.registry)).toEqual([]);
+    expect(result.droppedEngines).toEqual([{ name: 'vega', engine: 'vue' }]);
+  });
+
+  it('droppedEngines is empty for an ordinary all-react-engine install', () => {
+    const queued: QueuedPackRegistration[] = [
+      {
+        manifestJson: VALID_MANIFEST,
+        componentModules: { badge: { component: fakeComponent } },
+      },
+    ];
+    const result = buildRenderRegistry(queued, createRegistry());
+    expect(result.droppedEngines).toEqual([]);
+  });
+
+  it('an empty queue returns droppedEngines: []', () => {
+    const result = buildRenderRegistry([], createRegistry());
+    expect(result.droppedEngines).toEqual([]);
+  });
 });

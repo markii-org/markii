@@ -1,4 +1,5 @@
 import {
+  parse,
   toHast,
   nodeToHast,
   parseMetaAttributes,
@@ -29,10 +30,46 @@ import {
   failureTitle,
   EMPTY_INLINE_MARKER_CLASS,
   emptyInlineTitle,
+  invalidAttributeValueTitle,
 } from './failure-presentation.js';
-import { formatValue } from '@markii/stdlib';
+import {
+  formatValue,
+  getContract,
+  reportDiagnostic,
+  INTERACTIVE_ATTRIBUTE,
+} from '@markii/stdlib';
+import type { OnDiagnostic } from '@markii/stdlib';
 import { resolveImageAttribute } from './image-resolve.js';
 import type { ResolveImageSrc } from './image-resolve.js';
+import { resolveHrefAttribute } from './href-resolve.js';
+import type { ResolveHref } from './href-resolve.js';
+
+/**
+ * A whole parsed document, as `@markii/core`'s `parse` returns it — the
+ * type `renderMarkNodeToHtml` accepts alongside a single `MarkNode` (#44a).
+ * Named locally rather than importing `mdast`'s `Root` directly, mirroring
+ * `@markii/react`'s identical `MarkRoot` type alias.
+ */
+type MarkRoot = ReturnType<typeof parse>;
+
+function isMarkRoot(node: MarkNode | MarkRoot): node is MarkRoot {
+  return (node as { type?: unknown }).type === 'root';
+}
+
+/**
+ * Converts a `MarkNode | MarkRoot` (#44a) to a sanitized hast tree via
+ * `@markii/core`'s `nodeToHast`, mirroring `@markii/react`'s identical
+ * `nodeOrRootToHast`: for a whole `MarkRoot`, each child is run through
+ * `nodeToHast` independently and the resulting hast children concatenated.
+ */
+function nodeOrRootToHast(node: MarkNode | MarkRoot): Root {
+  if (!isMarkRoot(node)) return nodeToHast(node);
+  const children: Root['children'] = [];
+  for (const child of node.children) {
+    children.push(...nodeToHast(child).children);
+  }
+  return { type: 'root', children };
+}
 
 /** The hast tag name `@markii/core`'s `toHast` marks every directive with (`to-hast.ts`'s `DIRECTIVE_TAG`). */
 const DIRECTIVE_TAG = 'mk-directive';
@@ -107,6 +144,7 @@ function buildValueMarker(
 function createBaseContext(
   scope: ValueScope,
   resolveImageSrc: ResolveImageSrc | undefined,
+  onDiagnostic: OnDiagnostic | undefined,
 ): HtmlRenderContext {
   return {
     esc: escapeHtml,
@@ -123,6 +161,7 @@ function createBaseContext(
       return buildValueMarker(trimmed, resolved, format, decimals);
     },
     resolveImageSrc,
+    onDiagnostic,
   };
 }
 
@@ -412,12 +451,34 @@ function renderScriptMarker(node: Element): string | undefined {
 
     return (
       `<details class="mk-script"${open ? ' open' : ''}>` +
-      `<summary class="mk-script__summary">${escapeHtml(summary)}</summary>` +
+      `<summary class="mk-script__summary" ${INTERACTIVE_ATTRIBUTE}="">${escapeHtml(summary)}</summary>` +
       `${body}</details>`
     );
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Whether one of `name`'s `@markii/stdlib` contract attributes with a
+ * closed `enum` is present in `attributes` with a value outside that enum.
+ * Returns the first offending attribute/value pair found, or `undefined`.
+ * Mirrors `@markii/react`'s identical `invalidEnumAttribute`.
+ */
+function invalidEnumAttribute(
+  name: string,
+  attributes: DirectiveAttributes,
+): { attribute: string; value: string } | undefined {
+  const contract = getContract(name);
+  if (!contract) return undefined;
+  for (const [attribute, schema] of Object.entries(contract.attributes)) {
+    const enumValues = schema.enum;
+    if (!enumValues) continue;
+    const value = attributes[attribute];
+    if (value === undefined || value === null || value === '') continue;
+    if (!enumValues.includes(value)) return { attribute, value };
+  }
+  return undefined;
 }
 
 /** Resolves one directive (registry component, `:value[...]`, or the fallback) given its layout-stripped attributes. Never throws. */
@@ -471,6 +532,30 @@ function renderDirectiveContent(
     );
   } catch {
     return componentError(name || '(unnamed)', inline, childrenHtml);
+  }
+
+  // The silent-value-drop mechanism (AGENTS.md "clean is not silent"),
+  // mirroring `@markii/react`'s identical check: a known attribute's value
+  // outside its closed enum still renders the component exactly as
+  // registered, wrapped in a quiet marker whose `title` carries the reason,
+  // and `onDiagnostic` gets the same event for a host's own diagnostics
+  // surface. Checked against the FINAL attributes the component actually
+  // received (`binding.attributes`), not the raw ones.
+  const invalidEnum = invalidEnumAttribute(name, binding.attributes);
+  if (invalidEnum) {
+    const message = invalidAttributeValueTitle(
+      name,
+      invalidEnum.attribute,
+      invalidEnum.value,
+    );
+    reportDiagnostic(ctx.onDiagnostic, {
+      kind: 'invalid-attribute-value',
+      directive: name,
+      attribute: invalidEnum.attribute,
+      message,
+    });
+    const tag = inline ? 'span' : 'div';
+    rendered = `<${tag} data-mk-notice="" title="${escapeHtml(message)}">${rendered}</${tag}>`;
   }
 
   // ITEM 1 (AGENTS.md "clean is not silent"): mirrors `@markii/react`'s
@@ -560,10 +645,27 @@ function applyImageResolver(
   }
 }
 
+/**
+ * Rewrites an ordinary hast `<a>` element's `href` in place through
+ * `resolveHref` (#44b) — the link-rewrite twin of `applyImageResolver`. No
+ * standard component builds its own `<a>`, so this is the only place a link
+ * href is ever resolved. With no resolver at all this is a no-op.
+ */
+function applyHrefResolver(
+  node: Element,
+  resolveHref: ResolveHref | undefined,
+): void {
+  const href = node.properties.href;
+  if (typeof href === 'string') {
+    node.properties.href = resolveHrefAttribute(href, resolveHref);
+  }
+}
+
 function makeTransform(
   registry: HtmlRegistry,
   ctx: HtmlRenderContext,
   scope: ValueScope,
+  resolveHref: ResolveHref | undefined,
 ): (node: RootContent) => RootContent {
   function transform(node: RootContent): RootContent {
     if (node.type !== 'element') return node;
@@ -580,6 +682,9 @@ function makeTransform(
     }
     if (node.tagName === 'img') {
       applyImageResolver(node, ctx.resolveImageSrc);
+    }
+    if (node.tagName === 'a') {
+      applyHrefResolver(node, resolveHref);
     }
     return node;
   }
@@ -601,9 +706,11 @@ function renderRoot(
   registry: HtmlRegistry,
   scope: ValueScope,
   resolveImageSrc: ResolveImageSrc | undefined,
+  resolveHref: ResolveHref | undefined,
+  onDiagnostic: OnDiagnostic | undefined,
 ): string {
-  const ctx = createBaseContext(scope, resolveImageSrc);
-  const transform = makeTransform(registry, ctx, scope);
+  const ctx = createBaseContext(scope, resolveImageSrc, onDiagnostic);
+  const transform = makeTransform(registry, ctx, scope, resolveHref);
   root.children = root.children.map(transform);
   return serialize(root.children);
 }
@@ -634,17 +741,45 @@ function renderRoot(
  * markdown image or one `Figure` built from an attribute — to a URL a host
  * can actually load. It is never asked about a source that already carries
  * a scheme, a protocol-relative `//host/...`, a bare `#fragment`, or an
- * empty value, and its result is re-checked against `@markii/core`'s
- * `isSafeUrl` before use, so it cannot introduce a `javascript:` URL the
- * sanitizer would otherwise have dropped. Returning `undefined`, or
- * throwing, leaves the source exactly as the author wrote it. Omitted
- * entirely, every image renders with the source unchanged, matching every
- * render before this option existed. The identical option on
- * `@markii/react`'s `renderMark` uses the same rules, so the two engines
- * cannot diverge on what a resolver is offered or how its result is used.
+ * empty value, and its result is re-checked against a narrow
+ * `javascript:`/`vbscript:` denylist before use (`./url-resolve.js`), so it
+ * cannot introduce a scheme the parser's own sanitizer would otherwise have
+ * dropped. Returning `undefined`, or throwing, leaves the source exactly as
+ * the author wrote it. Omitted entirely, every image renders with the
+ * source unchanged, matching every render before this option existed.
+ *
+ * `options.resolveHref` (#44b) is the identical seam for an ordinary
+ * markdown link's `<a href>`: same resolvability rule, same shared
+ * dangerous-scheme refusal, same fall-through-on-`undefined`-or-throw
+ * behavior. No standard component builds its own `<a>`, so this only ever
+ * touches a link the parser itself produced.
+ *
+ * `options.onDiagnostic`, when supplied, is called once for every quiet
+ * in-page marker this render produces for a value it recognized and
+ * declined to use outright — a known attribute's value outside its closed
+ * enum, or a `figure` `src` refused as unsafe — with
+ * `{ kind, directive, attribute, message }` (`@markii/stdlib`'s
+ * `DiagnosticEvent`), so a host can put the same information on its own
+ * diagnostics surface. Never called for an unknown-attribute NAME or for
+ * the unknown-directive/form-mismatch fallbacks, which already show
+ * themselves in the page. A callback that throws can never break the
+ * render: every call site goes through `@markii/stdlib`'s
+ * `reportDiagnostic`. Both options mirror `@markii/react`'s identical
+ * `RenderMarkOptions`, so the two engines cannot diverge.
  */
 export interface RenderMarkOptions {
   readonly resolveImageSrc?: ResolveImageSrc;
+  readonly resolveHref?: ResolveHref;
+  readonly onDiagnostic?: OnDiagnostic;
+  /**
+   * The note's own last-run values, the same thing the third positional
+   * parameter takes. Offered here as well so a caller that already builds
+   * an options object does not have to fill positional slots it has no
+   * other use for. When both forms are given the option wins.
+   */
+  readonly store?: ValueStore;
+  /** Values other notes published, read by an `@`-prefixed name. Same positional twin and same precedence as `store`. */
+  readonly vault?: VaultStore;
 }
 
 export function renderMarkToHtml(
@@ -658,8 +793,10 @@ export function renderMarkToHtml(
     return renderRoot(
       toHast(text),
       registry,
-      { store, vault },
+      { store: options?.store ?? store, vault: options?.vault ?? vault },
       options?.resolveImageSrc,
+      options?.resolveHref,
+      options?.onDiagnostic,
     );
   } catch (error) {
     return renderFailureFallback(error);
@@ -667,14 +804,20 @@ export function renderMarkToHtml(
 }
 
 /**
- * The block-level twin of `renderMarkToHtml`: renders one already-parsed mdast
- * node (`@markii/core`'s `MarkNode`) to HTML instead of a whole document's
- * text, via `nodeToHast`. Same registry resolution, same fallbacks, same
- * purity and never-throw guarantees, and the same optional `store`/`vault`
- * value-binding arguments and `resolveImageSrc` option.
+ * The block-level twin of `renderMarkToHtml`: renders one already-parsed
+ * mdast node OR a whole already-parsed mdast document (`@markii/core`'s
+ * `MarkNode`, or the `Root` `parse` itself returns; #44a) to HTML instead of
+ * raw document text, via `nodeOrRootToHast`. Same registry resolution, same
+ * fallbacks, same purity and never-throw guarantees, and the same optional
+ * `store`/`vault` value-binding arguments and `resolveImageSrc`/
+ * `resolveHref`/`onDiagnostic` options.
+ *
+ * A `MarkNode` and a `Root` share ONE parameter, mirroring
+ * `@markii/react`'s `renderMarkNode` (see that function's doc comment for
+ * why: the smaller surface for callers, no second near-identical export).
  */
 export function renderMarkNodeToHtml(
-  node: MarkNode,
+  node: MarkNode | MarkRoot,
   registry: HtmlRegistry,
   store?: ValueStore,
   vault?: VaultStore,
@@ -682,12 +825,66 @@ export function renderMarkNodeToHtml(
 ): string {
   try {
     return renderRoot(
-      nodeToHast(node),
+      nodeOrRootToHast(node),
       registry,
-      { store, vault },
+      { store: options?.store ?? store, vault: options?.vault ?? vault },
       options?.resolveImageSrc,
+      options?.resolveHref,
+      options?.onDiagnostic,
     );
   } catch (error) {
     return renderFailureFallback(error);
   }
+}
+
+/**
+ * Whether `root` is exactly one paragraph holding exactly one text
+ * directive (`:name[...]`) and nothing else, mirroring `@markii/react`'s
+ * identical `loneInlineDirective`. Returns that inner directive node when
+ * so, `undefined` otherwise.
+ */
+function loneInlineDirective(root: MarkRoot): MarkNode | undefined {
+  if (root.children.length !== 1) return undefined;
+  const [only] = root.children;
+  if (!only || only.type !== 'paragraph') return undefined;
+  if (only.children.length !== 1) return undefined;
+  const [inner] = only.children;
+  // Compared against a widened `{ type?: unknown }` view, not
+  // `PhrasingContent` directly: `'textDirective'` only joins that union when
+  // something in the compilation imports `mdast-util-directive`'s ambient
+  // augmentation, which this file has no other reason to do. Matches
+  // `isMarkRoot`'s identical widen-then-compare shape just above, and
+  // `@markii/react`'s identical fix in its own copy of this function.
+  return inner && (inner as { type?: unknown }).type === 'textDirective'
+    ? (inner as unknown as MarkNode)
+    : undefined;
+}
+
+/**
+ * Renders `text` as a single, standalone inline directive when that is all
+ * it is (#44c), mirroring `@markii/react`'s identical `renderMarkInline`:
+ * source whose only parsed block is a paragraph holding exactly one text
+ * directive renders that directive alone, WITHOUT the paragraph wrapper
+ * `renderMarkToHtml` would otherwise put around it. Any other source falls
+ * back to the exact same rendering `renderMarkToHtml` would produce.
+ */
+export function renderMarkInlineToHtml(
+  text: string,
+  registry: HtmlRegistry,
+  store?: ValueStore,
+  vault?: VaultStore,
+  options?: RenderMarkOptions,
+): string {
+  try {
+    const root = parse(text);
+    const lone = loneInlineDirective(root);
+    if (lone) {
+      return renderMarkNodeToHtml(lone, registry, store, vault, options);
+    }
+  } catch {
+    // Falls through to the ordinary whole-document render below, whose own
+    // try/catch produces the shared failure fallback if parsing (again) or
+    // rendering fails.
+  }
+  return renderMarkToHtml(text, registry, store, vault, options);
 }

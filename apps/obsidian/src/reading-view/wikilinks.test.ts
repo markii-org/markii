@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  convertNoteWikilinks,
   convertWikilinksToMarkdown,
   markdownForWikilink,
 } from './wikilinks.js';
@@ -106,5 +107,55 @@ describe('convertWikilinksToMarkdown', () => {
   it('is a no-op with no references', () => {
     const text = 'nothing to convert here';
     expect(convertWikilinksToMarkdown(text, [], (l) => l)).toBe(text);
+  });
+});
+
+describe('convertNoteWikilinks', () => {
+  it('converts the links and embeds of one note from its metadata cache', () => {
+    const text = 'see [[Guide]] and ![[shot.png]]';
+    const cache = {
+      links: [
+        {
+          link: 'Guide',
+          position: { start: { offset: 4 }, end: { offset: 13 } },
+        },
+      ],
+      embeds: [
+        {
+          link: 'shot.png',
+          position: { start: { offset: 18 }, end: { offset: 31 } },
+        },
+      ],
+    };
+
+    const result = convertNoteWikilinks(text, cache, (link) =>
+      link === 'shot.png' ? 'assets/shot.png' : 'notes/Guide.md',
+    );
+
+    expect(result).toBe(
+      'see [Guide](notes/Guide.md) and ![shot.png](assets/shot.png)',
+    );
+  });
+
+  it('keeps an unresolved link pointing at its own raw text', () => {
+    const text = '[[Missing]]';
+    const cache = {
+      links: [
+        {
+          link: 'Missing',
+          position: { start: { offset: 0 }, end: { offset: 11 } },
+        },
+      ],
+    };
+
+    expect(convertNoteWikilinks(text, cache, () => undefined)).toBe(
+      '[Missing](Missing)',
+    );
+  });
+
+  it('is a no-op when the host has no cache for the note yet', () => {
+    expect(convertNoteWikilinks('plain [[text]]', null, () => 'x')).toBe(
+      'plain [[text]]',
+    );
   });
 });

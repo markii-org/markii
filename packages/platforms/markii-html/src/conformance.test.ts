@@ -56,6 +56,7 @@ const FIXTURE_NAMES = [
   '29-raw-html.mk.md',
   '30-directive-name-colon-rejected.mk.md',
   '31-malformed-leaf-attributes.mk.md',
+  '32-script-permissions.mk.md',
 ];
 
 describe('conformance corpus renders through @markii/html', () => {
@@ -202,6 +203,7 @@ describe('render-level conformance fixtures (conformance/render/)', () => {
     '04-value-failure',
     '05-table',
     '06-image',
+    '07-notice',
   ];
 
   it('the fixture list above accounts for every *.mk.md file in conformance/render/ (nothing silently skipped)', () => {

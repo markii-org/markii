@@ -243,6 +243,20 @@ export interface PackDiagnosticsMessage {
 }
 
 /**
+ * Webview -> host: the render itself produced one or more quiet in-page
+ * markers for a value it recognized and declined to use (a known
+ * attribute's value outside its enum, a `figure` `src` refused as unsafe).
+ * `@markii/host`'s `renderDiagnosticLine` already worded and deduped each
+ * line; `preview-panel.ts` writes them to the Markii output channel, which
+ * is the other half of "clean is not silent": the marker says something is
+ * wrong, this says what.
+ */
+export interface RenderDiagnosticsMessage {
+  readonly type: 'render-diagnostics';
+  readonly lines: readonly string[];
+}
+
+/**
  * Host -> webview (GitHub issue #28 slice 2): asks the webview to render one
  * note's body through its own React engine, for the `markii.exportHtml`
  * command. `requestId` pairs this request with its `ExportResultMessage`
@@ -280,7 +294,10 @@ export type HostToWebviewMessage =
   | BundleErrorMessage
   | ExportRequestMessage;
 export type WebviewToHostMessage =
-  ReadyMessage | PackDiagnosticsMessage | ExportResultMessage;
+  | ReadyMessage
+  | PackDiagnosticsMessage
+  | ExportResultMessage
+  | RenderDiagnosticsMessage;
 
 function hasOwn(value: object, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(value, key);
@@ -800,6 +817,16 @@ function isWireDuplicateComposedNameArray(
   );
 }
 
+function isRenderDiagnosticsMessage(
+  value: unknown,
+): value is RenderDiagnosticsMessage {
+  if (!isPlainObject(value)) return false;
+  if (!hasOwn(value, 'type') || value.type !== 'render-diagnostics') {
+    return false;
+  }
+  return hasOwn(value, 'lines') && isPackDiagnosticLineArray(value.lines);
+}
+
 function isPackDiagnosticsMessage(
   value: unknown,
 ): value is PackDiagnosticsMessage {
@@ -832,6 +859,7 @@ export function isWebviewToHostMessage(
   value: unknown,
 ): value is WebviewToHostMessage {
   return (
+    isRenderDiagnosticsMessage(value) ||
     isReadyMessage(value) ||
     isPackDiagnosticsMessage(value) ||
     isExportResultMessage(value)

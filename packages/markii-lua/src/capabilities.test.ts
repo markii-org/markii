@@ -70,19 +70,35 @@ function fixtureBundle() {
   return { storage, view };
 }
 
-describe('buildCapabilities — net absent when not granted', () => {
-  it('with no net provider at all, `net` is nil', async () => {
+describe('buildCapabilities — net always exists as a stub (batch 7 #47)', () => {
+  // `net` used to be omitted entirely whenever nothing was granted, which
+  // made a denied capability indistinguishable from a plain typo (calling
+  // an ungranted `net.fetch_json` and calling a global that never existed
+  // both raised the same "attempt to index/call a nil value" runtime
+  // error). `net` is now always a real table, and each of its methods is
+  // always callable: an ungranted call still fails, but it fails as a
+  // classified `kind: 'capability'` outcome instead of a runtime error,
+  // and a script that feature-detects with `if net then` now sees a table
+  // regardless of grants (see `capabilities.ts`'s "--- net ---" comment).
+  it('with no net provider at all, `net` is a table', async () => {
     const r = await run('return type(net)', { tier: 'manual' });
-    expect(r).toEqual({ ok: true, value: 'nil' });
+    expect(r).toEqual({ ok: true, value: 'table' });
   });
 
-  it('with a provider but zero granted GET hosts, `net` is nil', async () => {
+  it('with no net provider at all, calling net.fetch_json throws (caught by sandbox.ts as a capability denial, not a plain runtime error)', async () => {
+    const r = await run('return net.fetch_json("https://api.example.com")', {
+      tier: 'manual',
+    });
+    expect(r.ok).toBe(false);
+  });
+
+  it('with a provider but zero granted GET hosts, `net` is a table', async () => {
     const r = await run('return type(net)', {
       tier: 'manual',
       net: fakeNet(async () => ({ status: 200, body: '{}' })),
       netGrants: { get: [], post: [] },
     });
-    expect(r).toEqual({ ok: true, value: 'nil' });
+    expect(r).toEqual({ ok: true, value: 'table' });
   });
 });
 

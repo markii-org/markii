@@ -1,14 +1,9 @@
-import {
-  MarkdownRenderChild,
-  TFile,
-  type CachedMetadata,
-  type EmbedCache,
-  type LinkCache,
-} from 'obsidian';
+import { MarkdownRenderChild, TFile } from 'obsidian';
 import { createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { createValueStore } from '@markii/runtime';
 import {
+  createRenderDiagnosticReporter,
   MARK_EXTENSION,
   readPersistedValues,
   staleValuesForRehydration,
@@ -22,8 +17,7 @@ import {
 import type { VaultImageResolver } from './preview-images.js';
 import { createLocalStorageMemento } from './run/local-storage-memento.js';
 import { onValuesChanged } from './run/run-events.js';
-import { convertWikilinksToMarkdown } from './reading-view/wikilinks.js';
-import type { WikilinkReference } from './reading-view/wikilinks.js';
+import { convertNoteWikilinks } from './reading-view/wikilinks.js';
 import { ReadingViewSectionCoordinator } from './reading-view/section-coordinator.js';
 import type MarkiiPlugin from './main.js';
 
@@ -88,34 +82,6 @@ export function registerReadingView(plugin: MarkiiPlugin): void {
   });
 }
 
-function toWikilinkReference(
-  cacheItem: LinkCache | EmbedCache,
-  isEmbed: boolean,
-): WikilinkReference {
-  return {
-    link: cacheItem.link,
-    ...(cacheItem.displayText !== undefined
-      ? { displayText: cacheItem.displayText }
-      : {}),
-    isEmbed,
-    offset: {
-      start: cacheItem.position.start.offset,
-      end: cacheItem.position.end.offset,
-    },
-  };
-}
-
-/** Every wikilink and embed the metadata cache knows about for this note, in the shape `convertWikilinksToMarkdown` takes. `null` (no cache yet, or a note with neither) becomes an empty list, which makes the conversion a no-op. */
-function collectWikilinkReferences(
-  cache: CachedMetadata | null,
-): WikilinkReference[] {
-  if (!cache) return [];
-  return [
-    ...(cache.links ?? []).map((link) => toWikilinkReference(link, false)),
-    ...(cache.embeds ?? []).map((embed) => toWikilinkReference(embed, true)),
-  ];
-}
-
 /**
  * One claimed section's whole lifecycle: mount a React root into `el` on
  * load, tear it down on unload, and release the coordinator's claim so the
@@ -128,6 +94,18 @@ class ReadingViewSection extends MarkdownRenderChild {
   private readonly reportUnresolvedImage = createUnresolvedImageReporter(
     (line) => {
       console.warn(line);
+    },
+  );
+
+  /**
+   * The render's own quiet markers, reported once each to the console,
+   * which is this plugin's diagnostics surface (docs/integration.md's host
+   * checklist). A marker in the page says a value was declined; this says
+   * which value and why, without the reader having to hover it.
+   */
+  private readonly reportRenderDiagnostic = createRenderDiagnosticReporter(
+    (line) => {
+      console.warn(`[markii] ${line}`);
     },
   );
 
@@ -197,18 +175,12 @@ class ReadingViewSection extends MarkdownRenderChild {
     // the note) while the read above was in flight.
     if (!this.root) return;
 
-    const references = collectWikilinkReferences(
+    const text = convertNoteWikilinks(
+      rawText,
       app.metadataCache.getFileCache(file),
+      (link) =>
+        app.metadataCache.getFirstLinkpathDest(link, this.sourcePath)?.path,
     );
-    const text = convertWikilinksToMarkdown(rawText, references, (link) => {
-      const dest = app.metadataCache.getFirstLinkpathDest(
-        link,
-        this.sourcePath,
-      );
-      // An unresolved wikilink keeps pointing at its own raw text
-      // (`wikilinks.ts`'s own contract) rather than breaking the render.
-      return dest ? dest.path : link;
-    });
 
     const memento = createLocalStorageMemento(
       (key) => app.loadLocalStorage(key),
@@ -233,7 +205,13 @@ class ReadingViewSection extends MarkdownRenderChild {
       createElement(
         'div',
         { className: 'doc', key: this.sourcePath },
-        renderDocument(text, store, registry, resolveImageSrc),
+        renderDocument(
+          text,
+          store,
+          registry,
+          resolveImageSrc,
+          this.reportRenderDiagnostic,
+        ),
       ),
     );
   }

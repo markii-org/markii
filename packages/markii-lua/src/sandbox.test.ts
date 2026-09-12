@@ -268,10 +268,11 @@ describe('runScript — async wall-clock guard classification is identity-based,
 });
 
 describe('runScript — capabilities: net', () => {
-  it('with net not granted, net is absent and any use fails as a runtime error, not a crash', async () => {
+  it('with net not granted, net is a stub table and any use fails as a classified capability denial, not a runtime error (batch 7 #47)', async () => {
     const r = await run('return net.fetch_json("https://x.example.com")');
     expect(r.ok).toBe(false);
-    expect(!r.ok && r.error.kind).toBe('runtime');
+    expect(!r.ok && r.error.kind).toBe('capability');
+    expect(!r.ok && r.error.capability).toBe('denied');
   });
 
   it("tier 'auto': net.fetch_json works via a fake provider; net.post is a tier-blocked stub (a function, not nil) whose call fails as kind: 'capability', capability: 'tier-blocked'", async () => {

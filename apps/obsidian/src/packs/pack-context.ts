@@ -34,6 +34,7 @@ import { existsSync } from 'node:fs';
 import * as path from 'node:path';
 import { readFile as nodeReadFile } from 'node:fs/promises';
 import type { Registry } from '@markii/react';
+import { REACT_ENGINE_ID } from '@markii/react';
 import {
   buildRenderRegistry,
   createNodeFileReader,
@@ -249,6 +250,8 @@ export async function loadPackContext(
   const discovery = await discoverPacks(
     installedFolders,
     createNodeFileReader(),
+    undefined,
+    REACT_ENGINE_ID,
   );
   skipped.push(...discovery.skipped);
 

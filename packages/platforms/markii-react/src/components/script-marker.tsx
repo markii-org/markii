@@ -35,7 +35,10 @@ export function ScriptMarker({
 
   return (
     <details className="mk-script" open={open}>
-      <summary className="mk-script__summary">{summary}</summary>
+      {/* `data-mk-interactive` matches `@markii/stdlib`'s `INTERACTIVE_ATTRIBUTE` (#53); see `tabs.tsx`'s top comment for why it is a literal here. */}
+      <summary className="mk-script__summary" data-mk-interactive="">
+        {summary}
+      </summary>
       {code ? (
         <pre className="mk-script__code">
           <code>{code}</code>

@@ -131,3 +131,38 @@ export const EMPTY_INLINE_MARKER_CLASS = 'mk-inline-empty';
 export function emptyInlineTitle(name: string): string {
   return `${name}: no content (an attribute may have been used where directive text was expected)`;
 }
+
+/**
+ * The attribute both engines set on a component's own rendered output when
+ * it renders a quiet marker for a value the render pipeline recognized and
+ * declined to use, rather than silently dropping it (AGENTS.md's "clean is
+ * not silent"): a known attribute's value outside its closed enum, or a
+ * `figure` `src` refused as unsafe. Styled generically in `doc.css` off this
+ * attribute alone, so it works regardless of which element a component's
+ * root happens to be.
+ */
+export const NOTICE_ATTRIBUTE = 'data-mk-notice';
+
+/**
+ * The `title` tooltip for `NOTICE_ATTRIBUTE` when `directive`'s `attribute`
+ * received `value`, which is not one of the attribute's allowed values —
+ * e.g. `card{text="Hey"}` (`text` only accepts `left`/`center`/`right`). The
+ * component still renders with the attribute simply unapplied; this is the
+ * one place that says why, out of the text flow.
+ */
+export function invalidAttributeValueTitle(
+  directive: string,
+  attribute: string,
+  value: string,
+): string {
+  return `${directive}: "${value}" is not a valid ${attribute} value (ignored)`;
+}
+
+/**
+ * The `title` tooltip for `NOTICE_ATTRIBUTE` on a `figure` whose `src` was
+ * refused as an unsafe URL scheme: the caption still renders, but with no
+ * image and no explanation unless this marker is attached.
+ */
+export function unsafeImageSrcTitle(directive: string): string {
+  return `${directive}: image source was refused as unsafe and was not shown`;
+}

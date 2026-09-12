@@ -170,6 +170,74 @@ describe('openPackArchive: required entries', () => {
   });
 });
 
+describe('openPackArchive: single-wrapping-folder detection (batch 7 #61)', () => {
+  it('an archive that is a zipped FOLDER (every file nested one level down) names the folder and tells the user to zip the contents instead', async () => {
+    const nested: Record<string, Uint8Array> = {};
+    for (const [name, data] of Object.entries(wellFormedFiles())) {
+      nested[`my-pack/${name}`] = data;
+    }
+    const bytes = buildZip(nested);
+    const result = await openPackArchive(bytes);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.kind).toBe('missing-entry');
+    if (result.error.kind === 'missing-entry') {
+      expect(result.error.entry).toBe('pack.json');
+      expect(result.error.message).toContain('my-pack/');
+      expect(result.error.message.toLowerCase()).toContain('zip the pack');
+    }
+  });
+
+  it('a root archive with __MACOSX metadata siblings still opens normally (macOS-zipped, not folder-wrapped)', async () => {
+    const bytes = buildZip({
+      ...wellFormedFiles(),
+      '__MACOSX/._pack.json': enc.encode('resource-fork-junk'),
+      '__MACOSX/._webview.js': enc.encode('resource-fork-junk'),
+    });
+    const result = await openPackArchive(bytes);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.archive.manifest.name).toBe('ana');
+    // The macOS metadata entries are neither part of the prebuilt contract
+    // nor script modules, so they surface as ordinary ignored entries.
+    expect(result.archive.ignoredEntries).toEqual(
+      expect.arrayContaining(['__MACOSX/._pack.json', '__MACOSX/._webview.js']),
+    );
+  });
+
+  it('a genuinely wrapped folder alongside __MACOSX metadata still gets the folder-wrap message, not a bare "missing" one', async () => {
+    const nested: Record<string, Uint8Array> = {
+      '__MACOSX/._pack.json': enc.encode('resource-fork-junk'),
+    };
+    for (const [name, data] of Object.entries(wellFormedFiles())) {
+      nested[`my-pack/${name}`] = data;
+    }
+    const bytes = buildZip(nested);
+    const result = await openPackArchive(bytes);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.kind).toBe('missing-entry');
+    if (result.error.kind === 'missing-entry') {
+      expect(result.error.message).toContain('my-pack/');
+    }
+  });
+
+  it('does not misfire when pack.json is simply absent with everything else at the root (no wrapping folder at all)', async () => {
+    const bytes = buildZip(wellFormedFiles({ 'pack.json': undefined }));
+    const result = await openPackArchive(bytes);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.kind).toBe('missing-entry');
+    if (result.error.kind === 'missing-entry') {
+      expect(result.error.message).not.toContain('zip the pack');
+    }
+  });
+});
+
 describe('openPackArchive: security probes (real hostile bytes, real reader)', () => {
   it('rejects an entry whose path escapes the archive root via "../"', async () => {
     const bytes = buildZip(

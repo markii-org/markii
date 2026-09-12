@@ -15,11 +15,20 @@
  */
 import { createNodeFileReader, discoverPacks } from '@markii/host';
 import type { DiscoveredPack } from '@markii/host';
+import { REACT_ENGINE_ID } from '@markii/react';
 
 /** Every discovered pack under `installedFolders` — this caller (Insert Component, directive completion) only ever needs a pack's component names and attributes, never its script or Lua modules. */
 export async function discoverConfiguredPacks(
   installedFolders: readonly string[],
 ): Promise<readonly DiscoveredPack[]> {
-  const result = await discoverPacks(installedFolders, createNodeFileReader());
+  // Engine-gated like the render path (`@markii/react`'s `loadPack`), so
+  // Insert Component and completion never offer a component this renderer
+  // could not render if it were accepted.
+  const result = await discoverPacks(
+    installedFolders,
+    createNodeFileReader(),
+    undefined,
+    REACT_ENGINE_ID,
+  );
   return result.packs;
 }

@@ -56,6 +56,19 @@ write `publish`, never `publish=true`. Any spelled-out value counts as
 absent. This fails closed, so an unrecognized spelling can never switch
 behavior on.
 
+A block may also declare which hosts it intends to reach, with a
+`permissions` attribute holding a comma-separated list:
+
+```lua {name=stars permissions=api.github.com}
+```
+
+This is a statement of intent and nothing more. A host may show it beside
+the hosts it found when it asks for permission, so the reader can see what
+the note claims about itself, but it never widens or narrows what is
+actually granted. What can be granted comes from the addresses written
+literally in the script, and a declaration that disagrees with them is
+reported on the host's diagnostics surface rather than acted on.
+
 How a runnable block *looks* in a rendered page is the renderer's choice, not
 the format's. The reference renderer folds it to a collapsed one-line marker
 (`⚙ stars · lua`) that expands on demand; a reading view may hide it
@@ -267,6 +280,30 @@ single-writer snapshots with the usual freshness status. Reading an `@`
 value is pure and needs no permission; publishing writes beyond the note, so
 it requires a grant. Publishing adds no files to the vault; the store lives
 in the application.
+
+## Rendering a note with its values
+
+A host that renders a note itself, rather than through one of the reference
+applications, passes the stores to the renderer. `renderMark` in
+`@markii/react` takes them as its third and fourth arguments, after the text
+and the registry, and `renderMarkToHtml` in `@markii/html` has the same
+shape. Both are optional.
+
+The third argument is the note's own value store, holding what this note's
+scripts last produced. A bare name reads from it, whether written as
+`:value[stars]` or as a component's `data=stars`. The fourth is the vault
+store, holding what other notes published; an `@`-prefixed name reads from
+that one instead.
+
+Both can be given on the trailing options object as `store` and `vault`
+rather than positionally, which is the easier form once a caller is already
+passing other render options. If a value arrives both ways, the options
+object wins.
+
+Reading a value renders nothing but text: it executes no script and needs no
+grant. With no store, every bare name resolves as missing; with no vault,
+every `@` name does. Either way the rest of the note still renders, because
+a missing value is a state a component draws, not a failure.
 
 ## Long scripts and shared code
 

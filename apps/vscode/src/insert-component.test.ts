@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { InsertableComponent } from '@markii/host';
+import type { InsertableComponent } from '@markii/stdlib/editor';
 import {
   insertComponentQuickPickItems,
   INSERT_COMPONENT_QUICK_PICK_PLACEHOLDER,

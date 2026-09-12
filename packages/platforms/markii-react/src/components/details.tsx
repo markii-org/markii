@@ -22,7 +22,10 @@ export function Details({
 
   return (
     <details className="mk-details" open={open}>
-      <summary className="mk-details__summary">{title}</summary>
+      {/* `data-mk-interactive` matches `@markii/stdlib`'s `INTERACTIVE_ATTRIBUTE` (#53); see `tabs.tsx`'s top comment for why it is a literal here. */}
+      <summary className="mk-details__summary" data-mk-interactive="">
+        {title}
+      </summary>
       <div className="mk-details__body">{children}</div>
     </details>
   );

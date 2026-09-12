@@ -4,11 +4,13 @@
  * text for a host with no rich-text popup. Used by both `hoverAt` and the
  * `component` completion items in `./completion.ts`.
  */
-import type { PackComponentAttribute } from '@markii/pack';
-import type { AttributeSchema } from '@markii/stdlib';
-import { getContract } from '@markii/stdlib';
+import type { AttributeSchema } from '../../contracts.js';
+import { getContract } from '../../contracts.js';
 import { componentSkeleton } from '../insert/component-skeleton.js';
-import type { InsertableComponent } from '../insert/component-catalog.js';
+import type {
+  EditorComponentAttribute,
+  InsertableComponent,
+} from '../insert/component-catalog.js';
 import type { ComponentDocumentation } from './types.js';
 
 /** `name`, `name (required)`, `name: a | b`, or `name (required): a | b`. */
@@ -26,7 +28,7 @@ function attributeDocLine(name: string, schema: AttributeSchema): string {
  * so a reader cannot tell from the shape of the line whether the
  * attributes came from a contract or from a `pack.json`.
  */
-function packAttributeDocLine(attribute: PackComponentAttribute): string {
+function packAttributeDocLine(attribute: EditorComponentAttribute): string {
   const requiredPart = attribute.required === true ? ' (required)' : '';
   const valuesPart =
     attribute.values !== undefined ? `: ${attribute.values.join(' | ')}` : '';

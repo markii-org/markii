@@ -40,29 +40,28 @@ export type {
 } from './packs/pack-render-registry.js';
 export { buildRenderRegistry } from './packs/pack-render-registry.js';
 
-// "Insert Component" (issue #17): the catalog and the skeleton builder are
-// pure string/data logic over `@markii/stdlib` contracts and `@markii/pack`
-// manifests, with no environment of their own.
-export type {
-  ComponentSkeleton,
-  LineColumn,
-} from './insert/component-skeleton.js';
-export {
-  componentSkeleton,
-  offsetToLineColumn,
-} from './insert/component-skeleton.js';
-export type { InsertableComponent } from './insert/component-catalog.js';
+// "Insert Component" (issue #17): the skeleton builder, the standard-set
+// catalog, directive autocompletion, and fence auto-extension are ALL now
+// `@markii/stdlib/editor` (GitHub issue #41): pure string/data logic over
+// `@markii/stdlib` contracts, with zero dependencies and no environment of
+// its own. Re-exported here so nothing importing them off `@markii/host` or
+// `@markii/host/browser` has to change; a new consumer should import
+// `@markii/stdlib/editor` directly instead.
+export type { ComponentSkeleton, LineColumn } from '@markii/stdlib/editor';
+export { componentSkeleton, offsetToLineColumn } from '@markii/stdlib/editor';
+export type { InsertableComponent } from '@markii/stdlib/editor';
 // Re-exported so a host reading `InsertableComponent.attributes` names the
 // type through this seam rather than reaching past it into `@markii/pack`.
 export type { PackComponentAttribute } from '@markii/pack';
-export {
-  LAYOUT_WRAPPER_NAMES,
-  buildComponentCatalog,
-} from './insert/component-catalog.js';
+export { LAYOUT_WRAPPER_NAMES } from '@markii/stdlib/editor';
+// The PACK-AWARE catalog builder stays here: it needs `@markii/pack` to
+// compose a pack's declared components onto `@markii/stdlib/editor`'s
+// standard-set list. See `./insert/component-catalog.ts`.
+export { buildComponentCatalog } from './insert/component-catalog.js';
 
 // Directive autocompletion (issue #27, slice 1): pure line/column parsing
 // over the insert catalog and `@markii/stdlib` contracts, plus hover
-// documentation. See `./complete/index.ts`.
+// documentation.
 export type {
   CompletionContext,
   CompletionContextKind,
@@ -70,28 +69,30 @@ export type {
   CompletionItemKind,
   ComponentDocumentation,
   HoverInfo,
-} from './complete/index.js';
+} from '@markii/stdlib/editor';
 export {
   completionAt,
   componentDocumentation,
   formatComponentDocumentation,
   hoverAt,
-} from './complete/index.js';
+} from '@markii/stdlib/editor';
 
 // Fence auto-extension on insert: the pure scan that finds the container
 // fence pairs enclosing an insertion point, and the minimal set of fence
-// lines to lengthen so a newly inserted container still nests legally.
-// Both hosts apply the returned edits in ONE undoable edit together with
-// the insertion. See `./fences/container-fences.ts`.
+// lines to lengthen so a newly inserted container still nests legally, plus
+// the predicate (issue #57) that tells a completion trigger a bare colon
+// run CLOSES an open container rather than opening a new one. Both hosts
+// apply the fence edits in ONE undoable edit together with the insertion.
 export type {
   EnclosingContainerFence,
   FenceLineEdit,
-} from './fences/container-fences.js';
+} from '@markii/stdlib/editor';
 export {
+  closesOpenContainerFence,
   enclosingContainerFences,
   fenceExtensionEdits,
   insertedContainerColonCount,
-} from './fences/container-fences.js';
+} from '@markii/stdlib/editor';
 
 // Pack CSS lint rules: plain string analysis, no filesystem of its own (a
 // caller hands it the stylesheet text).
@@ -108,3 +109,12 @@ export type { ValuesFailure } from './values-failure.js';
 // data work over `@markii/runtime` types, and the VS Code webview (a browser
 // bundle) is one of its two callers.
 export { mergeArrivingValue } from './values-merge.js';
+
+// Render-time diagnostics: one event from either renderer's `onDiagnostic`
+// option becomes the one line both hosts write to their diagnostics
+// surface.
+export {
+  createRenderDiagnosticCollector,
+  createRenderDiagnosticReporter,
+  renderDiagnosticLine,
+} from './diagnostics/render-diagnostics.js';

@@ -16,7 +16,7 @@
  * `vscode.QuickPickItemKind.Separator`), shows the picker, and on a choice
  * builds the skeleton (`@markii/host`'s `componentSkeleton`) and inserts it.
  */
-import type { InsertableComponent } from '@markii/host';
+import type { InsertableComponent } from '@markii/stdlib/editor';
 
 /** Shown when there is no active editor on a document the command is willing to insert into. */
 export const NO_ACTIVE_MARK_EDITOR_MESSAGE =

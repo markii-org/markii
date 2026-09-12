@@ -8,7 +8,7 @@
  */
 
 import type { FailureKind, ValueStatus } from '@markii/runtime';
-import type { LayoutAxis } from '@markii/stdlib';
+import type { LayoutAxis, OnDiagnostic } from '@markii/stdlib';
 import type { ResolveImageSrc } from './image-resolve.js';
 
 /**
@@ -95,6 +95,17 @@ export interface HtmlRenderContext {
    * component must leave its `src` exactly as authored.
    */
   resolveImageSrc?: ResolveImageSrc;
+  /**
+   * `renderMarkToHtml`'s `onDiagnostic` option (`render.ts`'s
+   * `RenderMarkOptions`), carried on `ctx` so a component that decides for
+   * itself whether to render a quiet marker — the standard `Figure` is the
+   * only one today, for a `src` refused as unsafe — can report the same
+   * event a host would otherwise only see as an in-page `title` tooltip.
+   * `undefined` when the render call supplied none. Never call this
+   * directly without going through `@markii/stdlib`'s `reportDiagnostic`,
+   * which guards against a throwing callback.
+   */
+  onDiagnostic?: OnDiagnostic;
 }
 
 /**

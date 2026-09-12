@@ -44,6 +44,30 @@ prompt must say the note "can send data to api.github.com", not that it
 through its URL, so the per-host allowlist is the real boundary, and the
 wording should say so.
 
+A script block may declare its own intended hosts with a `permissions`
+attribute on its fence, and a bundle manifest declares them too. Neither
+declaration is an input to the grant. What the user is asked about, and what
+can be allowed, comes from the addresses written literally in the code that
+will run. A declaration is shown beside that, so a reader can see what the
+note claims about itself, and a mismatch between the two is reported on the
+host's diagnostics surface. Treating a declaration as authorization would
+let a note widen its own reach by writing a longer list.
+
+A capability that has not been granted still exists inside the sandbox. Its
+functions are present and deny when called, rather than the name being
+missing altogether, so a denied call and a misspelled global are not the
+same thing to a script or to a host. The denial travels back on the same
+channel every other denial uses, and the run's outcome carries the
+capability kind.
+
+A host reads that outcome to learn what happened. It must never classify a
+failure by matching the text of an error message. Any text a script can see
+is text a script can produce: a script can call `error` with a message
+shaped exactly like a capability denial, and a host that pattern-matched
+messages would believe it. The outcome is computed outside the interpreter
+from a record the script cannot reach, which is why it is the only trustworthy
+answer.
+
 Grants are remembered per note, keyed by a hash of the note's full
 executable closure: its inline scripts, `src=` script files, required
 bundle-local modules, and the versions of any pack modules it requires. If any of that code changes, the grant is stale and the

@@ -44,16 +44,23 @@ import {
 import {
   buildPackRegistrationScript,
   buildComponentCatalog,
+  exportPackArchive,
+} from '@markii/host';
+import type { DiscoveredPack } from '@markii/host';
+import {
+  closesOpenContainerFence,
   completionAt,
   componentSkeleton,
-  exportPackArchive,
   hoverAt,
   offsetToLineColumn,
-} from '@markii/host';
-import type {
-  CompletionItem as MarkCompletionItem,
-  DiscoveredPack,
-} from '@markii/host';
+} from '@markii/stdlib/editor';
+import type { CompletionItem as MarkCompletionItem } from '@markii/stdlib/editor';
+import {
+  addPackFolderDiagnosticLines,
+  addedPackFolderMessage,
+  unusablePackFolderMessage,
+  validatePackFolder,
+} from './packs/validate-pack-folder.js';
 import { createCatalogCache } from './completion-catalog.js';
 import type { CatalogCache } from './completion-catalog.js';
 import {
@@ -96,7 +103,10 @@ import type { FenceTextEdit } from './fence-edits.js';
  * and tells the user to reopen the preview, since a pack is loaded when the
  * panel is (re)created, not live.
  */
-async function addPackFolder(context: vscode.ExtensionContext): Promise<void> {
+async function addPackFolder(
+  context: vscode.ExtensionContext,
+  diagnosticsChannel: vscode.OutputChannel,
+): Promise<void> {
   const picked = await vscode.window.showOpenDialog({
     canSelectFolders: true,
     canSelectFiles: false,
@@ -108,6 +118,21 @@ async function addPackFolder(context: vscode.ExtensionContext): Promise<void> {
   if (!chosen) return;
 
   const folderPath = chosen.fsPath;
+  // GitHub issue #61: the folder is checked before the setting is written,
+  // so the one notice the user reads matches what the folder actually
+  // holds. Reporting success for a folder with no loadable pack sent the
+  // reader looking for the fault in the pack instead of in the path.
+  const validation = await validatePackFolder(folderPath);
+  for (const line of addPackFolderDiagnosticLines(validation, folderPath)) {
+    diagnosticsChannel.appendLine(line);
+  }
+  if (validation.packs.length === 0) {
+    void vscode.window.showWarningMessage(
+      unusablePackFolderMessage(folderPath),
+    );
+    return;
+  }
+
   const config = vscode.workspace.getConfiguration('markii');
   const existing = config.get<string[]>('packs', []);
   const next = appendPackFolder(existing, folderPath);
@@ -119,7 +144,7 @@ async function addPackFolder(context: vscode.ExtensionContext): Promise<void> {
   }
   await config.update('packs', next, vscode.ConfigurationTarget.Global);
   await reloadActivePreviewPacks(context);
-  void vscode.window.showInformationMessage('Markii: pack folder added.');
+  void vscode.window.showInformationMessage(addedPackFolderMessage(validation));
 }
 
 /**
@@ -709,6 +734,7 @@ function toVscodeCompletionItem(
   line: number,
   replaceStart: number,
   replaceEnd: number,
+  tokenStart: number,
   fenceEdits: readonly FenceTextEdit[],
 ): vscode.CompletionItem {
   const completion = new vscode.CompletionItem(
@@ -718,10 +744,13 @@ function toVscodeCompletionItem(
   completion.detail = completionItemDetail(item);
   // Not the label: VS Code scores an item against the text from its own
   // replace range to the cursor, and a directive-name range starts on the
-  // colon run. See `completionFilterText`.
+  // colon run. The insert-and-replace range form cannot express the two
+  // starts instead, since VS Code requires both of its ranges to begin at
+  // the same position. See `completionFilterText`.
   completion.filterText = completionFilterText(
     lineText,
     replaceStart,
+    tokenStart,
     item.label,
   );
   if (item.documentation !== undefined) {
@@ -779,6 +808,15 @@ function createCompletionAndHoverProviders(catalogCache: CatalogCache): {
     async provideCompletionItems(document, position) {
       try {
         const lineText = document.lineAt(position.line).text;
+        // A bare colon run that CLOSES an open container is not an opener
+        // waiting for a name, so the catalog stays shut. `completionAt`
+        // sees one line and cannot tell the two apart; the trigger
+        // boundary, which has the whole document, can.
+        if (
+          closesOpenContainerFence(document.getText(), position.line, lineText)
+        ) {
+          return undefined;
+        }
         const catalog = await catalogCache.get();
         const ctx = completionAt(lineText, position.character, catalog);
         if (ctx.kind === 'none' || ctx.items.length === 0) return undefined;
@@ -789,6 +827,7 @@ function createCompletionAndHoverProviders(catalogCache: CatalogCache): {
           position.line,
           ctx.items,
         );
+        const tokenStart = ctx.tokenStart ?? ctx.replaceStart;
         return ctx.items.map((item, index) =>
           toVscodeCompletionItem(
             item,
@@ -797,6 +836,7 @@ function createCompletionAndHoverProviders(catalogCache: CatalogCache): {
             position.line,
             ctx.replaceStart,
             ctx.replaceEnd,
+            tokenStart,
             fenceEdits,
           ),
         );
@@ -898,7 +938,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const addPackFolderCommand = vscode.commands.registerCommand(
     'markii.addPackFolder',
     () => {
-      void addPackFolder(context);
+      void addPackFolder(context, diagnosticsChannel);
     },
   );
   const installPackCommandHandle = vscode.commands.registerCommand(

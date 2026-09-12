@@ -118,7 +118,7 @@ describe('doc.css token architecture', () => {
   );
   const fallbackBlock = blocks.find(
     (b) =>
-      b.selector === '.doc' &&
+      b.selector === ':where(.doc, [data-mk-root])' &&
       /--mk-info-fill\s*:/.test(b.body) &&
       !/--mk-bg\s*:/.test(b.body),
   );

@@ -1,9 +1,18 @@
 import type { ReactElement } from 'react';
 import { isSafeUrl } from '@markii/core';
+import { reportDiagnostic } from '@markii/stdlib';
 import type { MarkComponentProps } from '../registry.js';
 import { resolveImageAttribute } from '../image-resolve.js';
+import { unsafeImageSrcTitle } from './failure-presentation.js';
+
+// Matches `failure-presentation.ts`'s `NOTICE_ATTRIBUTE` — kept as a JSX
+// literal (not the imported constant) because TypeScript only special-cases
+// a literal `data-*` attribute name on a DOM intrinsic element, not a
+// computed one; `failure-presentation.test.ts` pins the two to the same
+// value so they cannot drift apart.
 
 const DEFAULT_ALT = '';
+const DIRECTIVE_NAME = 'figure';
 
 /**
  * `:::figure{src="..." alt="..."} caption markdown :::` — an image with a
@@ -32,16 +41,44 @@ export function Figure({
   attributes,
   children,
   resolveImageSrc,
+  onDiagnostic,
 }: MarkComponentProps): ReactElement {
   const rawSrc = attributes.src ?? null;
   const alt = attributes.alt ?? DEFAULT_ALT;
-  const safeSrc = rawSrc && isSafeUrl(rawSrc) ? rawSrc : null;
+  const refused = Boolean(rawSrc) && !isSafeUrl(rawSrc as string);
+  const safeSrc = rawSrc && !refused ? rawSrc : null;
   const src = safeSrc ? resolveImageAttribute(safeSrc, resolveImageSrc) : null;
+
+  const imgEl = src ? (
+    <img className="mk-figure__img" src={src} alt={alt} />
+  ) : null;
+  const captionEl = (
+    <figcaption className="mk-figure__caption">{children}</figcaption>
+  );
+
+  // AGENTS.md "clean is not silent": a refused `src` used to render a
+  // caption with no image and no explanation. The marker's `title` carries
+  // the reason out of the text flow; `onDiagnostic` gives a host the same
+  // event for its own diagnostics surface.
+  if (refused) {
+    const message = unsafeImageSrcTitle(DIRECTIVE_NAME);
+    reportDiagnostic(onDiagnostic, {
+      kind: 'unsafe-image-src',
+      directive: DIRECTIVE_NAME,
+      message,
+    });
+    return (
+      <figure className="mk-figure" data-mk-notice="" title={message}>
+        {imgEl}
+        {captionEl}
+      </figure>
+    );
+  }
 
   return (
     <figure className="mk-figure">
-      {src ? <img className="mk-figure__img" src={src} alt={alt} /> : null}
-      <figcaption className="mk-figure__caption">{children}</figcaption>
+      {imgEl}
+      {captionEl}
     </figure>
   );
 }

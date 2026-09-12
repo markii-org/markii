@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { completionAt } from '../complete/index.js';
+import {
+  completionAt,
+  componentSkeleton,
+  fenceExtensionEdits,
+} from '@markii/stdlib/editor';
 import { buildComponentCatalog } from '../insert/component-catalog.js';
-import { componentSkeleton } from '../insert/component-skeleton.js';
-import { fenceExtensionEdits } from './container-fences.js';
 
 /**
  * Ties the two seams a host actually pairs at runtime: the text
@@ -18,7 +20,7 @@ describe('accepting a completion inside a container', () => {
     const lines = [':::card{}', ':::ta', ':::'];
     const context = completionAt(lines[1] ?? '', 5, catalog);
     const item = context.items.find((entry) => entry.label === 'tabs');
-    expect(item?.insertText).toBe(':::tabs{}\n\n:::');
+    expect(item?.insertText).toBe(':::tabs\n\n:::');
 
     expect(
       fenceExtensionEdits(lines.join('\n'), 1, item?.insertText ?? ''),
@@ -32,7 +34,7 @@ describe('accepting a completion inside a container', () => {
     const lines = [':::card{}', '::div', ':::'];
     const context = completionAt(lines[1] ?? '', 5, catalog);
     const item = context.items.find((entry) => entry.label === 'divider');
-    expect(item?.insertText).toBe('::divider{}');
+    expect(item?.insertText).toBe('::divider');
 
     expect(
       fenceExtensionEdits(lines.join('\n'), 1, item?.insertText ?? ''),
@@ -43,7 +45,7 @@ describe('accepting a completion inside a container', () => {
     const lines = ['::::card{}', '::::ta', '::::'];
     const context = completionAt(lines[1] ?? '', 6, catalog);
     const item = context.items.find((entry) => entry.label === 'tabs');
-    expect(item?.insertText).toBe('::::tabs{}\n\n::::');
+    expect(item?.insertText).toBe('::::tabs\n\n::::');
 
     expect(
       fenceExtensionEdits(lines.join('\n'), 1, item?.insertText ?? ''),

@@ -1,7 +1,14 @@
 /**
- * "Insert Component" (GitHub issue #17, slice 1): the flat list of
- * components a picker offers — every `@markii/stdlib` standard component,
- * plus one entry per component every currently discovered pack declares.
+ * "Insert Component" (GitHub issue #17, slice 1): the PACK-AWARE half of
+ * the insert catalog. `@markii/stdlib/editor`'s `standardComponentCatalog`
+ * (GitHub issue #41) is the standard-set half — every `@markii/stdlib`
+ * standard component, with no dependency on `@markii/pack` at all — and
+ * this module composes it with one entry per component every currently
+ * discovered pack declares. This split is why `@markii/stdlib` can stay at
+ * zero dependencies while a pack-less host (or a third-party editor
+ * integration that never imports `@markii/pack`) still gets the full
+ * standard-set catalog for free.
+ *
  * Host-neutral and pure: no `vscode`, no `obsidian`, no filesystem access
  * of its own (packs are handed in already discovered, via
  * `@markii/host`'s own `discoverPacks`/`DiscoveredPack`).
@@ -15,116 +22,15 @@
  * in it, so this module never re-validates it.
  */
 import { composeDirectiveName, packComponents } from '@markii/pack';
-import type { PackComponentAttribute } from '@markii/pack';
-import type { ComponentKind } from '@markii/stdlib';
-import { STANDARD_COMPONENTS } from '@markii/stdlib';
-import type { DiscoveredPack } from '../packs/discover.js';
-import { firstSentence } from './first-sentence.js';
-
-/**
- * The seven layout-wrapper container directive names (docs/format.md):
- * alignment (`center`, `left`, `right`) and width presets (`fit`, `narrow`,
- * `wide`, `full`). `left` is real — it exists in `@markii/stdlib`'s
- * `STANDARD_COMPONENTS` alongside the others — even though issue #18's
- * prose names only five; this constant is the complete, executable set, so
- * a picker's "layout" section can never silently drop or gain a member as
- * the standard set evolves. Exported so a picker UI can render this group
- * under its own heading without hand-copying the name list, and so the
- * colocated test below can assert it stays in sync with
- * `STANDARD_COMPONENTS`.
- */
-export const LAYOUT_WRAPPER_NAMES: readonly string[] = [
-  'center',
-  'left',
-  'right',
-  'wide',
-  'narrow',
-  'full',
-  'fit',
-];
-
-/** One component a picker can offer to insert. */
-export interface InsertableComponent {
-  /** The directive name the author types, e.g. `callout`, or `cat_card` for a pack component. */
-  readonly directiveName: string;
-  readonly kind: ComponentKind;
-  readonly source: 'standard' | 'pack';
-  /**
-   * Which section of a picker this entry belongs in: the ordinary standard
-   * set, the layout-wrapper set (also `source: 'standard'`, since a layout
-   * wrapper IS a standard component — `group` is the finer split a picker
-   * UI wants), or a pack's own contribution.
-   */
-  readonly group: 'standard' | 'layout' | 'pack';
-  /** Set only when `source === 'pack'`: the owning pack's namespace. */
-  readonly packName?: string;
-  /**
-   * A short, one-line detail for a picker row, when one is available. RAW
-   * material only: a standard component's contract first sentence, or a
-   * pack component's manifest-declared `description` — never a composed
-   * filler string like `From pack "x".`. A host that wants a fallback line
-   * for a pack component with no declared description writes that string
-   * itself, in its own wording module (AGENTS.md: hosts own their
-   * user-facing strings).
-   */
-  readonly description?: string;
-  /**
-   * Required attribute names, in declaration order: a standard component's
-   * contract order, or a pack component's own `attributes` order for the
-   * entries it marked `required`. Empty when nothing is required, which is
-   * still the case for every pack that declares no attributes at all.
-   */
-  readonly requiredAttributes: readonly string[];
-  /**
-   * A pack component's declared attribute metadata (issue #27 slice 4),
-   * in the order the manifest declared it. Absent for a standard
-   * component, whose attributes come from its `@markii/stdlib` contract
-   * instead, and absent for a pack component that declared none.
-   */
-  readonly attributes?: readonly PackComponentAttribute[];
-  /**
-   * True when `kind` came from the component's own declaration (every
-   * standard component, and a pack component whose manifest entry
-   * declares `kind`); false when `kind` is this catalog's `'container'`
-   * default for a pack component that declared none.
-   */
-  readonly kindDeclared: boolean;
-}
-
-/** Required attribute names off a contract's `attributes` map, in the map's own key order. */
-function requiredAttributeNames(
-  attributes: Record<string, { required?: boolean }>,
-): string[] {
-  return Object.keys(attributes).filter(
-    (name) => attributes[name]?.required === true,
-  );
-}
-
-const LAYOUT_WRAPPER_NAME_SET: ReadonlySet<string> = new Set(
+import {
   LAYOUT_WRAPPER_NAMES,
-);
+  standardComponentCatalog,
+} from '@markii/stdlib/editor';
+import type { InsertableComponent } from '@markii/stdlib/editor';
+import type { DiscoveredPack } from '../packs/discover.js';
 
-/**
- * Every standard component (including the layout wrappers), in
- * `STANDARD_COMPONENTS`'s own declaration order. `buildComponentCatalog`
- * below re-splits this into the non-layout entries followed by the layout
- * entries; since the layout wrappers already sit last in
- * `STANDARD_COMPONENTS`'s declaration order, that re-split does not change
- * the overall order today — it exists so the two groups can be labeled and
- * rendered as separate picker sections without relying on that
- * coincidence continuing to hold as the standard set grows.
- */
-function standardCatalogEntries(): InsertableComponent[] {
-  return Object.entries(STANDARD_COMPONENTS).map(([name, contract]) => ({
-    directiveName: name,
-    kind: contract.kind,
-    source: 'standard',
-    group: LAYOUT_WRAPPER_NAME_SET.has(name) ? 'layout' : 'standard',
-    description: firstSentence(contract.description),
-    requiredAttributes: requiredAttributeNames(contract.attributes),
-    kindDeclared: true,
-  }));
-}
+export { LAYOUT_WRAPPER_NAMES };
+export type { InsertableComponent };
 
 /**
  * One pack's contribution to the catalog: its declared components
@@ -178,13 +84,12 @@ function packCatalogEntries(
 }
 
 /**
- * Builds the full insert catalog. Order: every standard, non-layout
- * component first (declaration order), then the six layout wrappers
- * (declaration order), then each pack's components (in the order `packs`
- * is given, each pack's own local names sorted alphabetically). A host
- * renders a picker's sections straight off this order — standard section,
- * layout section, then one section per pack — without needing to re-sort
- * or re-group the result itself.
+ * Builds the full insert catalog: `@markii/stdlib/editor`'s standard-set
+ * list, then each pack's components (in the order `packs` is given, each
+ * pack's own local names sorted alphabetically). A host renders a picker's
+ * sections straight off this order — standard section, layout section,
+ * then one section per pack — without needing to re-sort or re-group the
+ * result itself.
  *
  * A pack component whose composed directive name collides with the
  * standard set or with an earlier pack's entry is skipped, so the returned
@@ -193,15 +98,13 @@ function packCatalogEntries(
 export function buildComponentCatalog(
   packs: readonly DiscoveredPack[],
 ): readonly InsertableComponent[] {
-  const standardAll = standardCatalogEntries();
-  const standard = standardAll.filter((entry) => entry.group === 'standard');
-  const layout = standardAll.filter((entry) => entry.group === 'layout');
-  const taken = new Set(standardAll.map((entry) => entry.directiveName));
+  const standard = standardComponentCatalog();
+  const taken = new Set(standard.map((entry) => entry.directiveName));
 
   const packEntries: InsertableComponent[] = [];
   for (const pack of packs) {
     packEntries.push(...packCatalogEntries(pack, taken));
   }
 
-  return [...standard, ...layout, ...packEntries];
+  return [...standard, ...packEntries];
 }

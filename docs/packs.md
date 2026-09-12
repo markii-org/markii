@@ -196,6 +196,13 @@ which namespaces each component and rejects two packs that claim the same
 namespace. You pass the merged registry to `renderMark`. Nothing loads at
 runtime: the pack is part of your bundle like any other import.
 
+A pack built for a different renderer is not installed, and the result says
+so: it names each dropped pack and the engine that pack declared, so a host
+can report it rather than leaving the author to wonder why their components
+render as unknown ones. Hosts apply the same gate wherever they offer a
+pack's components, including completion and insert lists, so nothing is
+offered that could not render.
+
 In an editor host, a pack is installed per device, because a pack decides
 what code may run in your previews. The two reference hosts differ in how a
 pack gets there, and the difference follows what each host is for.
@@ -471,6 +478,15 @@ webview.js
 webview.css     when the pack has styles
 scripts/        when the pack ships Lua modules
 ```
+
+Where the files sit matters, and it is the usual way a hand-made archive
+goes wrong. Compressing a folder puts everything one level down, inside a
+directory entry named after it, and a reader opening that archive finds no
+`pack.json` at the root. Zip the pack's files themselves, not the folder
+holding them. A reader that meets a wrapped archive says so by name rather
+than reporting a missing file, since the file is there, just a level too
+deep. Metadata a desktop archiver adds alongside, such as a `__MACOSX`
+folder, is ignored.
 
 An archive is named after what its manifest declares: `<name>-<version>.mkp`
 when the manifest has a `version`, and `<name>.mkp` when it does not. The

@@ -12,7 +12,7 @@
  * own editor's line/column (or offset) type using `offsetToLineColumn`
  * below.
  */
-import type { ComponentKind } from '@markii/stdlib';
+import type { ComponentKind } from '../../contracts.js';
 
 /** The text to insert, and where the cursor should land within it. */
 export interface ComponentSkeleton {
@@ -33,10 +33,15 @@ export interface ComponentSkeleton {
  * Directive forms match docs/format.md's three spellings:
  * - `container`: `:::NAME{...}\n\n:::`
  * - `leaf`:      `::NAME{...}`
- * - `inline`:    `:NAME[...]{...}` (the `{...}` clause only appears when
- *   there are required attributes — an inline directive with none of its
- *   own is just `:NAME[]`, since `[...]` is already its content slot and a
- *   trailing empty `{}` would be pointless noise in the inserted text)
+ * - `inline`:    `:NAME[...]{...}`
+ *
+ * A directive with no required attributes of its own gets no `{}` clause at
+ * all, in every form: an empty brace pair is pointless noise the author
+ * would otherwise have to delete by hand, the same reasoning the inline
+ * form already applied (`[...]` is already its content slot). A container
+ * with nothing required lands the cursor in its empty body, between the
+ * fences; a leaf lands it right after the name, since there is nowhere else
+ * useful to put it.
  */
 export function componentSkeleton(
   directiveName: string,
@@ -47,7 +52,7 @@ export function componentSkeleton(
 
   if (kind === 'container') {
     if (requiredAttributes.length === 0) {
-      const prefix = `:::${directiveName}{}\n`;
+      const prefix = `:::${directiveName}\n`;
       return { text: `${prefix}\n:::`, cursorOffset: prefix.length };
     }
     const prefix = `:::${directiveName}${attributesClause}\n`;
@@ -59,8 +64,8 @@ export function componentSkeleton(
 
   if (kind === 'leaf') {
     if (requiredAttributes.length === 0) {
-      const text = `::${directiveName}{}`;
-      return { text, cursorOffset: text.length - 1 };
+      const text = `::${directiveName}`;
+      return { text, cursorOffset: text.length };
     }
     const text = `::${directiveName}${attributesClause}`;
     return { text, cursorOffset: firstAttributeQuoteOffset(text) };

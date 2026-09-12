@@ -66,6 +66,20 @@ application. The split is:
   manifest validation, and the path jail.
 - `@markii/lua`: the sandboxed Lua executor that plugs into the runtime.
 
+Install what you import, not only what you call. A minimal React embedding
+is three packages:
+
+```
+npm install @markii/core @markii/stdlib @markii/react
+```
+
+`@markii/react`'s main entry reaches `@markii/stdlib` on the render path
+itself, for the width and align presets and the component contracts, so a
+strict resolver such as pnpm or Yarn PnP needs it declared even though
+application code only ever imports `@markii/react`. The same rule applies to
+anything else you import directly: declare every package your own source
+names.
+
 A minimal React embedding is a registry plus one call:
 
 ```tsx
@@ -112,6 +126,16 @@ the OS preference and a host's own palette mapping.
 
 The Tier 1 contract is nineteen custom properties declared on `.doc`:
 fifteen colors, and the four widths described after them.
+
+A host that renders into a container class of its own, rather than `.doc`,
+adds a bare `data-mk-root` attribute to that container and declares the Tier
+1 values on the same element. Everything past the palette treats `.doc` and
+`[data-mk-root]` as equivalent: the derived Tier 2 tokens, the vertical
+rhythm, the base typography, and the rules for tables, code, and task lists.
+The palette's own light and dark defaults stay on `.doc` alone, because a
+host that picks its own container is expected to supply its own values.
+Without either marker a container still shows the document, but it loses the
+derived tokens, so callouts and badges read flat in both light and dark.
 
 The palette is those fifteen colors:
 
@@ -271,6 +295,10 @@ importance:
    The VS Code extension uses an output channel named Markii; the Obsidian
    plugin uses the developer console with a notice for anything the user
    must act on. Both expose a command that shows the current state.
+   The renderers' `onDiagnostic` callback belongs here too: a quiet marker
+   in the page is half of the contract, and the reason has to reach this
+   surface as well. Deduplicate before writing, because a preview re-renders
+   on every keystroke.
 10. **Prebuilt pack conventions, if you load packs.** A pack shipping a
     prebuilt `webview.js` may ship a `webview.css` beside it: load and
     unload that exactly like a stylesheet you compiled yourself, keyed by
@@ -284,9 +312,15 @@ importance:
     say so on the diagnostics surface. That keeps the ordinary rule that two
     packs cannot share a namespace, and settles the tie by load order rather
     than by refusing both.
-    A pack list names folders, never archive files. A `.mkp` archive enters
-    a host through an install step instead, and installing is a consent
-    step, because it decides what code runs in a preview: validate the
+    A pack list names folders, never archive files. A host that offers a
+    folder list validates a folder before it reports the folder added:
+    discovery runs first, the notice says what was actually found, and the
+    reasons for anything skipped go to the diagnostics surface. Reporting
+    success for a folder holding no loadable pack sends the reader looking
+    for the fault in the pack rather than in the path. A host with no folder
+    list, such as an archive-only one, has nothing to do here. A `.mkp`
+    archive enters a host through an install step instead, and installing is
+    a consent step, because it decides what code runs in a preview: validate the
     archive, then ask in words that say the pack's code will run, then ask
     again before replacing a namespace already installed, and write nothing
     until all of those have passed. A rejected archive is reported on the
@@ -304,6 +338,11 @@ importance:
     carried by a sync service, does not load until that device says so.
     Installing, removing, and enabling take effect at once: reload packs and
     re-render what is open rather than asking the reader to reopen it.
+    Gate on the pack's declared engine in every place a pack's components
+    are offered, not only where they render. A pack built for another
+    renderer is reported as skipped, with its declared engine named, so it
+    never reaches a completion list or an insert picker that promises
+    something the renderer would answer with the unknown-component box.
 11. **Pack compilation, if you compile packs from source.** A pack ships
     component sources and no build step of its own, so a host that offers
     source packs compiles them at load time with `esbuild-wasm`, and it
@@ -344,15 +383,43 @@ container inside a container needs the outer fence pair to carry more colons
 than the inner one, so when a host inserts a container, either through Insert
 Component or by accepting one from the completion popup, it lengthens the
 enclosing fences in the same undoable edit. It happens in those two places
-only, never while typing, and it stays quiet: `@markii/host`'s scanner acts
-only on a document whose fences pair cleanly from the top of the file, and
-leaves anything ambiguous alone rather than guessing.
+only, never while typing, and it stays quiet: `@markii/stdlib/editor`'s
+scanner acts only on a document whose fences pair cleanly from the top of
+the file, and leaves anything ambiguous alone rather than guessing.
 
 Completion and hover are note-authoring features, so both hosts carry them,
 the same way both carry Insert Component. A host implements them against
-`@markii/host`'s `completionAt` and `hoverAt`, which read the line around
-the cursor and return the items and the range to replace. A host never
-re-derives directive parsing of its own. The items come from the component
+`@markii/stdlib/editor`'s `completionAt` and `hoverAt`, which read the line
+around the cursor and return the items and the range to replace. A host
+never re-derives directive parsing of its own.
+
+`@markii/stdlib/editor` is the whole editor seam, published and installable:
+the standard-set component catalog, completion, hover documentation, the
+Insert Component skeleton builder, and container fence lengthening. It has
+no dependencies of its own, so a host that wants the standard components in
+its completion list does not pull in pack loading, a bundler, or the script
+runtime to get them. A host that also loads packs composes the pack half on
+top of the standard catalog, the way this repo's own hosts do.
+
+A directive-name completion context reports two offsets, and they answer
+different questions. `replaceStart` is where an accepted item's text
+replaces from: on a line whose rest is empty it sits at the start of the
+colon run, because accepting an item there rewrites the whole fence.
+`tokenStart` is where the name itself begins, after the colon run. A widget
+that filters candidates against the text between its own anchor and the
+cursor, which is what CodeMirror's `CompletionResult.from` does, must filter
+from `tokenStart`: filtering from `replaceStart` compares every label
+against a leading `:::` and shows an empty popup. Use `replaceStart` for the
+edit and `tokenStart` for the filter. A host whose widget derives one anchor
+from the other, as VS Code's does, uses the pair to build its filter text
+rather than rediscovering the colon run itself.
+
+Completion does not open on a line that closes a container. A bare colon run
+can be a fence someone just started typing or the closing half of a
+container already open above it, and only the document can tell those apart,
+so `closesOpenContainerFence` makes that call at the host's trigger
+boundary. `completionAt` itself still offers the full catalog for a bare
+opener. The items come from the component
 catalog (the standard set plus installed packs), the attribute contracts in
 `@markii/stdlib`, and the layout preset lists the same package exports
 (`WIDTH_PRESETS`, `ALIGN_PRESETS`, `LAYOUT_ATTRIBUTES`). Those preset
@@ -374,6 +441,18 @@ wikilink uses, so a bare file name found anywhere in the vault works), then
 the path as vault-relative. Absolute file-system paths and `obsidian://`
 URLs are not resolved by either host: a note that used them would only
 render on one machine.
+
+Obsidian notes can also name a file the way Obsidian does, with `[[Page]]`,
+`[[Page|Alias]]`, or an embed such as `![[image.png]]`. The parser stays
+unaware of that syntax by design, so the plugin converts those into ordinary
+CommonMark links and images before the text reaches it. Both of its
+rendering surfaces do this, Reading view and the Markii Preview pane, so the
+same note shows the same picture on either one and `:::figure` is not
+required for an embedded image. A link naming nothing in the vault keeps its
+original text rather than breaking the render. The general rule for any
+host: if you offer more than one rendering surface for the same note,
+convert your own link syntax at every one of them, not only at the first one
+built.
 
 Resolution is not authorization. Each host reads an image through its own
 storage layer and never outside it, so a note cannot point the preview at a
@@ -401,6 +480,48 @@ That refusal reads the value the way a browser's URL parser does, ignoring
 tabs, newlines, and leading control characters, because a check that trusted
 the raw text would pass a disguised scheme straight through.
 
+`resolveHref` is the same seam for an ordinary markdown link's `href`: the
+same rule about which values are offered to it, the same refusal of a
+`javascript:` or `vbscript:` result, and the same fall-through when it
+returns nothing or throws. No standard component builds its own link, so it
+only ever sees a link the parser itself produced.
+
+`renderMarkNode` and `renderMarkNodeToHtml` accept a whole parsed document
+as well as a single node, so a host that already holds the tree `parse`
+returns hands it over directly instead of looping over the top-level
+children itself.
+
+`renderMarkInline` and `renderMarkInlineToHtml` render one standalone
+directive without the paragraph wrapper the ordinary render puts around it.
+The rule is narrow on purpose: the source has to be exactly one paragraph
+holding exactly one inline directive. Anything else, including prose beside
+the directive or a second block, renders exactly as the ordinary call
+would, wrapper included. A live-preview widget replacing a single line of
+source is what this is for.
+
+Both renderers also take an `onDiagnostic` callback. It is called once for
+each quiet marker a render produces for a value the renderer recognized and
+declined to use: a known attribute whose value is outside its closed set,
+and a figure source refused as unsafe. It receives the kind, the directive,
+the attribute, and the same sentence the marker's own tooltip carries, so a
+host can put the finding on its diagnostics surface instead of relying on
+someone hovering the marker. An unknown attribute name never triggers it,
+since packs and later versions of the format use names this one does not
+know, and neither does the unknown-directive box, which already explains
+itself in the page. A callback that throws cannot break the render.
+
+### Marking interactive elements
+
+Everything the standard set renders that is a real control carries
+`data-mk-interactive`: tabs' buttons, a details summary, and the collapsed
+script marker's summary. `@markii/stdlib` exports the attribute name as
+`INTERACTIVE_ATTRIBUTE`. An editor host that renders a note inline uses it
+to tell a click meant to act from a click meant to reveal the source for
+editing, without maintaining a tag and role allowlist of its own. A pack
+component with its own clickable element is expected to carry the same
+attribute. Nothing can enforce that on a pack, since a pack is arbitrary
+code, so a host should treat an element without the attribute as text.
+
 ## Exporting a note
 
 A host can hand the reader a file rather than a view. Both reference hosts do:
@@ -411,7 +532,8 @@ An export is not a screenshot of the preview, but it renders the same
 components. A host that already has a renderer and a loaded registry in front
 of it, which both reference hosts do for their preview, renders the export
 body with exactly that registry and hands the resulting markup to
-`@markii/host`'s `composeNoteHtmlExport`. A host with nothing to render
+`@markii/host`'s `composeNoteHtmlExport`, this repository's own shared host
+layer, which is not published. A host with nothing to render
 through falls back to `@markii/html`, the static string engine. Either way the
 exported file carries the shared `doc.css` inside it and loads nothing at
 runtime, so it opens in any browser, attaches to an email, or goes into an

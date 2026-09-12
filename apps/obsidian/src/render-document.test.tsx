@@ -39,3 +39,33 @@ describe('renderDocument', () => {
     expect(html).toContain('src="app://local/vault/cat.png"');
   });
 });
+
+describe('renderDocument — render diagnostics', () => {
+  it('reports a known attribute given a value outside its enum', () => {
+    const events: string[] = [];
+    renderToStaticMarkup(
+      renderDocument(
+        ':::card{text="Hey"}\nbody\n:::\n',
+        undefined,
+        undefined,
+        undefined,
+        (event) => events.push(`${event.kind} ${event.attribute ?? ''}`),
+      ),
+    );
+    expect(events).toEqual(['invalid-attribute-value text']);
+  });
+
+  it('stays silent for an attribute name nothing declares', () => {
+    const events: unknown[] = [];
+    renderToStaticMarkup(
+      renderDocument(
+        ':::card{madeUpAttribute=1}\nbody\n:::\n',
+        undefined,
+        undefined,
+        undefined,
+        (event) => events.push(event),
+      ),
+    );
+    expect(events).toEqual([]);
+  });
+});
