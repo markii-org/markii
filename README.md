@@ -40,7 +40,7 @@ facebook/react has :value[repo.stars] stars.
 ````
 
 > [!TIP]
-> For more details on how Markii works, see [README.mk.md](https://sadigaxund.github.io/markii/)
+> For more details on how Markii works, try the [guided tour](https://sadigaxund.github.io/markii-vault/#tour) in the vault playground.
 
 Delete every directive and script and a coherent note remains. That is the
 line Markii holds: components and scripts feed the document; they never become

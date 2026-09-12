@@ -6,6 +6,13 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Removed
+
+- **This repository's own GitHub Pages deployment of `apps/playground`.**
+  The vault playground (`markii-vault`, https://sadigaxund.github.io/markii-vault/)
+  is now the one deployed playground; `apps/playground` stays a local dev
+  harness only.
+
 ## [0.14.0] - 2026-09-13
 
 The `@markii/*` packages and the VS Code extension ship this release as
