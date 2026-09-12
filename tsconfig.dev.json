@@ -29,6 +29,7 @@
       "@markii/core": ["packages/markii-core/src/index.ts"],
       "@markii/core/corpus": ["packages/markii-core/src/corpus.ts"],
       "@markii/stdlib": ["packages/markii-stdlib/src/index.ts"],
+      "@markii/stdlib/editor": ["packages/markii-stdlib/src/editor/index.ts"],
       "@markii/runtime": ["packages/markii-runtime/src/index.ts"],
       "@markii/bundle": ["packages/markii-bundle/src/index.ts"],
       "@markii/bundle/fs": ["packages/markii-bundle/src/fs.ts"],
