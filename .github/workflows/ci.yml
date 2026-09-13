@@ -112,7 +112,7 @@ jobs:
             process.exit(1);
           }
           console.log('packed consumer render OK,', html.length, 'chars');
-          const ansi = renderMarkToAnsi(doc, defaultAnsiRegistry, undefined, undefined, {
+          const ansi = await renderMarkToAnsi(doc, defaultAnsiRegistry, undefined, undefined, {
             width: 80,
             color: 'never',
           });
