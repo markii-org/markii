@@ -127,12 +127,16 @@ Its three entry points mirror the other engines. `renderMarkToAnsi` takes
 document text, `renderMarkNodeToAnsi` takes one already parsed node or a
 whole parsed document, and `renderMarkInlineToAnsi` renders a lone inline
 directive without the paragraph wrapper. The registry argument is optional
-here, defaulting to the standard set:
+here, defaulting to the standard set.
+
+All three are asynchronous. The engine lays its output out with Ink, whose
+layout module loads through a top-level await, so the first render in a
+process waits for that once and every render after it is immediate:
 
 ```ts
 import { renderMarkToAnsi } from '@markii/ansi';
 
-const text = renderMarkToAnsi(source, undefined, store, undefined, {
+const text = await renderMarkToAnsi(source, undefined, store, undefined, {
   width: 100,
   color: 'truecolor',
 });
@@ -140,7 +144,44 @@ const text = renderMarkToAnsi(source, undefined, store, undefined, {
 
 The standard components live at the `@markii/ansi/components` subpath, as
 `defaultAnsiRegistry`, on the same principle as the other engines: an
-application bringing its own registry never pays for the standard set.
+application bringing its own registry never pays for the standard set. A
+component here is a React component that receives the directive's
+attributes, its already-built children, and the render context, and returns
+Ink elements.
+
+### A note that answers the keyboard
+
+A string is the right output for a pipe, a log, and a fixture. It is not
+the right output for someone reading a note at a prompt, where a tabbed
+panel should switch and a collapsed section should open. For that,
+`buildMarkElement` returns the element tree instead of rendering it, and
+the host mounts it with Ink itself:
+
+```ts
+import { buildMarkElement } from '@markii/ansi';
+import { render } from 'ink';
+
+const app = render(buildMarkElement(source, undefined, { width, store }));
+```
+
+A host that does this owns three things. It supplies the width, and
+re-supplies it when the terminal is resized. It supplies `onExit`, which
+the viewer calls when the reader presses q, since the engine never touches
+the process. And it keeps its own output off the screen while the viewer is
+mounted: a diagnostic written to standard error in the middle of a frame
+lands in the middle of the drawn page, so a host holds those lines and
+writes them after unmounting.
+
+The keys belong to the engine, so every host that mounts the viewer behaves
+the same way. Left and right, or tab, switch tabs. Enter folds a details
+block open or closed. Up and down, or j and k, move focus between the
+foldable blocks in document order. The focused block is marked with the
+accent color. Pressing q calls `onExit`.
+
+Interactivity is a property of the render, not of the note. The same
+document rendered through the string entry points is the flat page
+described below, with every tab panel stacked and every section open,
+because a string has nothing to press.
 
 ### Color is the caller's decision
 
@@ -191,9 +232,11 @@ The module says which ranges it knows, and the tests name each of them.
 
 Some of the format degrades on the way to text, and it degrades predictably.
 
-Tabs stack instead of switching, and a collapsible section renders open with
-a marker line, because there is nothing to click. An image renders as its
-alt text and its source, since the pixels cannot arrive. A link carries an
+In a string render, tabs stack instead of switching and a collapsible
+section renders open with a marker line, because a string has nothing to
+press; the live viewer described above is where those two come back. An
+image renders as its alt text and its source, since the pixels cannot
+arrive. A link carries an
 OSC 8 hyperlink only when color is on and the destination passes the same
 URL check every engine applies, and otherwise prints its address in
 parentheses, which reads correctly whether or not the terminal understands
@@ -501,6 +544,18 @@ importance:
     reset permissions should not be surprised by what else goes.
     Getting this wrong hands whoever receives a copy of the content
     authority they never granted.
+13. **A module format that can hold the terminal engine, if you bundle it.**
+    The terminal engine's layout module loads its WebAssembly through a
+    top-level await, which a CommonJS output format cannot represent, so a
+    host that bundles that engine emits an ECMAScript module or does not
+    bundle it at all. The layout WebAssembly is embedded in that module
+    rather than shipped beside it, so unlike the Lua runtime it needs no
+    sidecar file, but two other things do surface at bundle time: the
+    optional developer-tools peer the layout library imports has to be
+    stubbed out, and a bundler that wraps CommonJS dependencies has to be
+    given a `require` shim, because a plain module has no `require` to fall
+    back on. A host that ships a single executable file should expect its
+    output to grow by something under two megabytes.
 
 ## Editor support
 

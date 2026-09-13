@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { createValueStore } from '@markii/runtime';
 import { renderMarkToAnsi } from '../render.js';
-import { stripAnsi } from '../measure.js';
+import { stripEscapes } from '../text-grid.js';
 
 describe('Table', () => {
-  it('draws a box-drawn grid from an array of objects, header bold', () => {
+  it('draws a box-drawn grid from an array of objects, header bold', async () => {
     const store = createValueStore({
       users: {
         value: [
@@ -14,7 +14,11 @@ describe('Table', () => {
         status: 'fresh',
       },
     });
-    const out = renderMarkToAnsi('::table{data=users}\n', undefined, store);
+    const out = await renderMarkToAnsi(
+      '::table{data=users}\n',
+      undefined,
+      store,
+    );
     expect(out).toContain('┌');
     expect(out).toContain('┬');
     expect(out).toContain('name');
@@ -22,15 +26,15 @@ describe('Table', () => {
     expect(out).toContain('└');
   });
 
-  it('columns= reorders/restricts columns', () => {
+  it('columns= reorders/restricts columns', async () => {
     const store = createValueStore({
       users: {
         value: [{ name: 'Ana', role: 'Admin', extra: 'x' }],
         status: 'fresh',
       },
     });
-    const out = stripAnsi(
-      renderMarkToAnsi(
+    const out = stripEscapes(
+      await renderMarkToAnsi(
         '::table{data=users columns="role,name"}\n',
         undefined,
         store,
@@ -40,12 +44,12 @@ describe('Table', () => {
     expect(out).not.toContain('extra');
   });
 
-  it('limit= caps the number of rows shown', () => {
+  it('limit= caps the number of rows shown', async () => {
     const store = createValueStore({
       xs: { value: [1, 2, 3, 4], status: 'fresh' },
     });
-    const out = stripAnsi(
-      renderMarkToAnsi('::table{data=xs limit=2}\n', undefined, store),
+    const out = stripEscapes(
+      await renderMarkToAnsi('::table{data=xs limit=2}\n', undefined, store),
     );
     expect(out).toContain('1');
     expect(out).toContain('2');
@@ -53,20 +57,20 @@ describe('Table', () => {
     expect(out).not.toContain('4');
   });
 
-  it('renders a neutral "no data" line for missing/empty binding', () => {
-    const out = stripAnsi(renderMarkToAnsi('::table\n'));
+  it('renders a neutral "no data" line for missing/empty binding', async () => {
+    const out = stripEscapes(await renderMarkToAnsi('::table\n'));
     expect(out).toContain('no data');
   });
 
-  it('a stale binding appends the quiet stale suffix', () => {
+  it('a stale binding appends the quiet stale suffix', async () => {
     const store = createValueStore({ xs: { value: [1, 2], status: 'stale' } });
-    const out = renderMarkToAnsi('::table{data=xs}\n', undefined, store);
+    const out = await renderMarkToAnsi('::table{data=xs}\n', undefined, store);
     expect(out).toContain('(stale)');
   });
 
-  it('caption renders as a bold line above the grid', () => {
+  it('caption renders as a bold line above the grid', async () => {
     const store = createValueStore({ xs: { value: [1], status: 'fresh' } });
-    const out = renderMarkToAnsi(
+    const out = await renderMarkToAnsi(
       '::table{data=xs caption="My table"}\n',
       undefined,
       store,
@@ -74,12 +78,16 @@ describe('Table', () => {
     expect(out).toContain('My table');
   });
 
-  it('format/decimals apply to numeric cells only', () => {
+  it('format/decimals apply to numeric cells only', async () => {
     const store = createValueStore({
       rows: { value: [{ n: 1234, s: 'text' }], status: 'fresh' },
     });
-    const out = stripAnsi(
-      renderMarkToAnsi('::table{data=rows format=compact}\n', undefined, store),
+    const out = stripEscapes(
+      await renderMarkToAnsi(
+        '::table{data=rows format=compact}\n',
+        undefined,
+        store,
+      ),
     );
     expect(out.toLowerCase()).toContain('k');
     expect(out).toContain('text');

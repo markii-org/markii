@@ -1,13 +1,4 @@
-/**
- * The registry contract for the terminal engine: the string-emitting twin of
- * `@markii/html`'s `registry.ts`, itself the string-emitting twin of
- * `@markii/react`'s `registry.ts`. A component here is a plain function from
- * attributes and already-rendered children TEXT to an output string — no
- * hast, no React, no HTML. The alias, merge, and hostile-configuration rules
- * are kept identical to both existing renderers, so a note resolves the same
- * way in all three.
- */
-
+import type { FC, ReactNode } from 'react';
 import type { FailureKind, ValueStatus } from './value-types.js';
 import type { LayoutAxis, OnDiagnostic } from '@markii/stdlib';
 import type { ColorLevel } from './ansi.js';
@@ -15,6 +6,24 @@ import type { AnsiTheme, Tier1Token } from './theme.js';
 import type { ResolvedLayoutAttributes } from './layout.js';
 import type { ResolveImageSrc } from './image-resolve.js';
 import type { ResolveHref } from './href-resolve.js';
+
+/**
+ * The registry contract for the terminal engine, batch-10 (the Ink
+ * rewrite): a component is a React function component receiving
+ * `{ attributes, children, ctx }`, where `children` is ALREADY a built Ink
+ * element tree (a `ReactNode`) rather than the lazy string-producing
+ * `AnsiChildren` handle the pre-Ink engine used. Building children eagerly
+ * is the batch-10 brief's own instruction (`AGENTS.md`'s architecture
+ * section is silent on this; the brief is explicit: "Delete... the lazy-
+ * children machinery"): Ink/Yoga lays a tree out AFTER it is built, exactly
+ * like a browser reflows HTML, so a component no longer needs to ask for a
+ * narrower re-render of its own body the way the old string engine did —
+ * the one standard component that still needs a per-cell WIDTH NUMBER before
+ * it draws (`row`, whose cells may hold a self-drawing box like `card`) gets
+ * that from `render.tsx`'s own walk, which still threads `width` top-down
+ * exactly as before; see `render.tsx`'s `renderRow` for why that one case is
+ * handled at the walk level rather than through a registry-facing API.
+ */
 
 /**
  * Attributes parsed off a directive, e.g. `{type=warning title="Careful"}`. A
@@ -36,28 +45,47 @@ export interface ValueResolution {
 }
 
 /**
- * The render context handed to every component. Mirrors
- * `@markii/html`'s `HtmlRenderContext` field for field, with the HTML-only
- * `esc` swapped for `text` (this engine's control-character sanitizer, see
- * `./sanitize.js`'s `stripControlCharacters`) and a set of terminal-only
- * fields added: `width`/`indent` (the layout budget this directive's own
- * output has to work with), `color`/`theme` (what this render resolved),
- * and the box/style helpers pre-bound to both.
+ * The render context handed to every component. Mirrors the pre-Ink
+ * engine's `AnsiRenderContext` for every field EXCEPT the string-layout
+ * helpers (`wrap`/`pad`/`columns`/`frame`/`rule`), which are dropped:
+ * ordinary prose now wraps through Ink's own layout, and the handful of
+ * self-drawing standard components (`card`, `callout`, `divider`, `chart`,
+ * `table`) that still need exact box-drawing glyphs use `./text-grid.js`'s
+ * private helpers directly rather than through the context.
  */
 export interface AnsiRenderContext {
-  /** The columns available to this directive's own output. A component wraps its own text to this width. */
+  /** The columns available to this directive's own output. A self-drawing component sizes its own frame to this width (or to `layout`'s resolved preset of it). */
   width: number;
   /**
    * The prefix an enclosing block (a blockquote, a nested list) has already
-   * applied to every line above this directive. Informational only: a
-   * component emits its own block UNINDENTED, and the walk applies the
-   * prefix afterward, exactly as `width` is already the post-indent budget.
+   * applied to every line above this directive, informational only: a
+   * component draws its own content at `width` and the walk applies the
+   * enclosing indent as an Ink `Box` wrapper, not as a string prefix.
    */
   indent: string;
   /** The resolved color depth for this render. */
   color: ColorLevel;
   /** The resolved theme for this render. */
   theme: AnsiTheme;
+  /**
+   * Whether this render is in INTERACTIVE mode (a live viewer), as opposed
+   * to the default render-once mode. NAME COLLISION, documented at both
+   * declarations: this is UNRELATED to Ink's own `render()` option also
+   * spelled `interactive` (`ink-string.ts`'s doc comment) — that one
+   * controls which escape sequences Ink emits around a frame; this one
+   * controls which CONTENT a component renders (`tabs` shows only the
+   * active panel, `details` starts closed unless `open` is present) and
+   * whether it registers a keyboard handler at all.
+   */
+  interactive: boolean;
+  /**
+   * A stable, document-order identity for a FOCUSABLE component (currently
+   * `tabs` and `details`) when `interactive` is true; `undefined` when not
+   * interactive, or for any other component. Assigned once by `render.tsx`
+   * as it walks the tree (see `render.tsx`'s `WalkContext.nextFocusId`), so
+   * a component never has to compute its own position in document order.
+   */
+  focusId?: number;
   /** Applies `theme`'s color for `token` at this render's `color` level. Unchanged at `'none'` or for a `null` theme entry. */
   style(text: string, token: Tier1Token): string;
   /** SGR bold, pre-bound to this render's color level. */
@@ -70,29 +98,11 @@ export interface AnsiRenderContext {
   underline(text: string): string;
   /** SGR inverse/reverse video, pre-bound to this render's color level. */
   inverse(text: string): string;
-  /** Greedy word wrap, pre-bound to nothing (width is explicit here since a component may wrap narrower than its own `ctx.width`, e.g. inside its own frame). */
-  wrap(text: string, width: number): string[];
-  /** Pads `text` to `width` columns, aligned `left`/`center`/`right`. */
-  pad(text: string, width: number, align: 'left' | 'center' | 'right'): string;
-  /** Places blocks side by side; see `./box.js`'s `columns`. */
-  columns(
-    blocks: readonly string[],
-    widths: readonly number[],
-    gutter: number,
-  ): string;
-  /** Draws a box around `block`; see `./box.js`'s `frame`. */
-  frame(
-    block: string,
-    options: { style: 'solid' | 'dashed'; title?: string; width: number },
-  ): string;
-  /** A full-width horizontal rule; see `./box.js`'s `rule`. */
-  rule(width: number, char?: string): string;
   /**
    * The sanitizer a component MUST run any author-supplied string through
-   * before printing it (this engine's counterpart to the HTML context's
-   * `esc`): strips every control character an untrusted note could use to
-   * move the cursor or smuggle an escape sequence (`./sanitize.js`'s
-   * `stripControlCharacters`).
+   * before printing it: strips every control character an untrusted note
+   * could use to move the cursor or smuggle an escape sequence
+   * (`./sanitize.js`'s `stripControlCharacters`).
    */
   text(value: string): string;
   /** Resolves a `data=`/`:value[...]` name against the current render's store/vault. Never throws. */
@@ -116,65 +126,22 @@ export interface AnsiRenderContext {
 }
 
 /**
- * How a component wants ONE render of its children to happen: at a
- * narrower `width` than the directive itself was rendered at (a self-layout
- * box sizing its own inner budget), and/or a different `indent`. Omitting a
- * field inherits the value the enclosing directive was rendered with.
+ * One registry component: a React function component. `attributes` are the
+ * directive's raw string attributes (bare attributes as `null`); `children`
+ * is the directive's already-rendered inner markdown, an Ink element tree;
+ * `ctx` is `AnsiRenderContext` above. Attribute parsing, validation, and
+ * defaulting are the component's own job, exactly as in the other two
+ * engines' contracts. A component MAY use React hooks (`useState`,
+ * `useInput`, ...) since `render.tsx` always invokes it as a JSX element,
+ * never as a plain function call — `tabs` and `details` need this for
+ * interactive mode.
  */
-export interface AnsiChildrenOptions {
-  width?: number;
-  indent?: string;
+export interface AnsiComponentProps {
+  attributes: DirectiveAttributes;
+  children: ReactNode;
+  ctx: AnsiRenderContext;
 }
-
-/**
- * One top-level child of a directive's own body, independently renderable
- * at its own width — the piece `row` needs and no other standard component
- * does: it must decide each cell's column width BEFORE that cell's content
- * (including a self-drawing box like `card`) is rendered, not re-wrap an
- * already-drawn frame afterward. `name` is the child's own resolved
- * directive name (e.g. `'cell'`) when the child is itself a directive, and
- * `undefined` for a plain block (a paragraph, a list) or a directive with a
- * different name — enough for a container to recognize a semantically
- * tagged child without ever seeing a hast node.
- */
-export interface AnsiChildPart {
-  readonly name?: string;
-  render(options?: AnsiChildrenOptions): string;
-}
-
-/**
- * The children a component receives. Calling it directly renders the
- * directive's WHOLE body as one flattened string — what every component
- * except `row` wants, and what used to be eagerly computed as a plain
- * string before the component ever ran. `options` narrows the width/indent
- * for that one call (a self-layout box's inner budget); omitted, it renders
- * at the width/indent the directive itself was given.
- *
- * `.parts` exposes each of the directive's own top-level children
- * separately, in document order, each independently renderable at its own
- * width via its own `render(options)` — see `AnsiChildPart`.
- *
- * Laziness is the point: nothing under this directive is rendered until a
- * component actually calls `children()` or one of `.parts`' `render()`
- * functions, so a container can decide sizes top-down before anything below
- * it draws a single character.
- */
-export type AnsiChildren = ((options?: AnsiChildrenOptions) => string) & {
-  readonly parts: readonly AnsiChildPart[];
-};
-
-/**
- * One registry component: receives the directive's raw string attributes
- * (bare attributes as `null`), a lazy handle onto its inner markdown
- * (`AnsiChildren`, see above), and the render context, and returns the text
- * to emit. Attribute parsing, validation, and defaulting are the
- * component's own job, exactly as in the other two engines' contracts.
- */
-export type AnsiComponent = (
-  attributes: DirectiveAttributes,
-  children: AnsiChildren,
-  ctx: AnsiRenderContext,
-) => string;
+export type AnsiComponent = FC<AnsiComponentProps>;
 
 /** One registry entry: the component plus whether it is meant to be used inline vs as a block, and whether it is a layout scope. Mirrors `@markii/html`'s `HtmlRegistryEntry`. */
 export interface AnsiRegistryEntry {
@@ -182,18 +149,17 @@ export interface AnsiRegistryEntry {
   inline?: boolean;
   layout?: LayoutAxis;
   /**
-   * Marks a component that draws its OWN box (a frame, a table grid) rather
-   * than plain wrapped text — `card`, `callout`, `table`, `chart` in the
-   * standard set. `applyLayout`'s generic re-wrap/pad would corrupt a
-   * pre-drawn frame's box-drawing characters if `render.ts` narrowed it
-   * AFTER the component already drew it at the full width. A `selfLayout`
-   * component instead receives the resolved `width`/`align` presets as
-   * `ctx.layout` (the same field a layout-WRAPPER scope receives) and is
-   * trusted to size its own frame correctly; `render.ts` then skips its
-   * usual post-render `applyLayout` call for it, exactly as it already does
-   * for a layout-wrapper scope. Unlike `layout: LayoutAxis`, this is not
-   * "this directive's name sets an axis" — it is "this directive draws pixels
-   * that a generic wrap/pad would break."
+   * Marks a component that draws its OWN fixed-width block (box-drawing
+   * glyphs, a rule, a sparkline) rather than plain wrapped prose — `card`,
+   * `callout`, `divider`, `table`, `chart` in the standard set. A generic
+   * post-render narrow/align pass would corrupt a pre-drawn frame's
+   * box-drawing characters, so a `selfLayout` component instead receives the
+   * resolved `width`/`align` presets as `ctx.layout` and is trusted to size
+   * its own frame correctly; `render.tsx` skips its usual post-render
+   * `applyLayout` wrapping for it. Kept from the pre-Ink engine: Ink's own
+   * layout does not solve this, because the content in question is a
+   * pre-built STRING (see `text-grid.ts`'s module doc comment), not
+   * Ink primitives Yoga can reflow.
    */
   selfLayout?: boolean;
 }
@@ -361,4 +327,22 @@ export function resolveDirectiveAlias(
     name: alias.name,
     attributes: mergeAliasAttributes(alias.attributes, attributes),
   };
+}
+
+/**
+ * Reads a component's `children` prop back as plain text. `render.tsx`
+ * always hands most standard components (every one except `row`, `tabs`,
+ * `details`) an already-flattened STRING as `children` — see `render.tsx`'s
+ * top comment on why those three are the only ones that get a real Ink
+ * element tree instead. `children` is still typed `ReactNode` on
+ * `AnsiComponentProps` (the honest public contract: "an Ink element tree",
+ * per the batch-10 brief, and a string IS a valid `ReactNode`), so a
+ * component that needs its body AS TEXT (to measure it, frame it, indent
+ * it, or check whether it is empty) reads it through this helper rather
+ * than assuming the type; a non-string `children` degrades to `''` rather
+ * than throwing, matching this package's never-throw posture everywhere
+ * else.
+ */
+export function childrenText(children: ReactNode): string {
+  return typeof children === 'string' ? children : '';
 }

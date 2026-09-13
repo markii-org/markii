@@ -5,7 +5,9 @@
  * routes `onDiagnostic` lines to a collector the caller decides whether to
  * print.
  */
+import type { ReactElement } from 'react';
 import {
+  buildMarkElement,
   detectColorLevel,
   renderMarkToAnsi,
   resolveColorOption,
@@ -66,17 +68,49 @@ export interface RenderNoteOptions {
   readonly onDiagnostic?: OnDiagnostic;
 }
 
-/** Renders `text` to a plain string for the terminal, resolving width and color from `terminal` and `options`. */
-export function renderNote(
+/**
+ * Renders `text` to a plain string for the terminal, resolving width and
+ * color from `terminal` and `options`. `async` since `@markii/ansi` itself
+ * is (batch 10: the terminal engine moved to Ink, which pays a one-time
+ * module-evaluation cost the first time any render happens in a process —
+ * see `@markii/ansi`'s `ink-string.ts`).
+ */
+export async function renderNote(
   text: string,
   terminal: Terminal,
   options: RenderNoteOptions = {},
-): string {
+): Promise<string> {
   const width = resolveWidth(options.widthFlag, terminal);
   const color = resolveColor(options.colorFlag, terminal);
   return renderMarkToAnsi(text, undefined, options.store, undefined, {
     width,
     color: colorLevelToOption(color),
     ...(options.onDiagnostic ? { onDiagnostic: options.onDiagnostic } : {}),
+  });
+}
+
+/**
+ * The live-viewer twin of `renderNote`: builds the Ink element tree
+ * (`@markii/ansi`'s `buildMarkElement`) instead of a string, for a caller
+ * (`markii view`'s live path) to mount directly and re-render on resize.
+ * Resolves color once, the same way `renderNote` does; `width` is a plain
+ * argument rather than resolved from `terminal` here, since the live path
+ * recomputes it on every resize from the real terminal stream, not once at
+ * call time.
+ */
+export function buildViewElement(
+  text: string,
+  terminal: Pick<Terminal, 'env' | 'stdoutIsTty'>,
+  width: number,
+  options: RenderNoteOptions & { readonly onExit?: () => void } = {},
+): ReactElement {
+  const color = resolveColor(options.colorFlag, terminal);
+  return buildMarkElement(text, undefined, {
+    width,
+    color: colorLevelToOption(color),
+    ...(options.store ? { store: options.store } : {}),
+    ...(options.onDiagnostic ? { onDiagnostic: options.onDiagnostic } : {}),
+    ...(options.onExit ? { onExit: options.onExit } : {}),
+    interactive: true,
   });
 }

@@ -19,7 +19,7 @@ From the repository root:
 
 ```
 npm run build --workspace markii-cli
-node apps/cli/dist/markii.js --help
+node apps/cli/dist/markii.mjs --help
 ```
 
 ## Commands
@@ -38,12 +38,34 @@ Renders a note to the terminal.
   program follows. `never` always renders plain text.
 - `--no-run` never runs the note's scripts, even in an interactive
   terminal.
+- `--static` renders the note once and exits, even in a terminal.
 
 If the note has scripts, `--no-run` was not given, and both stdin and
 stdout are terminals, `markii view` runs the note's scripts once before
 rendering. Otherwise it renders with whatever values the note last
 produced, shown as cached. A note that has never been run shows its
 standard empty states.
+
+#### The live viewer
+
+In a terminal, `markii view` opens the note in a live viewer rather than
+printing it and exiting. Tabs show one panel at a time, and a details block
+starts folded unless it was written with `open`.
+
+| Key              | What it does                                      |
+| ---------------- | ------------------------------------------------- |
+| left, right, tab | Switch to the previous or next tab                |
+| enter            | Fold a details block open or closed               |
+| up, down, j, k   | Move focus to the previous or next foldable block |
+| q                | Quit                                              |
+
+The focused block is marked in the accent color, so it is always clear what
+a key will act on.
+
+The viewer needs both stdin and stdout to be terminals. Piping the output,
+redirecting it to a file, or passing `--static` renders the note once and
+exits, which is the behavior scripts and CI depend on. That path is plain
+text with no cursor movement in it, so it is safe to capture.
 
 ### `markii export <file> --format <html|ansi|md-plain> -o <file>`
 

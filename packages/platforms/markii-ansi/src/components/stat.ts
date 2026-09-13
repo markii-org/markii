@@ -53,16 +53,11 @@ function pick(
 
 /**
  * `::stat{value=42 label="stars" trend=up}` — a big value plus label. Data
- * binding (§8) mirrors `@markii/html`'s `Stat` exactly: a bound number/string
- * supplies `value`; a bound object may supply `value`/`label`/`delta`/`trend`
- * — an explicit attribute always wins. Missing value renders `—` rather than
- * a blank line. Terminal form: a muted label line, then a bold value line
- * (with `delta` appended, colored by `trend` when recognized). A failed or
- * stale binding appends `failure-presentation.ts`'s quiet suffix to the
- * value line — the terminal has no tooltip channel, so the reason has to
- * reach the text itself (AGENTS.md's "clean is not silent").
+ * binding (§8): a bound number/string supplies `value`; a bound object may
+ * supply `value`/`label`/`delta`/`trend` — an explicit attribute always
+ * wins. Missing value renders `—` rather than a blank line.
  */
-export const Stat: AnsiComponent = (attributes, _children, ctx) => {
+export const Stat: AnsiComponent = ({ attributes, ctx }) => {
   const { data, dataStatus, dataFailureKind } = ctx;
 
   const bound = safeRead<StatFields>(

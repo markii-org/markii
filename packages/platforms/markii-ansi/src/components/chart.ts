@@ -1,5 +1,4 @@
-import { pad } from '../box.js';
-import { measure } from '../measure.js';
+import { padText, measureWidth } from '../text-grid.js';
 import { safeRead } from '../resolve.js';
 import { dataStateSuffix, failureToken } from '../failure-presentation.js';
 import type { AnsiComponent } from '../registry.js';
@@ -33,7 +32,7 @@ function coercePoint(entry: unknown): number | undefined {
   return undefined;
 }
 
-/** Builds the numeric point series to plot, a bound `data` array taking priority over the static `values=` attribute. Ported from `@markii/html`'s `resolvePoints`. */
+/** Builds the numeric point series to plot, a bound `data` array taking priority over the static `values=` attribute. */
 function resolvePoints(
   data: unknown,
   dataStatus: string | undefined,
@@ -106,18 +105,12 @@ function barLength(
 
 /**
  * `::chart{kind=line|bar values="1,3,2,5"}` — a dependency-free, hand-rolled
- * chart. Data binding (§8) mirrors `@markii/html`'s `Chart`: a bound `data`
- * array of numbers (or `{value}` objects) takes priority over the static
- * `values=` attribute; non-numeric/non-finite entries are dropped and the
- * point count capped at `MAX_POINTS`. An empty or all-invalid series renders
- * a small neutral "no data" line rather than a broken chart.
- *
- * Terminal form: a `line` chart is a single sparkline row (`▁▂▃▄▅▆▇█`),
- * flanked by its minimum and maximum as plain numbers. A `bar` chart is one
- * horizontal `█` bar per point, its own value as the row's label, labels
- * right-aligned to the widest one so every bar starts at the same column.
+ * chart. Data binding (§8): a bound `data` array of numbers (or `{value}`
+ * objects) takes priority over the static `values=` attribute. Terminal
+ * form: a `line` chart is a single sparkline row, a `bar` chart is one
+ * horizontal `█` bar per point.
  */
-export const Chart: AnsiComponent = (attributes, _children, ctx) => {
+export const Chart: AnsiComponent = ({ attributes, ctx }) => {
   const { data, dataStatus, dataFailureKind } = ctx;
 
   const rawKind = attributes.kind ?? DEFAULT_KIND;
@@ -148,12 +141,12 @@ export const Chart: AnsiComponent = (attributes, _children, ctx) => {
   }
 
   const labels = points.map((point) => formatPoint(point));
-  const labelWidth = Math.max(...labels.map((label) => measure(label)));
+  const labelWidth = Math.max(...labels.map((label) => measureWidth(label)));
   const budget = Math.max(1, ctx.width - labelWidth - 1);
   const maxMagnitude = Math.max(...points.map((point) => Math.abs(point)));
   const lines = points.map((point, index) => {
     const bar = '█'.repeat(barLength(point, maxMagnitude, budget));
-    return `${pad(labels[index]!, labelWidth, 'right')} ${bar}`;
+    return `${padText(labels[index]!, labelWidth, 'right')} ${bar}`;
   });
   return `${lines.join('\n')}${styledSuffix}`;
 };

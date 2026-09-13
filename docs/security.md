@@ -436,6 +436,24 @@ never reinterpreted as markup: the engine consumes the tree `@markii/core`
 already sanitized and has no raw-output path, so an HTML node renders its
 text content and nothing else.
 
+The rule holds even though a layout library writes the final bytes. The
+engine lays its output out with Ink, and Ink is capable of emitting color
+of its own through chalk, which reads `NO_COLOR`, `FORCE_COLOR` and `TERM`.
+The engine therefore uses none of Ink's color or style properties and never
+sets chalk's level. Color is applied by the engine's own SGR helpers before
+the text is handed over, so the palette comes from the theme the caller
+chose and no environment variable can change what a render produces. The
+static path also asks Ink not to manage the screen, which is what keeps
+cursor movement and synchronized-update markers out of a string that may be
+piped, redirected, or committed as a fixture.
+
+The live viewer is the one place cursor control is legitimate. A terminal
+application that switches tabs and folds sections has to move the cursor
+and repaint, so `markii view` in a terminal emits the sequences any
+full-screen program does. The distinction that matters is unchanged: those
+sequences come from the viewer, never from the note. Author text reaches
+the viewer through the same sanitizer it reaches a piped string through.
+
 The boundary is verified by executed probes rather than by review. A note
 carrying a CSI sequence, an OSC 8 hyperlink, a C1 control introducer, a bell,
 a carriage return, and a delete character, placed in body text, in a heading,
@@ -447,6 +465,18 @@ escape introducer, bell, or delete byte survives anywhere in what remains.
 That check is what makes the rule falsifiable rather than aspirational: it
 fails if any future component prints an author string without sanitizing it,
 not merely if the sanitizer itself regresses.
+
+The layout library is covered by the same kind of evidence. A string
+carrying ESC, a CSI sequence, an OSC 8 hyperlink, a bell, a carriage return
+and a delete byte was passed through Ink twice: once sanitized and once
+raw. Sanitized, none of those bytes appear in the rendered output, and
+stripping SGR from that output leaves no escape introducer behind, so Ink
+introduces nothing of its own beyond the color the engine asked for and the
+line breaks. Raw, every one of those bytes reaches the output intact, which
+is the measurement that shows the sanitizer is load-bearing rather than
+belt and braces. A separate check renders at a fixed requested color level
+across every combination of `NO_COLOR`, `FORCE_COLOR`, `TERM` and `CI`, in
+separate processes, and asserts the bytes are identical each time.
 
 ## Verification status of the reference sandbox
 

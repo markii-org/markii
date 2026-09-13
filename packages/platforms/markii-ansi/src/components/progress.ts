@@ -1,5 +1,5 @@
 import { formatValue } from '@markii/stdlib';
-import { measure } from '../measure.js';
+import { measureWidth } from '../text-grid.js';
 import { safeRead } from '../resolve.js';
 import { dataStateSuffix, failureToken } from '../failure-presentation.js';
 import type { AnsiComponent } from '../registry.js';
@@ -51,19 +51,11 @@ const MAX_BAR_WIDTH = 30;
 const MIN_BAR_WIDTH = 3;
 
 /**
- * `::progress{value=3 max=5 label="tasks"}` — a meter bar. Data binding (§8)
- * mirrors `@markii/html`'s `Progress`: a bound number supplies `value`; a
- * bound object may supply `value`/`max` — explicit attributes always win.
- * Non-numeric/`NaN`/`Infinity` input falls back to `0` (value) or the
- * default `max` of `1`; the effective value is clamped to `[0, max]`.
- * Terminal form: `label bar percent`, the bar drawn with `█` (filled) and
- * `░` (empty) at up to `MAX_BAR_WIDTH` columns, narrower when the label and
- * percent text leave less room. `format`/`decimals`, when given, format the
- * `value/max` fraction for the percent readout in place of the default
- * rounded integer percent, matching `@markii/html` exactly. A failed/stale
- * binding appends the quiet failure suffix after the percent.
+ * `::progress{value=3 max=5 label="tasks"}` — a meter bar. Data binding
+ * (§8): a bound number supplies `value`; a bound object may supply
+ * `value`/`max` — explicit attributes always win.
  */
-export const Progress: AnsiComponent = (attributes, _children, ctx) => {
+export const Progress: AnsiComponent = ({ attributes, ctx }) => {
   const { data, dataStatus, dataFailureKind } = ctx;
 
   const bound = safeRead<ProgressFields>(
@@ -92,7 +84,7 @@ export const Progress: AnsiComponent = (attributes, _children, ctx) => {
   const token = failureToken(dataFailureKind);
   const percentPart = ` ${ctx.text(percentText)}${suffix ? (token ? ctx.style(suffix, token) : ctx.dim(suffix)) : ''}`;
 
-  const overhead = measure(labelPart) + measure(percentText) + 1;
+  const overhead = measureWidth(labelPart) + measureWidth(percentText) + 1;
   const barWidth = Math.max(
     MIN_BAR_WIDTH,
     Math.min(MAX_BAR_WIDTH, ctx.width - overhead),

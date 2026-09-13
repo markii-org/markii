@@ -1,6 +1,6 @@
 {
   "name": "@markii/ansi",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "description": "A framework-free terminal renderer for Markii (.mk.md): a registry-driven hast-to-ANSI-text engine. Zero React; for a terminal, a pipe, or any host that wants a plain string with optional color.",
   "keywords": [
     "markdown",
@@ -51,11 +51,14 @@
     "regenerate:fixtures": "npm run build:dist && node scripts/regenerate-ansi-fixtures.ts"
   },
   "dependencies": {
-    "@markii/core": "^0.15.0",
-    "@markii/stdlib": "^0.15.0"
+    "@markii/core": "^0.16.0",
+    "@markii/stdlib": "^0.16.0",
+    "ink": "^7.1.1",
+    "react": "^19.2.0"
   },
   "devDependencies": {
     "@types/hast": "^3.0.4",
-    "@markii/runtime": "^0.15.0"
+    "@markii/runtime": "^0.16.0",
+    "@types/react": "^19.2.0"
   }
 }

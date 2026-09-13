@@ -11,7 +11,7 @@ import { createAnsiRegistry, type AnsiComponent } from './registry.js';
  * suite is product code and stays green in CI.
  *
  * `SGR_ESCAPE`/`OSC8_ESCAPE` below are exactly the two patterns this engine
- * itself is allowed to emit (`./measure.ts`'s `stripAnsi` uses the same
+ * itself is allowed to emit (`./measure.ts`'s `stripEscapes` uses the same
  * two). The decisive assertion strips both from the output and checks that
  * no raw ESC (`\x1b`), C1 CSI (`\x9b`), BEL (`\x07`), or DEL (`\x7f`) byte
  * survives — so even an escape THIS engine emits is verified to be one of
@@ -42,8 +42,8 @@ describe('control characters never survive into the output (executed probe)', ()
   for (const level of COLOR_OPTIONS) {
     describe(`at color level ${level}`, () => {
       for (const { name, value } of PAYLOADS) {
-        it(`in plain paragraph text: ${name}`, () => {
-          const output = renderMarkToAnsi(
+        it(`in plain paragraph text: ${name}`, async () => {
+          const output = await renderMarkToAnsi(
             `before ${value} after`,
             undefined,
             undefined,
@@ -57,12 +57,12 @@ describe('control characters never survive into the output (executed probe)', ()
           );
         });
 
-        it(`inside a heading: ${name}`, () => {
+        it(`inside a heading: ${name}`, async () => {
           // A heading takes its own styling path (bold, and underline at
           // level one), so it wraps the author's text in escapes of the
           // engine's own. That is exactly the path where a surviving
           // author escape would be hardest to spot by eye.
-          const output = renderMarkToAnsi(
+          const output = await renderMarkToAnsi(
             `# title ${value} end\n`,
             undefined,
             undefined,
@@ -74,12 +74,14 @@ describe('control characters never survive into the output (executed probe)', ()
           );
         });
 
-        it(`inside a directive attribute value: ${name}`, () => {
-          const echoAttr: AnsiComponent = (attrs, _children, ctx) =>
-            ctx.text(typeof attrs.label === 'string' ? attrs.label : '');
+        it(`inside a directive attribute value: ${name}`, async () => {
+          const echoAttr: AnsiComponent = ({ attributes, ctx }) =>
+            ctx.text(
+              typeof attributes.label === 'string' ? attributes.label : '',
+            );
           const registry = createAnsiRegistry({ box: { component: echoAttr } });
           const escapedValue = value.replace(/"/g, '\\"');
-          const output = renderMarkToAnsi(
+          const output = await renderMarkToAnsi(
             `:::box{label="x${escapedValue}y"}\nbody\n:::\n`,
             registry,
             undefined,
@@ -91,8 +93,8 @@ describe('control characters never survive into the output (executed probe)', ()
           );
         });
 
-        it(`inside a code fence: ${name}`, () => {
-          const output = renderMarkToAnsi(
+        it(`inside a code fence: ${name}`, async () => {
+          const output = await renderMarkToAnsi(
             `\`\`\`text\nfence ${value} body\n\`\`\`\n`,
             undefined,
             undefined,
@@ -104,8 +106,8 @@ describe('control characters never survive into the output (executed probe)', ()
           );
         });
 
-        it(`inside a link's text: ${name}`, () => {
-          const output = renderMarkToAnsi(
+        it(`inside a link's text: ${name}`, async () => {
+          const output = await renderMarkToAnsi(
             `[click ${value} here](https://example.com)\n`,
             undefined,
             undefined,
@@ -117,8 +119,8 @@ describe('control characters never survive into the output (executed probe)', ()
           );
         });
 
-        it(`inside a link's href: ${name}`, () => {
-          const output = renderMarkToAnsi(
+        it(`inside a link's href: ${name}`, async () => {
+          const output = await renderMarkToAnsi(
             `[click](https://example.com/${encodeURIComponent(value)}${value})\n`,
             undefined,
             undefined,
@@ -130,8 +132,8 @@ describe('control characters never survive into the output (executed probe)', ()
           );
         });
 
-        it(`inside an image's alt text: ${name}`, () => {
-          const output = renderMarkToAnsi(
+        it(`inside an image's alt text: ${name}`, async () => {
+          const output = await renderMarkToAnsi(
             `![alt ${value} text](https://example.com/x.png)\n`,
             undefined,
             undefined,
@@ -144,11 +146,11 @@ describe('control characters never survive into the output (executed probe)', ()
         });
       }
 
-      it('the whole document, stripped of engine escapes, carries no raw ESC/C1/BEL/DEL byte', () => {
+      it('the whole document, stripped of engine escapes, carries no raw ESC/C1/BEL/DEL byte', async () => {
         const source = PAYLOADS.map(
           ({ value }) => `text ${value} more\n\n`,
         ).join('');
-        const output = renderMarkToAnsi(
+        const output = await renderMarkToAnsi(
           source,
           undefined,
           undefined,

@@ -1,12 +1,14 @@
-// @markii/ansi: a framework-free terminal renderer for Markii documents. It
+// @markii/ansi: a terminal renderer for Markii documents, built on Ink. It
 // consumes @markii/core's sanitized hast and emits a plain string (optionally
 // carrying ANSI SGR/OSC 8 escapes) for a terminal, a pipe, or any host that
-// wants text with no HTML and no React runtime. It is a third platform
-// renderer alongside @markii/html and @markii/react.
+// wants text with no HTML runtime — plus, for a live viewer, the Ink element
+// tree itself (`buildMarkElement`). It is a third platform renderer alongside
+// @markii/html and @markii/react.
 export {
   renderMarkToAnsi,
   renderMarkNodeToAnsi,
   renderMarkInlineToAnsi,
+  buildMarkElement,
   type RenderMarkOptions,
 } from './render.js';
 export {
@@ -32,14 +34,13 @@ export {
   registryAliases,
   readRegistryComponent,
   resolveDirectiveAlias,
+  childrenText,
   REGISTRY_ALIASES,
   type DirectiveAttributes,
   type AnsiRegistry,
   type AnsiRegistryEntry,
   type AnsiComponent,
-  type AnsiChildren,
-  type AnsiChildPart,
-  type AnsiChildrenOptions,
+  type AnsiComponentProps,
   type AnsiRenderContext,
   type RegistryAlias,
   type RegistryAliases,
@@ -65,22 +66,12 @@ export {
   unsafeImageSrcTitle,
 } from './failure-presentation.js';
 export { stringifyStoredValue } from './value-format.js';
-export { measure, stripAnsi } from './measure.js';
 export {
   stripControlCharacters,
   sanitizeBlockText,
   sanitizeUrlText,
   BLOCK_TAB_WIDTH,
 } from './sanitize.js';
-export {
-  wrap,
-  pad,
-  indentBlock,
-  columns,
-  frame,
-  rule,
-  type FrameOptions,
-} from './box.js';
 export {
   resolveLayoutAttributes,
   applyLayout,

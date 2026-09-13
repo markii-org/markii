@@ -1,4 +1,4 @@
-import { measure } from '../measure.js';
+import { measureWidth, padText, ruleLine } from '../text-grid.js';
 import { selfLayoutAlign, selfLayoutWidth } from '../layout.js';
 import type { AnsiComponent } from '../registry.js';
 
@@ -36,7 +36,7 @@ function labeledRule(
   align: DividerLabelAlign,
 ): string {
   const labelText = ` ${label} `;
-  const remaining = Math.max(0, width - measure(labelText));
+  const remaining = Math.max(0, width - measureWidth(labelText));
   let left: number;
   if (align === 'left') left = Math.min(SHORT_SIDE_RULE, remaining);
   else if (align === 'right')
@@ -57,16 +57,14 @@ function labeledRule(
  * within the width. Dimmed, matching the plain thematic-break rendering.
  *
  * Registered `selfLayout` (`registry.ts`'s `AnsiRegistryEntry.selfLayout`):
- * a full-width rule is ONE long run with no spaces in it, so a generic
+ * a full-width rule is ONE long run with no spaces in it, so the generic
  * post-render `applyLayout` narrowing would treat the whole rule as a
- * single over-long "word" and hard-break it into several shorter lines
- * (`../box.ts`'s `wrap`'s `breakLongWord`) instead of drawing one shorter
- * rule — this component instead reads `ctx.layout` and draws its own rule
- * at the resolved width from the start, exactly like `card`/`callout`.
+ * single over-long "word" and hard-break it — this component instead reads
+ * `ctx.layout` and draws its own rule at the resolved width from the start.
  */
 const FIT_DEFAULT_WIDTH = 10;
 
-export const Divider: AnsiComponent = (attributes, _children, ctx) => {
+export const Divider: AnsiComponent = ({ attributes, ctx }) => {
   const rawVariant = attributes.variant ?? 'line';
   const variant: DividerVariant = isDividerVariant(rawVariant)
     ? rawVariant
@@ -79,7 +77,7 @@ export const Divider: AnsiComponent = (attributes, _children, ctx) => {
       ? rawLabelAlign
       : 'center';
 
-  const naturalWidth = label ? measure(label) + 4 : FIT_DEFAULT_WIDTH;
+  const naturalWidth = label ? measureWidth(label) + 4 : FIT_DEFAULT_WIDTH;
   const width = selfLayoutWidth(ctx.layout, ctx.width, naturalWidth);
 
   let line: string;
@@ -87,12 +85,12 @@ export const Divider: AnsiComponent = (attributes, _children, ctx) => {
     const inner = label
       ? `${ORNAMENT_GLYPH} ${label} ${ORNAMENT_GLYPH}`
       : ORNAMENT_GLYPH;
-    line = ctx.pad(inner, width, labelAlign);
+    line = padText(inner, width, labelAlign);
   } else {
     const ruleChar = RULE_CHAR[variant];
     line = label
       ? labeledRule(ruleChar, label, width, labelAlign)
-      : ctx.rule(width, ruleChar);
+      : ruleLine(width, ruleChar);
   }
 
   return selfLayoutAlign(ctx.dim(line), ctx.layout, ctx.width);

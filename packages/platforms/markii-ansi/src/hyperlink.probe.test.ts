@@ -14,8 +14,8 @@ import { renderMarkToAnsi } from './render.js';
 const OSC8_START = '\x1b]8;;';
 
 describe('hyperlink emission (executed probe)', () => {
-  it('emits OSC 8 for a safe https: link at a color level', () => {
-    const output = renderMarkToAnsi(
+  it('emits OSC 8 for a safe https: link at a color level', async () => {
+    const output = await renderMarkToAnsi(
       '[click here](https://example.com)\n',
       undefined,
       undefined,
@@ -28,8 +28,8 @@ describe('hyperlink emission (executed probe)', () => {
     expect(output).toContain('https://example.com');
   });
 
-  it('never emits OSC 8 at color level none, even for a safe link', () => {
-    const output = renderMarkToAnsi(
+  it('never emits OSC 8 at color level none, even for a safe link', async () => {
+    const output = await renderMarkToAnsi(
       '[click here](https://example.com)\n',
       undefined,
       undefined,
@@ -42,8 +42,8 @@ describe('hyperlink emission (executed probe)', () => {
     expect(output).toContain('(https://example.com)');
   });
 
-  it('never emits OSC 8 for a javascript: href, at any color level', () => {
-    const output = renderMarkToAnsi(
+  it('never emits OSC 8 for a javascript: href, at any color level', async () => {
+    const output = await renderMarkToAnsi(
       '[click here](javascript:alert(1))\n',
       undefined,
       undefined,
@@ -55,8 +55,8 @@ describe('hyperlink emission (executed probe)', () => {
     expect(output).not.toContain(OSC8_START);
   });
 
-  it('never emits OSC 8 for a href resolved to carry a BEL', () => {
-    const output = renderMarkToAnsi(
+  it('never emits OSC 8 for a href resolved to carry a BEL', async () => {
+    const output = await renderMarkToAnsi(
       '[click here](notes/a)\n',
       undefined,
       undefined,
@@ -69,8 +69,8 @@ describe('hyperlink emission (executed probe)', () => {
     expect(output).not.toContain(OSC8_START);
   });
 
-  it('never emits OSC 8 for a href carrying an ESC byte', () => {
-    const output = renderMarkToAnsi(
+  it('never emits OSC 8 for a href carrying an ESC byte', async () => {
+    const output = await renderMarkToAnsi(
       '[click here](notes/a)\n',
       undefined,
       undefined,
@@ -83,8 +83,8 @@ describe('hyperlink emission (executed probe)', () => {
     expect(output).not.toContain(OSC8_START);
   });
 
-  it('emits OSC 8 for a resolved href that resolves to a safe, unmodified URL', () => {
-    const output = renderMarkToAnsi(
+  it('emits OSC 8 for a resolved href that resolves to a safe, unmodified URL', async () => {
+    const output = await renderMarkToAnsi(
       '[click here](notes/a)\n',
       undefined,
       undefined,
@@ -98,8 +98,8 @@ describe('hyperlink emission (executed probe)', () => {
     expect(output).toContain('https://resolved.example.com/a');
   });
 
-  it('never emits OSC 8 for a vbscript: href', () => {
-    const output = renderMarkToAnsi(
+  it('never emits OSC 8 for a vbscript: href', async () => {
+    const output = await renderMarkToAnsi(
       '[click here](vbscript:msgbox(1))\n',
       undefined,
       undefined,

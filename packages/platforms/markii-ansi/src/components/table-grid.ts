@@ -1,5 +1,8 @@
-import { pad, wrap } from '../box.js';
-import { measure } from '../measure.js';
+import {
+  padText as pad,
+  wrapText as wrap,
+  measureWidth as measure,
+} from '../text-grid.js';
 
 /**
  * The ONE box-drawing/width-negotiation routine every table this engine

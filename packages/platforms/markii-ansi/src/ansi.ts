@@ -89,6 +89,62 @@ export const underline = sgrWrap(4);
 /** SGR inverse/reverse video (7). Returns `text` unchanged at `'none'`. */
 export const inverse = sgrWrap(7);
 
+/** Matches one SGR sequence, capturing its raw parameter string (empty for a bare `ESC [ m`). */
+const SGR_TOKEN = /\x1b\[([0-9;]*)m/g;
+
+/**
+ * Repairs an SGR escape span that would otherwise cross an embedded `\n`
+ * inside `text`, so every physical LINE is independently self-contained:
+ * whatever SGR codes are still "open" (emitted since the last full reset)
+ * at a line boundary are closed with a reset before the `\n` and reopened
+ * at the start of the next line.
+ *
+ * This is the SYSTEMATIC fix for a real Ink behavior discovered during
+ * batch 10's post-phase-2 review: Ink's `<Text>` does not treat an embedded
+ * raw ANSI escape as transparent across an embedded newline the way a
+ * terminal receiving the same bytes directly would — it resets SGR state
+ * at every line boundary within one `<Text>` value and does not reopen it.
+ * Every multi-line string this engine hands to a single `<Text>` node
+ * (`render.tsx`'s `styledText` helper) MUST pass through this function
+ * first: a dim-wrapped multi-line frame, a bold-and-underlined heading that
+ * wrapped onto more than one line, a paragraph whose bold span happened to
+ * straddle a wrap point — anything this engine itself line-wrapped (with
+ * `text-grid.ts`'s `wrapText`) while carrying an open style. It is a no-op,
+ * fast-pathed, for a string with no `\n` at all.
+ *
+ * Every SGR code this engine's own helpers ever emit closes with a FULL
+ * reset (`\x1b[0m`), never a narrow one (`ansi.ts`'s `wrapSgr`), so
+ * tracking "what is currently open" only ever needs a flat list cleared by
+ * the next `\x1b[0m` (or a bare `\x1b[m`) — never per-attribute bookkeeping.
+ */
+export function carrySgrAcrossLines(text: string): string {
+  if (!text.includes('\n')) return text;
+
+  const lines = text.split('\n');
+  let openCodes: string[] = [];
+  const result: string[] = [];
+
+  for (const line of lines) {
+    const prefix = openCodes.map((params) => `${ESC}[${params}m`).join('');
+
+    SGR_TOKEN.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = SGR_TOKEN.exec(line)) !== null) {
+      const params = match[1] ?? '';
+      if (params === '' || params === '0') {
+        openCodes = [];
+      } else {
+        openCodes = [...openCodes, params];
+      }
+    }
+
+    const suffix = openCodes.length > 0 ? RESET : '';
+    result.push(`${prefix}${line}${suffix}`);
+  }
+
+  return result.join('\n');
+}
+
 /**
  * OSC 8: `ESC ] 8 ; ; url BEL text ESC ] 8 ; ; BEL`. Emitted only when
  * `level` is not `'none'`; at `'none'` this returns `text` UNCHANGED, and

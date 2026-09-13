@@ -112,35 +112,42 @@ packages/platforms/markii-html   the static HTML renderer (issue #2), a second
                      match @markii/react so doc.css is shared
 packages/platforms/markii-ansi   the terminal renderer, a third platform
                         adapter for a note read in a shell (CLI, CI log,
-                        pager). Zero React, and dependencies exactly
-                        @markii/core + @markii/stdlib, so the escapes, width
-                        measurement and box drawing are all its own:
-  src/render.ts      hast → ANSI string walk; same unknown/form-mismatch
-                     fallback wording as the other engines, as a framed
-                     dim box; markdown nodes rendered to text
+                        pager). Ink + React on top of @markii/core +
+                        @markii/stdlib: Ink owns layout, the escapes and
+                        the theme stay this engine's own:
+  src/render.tsx     hast -> Ink element tree; the three entry points are
+                     async (Ink's layout module loads via top-level await).
+                     buildMarkElement returns the tree for a host to mount
+  src/ink-string.ts  the ONE place Ink's render() is called for the string
+                     path: a collecting stream at the requested columns,
+                     interactive:false so no cursor escapes reach a pipe
+  src/interactive.tsx focus, tab switching, details folding; q calls the
+                     host's onExit, never process.exit
   src/sanitize.ts    SECURITY CRITICAL: the one place control characters
-                     leave author text. The only escapes in the output are
-                     this engine's own (docs/security.md)
-  src/ansi.ts        ColorLevel/AnsiColor + the SGR and OSC 8 primitives,
-                     and detectColorLevel(env, isTTY). The engine NEVER
-                     reads process/stdout/env: 'auto' resolves to no color
-                     and a caller that wants detection asks for it
-  src/theme.ts       Tier 1 doc.css token → {ansi16, ansi256, truecolor};
-                     theme-coverage.test.ts fails on an unmapped token,
-                     same rule as the host theme layers
-  src/measure.ts     hand-written display width (combining 0, CJK/emoji 2),
-                     a documented approximation of UAX #11, no dependency
-  src/box.ts         wrap/pad/columns/frame/rule, all escape-aware
+                     leave author text. The engine uses NO Ink color/style
+                     props and never sets chalk.level, so the only escapes
+                     in the output are its own (docs/security.md)
+  src/ansi.ts        ColorLevel/AnsiColor, SGR and OSC 8, detectColorLevel,
+                     and carrySgrAcrossLines (Ink drops SGR state at an
+                     embedded newline, so a styled block re-opens per line)
+  src/theme.ts       Tier 1 doc.css token -> {ansi16, ansi256, truecolor};
+                     theme-coverage.test.ts fails on an unmapped token
+  src/text-grid.ts   the private measure/pad/wrap/frame helpers the
+                     self-drawing components (card, callout, details) still
+                     need. NOT exported
   src/value-types.ts the local structural ValueStatus/FailureKind/store
                      shapes, so nothing imports @markii/runtime at runtime;
                      value-types.drift.test.ts pins them to the real ones
-  src/registry.ts    AnsiRegistry: (attrs, childrenText, ctx) → string; adds
-                     selfLayout for a component that draws its own box
-  src/components/    the standard set as text emitters + defaultAnsiRegistry;
+  src/registry.ts    AnsiRegistry: a React component taking
+                     {attributes, children, ctx}
+  src/components/    the standard set as Ink components + defaultAnsiRegistry;
                      contract-drift.test.ts fails closed like @markii/react's
-  src/conformance.test.ts  the L1 corpus plus the committed
-                     conformance/render/*.txt (width 80, color never) and one
-                     *.ansi; scripts/regenerate-ansi-fixtures.ts is manual
+  src/conformance.test.ts + src/nesting.test.ts  the L1 corpus, the
+                     committed conformance/render/*.txt (width 80, color
+                     never) and one *.ansi, and test-fixtures/ (nesting and
+                     tabs at fixed widths, generated from the previously
+                     published engine); scripts/regenerate-ansi-fixtures.ts
+                     is manual
 packages/markii-runtime host-side scripting glue (docs/scripting.md) — neutral, no React,
                         no wasmoon; stays runtime-agnostic (executor injected):
   src/store.ts       ValueStore + createValueStore (null-proto, hasOwn-guarded)
@@ -361,10 +368,13 @@ apps/cli             the "markii" command line tool, a third host and a
                      consumer of @markii/ansi, never a renderer. Publishable
                      but UNPUBLISHED: absent from build:dist and the release
                      workflow until the user bootstraps it on npm. Bundled
-                     with esbuild like apps/vscode, carrying @markii/host's
-                     worker entry and wasmoon's glue.wasm in its own
-                     dist/run/, so it needs no runtime dependency at all
-                     (every @markii/* entry is a devDependency):
+                     with esbuild as ESM (dist/markii.mjs, since Ink cannot
+                     be bundled as CJS), carrying @markii/host's worker
+                     entry and wasmoon's glue.wasm in its own dist/run/, so
+                     it needs no runtime dependency at all (every @markii/*
+                     entry is a devDependency). `markii view` mounts a live
+                     Ink viewer when stdin and stdout are terminals; a pipe
+                     or --static keeps the render-once path:
   src/main.ts        the entry, exit codes (0/1/2/3), and with terminal.ts
                      the ONLY module that reads env/argv/the terminal
   src/args.ts        the hand-written parser; src/terminal.ts the IO seam
@@ -372,6 +382,8 @@ apps/cli             the "markii" command line tool, a third host and a
                      platform config dir, 0600, atomic, hostile-file safe
   src/run-note.ts    runOnce through the shared path, manual tier only
   src/export-note.ts html via @markii/host, ansi, and the md-plain downgrade
+  src/view-mode.ts   live vs static decision (pure); src/live-view.ts mounts
+                     buildMarkElement with Ink, owns width/resize and onExit
   Loads no packs by design: a pack directive renders as the unknown
   component fallback, like the static HTML export
 apps/obsidian        the "Markii" Obsidian plugin (desktop only) — an
@@ -542,6 +554,14 @@ join the authoring side; nothing is built for that in advance.
 - Obsidian plugin only (`apps/obsidian`, user-approved 2026-08-25):
   `obsidian` (API types, dev-only, external at build time) and `esbuild`
   (plugin bundling). These never enter `packages/*`.
+- Terminal engine and command line tool only (`ink`, `react`,
+  user-approved 2026-09-14): `ink` pinned at the current major and the
+  React it peer-requires may enter `packages/platforms/markii-ansi` and
+  `apps/cli`, and nowhere else. Ink's transitives come with it. The rest
+  of the repo stays on React 18: only these two workspaces resolve
+  React 19, and `@markii/react` is unaffected. Ink's layout module loads
+  its WebAssembly through a top-level await, so any host bundling this
+  engine must emit ESM; a CommonJS bundle cannot represent it.
 
 ## Architecture rules (from the spec — violations are bugs)
 

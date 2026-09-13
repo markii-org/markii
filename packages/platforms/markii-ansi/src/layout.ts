@@ -4,8 +4,11 @@ import {
   WIDTH_PRESETS,
 } from '@markii/stdlib';
 import type { LayoutAxis } from '@markii/stdlib';
-import { pad, wrap } from './box.js';
-import { measure } from './measure.js';
+import {
+  padText as pad,
+  wrapText as wrap,
+  measureWidth as measure,
+} from './text-grid.js';
 import type { DirectiveAttributes } from './registry.js';
 
 /**

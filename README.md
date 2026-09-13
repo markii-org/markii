@@ -152,7 +152,8 @@ const view = renderMark(source, defaultRegistry);
       <br>
       <img src="res/icons/terminal.svg" width="40" height="40" alt="" /><br />
       <h4>Terminal</h4>
-      <code>@markii/ansi</code> renders a note as ANSI text.
+      <code>@markii/ansi</code> renders a note as text you can pipe, or as a
+      live view you can read at a prompt.
       <br /><br />
       <strong>Available</strong>
       <br>

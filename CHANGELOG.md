@@ -6,6 +6,55 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **A live terminal viewer.** `markii view` in a terminal opens the note
+  instead of printing it and exiting. A tabbed panel shows one tab at a
+  time and switches with left and right or tab, a collapsible section
+  starts folded and opens with enter, up and down (or j and k) move focus
+  between the foldable blocks, and q quits. The focused block is marked
+  with the accent color. The viewer needs both stdin and stdout to be
+  terminals: piping, redirecting, or passing the new `--static` flag
+  renders the note once and exits, byte for byte as before, which is what
+  scripts and CI depend on.
+- **`@markii/ansi` exports `buildMarkElement`.** It returns the element
+  tree for a note rather than a rendered string, so a host can mount the
+  note itself and drive it from the keyboard. The host supplies the width
+  and re-supplies it on resize, supplies `onExit` for the quit key, and
+  keeps its own output off the screen while the viewer is mounted. See the
+  terminal section of `docs/integration.md`.
+
+### Changed
+
+- **`@markii/ansi`'s three entry points are asynchronous.**
+  `renderMarkToAnsi`, `renderMarkNodeToAnsi` and `renderMarkInlineToAnsi`
+  return a promise. This is a breaking change for any caller of the
+  terminal engine. The engine lays its output out with Ink, whose layout
+  module loads through a top-level await; the first render in a process
+  waits for that once and every render after it is immediate.
+- **`@markii/ansi` depends on `ink` and `react`.** The dependency is
+  confined to the terminal engine and the command line tool. The other
+  engines and every neutral package are unaffected, and `@markii/react`
+  stays on React 18. Color still never comes from the environment: the
+  engine uses none of Ink's own color or style properties and never sets
+  chalk's level, so a requested color level produces identical bytes under
+  every combination of `NO_COLOR`, `FORCE_COLOR`, `TERM` and `CI`.
+- **`@markii/ansi` no longer exports its text-measurement and box-drawing
+  helpers.** `measure`, `stripAnsi`, `wrap`, `pad`, `indentBlock`,
+  `columns`, `frame`, `rule` and `FrameOptions` are gone, along with the
+  `AnsiChildren`, `AnsiChildPart` and `AnsiChildrenOptions` types, because
+  the layout engine owns that work now. A registry component is a React
+  component receiving the directive's attributes, its already-built
+  children and the render context.
+- **Centered text carries no trailing spaces.** A `text=center` or
+  `text=right` line inside a callout or a card, and a layout wrapper's
+  centered content, are no longer padded out to the full width. Nothing in
+  a terminal can see the difference, and a captured render is cleaner.
+- **The command line tool ships as an ECMAScript module.** The built file
+  is `dist/markii.mjs`, because the terminal engine cannot be represented
+  in a CommonJS bundle. Anyone invoking the built file by path needs the
+  new name; the `markii` command itself is unchanged.
+
 ## [0.15.0] - 2026-09-14
 
 The `@markii/*` packages and the VS Code extension ship this release as

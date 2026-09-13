@@ -4,8 +4,8 @@ import { renderMarkToAnsi } from '../render.js';
 const DOC = '::::row\n:::cell\nOne\n:::\n:::cell\nTwo\n:::\n::::\n';
 
 describe('Row / Cell', () => {
-  it('places cells as columns when width is at least the threshold', () => {
-    const out = renderMarkToAnsi(DOC, undefined, undefined, undefined, {
+  it('places cells as columns when width is at least the threshold', async () => {
+    const out = await renderMarkToAnsi(DOC, undefined, undefined, undefined, {
       width: 60,
     });
     const firstLine = out.trim().split('\n')[0] ?? '';
@@ -13,8 +13,8 @@ describe('Row / Cell', () => {
     expect(firstLine).toContain('Two');
   });
 
-  it('stacks cells vertically below the column threshold', () => {
-    const out = renderMarkToAnsi(DOC, undefined, undefined, undefined, {
+  it('stacks cells vertically below the column threshold', async () => {
+    const out = await renderMarkToAnsi(DOC, undefined, undefined, undefined, {
       width: 40,
     });
     const lines = out.trim().split('\n');
@@ -24,10 +24,10 @@ describe('Row / Cell', () => {
     expect(oneLine).not.toContain('Two');
   });
 
-  it('cols=2 wraps a third cell onto a new grid row', () => {
+  it('cols=2 wraps a third cell onto a new grid row', async () => {
     const doc =
       '::::row{cols=2}\n:::cell\nOne\n:::\n:::cell\nTwo\n:::\n:::cell\nThree\n:::\n::::\n';
-    const out = renderMarkToAnsi(doc, undefined, undefined, undefined, {
+    const out = await renderMarkToAnsi(doc, undefined, undefined, undefined, {
       width: 60,
     });
     const lines = out.trim().split('\n');
@@ -37,9 +37,9 @@ describe('Row / Cell', () => {
     expect(line1).toContain('Two');
   });
 
-  it('an invalid cols value degrades to auto-fit rather than throwing', () => {
-    expect(() =>
+  it('an invalid cols value degrades to auto-fit rather than throwing', async () => {
+    await expect(
       renderMarkToAnsi('::::row{cols=7}\n:::cell\nX\n:::\n::::\n'),
-    ).not.toThrow();
+    ).resolves.toBeTypeOf('string');
   });
 });

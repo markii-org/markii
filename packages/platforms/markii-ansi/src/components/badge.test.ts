@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { renderMarkToAnsi } from '../render.js';
-import { stripAnsi } from '../measure.js';
+import { stripEscapes } from '../text-grid.js';
 
 describe('Badge', () => {
-  it('renders inverse-video chip text at color levels above none', () => {
-    const out = renderMarkToAnsi(
+  it('renders inverse-video chip text at color levels above none', async () => {
+    const out = await renderMarkToAnsi(
       ':badge[New]{variant=success}\n',
       undefined,
       undefined,
@@ -14,17 +14,17 @@ describe('Badge', () => {
       },
     );
     expect(out).toContain('\x1b[7m');
-    expect(stripAnsi(out).trim()).toBe('New');
+    expect(stripEscapes(out).trim()).toBe('New');
   });
 
-  it('degrades to [label] at color level none', () => {
-    const out = renderMarkToAnsi(':badge[New]\n');
+  it('degrades to [label] at color level none', async () => {
+    const out = await renderMarkToAnsi(':badge[New]\n');
     expect(out.trim()).toBe('[New]');
   });
 
-  it('an invalid variant falls back to neutral without throwing', () => {
-    const out = stripAnsi(
-      renderMarkToAnsi(
+  it('an invalid variant falls back to neutral without throwing', async () => {
+    const out = stripEscapes(
+      await renderMarkToAnsi(
         ':badge[X]{variant=bogus}\n',
         undefined,
         undefined,

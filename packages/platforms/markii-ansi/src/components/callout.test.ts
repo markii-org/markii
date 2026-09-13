@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { renderMarkToAnsi } from '../render.js';
-import { measure } from '../measure.js';
+import { measureWidth } from '../text-grid.js';
 
 describe('Callout', () => {
-  it('renders the icon, type label, and body, every line barred', () => {
-    const out = renderMarkToAnsi(
+  it('renders the icon, type label, and body, every line barred', async () => {
+    const out = await renderMarkToAnsi(
       ':::callout{type=warning title="Careful"}\nbody text\n:::\n',
       undefined,
       undefined,
@@ -19,21 +19,21 @@ describe('Callout', () => {
       expect(line.startsWith('▌')).toBe(true);
   });
 
-  it('defaults to info for a missing/invalid type', () => {
-    expect(renderMarkToAnsi(':::callout\nx\n:::\n')).toContain('Info');
-    expect(renderMarkToAnsi(':::callout{type=bogus}\nx\n:::\n')).toContain(
-      'Info',
-    );
+  it('defaults to info for a missing/invalid type', async () => {
+    expect(await renderMarkToAnsi(':::callout\nx\n:::\n')).toContain('Info');
+    expect(
+      await renderMarkToAnsi(':::callout{type=bogus}\nx\n:::\n'),
+    ).toContain('Info');
   });
 
-  it('omits the title line when absent', () => {
-    const out = renderMarkToAnsi(':::callout\nbody only\n:::\n');
+  it('omits the title line when absent', async () => {
+    const out = await renderMarkToAnsi(':::callout\nbody only\n:::\n');
     const lines = out.trim().split('\n');
     expect(lines).toHaveLength(2); // header + body
   });
 
-  it('narrows to about half the width under width=narrow, without corrupting the bar', () => {
-    const out = renderMarkToAnsi(
+  it('narrows to about half the width under width=narrow, without corrupting the bar', async () => {
+    const out = await renderMarkToAnsi(
       ':::callout{width=narrow}\nhello\n:::\n',
       undefined,
       undefined,
@@ -42,7 +42,7 @@ describe('Callout', () => {
     );
     for (const line of out.trim().split('\n')) {
       expect(line.startsWith('▌')).toBe(true);
-      expect(measure(line)).toBeLessThanOrEqual(20);
+      expect(measureWidth(line)).toBeLessThanOrEqual(20);
     }
   });
 });

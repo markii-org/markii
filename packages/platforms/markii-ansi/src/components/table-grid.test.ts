@@ -4,7 +4,7 @@ import {
   MIN_COLUMN_WIDTH,
   measureTableGridWidth,
 } from './table-grid.js';
-import { measure } from '../measure.js';
+import { measureWidth } from '../text-grid.js';
 
 describe('drawTableGrid', () => {
   it('draws a header, separator, and body rows with box-drawing glyphs', () => {
@@ -38,7 +38,7 @@ describe('drawTableGrid', () => {
       ],
       40,
     );
-    const widths = new Set(grid.split('\n').map((line) => measure(line)));
+    const widths = new Set(grid.split('\n').map((line) => measureWidth(line)));
     expect(widths.size).toBe(1);
   });
 
@@ -48,7 +48,7 @@ describe('drawTableGrid', () => {
       [['x', 'y']],
       30,
     );
-    const widths = new Set(grid.split('\n').map((line) => measure(line)));
+    const widths = new Set(grid.split('\n').map((line) => measureWidth(line)));
     expect(widths.size).toBe(1);
     expect([...widths][0]).toBeLessThanOrEqual(30 + MIN_COLUMN_WIDTH); // allowed to overflow past the floor, never crash
   });

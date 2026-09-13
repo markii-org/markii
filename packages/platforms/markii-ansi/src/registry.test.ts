@@ -6,18 +6,12 @@ import {
   registryAliases,
   registryLayoutAxis,
   resolveDirectiveAlias,
-  type AnsiChildren,
   type AnsiComponent,
   type AnsiRegistry,
   type AnsiRegistryEntry,
 } from './registry.js';
 
-const echo: AnsiComponent = (_attrs, children) => children();
-
-/** A no-content `AnsiChildren` stub for tests that call a component function directly rather than going through `render.ts`'s real render walk. */
-function noopChildren(): AnsiChildren {
-  return Object.assign(() => '', { parts: [] });
-}
+const echo: AnsiComponent = ({ children }) => children;
 
 describe('createAnsiRegistry / mergeAnsiRegistries', () => {
   it('creates a null-prototype registry', () => {
@@ -53,7 +47,11 @@ describe('createAnsiRegistry / mergeAnsiRegistries', () => {
       createAnsiRegistry({ box: { component: second } }),
     );
     expect(
-      readRegistryComponent(merged.box)?.({}, noopChildren(), {} as never),
+      readRegistryComponent(merged.box)?.({
+        attributes: {},
+        children: '',
+        ctx: {} as never,
+      }),
     ).toBe('second');
   });
 });
@@ -121,7 +119,7 @@ describe('hostile registry configuration never throws', () => {
     expect(readRegistryComponent(registry.box)).toBeUndefined();
   });
 
-  it("a non-function component is returned as-is by readRegistryComponent (the caller's own component() call is what would throw, and render.ts contains that)", () => {
+  it("a non-function component is returned as-is by readRegistryComponent (the caller's own component() call is what would throw, and render.tsx contains that)", () => {
     const registry = createAnsiRegistry({
       box: { component: 'not a function' as unknown as AnsiComponent },
     });

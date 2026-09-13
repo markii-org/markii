@@ -1,4 +1,5 @@
-import type { AnsiComponent } from '../registry.js';
+import { padText } from '../text-grid.js';
+import { childrenText, type AnsiComponent } from '../registry.js';
 
 const TEXT_ALIGNS = ['left', 'center', 'right'] as const;
 type TextAlign = (typeof TEXT_ALIGNS)[number];
@@ -10,27 +11,21 @@ function isTextAlign(value: string): value is TextAlign {
  * `:::cell ... :::` — a transparent grouping container whose only job is
  * letting several blocks count as ONE cell of `:::row`.
  *
- * `row.ts` no longer discovers its cells by splitting a flattened string on
- * a blank-line heuristic: it walks its own directive's top-level children
- * directly (`registry.ts`'s `AnsiChildren.parts`), so a `cell` grouping more
- * than one block renders those blocks exactly as it would standalone,
- * blank line and all, with no collapsing needed to keep a cell boundary
- * unambiguous for `row.ts`.
- *
  * `text` aligns this cell's own content when rendered STANDALONE (outside a
- * `row`); nested inside a `row`, the row's own `text` decides every cell's
- * alignment uniformly instead, for the same reason `row.ts` does not look
- * inside a cell's own attributes when it places columns.
+ * `row`) or nested inside one: `render.tsx`'s `row` handling still runs
+ * each cell through the ordinary directive pipeline (so this component's
+ * own alignment applies first), then applies `row`'s OWN `text` uniformly
+ * on top — see `components/row.ts`'s doc comment.
  */
-export const Cell: AnsiComponent = (attributes, children, ctx) => {
+export const Cell: AnsiComponent = ({ attributes, children, ctx }) => {
   const rawTextAlign = attributes.text;
   const align: TextAlign | undefined =
     rawTextAlign && isTextAlign(rawTextAlign) ? rawTextAlign : undefined;
 
-  const childrenText = children();
-  if (!align || align === 'left') return childrenText;
-  return childrenText
+  const text = childrenText(children);
+  if (!align || align === 'left') return text;
+  return text
     .split('\n')
-    .map((line) => ctx.pad(line, ctx.width, align))
+    .map((line) => padText(line, ctx.width, align))
     .join('\n');
 };

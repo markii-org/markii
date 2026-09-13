@@ -1,0 +1,41 @@
+Nesting
+
+┌─ Outer ──────────────────────────────────────────────────┐
+│Some intro text in the outer card that is long enough to  │
+│need wrapping at the width we render at.                  │
+│                                                          │
+│┌─ Inner ────────────────────────────────────────────────┐│
+││Inner body text that also wants to wrap because it is   ││
+││quite long indeed yes.                                  ││
+│└────────────────────────────────────────────────────────┘│
+│                                                          │
+│▌ ▲ Warning                                               │
+│▌ Careful                                                 │
+│▌ A callout nested inside a card, with text long enough to│
+│▌ wrap once or twice.                                     │
+└──────────────────────────────────────────────────────────┘
+
+┌─ Holder ─────────────────────────────────────────────────┐
+│Left cell text here, long enough to wrap inside its own   │
+│column.                                                   │
+│                                                          │
+│Right cell text here, also long enough to wrap inside its │
+│own column.                                               │
+└──────────────────────────────────────────────────────────┘
+
+┌─ A ───────────────────────┐ ┌─ B ───────────────────────┐
+│Card A body text that      │ │Card B body text that      │
+│wraps.                     │ │wraps.                     │
+└───────────────────────────┘ └───────────────────────────┘
+
+┌─ Listy ──────────────────────────────────────────────────┐
+│                          - one                           │
+│                          - two                           │
+│                                                          │
+│                 │ a quote inside a card                  │
+└──────────────────────────────────────────────────────────┘
+
+▌ ℹ Info
+▌ ┌─ Deep ─────────────────────────────────────────────────┐
+▌ │A card inside a callout.                                │
+▌ └────────────────────────────────────────────────────────┘

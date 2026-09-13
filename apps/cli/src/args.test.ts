@@ -41,7 +41,13 @@ const cases: Case[] = [
   {
     name: 'plain view',
     argv: ['view', 'note.mk.md'],
-    expected: { kind: 'view', file: 'note.mk.md', run: true, verbose: false },
+    expected: {
+      kind: 'view',
+      file: 'note.mk.md',
+      run: true,
+      verbose: false,
+      static: false,
+    },
   },
   {
     name: 'view with --width',
@@ -52,6 +58,7 @@ const cases: Case[] = [
       width: 100,
       run: true,
       verbose: false,
+      static: false,
     },
   },
   {
@@ -64,6 +71,7 @@ const cases: Case[] = [
       color: 'never',
       run: true,
       verbose: false,
+      static: false,
     },
   },
   {
@@ -74,6 +82,7 @@ const cases: Case[] = [
       file: 'note.mk.md',
       run: false,
       verbose: false,
+      static: false,
     },
   },
   {
@@ -84,6 +93,7 @@ const cases: Case[] = [
       file: 'note.mk.md',
       run: true,
       verbose: true,
+      static: false,
     },
   },
   {
@@ -95,6 +105,18 @@ const cases: Case[] = [
       color: 'truecolor',
       run: true,
       verbose: false,
+      static: false,
+    },
+  },
+  {
+    name: 'view with --static',
+    argv: ['view', 'note.mk.md', '--static'],
+    expected: {
+      kind: 'view',
+      file: 'note.mk.md',
+      run: true,
+      verbose: false,
+      static: true,
     },
   },
   {
@@ -265,6 +287,7 @@ const cases: Case[] = [
       file: '-weird.mk.md',
       run: true,
       verbose: false,
+      static: false,
     },
   },
   {
@@ -276,6 +299,7 @@ const cases: Case[] = [
       width: 90,
       run: true,
       verbose: false,
+      static: false,
     },
   },
   {

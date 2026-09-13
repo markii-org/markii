@@ -1,0 +1,22 @@
+One (active)
+Panel one text, long enough to wrap at the narrower width
+under test.
+
+Two
+Panel two text.
+
+▸ Details (collapsible section, shown expanded)
+  Details body text.
+
+┌─ Holder ─────────────────────────────────────────────────┐
+│Alpha (active)                                            │
+│Alpha panel text.                                         │
+│                                                          │
+│Beta                                                      │
+│Beta panel text.                                          │
+└──────────────────────────────────────────────────────────┘
+
+┌─ Folded ─────────────────────────────────────────────────┐
+│▸ Details (collapsible section, shown expanded)           │
+│  Hidden body text here.                                  │
+└──────────────────────────────────────────────────────────┘

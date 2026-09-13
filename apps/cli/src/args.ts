@@ -21,6 +21,8 @@ export type ParsedCommand =
       readonly color?: ColorFlag;
       readonly run: boolean;
       readonly verbose: boolean;
+      /** Forces the render-once path even when both stdin and stdout are terminals. */
+      readonly static: boolean;
     }
   | {
       readonly kind: 'export';
@@ -78,6 +80,7 @@ interface Flags {
   width?: number;
   color?: ColorFlag;
   noRun: boolean;
+  static: boolean;
   format?: ExportFormat;
   output?: string;
 }
@@ -111,6 +114,7 @@ function parseTokens(
     version: false,
     verbose: false,
     noRun: false,
+    static: false,
   };
   const positionals: string[] = [];
   let onlyPositionals = false;
@@ -142,6 +146,9 @@ function parseTokens(
         continue;
       case '--no-run':
         flags.noRun = true;
+        continue;
+      case '--static':
+        flags.static = true;
         continue;
       case '--width': {
         const value = tokens[++i];
@@ -244,6 +251,7 @@ export function parseArgs(argv: readonly string[]): ParsedCommand {
       ...(flags.color !== undefined ? { color: flags.color } : {}),
       run: !flags.noRun,
       verbose: flags.verbose,
+      static: flags.static,
     };
   }
 

@@ -4,6 +4,6 @@ import { workspaceAliases } from '../../../scripts/workspace-aliases.config.ts';
 export default defineConfig({
   resolve: { alias: workspaceAliases },
   test: {
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.{ts,tsx}'],
   },
 });

@@ -30,7 +30,7 @@ function limitRows<T>(
   return limit === undefined ? rows : rows.slice(0, limit);
 }
 
-/** Renders one cell's display text: `format`/`decimals` apply only when the cell's raw value is itself numeric-like, matching `@markii/html`'s `Table` exactly. */
+/** Renders one cell's display text: `format`/`decimals` apply only when the cell's raw value is itself numeric-like. */
 function renderCell(
   value: unknown,
   format: string | undefined,
@@ -49,19 +49,14 @@ function isTextAlign(value: string): value is TextAlign {
 
 /**
  * `::table{data=users columns="name,role" limit=10}` — a data-bound table.
- * Data binding (§8) mirrors `@markii/html`'s `Table`: `@markii/stdlib`'s
- * `deriveTableShape` decides the layout from the bound value's own shape.
- * `format`/`decimals` apply to numeric cells only; `text` aligns every
- * cell's content within its column; `caption`, when given, is a bold line
- * above the grid. A missing/stale/failed binding degrades to the same quiet
- * "no data" line `chart`/`progress` use, with the failure suffix appended.
+ * Data binding (§8): `@markii/stdlib`'s `deriveTableShape` decides the
+ * layout from the bound value's own shape.
  *
- * Registered `selfLayout` (see `card.ts`'s doc comment): draws real
- * box-drawing glyphs (`./table-grid.ts`), so it sizes its own grid off
- * `ctx.layout` instead of letting a generic post-render narrow/pad corrupt
- * the borders.
+ * Registered `selfLayout`: draws real box-drawing glyphs
+ * (`./table-grid.ts`), so it sizes its own grid off `ctx.layout` instead of
+ * letting a generic post-render narrow/pad corrupt the borders.
  */
-export const Table: AnsiComponent = (attributes, _children, ctx) => {
+export const Table: AnsiComponent = ({ attributes, ctx }) => {
   const { data, dataStatus, dataFailureKind } = ctx;
 
   const columnsOverride = parseColumns(attributes.columns);

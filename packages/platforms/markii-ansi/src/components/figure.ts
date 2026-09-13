@@ -5,30 +5,19 @@ import {
   unsafeImageSrcLabel,
   unsafeImageSrcTitle,
 } from '../failure-presentation.js';
-import type { AnsiComponent } from '../registry.js';
+import { childrenText, type AnsiComponent } from '../registry.js';
 
 const DEFAULT_ALT = '';
 const DIRECTIVE_NAME = 'figure';
 
 /**
  * `:::figure{src="..." alt="..."} caption markdown :::` — an image with a
- * rich (markdown) caption. `src` is required; a missing `src` shows only the
- * caption, matching the graceful-degradation spirit of the unknown-directive
- * fallback rather than throwing.
- *
- * Security: `src` bypasses `@markii/core`'s hast-level URL sanitizer (it is
- * a directive attribute, not a markdown image), so this component closes
- * that gap itself with `@markii/core`'s `isSafeUrl` — the same allowlist the
- * sanitizer uses — and drops the image line entirely on a refusal, replacing
- * it with a short labeled marker (a terminal has no tooltip to carry the
- * full sentence out of the text flow) plus the full sentence reported to
- * `onDiagnostic`; matches `@markii/html`'s `Figure` in behavior, not in the
- * inline wording.
- *
- * Terminal form: alt text, then the (possibly host-resolved) src, then the
- * caption, each on its own line, dimmed except the caption itself.
+ * rich (markdown) caption. `src` is required; a missing `src` shows only
+ * the caption. Security: `src` bypasses `@markii/core`'s hast-level URL
+ * sanitizer (it is a directive attribute, not a markdown image), so this
+ * component closes that gap itself with `isSafeUrl`.
  */
-export const Figure: AnsiComponent = (attributes, children, ctx) => {
+export const Figure: AnsiComponent = ({ attributes, children, ctx }) => {
   const rawSrc = attributes.src ?? null;
   const alt = attributes.alt ?? DEFAULT_ALT;
   const refused = Boolean(rawSrc) && !isSafeUrl(rawSrc as string);
@@ -51,8 +40,8 @@ export const Figure: AnsiComponent = (attributes, children, ctx) => {
       lines.push(ctx.dim(src));
     }
   }
-  const childrenText = children();
-  if (childrenText) lines.push(childrenText);
+  const body = childrenText(children);
+  if (body) lines.push(body);
 
   return lines.join('\n');
 };

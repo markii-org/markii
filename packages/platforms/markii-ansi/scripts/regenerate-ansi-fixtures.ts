@@ -47,7 +47,7 @@ if (names.length === 0) {
 
 for (const name of names) {
   const input = readFileSync(join(renderFixturesDir, `${name}.mk.md`), 'utf8');
-  const text = renderMarkToAnsi(
+  const text = await renderMarkToAnsi(
     input,
     defaultAnsiRegistry,
     undefined,
@@ -67,7 +67,7 @@ if (FIRST_FIXTURE) {
     join(renderFixturesDir, `${FIRST_FIXTURE}.mk.md`),
     'utf8',
   );
-  const ansi = renderMarkToAnsi(
+  const ansi = await renderMarkToAnsi(
     input,
     defaultAnsiRegistry,
     undefined,

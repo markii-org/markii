@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { renderMarkToAnsi } from '../render.js';
-import { measure } from '../measure.js';
+import { measureWidth } from '../text-grid.js';
 
 describe('Card', () => {
-  it('draws a solid frame with the title woven into the top edge', () => {
-    const out = renderMarkToAnsi(
+  it('draws a solid frame with the title woven into the top edge', async () => {
+    const out = await renderMarkToAnsi(
       ':::card{title="Notes"}\nhello\n:::\n',
       undefined,
       undefined,
@@ -17,8 +17,8 @@ describe('Card', () => {
     expect(out).toContain('└');
   });
 
-  it('every drawn line is the same width', () => {
-    const out = renderMarkToAnsi(
+  it('every drawn line is the same width', async () => {
+    const out = await renderMarkToAnsi(
       ':::card{title="Notes"}\nhello world this wraps\n:::\n',
       undefined,
       undefined,
@@ -29,13 +29,13 @@ describe('Card', () => {
       out
         .trim()
         .split('\n')
-        .map((line) => measure(line)),
+        .map((line) => measureWidth(line)),
     );
     expect(widths.size).toBe(1);
   });
 
-  it('omits the title-in-edge text when title is absent', () => {
-    const out = renderMarkToAnsi(
+  it('omits the title-in-edge text when title is absent', async () => {
+    const out = await renderMarkToAnsi(
       ':::card\nbody\n:::\n',
       undefined,
       undefined,
@@ -45,8 +45,8 @@ describe('Card', () => {
     expect(out).toContain('body');
   });
 
-  it('a width=narrow card stays a valid frame at roughly half the width', () => {
-    const out = renderMarkToAnsi(
+  it('a width=narrow card stays a valid frame at roughly half the width', async () => {
+    const out = await renderMarkToAnsi(
       ':::card{title=X width=narrow}\nhello\n:::\n',
       undefined,
       undefined,
@@ -54,8 +54,8 @@ describe('Card', () => {
       { width: 40 },
     );
     const lines = out.trim().split('\n');
-    const width = measure(lines[0] ?? '');
+    const width = measureWidth(lines[0] ?? '');
     expect(width).toBeLessThanOrEqual(22);
-    for (const line of lines) expect(measure(line)).toBe(width);
+    for (const line of lines) expect(measureWidth(line)).toBe(width);
   });
 });

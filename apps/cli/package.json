@@ -1,6 +1,6 @@
 {
   "name": "markii-cli",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "description": "A terminal front end for Markii (.mk.md): view, export, and run a note's scripts from the command line.",
   "keywords": [
     "markdown",
@@ -18,7 +18,7 @@
     "directory": "apps/cli"
   },
   "bin": {
-    "markii": "./dist/markii.js"
+    "markii": "./dist/markii.mjs"
   },
   "files": [
     "dist",
@@ -40,6 +40,9 @@
     "@markii/lua": "*",
     "@markii/runtime": "*",
     "esbuild": "^0.28.2",
-    "tsx": "^4.23.12"
+    "tsx": "^4.23.12",
+    "ink": "^7.1.1",
+    "react": "^19.2.0",
+    "@types/react": "^19.2.0"
   }
 }

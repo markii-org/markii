@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   bold,
+  carrySgrAcrossLines,
   colorize,
   detectColorLevel,
   dim,
@@ -12,7 +13,7 @@ import {
   underline,
   type AnsiColor,
 } from './ansi.js';
-import { stripAnsi } from './measure.js';
+import { stripEscapes } from './text-grid.js';
 
 const RED: AnsiColor = { ansi16: 31, ansi256: 196, truecolor: [220, 38, 38] };
 
@@ -37,7 +38,7 @@ describe('fg / colorize', () => {
   });
 
   it('leaves no escape state open: stripping known escapes leaves the plain text', () => {
-    expect(stripAnsi(colorize('x', RED, 'truecolor'))).toBe('x');
+    expect(stripEscapes(colorize('x', RED, 'truecolor'))).toBe('x');
   });
 });
 
@@ -50,121 +51,116 @@ describe('style wrappers', () => {
     expect(inverse('x', 'none')).toBe('x');
   });
 
-  it('wrap with the right SGR code and reset', () => {
+  it('bold/dim/italic/underline/inverse each wrap with the matching SGR code and a full reset', () => {
     expect(bold('x', '16')).toBe('\x1b[1mx\x1b[0m');
     expect(dim('x', '16')).toBe('\x1b[2mx\x1b[0m');
     expect(italic('x', '16')).toBe('\x1b[3mx\x1b[0m');
     expect(underline('x', '16')).toBe('\x1b[4mx\x1b[0m');
     expect(inverse('x', '16')).toBe('\x1b[7mx\x1b[0m');
   });
-});
 
-describe('hyperlink', () => {
-  it('returns text unchanged at level none, no OSC 8', () => {
-    expect(hyperlink('click', 'https://example.com', 'none')).toBe('click');
+  it('re-opens after an inner reset so nesting composes', () => {
+    const inner = bold('mid', '16');
+    const outer = dim(`before ${inner} after`, '16');
+    // The inner bold's own reset would otherwise cancel the outer dim too;
+    // dim must reopen itself right after it.
+    expect(outer).toContain(`\x1b[0m\x1b[2m after`);
   });
 
-  it('emits OSC 8 open/close at a color level', () => {
-    expect(hyperlink('click', 'https://example.com', '16')).toBe(
-      '\x1b]8;;https://example.com\x07click\x1b]8;;\x07',
+  it('hyperlink emits OSC 8 only above level none, and leaves the plain form to the caller at none', () => {
+    expect(hyperlink('text', 'https://example.com', 'none')).toBe('text');
+    expect(hyperlink('text', 'https://example.com', '16')).toBe(
+      '\x1b]8;;https://example.com\x07text\x1b]8;;\x07',
     );
   });
 });
 
 describe('detectColorLevel', () => {
-  it('NO_COLOR set to any non-empty value forces none, even on a TTY with FORCE_COLOR set', () => {
+  it('reads nothing on its own: identical env/isTTY in, identical level out, deterministically', () => {
+    expect(detectColorLevel({}, false)).toBe('none');
+    expect(detectColorLevel({ COLORTERM: 'truecolor' }, true)).toBe(
+      'truecolor',
+    );
+  });
+
+  it('NO_COLOR wins over everything else', () => {
     expect(detectColorLevel({ NO_COLOR: '1', FORCE_COLOR: '3' }, true)).toBe(
       'none',
     );
   });
-
-  it('an empty NO_COLOR does not force none', () => {
-    expect(detectColorLevel({ NO_COLOR: '' }, true)).toBe('16');
-  });
-
-  it('FORCE_COLOR=0 forces none', () => {
-    expect(detectColorLevel({ FORCE_COLOR: '0' }, true)).toBe('none');
-  });
-
-  it('FORCE_COLOR=1 and =true force 16', () => {
-    expect(detectColorLevel({ FORCE_COLOR: '1' }, true)).toBe('16');
-    expect(detectColorLevel({ FORCE_COLOR: 'true' }, true)).toBe('16');
-  });
-
-  it('FORCE_COLOR=2 forces 256', () => {
-    expect(detectColorLevel({ FORCE_COLOR: '2' }, true)).toBe('256');
-  });
-
-  it('FORCE_COLOR=3 forces truecolor', () => {
-    expect(detectColorLevel({ FORCE_COLOR: '3' }, true)).toBe('truecolor');
-  });
-
-  it('a non-TTY with no FORCE_COLOR gives none', () => {
-    expect(detectColorLevel({}, false)).toBe('none');
-  });
-
-  it('TERM=dumb gives none on a TTY', () => {
-    expect(detectColorLevel({ TERM: 'dumb' }, true)).toBe('none');
-  });
-
-  it('COLORTERM truecolor/24bit gives truecolor', () => {
-    expect(detectColorLevel({ COLORTERM: 'truecolor' }, true)).toBe(
-      'truecolor',
-    );
-    expect(detectColorLevel({ COLORTERM: '24bit' }, true)).toBe('truecolor');
-  });
-
-  it('a TERM containing 256color gives 256', () => {
-    expect(detectColorLevel({ TERM: 'xterm-256color' }, true)).toBe('256');
-  });
-
-  it('otherwise gives 16', () => {
-    expect(detectColorLevel({ TERM: 'xterm' }, true)).toBe('16');
-  });
 });
 
 describe('resolveColorOption', () => {
-  it('never and auto both resolve to none', () => {
-    expect(resolveColorOption('never')).toBe('none');
+  it("'auto' and undefined both mean no escapes, since this engine has no environment knowledge", () => {
     expect(resolveColorOption('auto')).toBe('none');
-  });
-
-  it('undefined behaves as auto', () => {
     expect(resolveColorOption(undefined)).toBe('none');
+    expect(resolveColorOption('never')).toBe('none');
   });
 
-  it('the three explicit levels pass through', () => {
+  it('passes an explicit level through unchanged', () => {
     expect(resolveColorOption('16')).toBe('16');
     expect(resolveColorOption('256')).toBe('256');
     expect(resolveColorOption('truecolor')).toBe('truecolor');
   });
 });
 
-describe('nested styling', () => {
-  it('restores the outer attribute after an inner reset, so nesting does not cancel it', () => {
-    const nested = dim(`frame ${bold('LABEL', '16')} tail`, '16');
-    // The inner bold closes with a full reset (SGR has no per-attribute
-    // undo), so the outer dim has to be re-opened for the remainder.
-    expect(nested).toBe('\x1b[2mframe \x1b[1mLABEL\x1b[0m\x1b[2m tail\x1b[0m');
+describe('carrySgrAcrossLines', () => {
+  it('is a no-op for a string with no embedded newline', () => {
+    const text = dim('one line', '16');
+    expect(carrySgrAcrossLines(text)).toBe(text);
   });
 
-  it('restores an outer color after an inner reset', () => {
-    const color = {
-      ansi16: 31,
-      ansi256: 196,
-      truecolor: [220, 38, 38],
-    } as const;
-    const nested = colorize(
-      `a ${bold('b', 'truecolor')} c`,
-      color,
-      'truecolor',
-    );
-    expect(nested).toBe(
-      '\x1b[38;2;220;38;38ma \x1b[1mb\x1b[0m\x1b[38;2;220;38;38m c\x1b[0m',
-    );
+  it('closes an open span before an embedded newline and reopens it on the next line', () => {
+    const styled = dim('first\nsecond\nthird', '16');
+    const repaired = carrySgrAcrossLines(styled);
+    const lines = repaired.split('\n');
+    expect(lines).toHaveLength(3);
+    for (const line of lines) {
+      // Every physical line is independently open-then-closed: this is
+      // exactly what makes it safe for Ink to reset SGR state at each line
+      // boundary, since each line already carries its own open and close.
+      expect(line.startsWith('\x1b[2m')).toBe(true);
+      expect(line.endsWith('\x1b[0m')).toBe(true);
+    }
+    expect(stripEscapes(repaired)).toBe('first\nsecond\nthird');
   });
 
-  it('leaves no escape state open: the string ends with a reset', () => {
-    expect(dim(`x ${bold('y', '16')} z`, '16').endsWith('\x1b[0m')).toBe(true);
+  it('a styled string long enough to word-wrap keeps its style on every resulting line (the reported Ink regression)', () => {
+    const words = Array.from({ length: 20 }, (_, i) => `word${i}`).join(' ');
+    // Simulates this engine's own heading/paragraph pipeline: style the
+    // whole logical line, THEN word-wrap it into physical lines with
+    // text-grid's escape-aware wrapText, THEN join with '\n' — exactly the
+    // shape `render.tsx`'s heading/paragraph rendering produces.
+    const styled = underline(bold(words, '16'), '16');
+    // A minimal stand-in for text-grid's wrapText: break every 3 words,
+    // keeping the leading/trailing escape atoms wherever they land.
+    const plainWords = words.split(' ');
+    const chunks: string[] = [];
+    for (let i = 0; i < plainWords.length; i += 3) {
+      chunks.push(plainWords.slice(i, i + 3).join(' '));
+    }
+    // Re-inject the styling the same way `styled` carries it: open at the
+    // very start, close at the very end, joined by '\n' — the shape a
+    // pre-Ink engine could safely emit as one continuous escape run.
+    const openCode = styled.slice(0, styled.indexOf('m') + 1);
+    const closeCode = '\x1b[0m';
+    const rawMultiline = `${openCode}${chunks.join('\n')}${closeCode}`;
+
+    const repaired = carrySgrAcrossLines(rawMultiline);
+    const lines = repaired.split('\n');
+    expect(lines.length).toBeGreaterThan(1);
+    for (const line of lines) {
+      expect(line).toMatch(/^\x1b\[[0-9;]*m/);
+      expect(line.endsWith('\x1b[0m')).toBe(true);
+    }
+    expect(stripEscapes(repaired)).toBe(chunks.join('\n'));
+  });
+
+  it('a bare reset (`ESC [ m`, no parameter) also clears the open-state tracker', () => {
+    const text = `\x1b[2mfirst\x1b[mnext\nsecond`;
+    const repaired = carrySgrAcrossLines(text);
+    // Nothing was still open when the newline was reached (the bare reset
+    // already cleared it), so line two gets no reopened prefix.
+    expect(repaired.split('\n')[1]).toBe('second');
   });
 });

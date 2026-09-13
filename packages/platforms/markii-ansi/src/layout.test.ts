@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { applyLayout, resolveLayoutAttributes } from './layout.js';
-import { measure } from './measure.js';
+import { measureWidth } from './text-grid.js';
 
 describe('resolveLayoutAttributes', () => {
   it('strips width/align and returns the resolved presets', () => {
@@ -52,13 +52,13 @@ describe('applyLayout', () => {
     const block = 'a'.repeat(30);
     const result = applyLayout(block, { width: 'narrow' }, 40);
     for (const line of result.split('\n'))
-      expect(measure(line)).toBeLessThanOrEqual(20);
+      expect(measureWidth(line)).toBeLessThanOrEqual(20);
   });
 
   it('narrow never shrinks below the 20-column minimum', () => {
     const block = 'a'.repeat(10);
     const result = applyLayout(block, { width: 'narrow' }, 20);
-    expect(measure(result.split('\n')[0] ?? '')).toBeLessThanOrEqual(10);
+    expect(measureWidth(result.split('\n')[0] ?? '')).toBeLessThanOrEqual(10);
   });
 
   it('wide and full both use the full available width (no narrowing)', () => {
@@ -80,6 +80,6 @@ describe('applyLayout', () => {
 
   it('align combined with a width preset narrows first, then aligns within the full width', () => {
     const result = applyLayout('hi', { width: 'narrow', align: 'center' }, 40);
-    expect(measure(result)).toBe(40);
+    expect(measureWidth(result)).toBe(40);
   });
 });

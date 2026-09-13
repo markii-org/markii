@@ -6,7 +6,7 @@ import { Callout } from './callout.js';
 import { Card } from './card.js';
 import { Cell } from './cell.js';
 import { Chart } from './chart.js';
-import { Details } from './details.js';
+import { Details } from './details-string.js';
 import { Divider } from './divider.js';
 import { Figure } from './figure.js';
 import { Kbd } from './kbd.js';
@@ -20,7 +20,7 @@ import { Rating } from './rating.js';
 import { Row } from './row.js';
 import { Stat } from './stat.js';
 import { Tab } from './tab.js';
-import { Tabs } from './tabs.js';
+import { Tabs } from './tabs-string.js';
 import { Table } from './table.js';
 
 export { Badge } from './badge.js';
@@ -30,7 +30,8 @@ export type { CalloutType } from './callout.js';
 export { Card } from './card.js';
 export { Cell } from './cell.js';
 export { Chart } from './chart.js';
-export { Details } from './details.js';
+export { Details } from './details-string.js';
+export { InteractiveDetails } from './details.js';
 export { Divider } from './divider.js';
 export type { DividerVariant } from './divider.js';
 export { Figure } from './figure.js';
@@ -43,10 +44,11 @@ export {
 export type { LayoutWrapperPreset } from './layout-wrapper.js';
 export { Progress } from './progress.js';
 export { Rating } from './rating.js';
-export { Row, ROW_COLUMN_THRESHOLD } from './row.js';
+export { Row, ROW_COLUMN_THRESHOLD, resolveRowLayout } from './row.js';
 export { Stat } from './stat.js';
 export { Tab, DEFAULT_TAB_LABEL } from './tab.js';
-export { Tabs } from './tabs.js';
+export { Tabs } from './tabs-string.js';
+export { InteractiveTabs } from './tabs.js';
 export { Table } from './table.js';
 export {
   drawTableGrid,
@@ -56,9 +58,9 @@ export {
 
 /**
  * Derives a registry entry's `inline` flag from `@markii/stdlib`'s standard
- * component contract for `name`, matching `@markii/html`'s
- * `inlineFromContract`: `kind: 'inline'` -> `inline: true`, otherwise
- * `false`. Falls back to `false` if `name` has no standard contract.
+ * component contract for `name`: `kind: 'inline'` -> `inline: true`,
+ * otherwise `false`. Falls back to `false` if `name` has no standard
+ * contract.
  */
 function inlineFromContract(name: string): boolean {
   return getContract(name)?.kind === 'inline';
@@ -67,7 +69,6 @@ function inlineFromContract(name: string): boolean {
 /**
  * One layout-wrapper registration: the shared wrapper component bound to
  * `preset`, plus the `layout` axis that preset sets by its own name.
- * Matches `@markii/html`'s `layoutWrapperEntry`.
  */
 function layoutWrapperEntry(preset: LayoutWrapperPreset): AnsiRegistryEntry {
   return {
@@ -78,14 +79,16 @@ function layoutWrapperEntry(preset: LayoutWrapperPreset): AnsiRegistryEntry {
 }
 
 /**
- * The built-in standard components, pre-registered under their names —
- * matching `@markii/html`'s `defaultHtmlRegistry` and `@markii/react`'s
- * `defaultRegistry` in shape and coverage: the same 23 names. `card`,
- * `callout`, `divider`, and `table` are marked `selfLayout` (`registry.ts`'s
- * `AnsiRegistryEntry.selfLayout`) because they draw a single long
+ * The built-in standard components, pre-registered under their names: the
+ * same 23 names as `@markii/html`'s `defaultHtmlRegistry` and
+ * `@markii/react`'s `defaultRegistry`. `card`, `callout`, `divider`, and
+ * `table` are marked `selfLayout` because they draw a single long
  * frame/bar/rule/grid a generic post-render `applyLayout` narrow/pad would
- * corrupt or hard-break mid-glyph; see `card.ts`'s and `divider.ts`'s doc
- * comments.
+ * corrupt or hard-break mid-glyph. `row`, `tabs`, and `details` are the
+ * three directives `render.tsx` gives real Ink layout/state to directly
+ * (see `registry.ts`'s and `render.tsx`'s doc comments); their REGISTERED
+ * `component` here is the STRING-mode fallback, reached only when one of
+ * them is nested inside a self-drawing container's own body.
  */
 export const defaultAnsiRegistry: AnsiRegistry = createAnsiRegistry({
   callout: {

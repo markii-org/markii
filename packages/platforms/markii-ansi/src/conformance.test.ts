@@ -54,7 +54,7 @@ const FIXTURE_NAMES = [
 ];
 
 describe('conformance corpus renders through @markii/ansi', () => {
-  it('the fixture list above accounts for every *.mk.md file in conformance/ (nothing silently skipped)', () => {
+  it('the fixture list above accounts for every *.mk.md file in conformance/ (nothing silently skipped)', async () => {
     const actual = listCorpusNames();
     expect(actual).toEqual(
       FIXTURE_NAMES.map((n) => n.replace(/\.mk\.md$/, '')),
@@ -62,12 +62,9 @@ describe('conformance corpus renders through @markii/ansi', () => {
   });
 
   for (const name of FIXTURE_NAMES) {
-    it(`renders ${name} without throwing, producing non-empty text`, () => {
+    it(`renders ${name} without throwing, producing non-empty text`, async () => {
       const source = readFixture(name);
-      let text = '';
-      expect(() => {
-        text = renderMarkToAnsi(source, defaultAnsiRegistry);
-      }).not.toThrow();
+      const text = await renderMarkToAnsi(source, defaultAnsiRegistry);
       expect(text.length).toBeGreaterThan(0);
       // The generic "failed to render document" fallback must never fire
       // for a corpus fixture.
@@ -112,12 +109,12 @@ describe('render-level conformance fixtures (conformance/render/)', () => {
     '08-row-cards',
   ];
 
-  it('the fixture list above accounts for every *.mk.md file in conformance/render/ (nothing silently skipped)', () => {
+  it('the fixture list above accounts for every *.mk.md file in conformance/render/ (nothing silently skipped)', async () => {
     expect(listRenderFixtureNames()).toEqual(RENDER_FIXTURE_NAMES);
   });
 
   for (const name of RENDER_FIXTURE_NAMES) {
-    it(`${name}: renders exactly the committed expected text (width 80, color 'never')`, () => {
+    it(`${name}: renders exactly the committed expected text (width 80, color 'never')`, async () => {
       const input = readFileSync(
         join(renderFixturesDir, `${name}.mk.md`),
         'utf8',
@@ -126,7 +123,7 @@ describe('render-level conformance fixtures (conformance/render/)', () => {
         join(renderFixturesDir, `${name}.txt`),
         'utf8',
       );
-      const text = renderMarkToAnsi(
+      const text = await renderMarkToAnsi(
         input,
         defaultAnsiRegistry,
         undefined,
@@ -140,7 +137,7 @@ describe('render-level conformance fixtures (conformance/render/)', () => {
     });
   }
 
-  it("01-unknown-component WITH color 'truecolor': renders exactly the committed expected escape sequences", () => {
+  it("01-unknown-component WITH color 'truecolor': renders exactly the committed expected escape sequences", async () => {
     const input = readFileSync(
       join(renderFixturesDir, '01-unknown-component.mk.md'),
       'utf8',
@@ -149,7 +146,7 @@ describe('render-level conformance fixtures (conformance/render/)', () => {
       join(renderFixturesDir, '01-unknown-component.ansi'),
       'utf8',
     );
-    const text = renderMarkToAnsi(
+    const text = await renderMarkToAnsi(
       input,
       defaultAnsiRegistry,
       undefined,
