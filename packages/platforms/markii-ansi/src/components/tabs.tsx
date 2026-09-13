@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { bold, dim } from '../ansi.js';
 import type { ColorLevel } from '../ansi.js';
-import { useIsFocused } from '../interactive.js';
+import { useFocusMarker, useIsFocused } from '../interactive.js';
 import type { ElementTabPanel } from '../render.js';
 
 /**
@@ -20,8 +20,14 @@ import type { ElementTabPanel } from '../render.js';
  * way to ask which panel a reader wants.
  *
  * Interactive: only the active panel's body is shown; the header row lists
- * every label, the active one in the accent color; left/right or Tab
- * switches it when this `tabs` instance is focused (`useIsFocused`).
+ * every label, the active one bracketed; left/right or Tab switches it when
+ * this `tabs` instance is focused (`useIsFocused`). When this `tabs`
+ * instance itself is the FOCUSED component (as opposed to merely being
+ * interactive), the whole header strip is drawn in the accent color and
+ * prefixed with a `› ` glyph (`useFocusMarker`), so focus is visible even
+ * on a theme with no perceptible accent color; an unfocused header strip
+ * gets two leading spaces instead, so nothing shifts horizontally when
+ * focus moves onto or off of this block.
  */
 export interface InteractiveTabsProps {
   panels: readonly ElementTabPanel[];
@@ -50,6 +56,24 @@ export function InteractiveTabs({
     { isActive: interactive && focused },
   );
 
+  // Every hook this component calls runs BEFORE the non-interactive early
+  // return below, so the hook order is identical in both modes. The header
+  // strip is cheap to build and unused in the non-interactive branch; that
+  // waste is the price of never making a hook call conditional.
+  const activeIndex = Math.min(active, Math.max(0, panels.length - 1));
+  const activePanel = panels[activeIndex];
+  const strip = panels
+    .map((panel, index) => {
+      const rendered =
+        index === activeIndex
+          ? bold(`[${panel.label}]`, color)
+          : dim(panel.label, color);
+      return index > 0 ? `  ${rendered}` : rendered;
+    })
+    .join('');
+  const focusGlyph = focused ? '› ' : '  ';
+  const headingLine = useFocusMarker(`${focusGlyph}${strip}`, focusId);
+
   if (!interactive) {
     return (
       <Box flexDirection="column">
@@ -65,20 +89,9 @@ export function InteractiveTabs({
     );
   }
 
-  const activeIndex = Math.min(active, Math.max(0, panels.length - 1));
-  const activePanel = panels[activeIndex];
   return (
     <Box flexDirection="column">
-      <Box>
-        {panels.map((panel, index) => (
-          <Text key={index}>
-            {index > 0 ? '  ' : ''}
-            {index === activeIndex
-              ? bold(`[${panel.label}]`, color)
-              : dim(panel.label, color)}
-          </Text>
-        ))}
-      </Box>
+      <Text>{headingLine}</Text>
       {activePanel?.body}
     </Box>
   );

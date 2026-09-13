@@ -59,8 +59,16 @@ starts folded unless it was written with `open`.
 | up, down, j, k   | Move focus to the previous or next foldable block |
 | q                | Quit                                              |
 
-The focused block is marked in the accent color, so it is always clear what
-a key will act on.
+The focused block is marked in the accent color and with a `›` glyph before
+its heading, so focus is visible even on a theme with no perceptible accent
+color. A focused, closed details block also shows a dim `enter to open`
+hint next to its summary (`enter to close` once it is open). A status line
+at the bottom of the view names the focused block and repeats the key
+legend.
+
+A tabs or details block nested inside a card, callout, or figure is
+read-only in this version: it renders as it does in the static view and is
+not part of the focus cycle.
 
 The viewer needs both stdin and stdout to be terminals. Piping the output,
 redirecting it to a file, or passing `--static` renders the note once and

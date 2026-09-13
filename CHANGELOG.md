@@ -9,14 +9,22 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - **A live terminal viewer.** `markii view` in a terminal opens the note
-  instead of printing it and exiting. A tabbed panel shows one tab at a
-  time and switches with left and right or tab, a collapsible section
-  starts folded and opens with enter, up and down (or j and k) move focus
-  between the foldable blocks, and q quits. The focused block is marked
-  with the accent color. The viewer needs both stdin and stdout to be
-  terminals: piping, redirecting, or passing the new `--static` flag
-  renders the note once and exits, byte for byte as before, which is what
-  scripts and CI depend on.
+  instead of printing it and exiting. A tabbed panel shows a header strip
+  with the active tab bracketed and switches with left and right or tab; a
+  collapsible section starts folded, showing only its glyph and summary,
+  and opens with enter; up and down (or j and k) move focus between the
+  foldable blocks; and q quits. The focused block is marked with the
+  accent color and a `›` glyph before its heading, so focus is visible
+  even on a theme with no perceptible accent color; a focused, closed
+  details block also shows a dim "enter to open" hint ("enter to close"
+  once open). A status line at the bottom names the focused block (for
+  example `tabs "One"` or `details "Summary"`, or "nothing focusable") and
+  repeats the key legend. A tabs or details block nested inside a card,
+  callout, or figure is read-only in this version and is not part of the
+  focus cycle. The viewer needs both stdin and stdout to be terminals:
+  piping, redirecting, or passing the new `--static` flag renders the note
+  once and exits, byte for byte as before, which is what scripts and CI
+  depend on.
 - **`@markii/ansi` exports `buildMarkElement`.** It returns the element
   tree for a note rather than a rendered string, so a host can mount the
   note itself and drive it from the keyboard. The host supplies the width

@@ -175,8 +175,23 @@ writes them after unmounting.
 The keys belong to the engine, so every host that mounts the viewer behaves
 the same way. Left and right, or tab, switch tabs. Enter folds a details
 block open or closed. Up and down, or j and k, move focus between the
-foldable blocks in document order. The focused block is marked with the
-accent color. Pressing q calls `onExit`.
+foldable blocks in document order. Pressing q calls `onExit`.
+
+Focus is drawn twice over, so that it survives a theme whose accent is not
+perceptible: the focused block's heading is colored with the accent token
+and carries a `›` glyph before it, and an unfocused heading of the same
+kind is indented by the same two columns so nothing shifts sideways as
+focus moves. A focused, closed details block also shows a dim `enter to
+open` hint beside its summary, and `enter to close` once it is open. The
+engine renders one dim status line as the last line of the tree, naming
+the focused block and repeating the key legend; a host mounting the tree
+gets it for free and needs no status surface of its own.
+
+Only a tabs or details block at the top level of the document is
+focusable. One nested inside a card, callout, or figure renders as the
+string form of itself, exactly as it does in a static render, and is not
+part of the focus cycle. A self-drawing container's body is a fixed
+string by its own nature, so nothing inside one can be live.
 
 Interactivity is a property of the render, not of the note. The same
 document rendered through the string entry points is the flat page

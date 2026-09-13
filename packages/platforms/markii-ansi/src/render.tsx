@@ -83,6 +83,7 @@ import type { AnsiValueStore, AnsiVaultStore } from './value-types.js';
 import { defaultAnsiRegistry } from './components/index.js';
 import { renderInkToString } from './ink-string.js';
 import { InteractiveRoot } from './interactive.js';
+import type { FocusableDescriptor } from './interactive.js';
 import { InteractiveTabs } from './components/tabs.js';
 import { InteractiveDetails } from './components/details.js';
 
@@ -180,7 +181,7 @@ function nodeOrRootToHast(node: MarkNode | MarkRoot): Root {
   return { type: 'root', children };
 }
 
-/** Everything one render call shares: the registry, the value scope, and the resolved color/theme/hooks. Never mutated after creation, except `focusCounter`, whose only job is handing out sequential focus ids as the walk encounters focusable directives. */
+/** Everything one render call shares: the registry, the value scope, and the resolved color/theme/hooks. Never mutated after creation, except `focusCounter` (sequential focus ids) and `focusables` (their descriptors for the status line), both of which only the counting walk in `buildMarkElement` populates. */
 interface WalkContext {
   registry: AnsiRegistry;
   scope: ValueScope;
@@ -191,12 +192,22 @@ interface WalkContext {
   resolveHref: ResolveHref | undefined;
   onDiagnostic: OnDiagnostic | undefined;
   focusCounter: { current: number };
+  /** Populated only by `buildMarkElement`'s counting walk; `undefined` for every other walk (string rendering, the mounted render's own tree), which have no use for it and skip the bookkeeping. */
+  focusables: FocusableDescriptor[] | undefined;
 }
 
 function nextFocusId(wctx: WalkContext): number {
   const id = wctx.focusCounter.current;
   wctx.focusCounter.current += 1;
   return id;
+}
+
+/** Records `descriptor` for `focusId` when `wctx` is collecting them (a no-op otherwise). Call sites push in the same order they call `nextFocusId`, so `focusId` always equals the descriptor's index. */
+function recordFocusable(
+  wctx: WalkContext,
+  descriptor: FocusableDescriptor,
+): void {
+  wctx.focusables?.push(descriptor);
 }
 
 /**
@@ -1306,6 +1317,12 @@ function renderTabsElement(
   const panels = extractTabPanelsElement(element, width, indent, wctx);
   if (panels.length === 0) return null;
   const focusId = wctx.interactive ? nextFocusId(wctx) : undefined;
+  if (focusId !== undefined) {
+    recordFocusable(wctx, {
+      kind: 'tabs',
+      label: panels[0]?.label ?? DEFAULT_TAB_LABEL,
+    });
+  }
   return (
     <InteractiveTabs
       panels={panels}
@@ -1365,6 +1382,12 @@ function renderDetailsElement(
   const innerWidth = resolveDetailsInnerWidth(width);
   const body = renderBlocksElement(element.children, innerWidth, indent, wctx);
   const focusId = wctx.interactive ? nextFocusId(wctx) : undefined;
+  if (focusId !== undefined) {
+    recordFocusable(wctx, {
+      kind: 'details',
+      label: stripControlCharacters(title),
+    });
+  }
   return (
     <InteractiveDetails
       title={stripControlCharacters(title)}
@@ -1626,6 +1649,7 @@ function buildWalkContext(
     resolveHref,
     onDiagnostic,
     focusCounter: { current: 0 },
+    focusables: undefined,
   };
 }
 
@@ -1876,12 +1900,15 @@ export function buildMarkElement(
   if (!interactive) return content;
 
   // The walk above already assigned every focusable component's `focusId`
-  // (`WalkContext.focusCounter`); its final value is the total count.
-  // Rebuilding once more to read that count is wasteful only in the sense
-  // that the tree is constructed twice; simpler and safer than threading a
-  // mutable count out of a pure element-builder, and this entry point is
-  // called once per mount/resize, not per keystroke.
+  // (`WalkContext.focusCounter`) and, incidentally, discarded each one's
+  // descriptor (`WalkContext.focusables` is left `undefined` on the real
+  // render, since nothing there needs it). Rebuilding once more, this time
+  // collecting descriptors, is wasteful only in the sense that the tree is
+  // constructed twice; simpler and safer than threading mutable state out
+  // of a pure element-builder, and this entry point is called once per
+  // mount/resize, not per keystroke.
   const counter = { current: 0 };
+  const focusables: FocusableDescriptor[] = [];
   const countingWctx = buildWalkContext(
     registry,
     scope,
@@ -1890,14 +1917,19 @@ export function buildMarkElement(
     true,
     options?.resolveImageSrc,
     options?.resolveHref,
-    options?.onDiagnostic,
+    // No `onDiagnostic`: the real walk above already reported every notice
+    // this document produces, and this second walk exists only to collect
+    // focus descriptors. Passing the callback here would report each notice
+    // twice on every mount and again on every resize.
+    undefined,
   );
   countingWctx.focusCounter = counter;
+  countingWctx.focusables = focusables;
   renderBlocksElement(root.children, width, '', countingWctx);
 
   return (
     <InteractiveRoot
-      focusableCount={counter.current}
+      focusables={focusables}
       onExit={options?.onExit}
       color={color}
       theme={theme}

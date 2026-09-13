@@ -1,6 +1,7 @@
 import { createContext, useContext, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { useInput } from 'ink';
+import { Box, Text, useInput } from 'ink';
+import { dim } from './ansi.js';
 import type { AnsiTheme } from './theme.js';
 import type { ColorLevel } from './ansi.js';
 import { style } from './style.js';
@@ -53,9 +54,26 @@ export function useFocusMarker(
   return focused ? api.focusMarker(text) : text;
 }
 
+/**
+ * One focusable component, in the same document order `render.tsx`'s
+ * counting walk assigns `focusId`s in — `focusables[focusId]` is always
+ * that component's descriptor. `label` is a stable identity: for `tabs`,
+ * the FIRST panel's label, never the currently active one. A `tabs` block's
+ * active panel is its own component state, so naming it on the status line
+ * would need a report channel back up to this root on every switch; the
+ * first label identifies the block just as well and cannot loop.
+ */
+export interface FocusableDescriptor {
+  kind: 'tabs' | 'details';
+  label: string;
+}
+
+/** The key legend shown on the status line, identical regardless of what is focused. */
+const KEY_LEGEND = '↑↓/jk focus  ←→/tab switch  enter open/close  q quit';
+
 export interface InteractiveRootProps {
-  /** Total number of focusable components `render.tsx`'s walk assigned a `focusId` to (0 for none). */
-  focusableCount: number;
+  /** Every focusable component the walk assigned a `focusId` to, in `focusId` order (empty for none). */
+  focusables: readonly FocusableDescriptor[];
   /** Called when the reader presses `q`. The engine owns no process state: it never calls `process.exit` itself (AGENTS.md, batch-10 brief). */
   onExit?: () => void;
   color: ColorLevel;
@@ -65,19 +83,23 @@ export interface InteractiveRootProps {
 
 /**
  * The root of an interactive render: owns which `focusId` is focused, moves
- * it on up/down/j/k, and calls `onExit` on `q`. Rendered only when the
- * caller actually wants a live, keyboard-driven view — the render-ONCE path
- * (`ink-string.ts`) still mounts this (so `tabs`/`details` see a consistent
- * context shape either way), but its `useInput` call never fires before
- * `ink-string.ts` unmounts after the first frame.
+ * it on up/down/j/k, calls `onExit` on `q`, and renders the one-line status
+ * bar (batch 10.1) naming the focused block and the key legend. Rendered
+ * only when the caller actually wants a live, keyboard-driven view:
+ * `buildMarkElement` mounts this when `interactive` is true, but the
+ * render-ONCE string path (`ink-string.ts`, `renderRootToString`) never
+ * reaches it at all — `tabs`/`details` still fall back to `FocusContext`'s
+ * default (uninteractive) value there, so a string render never sees a
+ * focus marker, a glyph, or a status line.
  */
 export function InteractiveRoot({
-  focusableCount,
+  focusables,
   onExit,
   color,
   theme,
   children,
 }: InteractiveRootProps): ReactNode {
+  const focusableCount = focusables.length;
   const [focusIndex, setFocusIndex] = useState(0);
 
   useInput(
@@ -98,14 +120,30 @@ export function InteractiveRoot({
     { isActive: true },
   );
 
+  const focusedId =
+    focusableCount > 0 ? focusIndex % focusableCount : undefined;
+
   const api = useMemo<FocusApi>(
     () => ({
       interactive: true,
-      focusedId: focusableCount > 0 ? focusIndex % focusableCount : undefined,
+      focusedId,
       focusMarker: (text: string) => style(text, '--mk-accent', theme, color),
     }),
-    [focusIndex, focusableCount, color, theme],
+    [focusedId, color, theme],
   );
 
-  return <FocusContext.Provider value={api}>{children}</FocusContext.Provider>;
+  const focused = focusedId !== undefined ? focusables[focusedId] : undefined;
+  const statusLabel = focused
+    ? `${focused.kind} "${focused.label}"`
+    : 'nothing focusable';
+  const statusLine = dim(`${statusLabel}  ${KEY_LEGEND}`, color);
+
+  return (
+    <FocusContext.Provider value={api}>
+      <Box flexDirection="column">
+        {children}
+        <Text>{statusLine}</Text>
+      </Box>
+    </FocusContext.Provider>
+  );
 }

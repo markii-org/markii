@@ -121,8 +121,11 @@ packages/platforms/markii-ansi   the terminal renderer, a third platform
   src/ink-string.ts  the ONE place Ink's render() is called for the string
                      path: a collecting stream at the requested columns,
                      interactive:false so no cursor escapes reach a pipe
-  src/interactive.tsx focus, tab switching, details folding; q calls the
-                     host's onExit, never process.exit
+  src/interactive.tsx focus (accent + a leading glyph), tab switching,
+                     details folding, the dim status line with the key
+                     legend; q calls the host's onExit, never process.exit.
+                     A tabs/details inside a string-framed block (card,
+                     callout, figure, cell) gets no focus id: read-only
   src/sanitize.ts    SECURITY CRITICAL: the one place control characters
                      leave author text. The engine uses NO Ink color/style
                      props and never sets chalk.level, so the only escapes

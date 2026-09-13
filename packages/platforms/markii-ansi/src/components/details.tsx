@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { bold, dim } from '../ansi.js';
 import type { ColorLevel } from '../ansi.js';
-import { useIsFocused } from '../interactive.js';
+import { useFocusMarker, useIsFocused } from '../interactive.js';
 
 /**
  * `:::details{title="..." open} ... :::` — a collapsible disclosure, built
@@ -18,7 +18,13 @@ import { useIsFocused } from '../interactive.js';
  * the note's own authored default.
  *
  * Interactive: starts CLOSED unless `open` was given; Enter toggles it when
- * this `details` instance is focused (`useIsFocused`).
+ * this `details` instance is focused (`useIsFocused`). When focused, the
+ * summary line also carries a dim hint (`enter to open`/`enter to close`,
+ * matching the current state) and the whole line is drawn in the accent
+ * color with a leading `› ` glyph (`useFocusMarker`), so focus is visible
+ * even on a theme with no perceptible accent color; unfocused, the line
+ * gets two leading spaces instead, so nothing shifts horizontally when
+ * focus moves onto or off of this block.
  */
 export interface InteractiveDetailsProps {
   title: string;
@@ -47,6 +53,16 @@ export function InteractiveDetails({
     { isActive: interactive && focused },
   );
 
+  // Every hook this component calls runs BEFORE the non-interactive early
+  // return below, so the hook order is identical in both modes. The summary
+  // line is cheap to build and unused in the non-interactive branch; that
+  // waste is the price of never making a hook call conditional.
+  const openGlyph = open ? '▾' : '▸';
+  const hint = focused ? (open ? '  enter to close' : '  enter to open') : '';
+  const summaryLine = dim(`${openGlyph} ${bold(title, color)}${hint}`, color);
+  const focusGlyph = focused ? '› ' : '  ';
+  const headingLine = useFocusMarker(`${focusGlyph}${summaryLine}`, focusId);
+
   if (!interactive) {
     const glyph = defaultOpen ? '▾' : '▸';
     return (
@@ -64,10 +80,9 @@ export function InteractiveDetails({
     );
   }
 
-  const glyph = open ? '▾' : '▸';
   return (
     <Box flexDirection="column">
-      <Text>{dim(`${glyph} ${bold(title, color)}`, color)}</Text>
+      <Text>{headingLine}</Text>
       {open && (
         <Box marginLeft={2} flexDirection="column">
           {body}
