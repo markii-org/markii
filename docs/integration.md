@@ -201,13 +201,19 @@ hyperlinks. Marking an interactive element has no counterpart at all: text
 output has no control to mark, so the interactive attribute produces
 nothing rather than a marker that would promise something.
 
-Quiet markers work the way they do everywhere else, with one adjustment. A
-terminal has no tooltip, so the reason a value was declined is printed as
-dim text next to the component rather than hidden behind a hover, on its own
-line for a block component and inline for an inline one. The wording is
-shared with the static engine and lives in one module, so a failing name
-reads the same in a terminal as it does on a page. The same event still
-reaches `onDiagnostic`, and a host routes it to its own diagnostics surface.
+Quiet markers work the way they do everywhere else, with one adjustment for
+the reason text. A missing, stale, or failed data binding still prints its
+short phrase (`stale`, `script error`, and so on) as dim text next to the
+value, since a terminal has no hover to hide it behind. An out-of-enum
+attribute value and a refused image source are different: their full
+sentence is written for a tooltip, and a terminal has no tooltip to put it
+in, so printing that sentence inline would land it back in the page. Those
+two cases print a short dim label instead (`[callout: type ignored]`,
+`[figure: image not shown]`), on its own line for a block component and
+inline for an inline one, and the full sentence reaches a host only through
+`onDiagnostic`. The wording for every case is shared with the static engine
+and lives in one module, so a failing name reads the same in a terminal as
+it does on a page.
 
 Author text can never put an escape sequence into the output. Every string
 that reaches the terminal has its control characters removed first, so the

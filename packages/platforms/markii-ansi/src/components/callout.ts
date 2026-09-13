@@ -1,4 +1,3 @@
-import { rewrapBlock } from '../box.js';
 import { measure } from '../measure.js';
 import { selfLayoutAlign, selfLayoutWidth } from '../layout.js';
 import type { AnsiComponent } from '../registry.js';
@@ -56,7 +55,7 @@ const BAR = '▌ ';
  * `width`/`align` off `ctx.layout` itself and sizes/places its own bar
  * block, exactly like `card`/`table`/`chart`.
  */
-export const Callout: AnsiComponent = (attributes, childrenText, ctx) => {
+export const Callout: AnsiComponent = (attributes, children, ctx) => {
   const rawType = attributes.type ?? 'info';
   const type: CalloutType = isCalloutType(rawType) ? rawType : 'info';
   const token = CALLOUT_TOKENS[type];
@@ -83,9 +82,9 @@ export const Callout: AnsiComponent = (attributes, childrenText, ctx) => {
     lines.push(`${bar}${placeLine(ctx.bold(titleText))}`);
   }
 
+  const childrenText = children({ width: innerWidth });
   if (childrenText) {
-    const wrapped = rewrapBlock(childrenText, innerWidth);
-    for (const line of wrapped.split('\n')) {
+    for (const line of childrenText.split('\n')) {
       lines.push(`${bar}${placeLine(line)}`);
     }
   }

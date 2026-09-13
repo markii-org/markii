@@ -1,4 +1,3 @@
-import { rewrapBlock } from '../box.js';
 import { measure } from '../measure.js';
 import { selfLayoutAlign, selfLayoutWidth } from '../layout.js';
 import type { AnsiComponent } from '../registry.js';
@@ -24,7 +23,7 @@ const FRAME_OVERHEAD = 2;
  * component draws a real box-drawn frame, which a generic post-render
  * narrow/pad would corrupt, so it reads `ctx.layout` and sizes its own frame.
  */
-export const Card: AnsiComponent = (attributes, childrenText, ctx) => {
+export const Card: AnsiComponent = (attributes, children, ctx) => {
   const title = attributes.title ?? null;
   const titleText = title ? ctx.text(title) : undefined;
   const rawTextAlign = attributes.text;
@@ -37,8 +36,9 @@ export const Card: AnsiComponent = (attributes, childrenText, ctx) => {
   const boxWidth = selfLayoutWidth(ctx.layout, ctx.width, naturalWidth);
   const innerWidth = Math.max(1, boxWidth - FRAME_OVERHEAD);
 
+  const childrenText = children({ width: innerWidth });
   const body = childrenText
-    ? rewrapBlock(childrenText, innerWidth)
+    ? childrenText
         .split('\n')
         .map((line) =>
           align === 'left' ? line : ctx.pad(line, innerWidth, align),

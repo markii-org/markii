@@ -37,6 +37,9 @@ export {
   type AnsiRegistry,
   type AnsiRegistryEntry,
   type AnsiComponent,
+  type AnsiChildren,
+  type AnsiChildPart,
+  type AnsiChildrenOptions,
   type AnsiRenderContext,
   type RegistryAlias,
   type RegistryAliases,
@@ -56,7 +59,9 @@ export {
   failureToken,
   dataStateSuffix,
   emptyInlineTitle,
+  invalidAttributeValueLabel,
   invalidAttributeValueTitle,
+  unsafeImageSrcLabel,
   unsafeImageSrcTitle,
 } from './failure-presentation.js';
 export { stringifyStoredValue } from './value-format.js';

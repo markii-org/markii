@@ -1,4 +1,4 @@
-import { indentBlock, rewrapBlock } from '../box.js';
+import { indentBlock } from '../box.js';
 import type { AnsiComponent } from '../registry.js';
 
 const DEFAULT_TITLE = 'Details';
@@ -15,15 +15,15 @@ const INDENT_WIDTH = 2;
  * also names the section a "collapsible section" so a reader understands
  * why they are seeing an indented block with no directive name attached.
  */
-export const Details: AnsiComponent = (attributes, childrenText, ctx) => {
+export const Details: AnsiComponent = (attributes, children, ctx) => {
   const title = attributes.title ?? DEFAULT_TITLE;
   const open = Object.hasOwn(attributes, 'open');
   const glyph = open ? '▾' : '▸';
   const marker = ctx.dim(
     `${glyph} ${ctx.bold(ctx.text(title))} (collapsible section, shown expanded)`,
   );
-  if (!childrenText) return marker;
   const innerWidth = Math.max(1, ctx.width - INDENT_WIDTH);
-  const wrapped = rewrapBlock(childrenText, innerWidth);
-  return `${marker}\n${indentBlock(wrapped, '  ')}`;
+  const childrenText = children({ width: innerWidth });
+  if (!childrenText) return marker;
+  return `${marker}\n${indentBlock(childrenText, '  ')}`;
 };

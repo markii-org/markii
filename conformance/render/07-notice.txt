@@ -1,7 +1,7 @@
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │body                                                                          │
 └──────────────────────────────────────────────────────────────────────────────┘
-(card: "Hey" is not a valid text value (ignored))
+[card: text ignored]
 
-(figure: image source was refused as unsafe and was not shown)
+[figure: image not shown]
 caption

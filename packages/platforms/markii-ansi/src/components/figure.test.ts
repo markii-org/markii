@@ -22,8 +22,12 @@ describe('Figure', () => {
       { onDiagnostic: (d) => diagnostics.push(d) },
     );
     expect(out).not.toContain('javascript:');
-    expect(out).toContain('refused as unsafe');
+    expect(out).toContain('[figure: image not shown]');
+    expect(out).not.toContain('refused as unsafe');
     expect(diagnostics.length).toBe(1);
+    expect((diagnostics[0] as { message: string }).message).toContain(
+      'refused as unsafe',
+    );
   });
 
   it('shows only the caption when src is absent', () => {

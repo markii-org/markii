@@ -116,15 +116,63 @@ export interface AnsiRenderContext {
 }
 
 /**
+ * How a component wants ONE render of its children to happen: at a
+ * narrower `width` than the directive itself was rendered at (a self-layout
+ * box sizing its own inner budget), and/or a different `indent`. Omitting a
+ * field inherits the value the enclosing directive was rendered with.
+ */
+export interface AnsiChildrenOptions {
+  width?: number;
+  indent?: string;
+}
+
+/**
+ * One top-level child of a directive's own body, independently renderable
+ * at its own width — the piece `row` needs and no other standard component
+ * does: it must decide each cell's column width BEFORE that cell's content
+ * (including a self-drawing box like `card`) is rendered, not re-wrap an
+ * already-drawn frame afterward. `name` is the child's own resolved
+ * directive name (e.g. `'cell'`) when the child is itself a directive, and
+ * `undefined` for a plain block (a paragraph, a list) or a directive with a
+ * different name — enough for a container to recognize a semantically
+ * tagged child without ever seeing a hast node.
+ */
+export interface AnsiChildPart {
+  readonly name?: string;
+  render(options?: AnsiChildrenOptions): string;
+}
+
+/**
+ * The children a component receives. Calling it directly renders the
+ * directive's WHOLE body as one flattened string — what every component
+ * except `row` wants, and what used to be eagerly computed as a plain
+ * string before the component ever ran. `options` narrows the width/indent
+ * for that one call (a self-layout box's inner budget); omitted, it renders
+ * at the width/indent the directive itself was given.
+ *
+ * `.parts` exposes each of the directive's own top-level children
+ * separately, in document order, each independently renderable at its own
+ * width via its own `render(options)` — see `AnsiChildPart`.
+ *
+ * Laziness is the point: nothing under this directive is rendered until a
+ * component actually calls `children()` or one of `.parts`' `render()`
+ * functions, so a container can decide sizes top-down before anything below
+ * it draws a single character.
+ */
+export type AnsiChildren = ((options?: AnsiChildrenOptions) => string) & {
+  readonly parts: readonly AnsiChildPart[];
+};
+
+/**
  * One registry component: receives the directive's raw string attributes
- * (bare attributes as `null`), its inner markdown already rendered to plain
- * (possibly ANSI-carrying) text, and the render context, and returns the
- * text to emit. Attribute parsing, validation, and defaulting are the
+ * (bare attributes as `null`), a lazy handle onto its inner markdown
+ * (`AnsiChildren`, see above), and the render context, and returns the text
+ * to emit. Attribute parsing, validation, and defaulting are the
  * component's own job, exactly as in the other two engines' contracts.
  */
 export type AnsiComponent = (
   attributes: DirectiveAttributes,
-  childrenText: string,
+  children: AnsiChildren,
   ctx: AnsiRenderContext,
 ) => string;
 

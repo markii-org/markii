@@ -10,30 +10,26 @@ function isTextAlign(value: string): value is TextAlign {
  * `:::cell ... :::` — a transparent grouping container whose only job is
  * letting several blocks count as ONE cell of `:::row`.
  *
- * FAITHFULNESS LIMITATION (matches `@markii/html`'s `Tabs`, see that
- * module's doc comment for the same underlying cause): this engine hands a
- * container component its children ALREADY rendered to one flat string, with
- * blank-line-separated blocks joined by a literal double newline —
- * indistinguishable, once flattened, from the double newline `row.ts` uses
- * to tell one cell's rendered block from the next. So a `cell` grouping more
- * than one block COLLAPSES the blank line between its own sub-blocks (they
- * print as adjacent lines instead of separate paragraphs) — the price of
- * leaving `row.ts` an unambiguous cell boundary to split on. A `cell` with a
- * single block is unaffected.
+ * `row.ts` no longer discovers its cells by splitting a flattened string on
+ * a blank-line heuristic: it walks its own directive's top-level children
+ * directly (`registry.ts`'s `AnsiChildren.parts`), so a `cell` grouping more
+ * than one block renders those blocks exactly as it would standalone,
+ * blank line and all, with no collapsing needed to keep a cell boundary
+ * unambiguous for `row.ts`.
  *
  * `text` aligns this cell's own content when rendered STANDALONE (outside a
  * `row`); nested inside a `row`, the row's own `text` decides every cell's
- * alignment uniformly instead, for the same flattened-text reason `row.ts`
- * cannot see which of its cells set their own override.
+ * alignment uniformly instead, for the same reason `row.ts` does not look
+ * inside a cell's own attributes when it places columns.
  */
-export const Cell: AnsiComponent = (attributes, childrenText, ctx) => {
+export const Cell: AnsiComponent = (attributes, children, ctx) => {
   const rawTextAlign = attributes.text;
   const align: TextAlign | undefined =
     rawTextAlign && isTextAlign(rawTextAlign) ? rawTextAlign : undefined;
 
-  const collapsed = childrenText.replace(/\n{2,}/g, '\n');
-  if (!align || align === 'left') return collapsed;
-  return collapsed
+  const childrenText = children();
+  if (!align || align === 'left') return childrenText;
+  return childrenText
     .split('\n')
     .map((line) => ctx.pad(line, ctx.width, align))
     .join('\n');

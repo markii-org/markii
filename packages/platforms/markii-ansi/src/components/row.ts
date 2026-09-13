@@ -1,4 +1,4 @@
-import { columns, rewrapBlock } from '../box.js';
+import { columns } from '../box.js';
 import type { AnsiComponent } from '../registry.js';
 
 const COLS_VALUES = ['2', '3', '4'] as const;
@@ -29,28 +29,30 @@ const GUTTER = 1;
  * terminal has no responsive reflow, so this is the one width breakpoint
  * that stands in for it.
  *
- * FAITHFULNESS LIMITATION: each cell's block arrives ALREADY wrapped to the
- * row's full width (see `cell.ts`'s doc comment on why this engine hands a
- * container its children pre-rendered). This component re-wraps each cell's
- * lines to its narrower column width (`../box.ts`'s `rewrapBlock`) before
- * placing it, which reflows ordinary paragraph text correctly; a cell
- * containing something that draws its own box (a nested `card`/`table`)
- * would not re-wrap cleanly at a narrower width, the same accepted
- * limitation `applyLayout` documents for a `selfLayout` component.
+ * Each cell is one of the directive's own top-level children
+ * (`registry.ts`'s `AnsiChildren.parts`: a `:::cell` directive grouping
+ * several blocks, or any other block standing for itself, per docs/format.md's
+ * "a row counts its direct block children as its cells"), rendered through
+ * that part's own `render({ width })` at the ACTUAL column width decided
+ * below, rather than rendered once at the row's full width and then
+ * re-wrapped into a narrower column. A cell containing a self-drawing box
+ * (a nested `card`/`table`) therefore draws that box at the real column
+ * width in the first place, instead of having an already-drawn frame
+ * mangled by a later re-wrap.
  */
-export const Row: AnsiComponent = (attributes, childrenText, ctx) => {
+export const Row: AnsiComponent = (attributes, children, ctx) => {
   const rawTextAlign = attributes.text;
   const align: TextAlign =
     rawTextAlign && isTextAlign(rawTextAlign) ? rawTextAlign : 'left';
 
-  const cellBlocks = childrenText ? childrenText.split('\n\n') : [];
-  if (cellBlocks.length === 0) return '';
+  const cellParts = children.parts;
+  if (cellParts.length === 0) return '';
 
   const rawCols = attributes.cols ?? '';
   const requestedCols = isColsValue(rawCols)
     ? Number(rawCols)
-    : cellBlocks.length;
-  const columnCount = Math.max(1, Math.min(requestedCols, cellBlocks.length));
+    : cellParts.length;
+  const columnCount = Math.max(1, Math.min(requestedCols, cellParts.length));
 
   const place = (text: string, width: number): string =>
     align === 'left'
@@ -61,15 +63,17 @@ export const Row: AnsiComponent = (attributes, childrenText, ctx) => {
           .join('\n');
 
   if (ctx.width < ROW_COLUMN_THRESHOLD || columnCount <= 1) {
-    return cellBlocks.map((block) => place(block, ctx.width)).join('\n\n');
+    return cellParts
+      .map((part) => place(part.render({ width: ctx.width }), ctx.width))
+      .join('\n\n');
   }
 
   const colWidth = Math.max(
     1,
     Math.floor((ctx.width - GUTTER * (columnCount - 1)) / columnCount),
   );
-  const placedCells = cellBlocks.map((block) =>
-    place(rewrapBlock(block, colWidth), colWidth),
+  const placedCells = cellParts.map((part) =>
+    place(part.render({ width: colWidth }), colWidth),
   );
 
   const gridRows: string[] = [];

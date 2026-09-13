@@ -12,8 +12,9 @@ export const DEFAULT_TAB_LABEL = 'Tab';
  * becomes a bold heading line above the panel body. Rendered standalone
  * (outside a `tabs` parent) it shows exactly the same heading and panel.
  */
-export const Tab: AnsiComponent = (attributes, childrenText, ctx) => {
+export const Tab: AnsiComponent = (attributes, children, ctx) => {
   const label = attributes.label ?? DEFAULT_TAB_LABEL;
   const heading = ctx.bold(ctx.text(label));
+  const childrenText = children();
   return childrenText ? `${heading}\n${childrenText}` : heading;
 };

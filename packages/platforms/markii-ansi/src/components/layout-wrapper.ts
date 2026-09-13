@@ -61,9 +61,9 @@ export function createLayoutWrapper(
       ? { align: preset as AlignPreset }
       : { width: preset as WidthPreset };
 
-  return (_attributes, childrenText, ctx) => {
+  return (_attributes, children, ctx) => {
     const merged: ResolvedLayoutPresets = { ...own, ...ctx.layout };
-    return applyLayout(childrenText, merged, ctx.width);
+    return applyLayout(children(), merged, ctx.width);
   };
 }
 

@@ -117,7 +117,7 @@ function barLength(
  * horizontal `█` bar per point, its own value as the row's label, labels
  * right-aligned to the widest one so every bar starts at the same column.
  */
-export const Chart: AnsiComponent = (attributes, _childrenText, ctx) => {
+export const Chart: AnsiComponent = (attributes, _children, ctx) => {
   const { data, dataStatus, dataFailureKind } = ctx;
 
   const rawKind = attributes.kind ?? DEFAULT_KIND;

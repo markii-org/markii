@@ -62,7 +62,7 @@ function pick(
  * value line — the terminal has no tooltip channel, so the reason has to
  * reach the text itself (AGENTS.md's "clean is not silent").
  */
-export const Stat: AnsiComponent = (attributes, _childrenText, ctx) => {
+export const Stat: AnsiComponent = (attributes, _children, ctx) => {
   const { data, dataStatus, dataFailureKind } = ctx;
 
   const bound = safeRead<StatFields>(

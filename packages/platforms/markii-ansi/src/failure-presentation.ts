@@ -17,6 +17,15 @@ import type { Tier1Token } from './theme.js';
  * it, a themed color (`failureToken`) — the terminal's equivalent of the
  * HTML engine's `title` tooltip and modifier class, since neither exists in
  * a terminal.
+ *
+ * Two notices (an out-of-enum attribute value, a refused image source) carry
+ * a full sentence in the browser engines' `title` tooltip, reached out of
+ * the text flow. A terminal has no tooltip, so printing that sentence inline
+ * would put the reason back in the rendered note. `invalidAttributeValueLabel`
+ * and `unsafeImageSrcLabel` are this engine's short inline labels for those
+ * two cases; the full sentence (`invalidAttributeValueTitle`/
+ * `unsafeImageSrcTitle`, unchanged) still reaches a host only through
+ * `onDiagnostic`.
  */
 
 /** Human-facing phrase per `FailureKind`. Identical wording to `@markii/html`'s `FAILURE_PHRASE`; kept in sync by `failure-presentation.drift.test.ts`. Null-prototype so an out-of-taxonomy `kind` can never resolve through the prototype chain. */
@@ -112,4 +121,32 @@ export function invalidAttributeValueTitle(
 /** The marker text for a component-built image whose `src` was refused as unsafe. Wording identical to `@markii/html`'s `unsafeImageSrcTitle`. */
 export function unsafeImageSrcTitle(directive: string): string {
   return `${directive}: image source was refused as unsafe and was not shown`;
+}
+
+/**
+ * The INLINE marker text for a known attribute's value outside its closed
+ * enum, this engine's own departure from `@markii/html`'s identical wording:
+ * a terminal has no tooltip to carry `invalidAttributeValueTitle`'s full
+ * sentence out of the text flow, so printing that sentence inline would put
+ * the reason back in the page, the exact thing AGENTS.md's "clean is not
+ * silent" rule exists to prevent. This short label is what render.ts prints
+ * next to the component's own output; the full sentence still reaches a
+ * host's diagnostics surface via `onDiagnostic`.
+ */
+export function invalidAttributeValueLabel(
+  directive: string,
+  attribute: string,
+): string {
+  return `${directive}: ${attribute} ignored`;
+}
+
+/**
+ * The INLINE marker text for a component-built image whose `src` was
+ * refused as unsafe, this engine's short counterpart to
+ * `unsafeImageSrcTitle` for the same reason `invalidAttributeValueLabel`
+ * exists: no tooltip channel, so the full sentence goes to `onDiagnostic`
+ * only.
+ */
+export function unsafeImageSrcLabel(directive: string): string {
+  return `${directive}: image not shown`;
 }

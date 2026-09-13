@@ -29,6 +29,9 @@ import {
   stripControlCharacters,
 } from './sanitize.js';
 import type {
+  AnsiChildPart,
+  AnsiChildren,
+  AnsiChildrenOptions,
   AnsiRegistry,
   AnsiRegistryEntry,
   AnsiRenderContext,
@@ -51,6 +54,7 @@ import {
   dataStateSuffix,
   emptyInlineTitle,
   failureToken,
+  invalidAttributeValueLabel,
   invalidAttributeValueTitle,
 } from './failure-presentation.js';
 import {
@@ -221,6 +225,22 @@ function fallbackLabel(
       : `inline component ${code} written as a block`;
   }
   return `unknown component ${code}`;
+}
+
+/**
+ * Renders `children`'s default (whole-body) text, never throwing. Used only
+ * on already-exceptional paths (an unregistered directive, a form mismatch,
+ * a component that itself threw): the render walk underneath `children` is
+ * documented never-throw, but these three call sites are exactly the ones
+ * built to contain a failure, so they must not become a new way to produce
+ * one themselves.
+ */
+function safeChildrenText(children: AnsiChildren): string {
+  try {
+    return children();
+  } catch {
+    return '';
+  }
 }
 
 /** The unknown-directive fallback: dim inline text for a text directive, a dashed dim frame for a block directive. Wording matches `@markii/html`'s `fallbackLabel` exactly. */
@@ -429,7 +449,7 @@ function renderDirectiveContent(
   kind: string | undefined,
   isBlock: boolean,
   attributes: DirectiveAttributes,
-  childrenText: string,
+  children: AnsiChildren,
   width: number,
   indent: string,
   wctx: WalkContext,
@@ -445,7 +465,7 @@ function renderDirectiveContent(
     return unknownDirective(
       name || '(unnamed)',
       inline,
-      childrenText,
+      safeChildrenText(children),
       'unregistered',
       width,
       wctx.color,
@@ -455,7 +475,7 @@ function renderDirectiveContent(
     return unknownDirective(
       name || '(unnamed)',
       inline,
-      childrenText,
+      safeChildrenText(children),
       'form-mismatch',
       width,
       wctx.color,
@@ -472,12 +492,12 @@ function renderDirectiveContent(
   );
   let rendered: string;
   try {
-    rendered = component(binding.attributes, childrenText, ctx);
+    rendered = component(binding.attributes, children, ctx);
   } catch {
     return componentError(
       name || '(unnamed)',
       inline,
-      childrenText,
+      safeChildrenText(children),
       width,
       wctx.color,
     );
@@ -485,35 +505,38 @@ function renderDirectiveContent(
 
   // The silent-value-drop mechanism (AGENTS.md "clean is not silent"): a
   // known attribute's value outside its closed enum still renders the
-  // component exactly as registered, with the reason appended as visible
-  // dim text (there is no tooltip channel in a terminal), and reported to
-  // `onDiagnostic` for a host's own diagnostics surface.
+  // component exactly as registered, with a short labeled marker appended
+  // (there is no tooltip channel in a terminal, so the full reason cannot
+  // live inline without becoming body text again). The full sentence is
+  // reported to `onDiagnostic` for a host's own diagnostics surface; a
+  // caller that passes no `onDiagnostic` simply gets the marker with no
+  // reason anywhere, exactly like the browser engines with no tooltip read.
   //
   // A block component's marker goes on its OWN line. Appended to the same
   // line it would land against the bottom edge of whatever the component
-  // drew, turning a clean box into a box with a sentence stuck to its
-  // corner. Only an inline component, which is already part of a line of
-  // text, takes the marker inline.
+  // drew, turning a clean box into a box with a label stuck to its corner.
+  // Only an inline component, which is already part of a line of text,
+  // takes the marker inline.
   const markerSeparator = inline ? ' ' : '\n';
   const invalidEnum = invalidEnumAttribute(name, binding.attributes);
   if (invalidEnum) {
-    const message = invalidAttributeValueTitle(
-      name,
-      invalidEnum.attribute,
-      invalidEnum.value,
-    );
     reportDiagnostic(wctx.onDiagnostic, {
       kind: 'invalid-attribute-value',
       directive: name,
       attribute: invalidEnum.attribute,
-      message,
+      message: invalidAttributeValueTitle(
+        name,
+        invalidEnum.attribute,
+        invalidEnum.value,
+      ),
     });
-    rendered = `${rendered}${markerSeparator}${dim(`(${message})`, wctx.color)}`;
+    const label = invalidAttributeValueLabel(name, invalidEnum.attribute);
+    rendered = `${rendered}${markerSeparator}${dim(`[${label}]`, wctx.color)}`;
   }
 
   // An `inline: true` component with no content still renders exactly as
   // registered, with the same quiet trailing marker.
-  if (isRegisteredInline(entry) && childrenText.trim() === '') {
+  if (isRegisteredInline(entry) && safeChildrenText(children).trim() === '') {
     rendered = `${rendered}${dim(` (${emptyInlineTitle(name)})`, wctx.color)}`;
   }
 
@@ -543,6 +566,97 @@ function renderDirectiveChildren(
     return renderBlocks(children as RootContent[], width, indent, wctx);
   }
   return renderInlineChildren(children, width, indent, wctx);
+}
+
+/** The resolved directive name for a `<mk-directive>` element, after alias resolution — the name `AnsiChildPart.name` reports. Attributes play no part in identifying a child this way, so an empty attribute map is enough. */
+function resolvedChildDirectiveName(
+  element: Element,
+  registry: AnsiRegistry,
+): string {
+  const written = stringProperty(element, 'data-mk-name') ?? '';
+  return resolveDirectiveAlias(registry, written, {}).name;
+}
+
+/**
+ * Builds one `AnsiChildPart` per top-level child of a directive's BLOCK
+ * body (a pure whitespace-only text node between blocks, the same kind
+ * `renderBlocks` already treats as carrying no content, contributes no
+ * part). Each part renders lazily via the same per-node `renderBlock` the
+ * ordinary block walk uses, so a container that calls `part.render` at its
+ * own chosen width gets exactly what a document-level render at that width
+ * would have produced — no separate rendering path to drift from the
+ * ordinary one.
+ */
+function buildBlockChildParts(
+  nodes: ElementContent[],
+  width: number,
+  indent: string,
+  wctx: WalkContext,
+): AnsiChildPart[] {
+  const parts: AnsiChildPart[] = [];
+  for (const node of nodes) {
+    if (node.type === 'text' && node.value.trim() === '') continue;
+    const name =
+      node.type === 'element' && node.tagName === DIRECTIVE_TAG
+        ? resolvedChildDirectiveName(node, wctx.registry)
+        : undefined;
+    parts.push({
+      name,
+      render: (options) =>
+        renderBlock(
+          node as RootContent,
+          options?.width ?? width,
+          options?.indent ?? indent,
+          wctx,
+        ),
+    });
+  }
+  return parts;
+}
+
+/**
+ * Builds the `AnsiChildren` handle a component receives (`registry.ts`'s
+ * doc comment on the type): calling it renders the WHOLE body, lazily, at
+ * an optionally narrower width/indent; `.parts` exposes each top-level
+ * child separately for a container (`row`) that must size each one before
+ * it is drawn. Nothing under `element` is rendered until a caller actually
+ * invokes one of these functions.
+ */
+function buildChildren(
+  element: Element,
+  width: number,
+  indent: string,
+  wctx: WalkContext,
+): AnsiChildren {
+  const isBlock = isBlockLevelChildren(element.children);
+
+  const fn = ((options?: AnsiChildrenOptions): string =>
+    renderDirectiveChildren(
+      element.children,
+      options?.width ?? width,
+      options?.indent ?? indent,
+      wctx,
+    )) as AnsiChildren;
+
+  Object.defineProperty(fn, 'parts', {
+    enumerable: true,
+    get: (): readonly AnsiChildPart[] =>
+      isBlock
+        ? buildBlockChildParts(element.children, width, indent, wctx)
+        : [
+            {
+              render: (options?: AnsiChildrenOptions) =>
+                renderInlineChildren(
+                  element.children,
+                  options?.width ?? width,
+                  options?.indent ?? indent,
+                  wctx,
+                ),
+            },
+          ],
+  });
+
+  return fn;
 }
 
 /** Turns one `<mk-directive>` element into its rendered text, including the layout adjustment for a block directive whose layout it does not own. */
@@ -589,18 +703,13 @@ function renderDirective(
   // generic post-render `applyLayout` below would corrupt its frame.
   const isSelfLayout = isBlock && registrySelfLayout(wctx.registry, name);
 
-  const childrenText = renderDirectiveChildren(
-    element.children,
-    width,
-    indent,
-    wctx,
-  );
+  const children = buildChildren(element, width, indent, wctx);
   const content = renderDirectiveContent(
     name,
     kind,
     isBlock,
     attributes,
-    childrenText,
+    children,
     width,
     indent,
     wctx,

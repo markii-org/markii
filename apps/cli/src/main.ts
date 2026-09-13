@@ -157,9 +157,12 @@ async function runViewCommand(
     if (result.failures.length > 0) exitCode = 2;
   } else {
     values = readPersistedValues(memento, documentKey);
-    if (command.verbose && command.run && hasScripts) {
+    // AGENTS.md's "clean is not silent" rule: a note with scripts that are
+    // skipped because stdin/stdout is not a terminal is a real, discoverable
+    // outcome, not just a --verbose detail, so this reaches stderr always.
+    if (command.run && hasScripts) {
       terminal.writeError(
-        'markii: not running scripts (requires an interactive terminal); showing cached values.\n',
+        'markii: scripts not run because the output is not a terminal; use markii run first\n',
       );
     }
   }
@@ -173,10 +176,13 @@ async function runViewCommand(
     onDiagnostic: diagnostics.onDiagnostic,
   });
   terminal.write(output);
-  if (command.verbose) {
-    for (const line of diagnostics.lines()) {
-      terminal.writeError(`markii: ${line}\n`);
-    }
+  // Render diagnostics (a declined attribute value, a refused image source)
+  // are the reason behind an in-note marker that has no tooltip in a
+  // terminal; AGENTS.md's "clean is not silent" rule means they always reach
+  // stderr, not just under --verbose. --verbose only adds the pack/run
+  // diagnostics printed above.
+  for (const line of diagnostics.lines()) {
+    terminal.writeError(`markii: ${line}\n`);
   }
 
   return exitCode;

@@ -7,9 +7,9 @@ describe('Cell', () => {
     expect(out.trim()).toBe('hello');
   });
 
-  it('collapses the blank line between its own two sub-blocks into one line break', () => {
+  it('keeps the blank line between its own two sub-blocks as two separate paragraphs', () => {
     const out = renderMarkToAnsi(':::cell\nfirst\n\nsecond\n:::\n');
-    expect(out.trim().split('\n\n').length).toBe(1);
+    expect(out.trim().split('\n\n').length).toBe(2);
     expect(out).toContain('first');
     expect(out).toContain('second');
   });

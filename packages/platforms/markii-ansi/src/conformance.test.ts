@@ -109,6 +109,7 @@ describe('render-level conformance fixtures (conformance/render/)', () => {
     '05-table',
     '06-image',
     '07-notice',
+    '08-row-cards',
   ];
 
   it('the fixture list above accounts for every *.mk.md file in conformance/render/ (nothing silently skipped)', () => {

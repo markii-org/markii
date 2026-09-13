@@ -6,12 +6,18 @@ import {
   registryAliases,
   registryLayoutAxis,
   resolveDirectiveAlias,
+  type AnsiChildren,
   type AnsiComponent,
   type AnsiRegistry,
   type AnsiRegistryEntry,
 } from './registry.js';
 
-const echo: AnsiComponent = (_attrs, children) => children;
+const echo: AnsiComponent = (_attrs, children) => children();
+
+/** A no-content `AnsiChildren` stub for tests that call a component function directly rather than going through `render.ts`'s real render walk. */
+function noopChildren(): AnsiChildren {
+  return Object.assign(() => '', { parts: [] });
+}
 
 describe('createAnsiRegistry / mergeAnsiRegistries', () => {
   it('creates a null-prototype registry', () => {
@@ -46,9 +52,9 @@ describe('createAnsiRegistry / mergeAnsiRegistries', () => {
       createAnsiRegistry({ box: { component: first } }),
       createAnsiRegistry({ box: { component: second } }),
     );
-    expect(readRegistryComponent(merged.box)?.({}, '', {} as never)).toBe(
-      'second',
-    );
+    expect(
+      readRegistryComponent(merged.box)?.({}, noopChildren(), {} as never),
+    ).toBe('second');
   });
 });
 

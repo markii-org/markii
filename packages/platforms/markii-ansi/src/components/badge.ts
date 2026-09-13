@@ -44,12 +44,13 @@ const TOKEN_NAME = {
  * variant. At color level `'none'` there is no inverse video to distinguish
  * a badge from surrounding text, so it degrades to `[label]` instead.
  */
-export const Badge: AnsiComponent = (attributes, childrenText, ctx) => {
+export const Badge: AnsiComponent = (attributes, children, ctx) => {
   const rawVariant = attributes.variant ?? DEFAULT_VARIANT;
   const variant: BadgeVariant = isBadgeVariant(rawVariant)
     ? rawVariant
     : DEFAULT_VARIANT;
 
+  const childrenText = children();
   if (ctx.color === 'none') return `[${childrenText}]`;
 
   const token = TOKEN_NAME[VARIANT_TOKEN[variant]];

@@ -16,10 +16,10 @@ const empty = createAnsiRegistry();
 
 const callout: AnsiComponent = (attrs, children, ctx) => {
   const type = typeof attrs.type === 'string' ? attrs.type : 'note';
-  return `[${type}] ${ctx.text(children)}`;
+  return `[${type}] ${ctx.text(children())}`;
 };
 
-const badge: AnsiComponent = (_attrs, children) => `[${children}]`;
+const badge: AnsiComponent = (_attrs, children) => `[${children()}]`;
 
 const withComponents: AnsiRegistry = createAnsiRegistry(
   {
@@ -144,7 +144,7 @@ describe('layout presets (width/align)', () => {
     const seen: string[] = [];
     const probe: AnsiComponent = (attrs, children) => {
       seen.push(JSON.stringify(attrs));
-      return children;
+      return children();
     };
     const reg = createAnsiRegistry({ box: { component: probe } });
     renderMarkToAnsi(':::box{width=wide align=center}\nx\n:::\n', reg);
@@ -306,8 +306,12 @@ describe('empty-inline and invalid-enum quiet markers', () => {
         onDiagnostic: (event) => diagnostics.push(event),
       },
     );
-    expect(stripAnsi(text)).toContain('is not a valid type value');
+    expect(stripAnsi(text)).toContain('[callout: type ignored]');
+    expect(stripAnsi(text)).not.toContain('is not a valid type value');
     expect(diagnostics).toHaveLength(1);
+    expect((diagnostics[0] as { message: string }).message).toContain(
+      'is not a valid type value',
+    );
   });
 });
 

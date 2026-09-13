@@ -61,7 +61,7 @@ function isTextAlign(value: string): value is TextAlign {
  * `ctx.layout` instead of letting a generic post-render narrow/pad corrupt
  * the borders.
  */
-export const Table: AnsiComponent = (attributes, _childrenText, ctx) => {
+export const Table: AnsiComponent = (attributes, _children, ctx) => {
   const { data, dataStatus, dataFailureKind } = ctx;
 
   const columnsOverride = parseColumns(attributes.columns);

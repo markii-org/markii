@@ -63,7 +63,7 @@ const MIN_BAR_WIDTH = 3;
  * rounded integer percent, matching `@markii/html` exactly. A failed/stale
  * binding appends the quiet failure suffix after the percent.
  */
-export const Progress: AnsiComponent = (attributes, _childrenText, ctx) => {
+export const Progress: AnsiComponent = (attributes, _children, ctx) => {
   const { data, dataStatus, dataFailureKind } = ctx;
 
   const bound = safeRead<ProgressFields>(

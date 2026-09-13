@@ -66,7 +66,7 @@ function labeledRule(
  */
 const FIT_DEFAULT_WIDTH = 10;
 
-export const Divider: AnsiComponent = (attributes, _childrenText, ctx) => {
+export const Divider: AnsiComponent = (attributes, _children, ctx) => {
   const rawVariant = attributes.variant ?? 'line';
   const variant: DividerVariant = isDividerVariant(rawVariant)
     ? rawVariant

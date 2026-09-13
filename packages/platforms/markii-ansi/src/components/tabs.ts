@@ -19,7 +19,8 @@ const ACTIVE_MARKER = ' (active)';
  * blank line reliably finds the boundary between the first tab's block and
  * the rest without needing any information `tabs` does not have.
  */
-export const Tabs: AnsiComponent = (_attributes, childrenText) => {
+export const Tabs: AnsiComponent = (_attributes, children) => {
+  const childrenText = children();
   if (!childrenText.trim()) return '';
 
   const blocks = childrenText.split('\n\n');
