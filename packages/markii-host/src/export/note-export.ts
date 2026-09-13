@@ -40,7 +40,7 @@ function lastSegment(pathOrName: string): string {
 export const MARK_EXTENSION = '.mk.md';
 
 /** The extensions an export can be written as. */
-export type ExportExtension = '.html' | '.pdf';
+export type ExportExtension = '.html' | '.pdf' | '.txt' | '.md';
 
 /**
  * The name used when a note has no usable base name at all — a file called

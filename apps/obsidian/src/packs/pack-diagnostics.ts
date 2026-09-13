@@ -26,22 +26,13 @@
  */
 import {
   formatPackDiagnosticLines as formatPackDiagnosticLinesShared,
+  prebuiltShadowLine,
   skippedPackCount as skippedPackCountShared,
 } from '@markii/host';
 import type { PackContext } from './pack-context.js';
 
-/**
- * One informational line for a pack whose prebuilt `webview.js` shadows
- * component sources still present in the same folder (`@markii/host`'s
- * `resolvePrebuiltPack`). Never a failure: shipping both the built
- * artifact and its sources is a supported distribution shape.
- */
-function prebuiltShadowLine(pack: {
-  readonly name: string;
-  readonly folder: string;
-}): string {
-  return `Pack "${pack.name}" is using its prebuilt webview.js, so the component sources in that folder are not compiled. Edits to them take effect only after you delete webview.js, or rebuild it with the VS Code Export Pack command.`;
-}
+/** This plugin's own rebuild instruction for `@markii/host`'s shared `prebuiltShadowLine`: it has no build command of its own (AGENTS.md's Host positioning), so it points at VS Code's Export Pack command. */
+const REBUILD_INSTRUCTION = 'rebuild it with the VS Code Export Pack command';
 
 /** One line per namespace present on disk under `packs/` but not on this device's trust list — `../packs/installed-packs.ts`'s `selectLoadablePackFolders`. Informational, not a failure: the settings tab's "Enable" control is the way to load it. */
 export function notEnabledPackLine(namespace: string): string {
@@ -61,7 +52,9 @@ export function formatPackDiagnosticLines(context: PackContext): string[] {
     packs: context.packs,
     skipped: context.skipped,
     relativeEntryLines: [],
-    prebuiltShadowLines: context.prebuiltShadowedPacks.map(prebuiltShadowLine),
+    prebuiltShadowLines: context.prebuiltShadowedPacks.map((pack) =>
+      prebuiltShadowLine(pack, REBUILD_INSTRUCTION),
+    ),
     cssWarnings: [],
     invalidRegistrationReasons: context.invalidRegistrationReasons,
     registrationCollisions: context.registrationCollisions,

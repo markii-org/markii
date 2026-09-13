@@ -376,3 +376,141 @@ export {
   createRenderDiagnosticReporter,
   renderDiagnosticLine,
 } from './diagnostics/render-diagnostics.js';
+
+// Batch 11: the HostAdapter contract, createMarkiiHost, and the Phase 1a
+// shared behavior modules (docs pending — see tmp/W11-adapter-design.md).
+export type {
+  HostAdapter,
+  HostDirEntry,
+  HostEditor,
+  HostExportCapabilities,
+  HostExportFormat,
+  HostIsolate,
+  HostLabels,
+  HostPackSource,
+  HostPromptRequest,
+  HostTextEdit,
+} from './host/adapter.js';
+export { BROWSER_ISOLATE_ENTRY } from './host/adapter.js';
+export { CLI_LABELS, OBSIDIAN_LABELS, VSCODE_LABELS } from './host/labels.js';
+export {
+  scheduledRefreshNotStartedLine,
+  scriptsDisabledConfirmationText,
+  scriptsDisabledDiagnosticLine,
+  scriptsDisabledNotice,
+  scriptsDisabledNoticeText,
+  scriptsEnabledConfirmationText,
+} from './host/script-execution.js';
+export {
+  MIN_REFRESH_INTERVAL_SECONDS,
+  parseRefreshIntervalSeconds,
+  refreshIntervalMsFromSeconds,
+  refreshIntervalValidationMessage,
+} from './host/refresh-interval.js';
+export {
+  promptsFromAdapter,
+  runViaAdapter,
+  spawnRunViaAdapter,
+  RUN_TIMEOUT_MS as HOST_RUN_TIMEOUT_MS,
+} from './host/run-behavior.js';
+export type { RunViaAdapterRequest } from './host/run-behavior.js';
+export { formatRunFailureLines } from './host/run-diagnostics.js';
+
+// Batch 11 Phase 1b: packs, export, and the editor seam.
+export type { ArchiveExtractFs } from './host/pack-archive.js';
+export {
+  createNodeArchiveExtractFs,
+  describeArchiveError,
+  writeArchiveContents,
+} from './host/pack-archive.js';
+export type {
+  InstallPackFromArchiveOptions,
+  PackDirectoryExists,
+} from './host/pack-install.js';
+export {
+  installConsentMessage,
+  installPackDiagnosticLines,
+  installPackFromArchive,
+  installPackMessage,
+  installReplaceConfirmMessage,
+} from './host/pack-install.js';
+export type { LoadPacksResult } from './host/pack-load.js';
+export {
+  discoverConfiguredPacks,
+  loadPacksViaAdapter,
+} from './host/pack-load.js';
+export { prebuiltShadowLine } from './packs/pack-diagnostics.js';
+export { mdPlainFromSource } from './host/export/md-plain.js';
+export type {
+  ExportHtmlDocumentRequest,
+  NoteFileExportOutcome,
+} from './host/export-behavior.js';
+export {
+  buildExportDocument,
+  exportDefaultFileName,
+  exportDiagnosticLines,
+  exportNoteFileViaAdapter,
+  exportResultMessage,
+  fileNameOf,
+  formatByteSize,
+  imageEmbedDiagnosticLines,
+  renderEngineDiagnosticLine,
+} from './host/export-behavior.js';
+export type {
+  CatalogCache,
+  InsertComponentEdit,
+  InsertComponentPlan,
+} from './host/editor-behavior.js';
+export {
+  LAYOUT_ORIGIN_TAG,
+  STANDARD_ORIGIN_TAG,
+  completeAtViaEditor,
+  completionOriginTag,
+  createCatalogCache,
+  hoverAtViaEditor,
+  hoverDocumentationText,
+  insertComponentPlan,
+} from './host/editor-behavior.js';
+
+export { createMarkiiHost } from './host/create-host.js';
+export type {
+  CompleteOutcome,
+  EditorPositionRequest,
+  ExportOutcome,
+  ExportRequest,
+  HoverOutcome,
+  InsertComponentRequest,
+  InstallPackOutcome,
+  InstallPackRequest,
+  LoadPacksOutcome,
+  MarkiiHost,
+  MarkiiHostOptions,
+  OpenOutcome,
+  OpenRequest,
+  RunOutcome,
+  RunRequest,
+  Unsupported,
+} from './host/create-host.js';
+
+export {
+  ACTION_CAPABILITY,
+  assertHostScenario,
+  containsInOrder,
+  createAnswerQueue,
+  hostConformanceDir,
+  hostDeclaresCapability,
+  listHostScenarioNames,
+  loadHostScenario,
+  outcomeMismatches,
+  runHostScenario,
+  zipArchiveDirectory,
+} from './host/conformance-runner.js';
+export type {
+  HostScenario,
+  HostScenarioAction,
+  HostScenarioCapability,
+  HostScenarioExpected,
+  HostScenarioRunResult,
+  LoadedHostScenario,
+  RunSimulation,
+} from './host/conformance-runner.js';

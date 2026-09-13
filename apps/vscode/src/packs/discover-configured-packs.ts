@@ -1,26 +1,31 @@
 /**
- * Discovers the packs `markii.packs` currently names — cheaply, without
- * compiling anything. Shared by two commands that both only need "what
- * packs are configured": the export command (`./export-pack.ts`) and the
- * Insert Component command (GitHub issue #17, slice 1, `../insert-component.ts`
- * via `../extension.ts`), plus the completion/hover catalog
- * (`../completion-catalog.ts`). Deliberately not `./pack-context.ts`'s
- * `loadPackContext`: that function also loads Lua modules and resolves/
- * compiles a webview registration script for the PREVIEW path, neither of
- * which any caller here needs, so contorting it to serve every caller
- * would just make it harder to read for no benefit.
+ * The host-specific POLICY half of "what packs does `markii.packs`
+ * currently name": resolving the setting's raw entries (workspace-relative,
+ * `~`-prefixed, or absolute) against this workspace and merging in the
+ * extension's own bundled packs. Everything AFTER that folder list exists —
+ * read each folder's `pack.json`, validate it, drop a namespace collision,
+ * engine-gate against this renderer — is `@markii/host`'s shared
+ * `discoverConfiguredPacks` (batch 11, survey finding A3); this module no
+ * longer duplicates that half.
+ *
+ * Shared by two commands that both only need "what packs are configured":
+ * the export command (`./export-pack.ts`) and the Insert Component command
+ * (GitHub issue #17, slice 1, `../insert-component.ts` via `../extension.ts`),
+ * plus the completion/hover catalog cache built in `../extension.ts` over
+ * `@markii/host`'s `createCatalogCache`.
+ * Deliberately not `./pack-context.ts`'s `loadPackContext`: that function
+ * also loads Lua modules and resolves/compiles a webview registration
+ * script for the PREVIEW path, neither of which any caller here needs.
  *
  * `vscode`-free (plain paths and strings in, `DiscoveredPack[]` out) so it
  * stays unit-testable without a real workspace.
  */
 import { homedir } from 'node:os';
 import {
-  createNodeFileReader,
-  discoverPacks,
+  discoverConfiguredPacks as discoverConfiguredPacksShared,
   resolvePackPaths,
 } from '@markii/host';
 import type { DiscoveredPack } from '@markii/host';
-import { REACT_ENGINE_ID } from '@markii/react';
 import { discoverBundledPacks, mergeBundledPacks } from './bundled-packs.js';
 
 /**
@@ -46,15 +51,7 @@ export async function discoverConfiguredPacks(
     workspaceRoot,
     homeDir,
   );
-  // Engine-gated like the render path (`@markii/react`'s `loadPack`), so
-  // Insert Component and completion never offer a component this renderer
-  // could not render if it were accepted.
-  const result = await discoverPacks(
-    resolvedPaths,
-    createNodeFileReader(),
-    undefined,
-    REACT_ENGINE_ID,
-  );
+  const result = await discoverConfiguredPacksShared(resolvedPaths);
   if (extensionPath === undefined) {
     return result.packs;
   }

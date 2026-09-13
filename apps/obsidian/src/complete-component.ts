@@ -16,23 +16,19 @@
  * empty query matches everything.
  */
 import type { CompletionContext, CompletionItem } from '@markii/stdlib/editor';
-import {
-  filterSuggestionsByLabel,
-  LAYOUT_ORIGIN,
-  STANDARD_ORIGIN,
-} from './insert-component.js';
+import { completionOriginTag } from '@markii/host';
+import { filterSuggestionsByLabel } from './insert-component.js';
 
 /**
  * The small origin tag for a completion item: `standard`, `layout`, or the
  * owning pack's name for a `component` item; the empty string for an
  * `attribute` or `value` item, which has no catalog group of its own.
+ *
+ * Re-exported, not re-implemented: `apps/vscode/src/completion.ts` had the
+ * identical function body (survey finding A5), and it now lives once in
+ * `@markii/host`'s `host/editor-behavior.ts`.
  */
-export function completionOriginTag(item: CompletionItem): string {
-  if (item.kind !== 'component') return '';
-  if (item.group === 'standard') return STANDARD_ORIGIN;
-  if (item.group === 'layout') return LAYOUT_ORIGIN;
-  return item.packName ?? '';
-}
+export { completionOriginTag };
 
 /**
  * The plain row shape `./complete-suggest.ts`'s `renderSuggestion` draws

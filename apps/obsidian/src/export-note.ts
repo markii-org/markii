@@ -29,8 +29,9 @@
 import {
   noteHasScripts,
   MAX_EMBEDDED_IMAGE_BYTES,
-  buildNoteExport,
+  buildExportDocument,
   exportedSiblingPath,
+  fileNameOf,
 } from '@markii/host';
 import type {
   EmbeddedImageReport,
@@ -192,18 +193,24 @@ export interface NotePdfExportRequest extends NoteExportRequest {
   readonly baseDir: string | undefined;
 }
 
-/** Builds the standalone document for one note. Never throws: `buildNoteExport` classifies a failing `renderBody` and falls back to the static engine rather than propagating. */
+/**
+ * Builds the standalone document for one note, over `@markii/host`'s
+ * shared `buildExportDocument` (batch 11: the same pure composition
+ * `apps/vscode`'s and `apps/cli`'s export paths use now too, so the
+ * three hosts cannot build a differently-shaped document from the same
+ * inputs). Never throws: a failing `renderBody` degrades to the static
+ * engine rather than propagating.
+ */
 async function buildDocument(request: NoteExportRequest): Promise<{
   html: string;
   valueCount: number;
   render: ExportRenderInfo;
   images: EmbeddedImageReport;
 }> {
-  const values = request.values ?? {};
-  const document = await buildNoteExport({
+  const document = await buildExportDocument({
+    notePath: request.notePath,
     text: request.text,
-    fileName: request.notePath,
-    values,
+    ...(request.values !== undefined ? { values: request.values } : {}),
     ...(request.renderBody !== undefined
       ? { renderBody: request.renderBody }
       : {}),
@@ -303,11 +310,8 @@ export async function exportNoteAsPdf(
   }
 }
 
-/** The last path segment of a vault-relative path, for naming a file in a notice. */
-function fileNameOf(path: string): string {
-  const separator = path.lastIndexOf('/');
-  return separator === -1 ? path : path.slice(separator + 1);
-}
+// `fileNameOf` (the last path segment, for naming a file in a notice) is
+// `@markii/host`'s shared one, imported above.
 
 /** Shown when a command runs with no Markii note to export. */
 export const NO_ACTIVE_NOTE_NOTICE = 'Markii: open a .mk.md note to export it.';

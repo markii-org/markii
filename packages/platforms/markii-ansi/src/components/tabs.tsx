@@ -3,7 +3,11 @@ import type { ReactNode } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { bold, dim } from '../ansi.js';
 import type { ColorLevel } from '../ansi.js';
-import { useFocusMarker, useIsFocused } from '../interactive.js';
+import {
+  useFocusMarker,
+  useIsFocused,
+  useReportActiveLabel,
+} from '../interactive.js';
 import type { ElementTabPanel } from '../render.js';
 
 /**
@@ -44,13 +48,25 @@ export function InteractiveTabs({
 }: InteractiveTabsProps): ReactNode {
   const [active, setActive] = useState(0);
   const focused = useIsFocused(focusId);
+  const reportActiveLabel = useReportActiveLabel();
 
   useInput(
     (_input, key) => {
+      if (panels.length === 0) return;
+      let nextIndex: number | undefined;
       if (key.leftArrow) {
-        setActive((current) => (current - 1 + panels.length) % panels.length);
+        nextIndex = (active - 1 + panels.length) % panels.length;
       } else if (key.rightArrow || key.tab) {
-        setActive((current) => (current + 1) % panels.length);
+        nextIndex = (active + 1) % panels.length;
+      }
+      if (nextIndex === undefined) return;
+      setActive(nextIndex);
+      // Reported from THIS key handler, never during render — see
+      // `FocusApi.reportActiveLabel`'s doc comment for why that carries no
+      // render-loop risk, unlike the render-time report channel batch 10.1
+      // deliberately avoided.
+      if (focusId !== undefined) {
+        reportActiveLabel(focusId, panels[nextIndex]?.label ?? '');
       }
     },
     { isActive: interactive && focused },

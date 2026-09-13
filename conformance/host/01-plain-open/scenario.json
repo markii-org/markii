@@ -1,0 +1,6 @@
+{
+  "id": "plain-open",
+  "invariant": "a note with no scripts and no packs opens, renders, and writes no diagnostics",
+  "clock": 1700000000000,
+  "actions": [{ "type": "open" }]
+}

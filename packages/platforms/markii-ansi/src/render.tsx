@@ -27,14 +27,22 @@ import { style } from './style.js';
 import { defaultAnsiTheme, type AnsiTheme } from './theme.js';
 import {
   frameBlock,
+  frameTopLine,
+  inkBorderStyle,
+  isTextAlign,
   measureWidth,
   padText,
   ruleLine,
   wrapText,
+  type TextAlign,
 } from './text-grid.js';
 import { drawTableGrid } from './components/table-grid.js';
-import { resolveRowLayout } from './components/row.js';
-import { resolveCardInnerWidth } from './components/card.js';
+import { resolveRowLayout, type RowTextAlign } from './components/row.js';
+import {
+  CARD_FRAME_OVERHEAD,
+  resolveCardBoxWidth,
+  resolveCardInnerWidth,
+} from './components/card.js';
 import { resolveCalloutInnerWidth } from './components/callout.js';
 import { resolveDetailsInnerWidth } from './components/details-string.js';
 import {
@@ -67,6 +75,8 @@ import {
   failureToken,
   invalidAttributeValueLabel,
   invalidAttributeValueTitle,
+  unsafeImageSrcLabel,
+  unsafeImageSrcTitle,
 } from './failure-presentation.js';
 import {
   formatValue,
@@ -144,10 +154,33 @@ const VALUE_DIRECTIVE_NAME = 'value';
 const DATA_ATTRIBUTE_KEY = 'data';
 /** The attribute `@markii/core` preserves a code fence's raw `meta` string onto. */
 const CODE_META_ATTR = 'data-mk-meta';
-/** The three block directive names given real Ink layout/state (see this file's top comment). */
+/** The block directive names given real Ink layout/state (see this file's top comment). */
 const ROW_NAME = 'row';
 const TABS_NAME = 'tabs';
 const DETAILS_NAME = 'details';
+/**
+ * `card` and `figure` join this list (batch 11's Ink-frames phase): both are
+ * containers whose body previously only ever reached STRING mode, so a
+ * `tabs`/`details` nested inside one could never become focusable. `card`
+ * draws its frame with an Ink `Box` border (`renderCardElement`); `figure`
+ * never drew a frame at all (it is a caption + optional image line), so it
+ * gains no border, only ELEMENT-mode children.
+ *
+ * `callout` is deliberately NOT in this list: its per-line colored bar
+ * (`▌ `) has no Ink-native equivalent under this engine's binding styling
+ * rule (`AGENTS.md`/batch 10's brief: never set `borderColor`, never style
+ * through an Ink color prop). Ink's `Box` border draws a straight, uncolored
+ * edge; there is no way to tint just the border glyph without a color prop.
+ * Coloring a bar next to CONTENT OF UNKNOWN HEIGHT (an Ink element tree,
+ * not a string) would require rendering the body once to learn its line
+ * count and building that many bar rows — a second render pass this engine
+ * does not otherwise need. `callout` stays STRING-mode-only; a `tabs`/
+ * `details` nested inside one remains non-interactive, the same documented
+ * boundary a nested-in-`cell`/GFM-table-cell block already has. See this
+ * worker's report (tmp/W11-phase4.md) for the full reasoning.
+ */
+const CARD_NAME = 'card';
+const FIGURE_NAME = 'figure';
 
 /** Block-level hast tags this engine recognizes; anything else inside a directive's children is treated as inline content. */
 const BLOCK_TAGS: ReadonlySet<string> = new Set([
@@ -1262,6 +1295,36 @@ function invalidEnumMarkerElement(
   return styledText(dim(`[${label}]`, wctx.color));
 }
 
+/**
+ * Renders one `row` cell at `cellWidth`. `text=left` (the default) keeps
+ * the cell a real Ink element tree (`renderBlockElement`), so anything
+ * focusable inside it stays focusable. `text=center`/`text=right` instead
+ * falls back to a flattened, pre-justified STRING — batch 11's justification
+ * rule: exactly ONE implementation, `text-grid.ts`'s `padText`, never a
+ * second Ink-`alignItems`-based mechanism. Before this batch, `row`'s
+ * ELEMENT-mode grid silently ignored `text=` altogether (only the STRING-
+ * mode fallback, reached when a `row` is nested inside a self-drawing
+ * container, honored it); this closes that gap using the SAME helper the
+ * STRING mode already uses, rather than inventing a second mechanism.
+ */
+function renderRowCellElement(
+  node: RootContent,
+  cellWidth: number,
+  indent: string,
+  wctx: WalkContext,
+  align: RowTextAlign,
+): ReactElement | null {
+  if (align === 'left')
+    return renderBlockElement(node, cellWidth, indent, wctx);
+  const text = renderBlockString(node, cellWidth, indent, wctx);
+  if (text.trim() === '') return null;
+  const justified = text
+    .split('\n')
+    .map((line) => padText(line, cellWidth, align))
+    .join('\n');
+  return styledText(justified);
+}
+
 function renderRowElement(
   element: Element,
   attributes: DirectiveAttributes,
@@ -1279,7 +1342,13 @@ function renderRowElement(
     const items = cellNodes
       .map((node, index) => (
         <Box key={index} marginTop={index > 0 ? 1 : 0} flexDirection="column">
-          {renderBlockElement(node, width, indent, wctx)}
+          {renderRowCellElement(
+            node as RootContent,
+            width,
+            indent,
+            wctx,
+            layout.align,
+          )}
         </Box>
       ))
       .filter(Boolean);
@@ -1299,7 +1368,13 @@ function renderRowElement(
             marginRight={cellIndex < rowCells.length - 1 ? gutter : 0}
             flexDirection="column"
           >
-            {renderBlockElement(node, layout.colWidth, indent, wctx)}
+            {renderRowCellElement(
+              node as RootContent,
+              layout.colWidth,
+              indent,
+              wctx,
+              layout.align,
+            )}
           </Box>
         ))}
       </Box>,
@@ -1400,7 +1475,212 @@ function renderDetailsElement(
   );
 }
 
-/** Renders one directive as a real Ink element (block position only). Dispatches `row`/`tabs`/`details` to their real builders; every other directive falls back to the string engine, wrapped in one `<Text>`. */
+/** Ink's `Box` `borderStyle` for `card`'s frame, `frameBlock`'s own solid glyph set. `card` never draws a dashed frame (only the unknown-directive/component-error fallbacks do), so this is the one set it ever needs. */
+const CARD_BORDER = inkBorderStyle('solid');
+
+/**
+ * Places a self-sized element (a `card`'s own bordered `Box`, already drawn
+ * at `boxWidth`) within the full `width` per the resolved `align` preset —
+ * the ELEMENT-mode twin of `layout.ts`'s string-based `selfLayoutAlign`,
+ * kept separate from `applyLayoutElement` below because a self-drawing
+ * component (unlike `row`/`tabs`/`details`) has ALREADY resolved its own
+ * width (including `fit`, which `applyLayoutElement` does not implement)
+ * and must never be narrowed a second time.
+ */
+function selfLayoutAlignElement(
+  element: ReactElement,
+  boxWidth: number,
+  layout: ResolvedLayoutPresets | undefined,
+  width: number,
+): ReactElement {
+  if (!layout?.align) return element;
+  const alignItems =
+    layout.align === 'center'
+      ? 'center'
+      : layout.align === 'right'
+        ? 'flex-end'
+        : 'flex-start';
+  return (
+    <Box width={width} flexDirection="column" alignItems={alignItems}>
+      <Box width={boxWidth} flexDirection="column">
+        {element}
+      </Box>
+    </Box>
+  );
+}
+
+/**
+ * `:::card{title="..." text=left|center|right} ... :::` as a real Ink
+ * element (batch 11: card moves off `frameBlock`'s hand-drawn string frame
+ * onto Ink's own `Box` border, so a `tabs`/`details` nested in its body can
+ * become a real focusable — this function's `body` is built through
+ * `renderBlocksElement`, ELEMENT mode, whenever that is possible).
+ *
+ * Ink's border has no primitive for weaving text into an edge, so a titled
+ * card still draws its OWN top line by hand (`frameTopLine`, the exact same
+ * string `frameBlock` would have produced) and tells Ink not to draw a top
+ * border at all; an untitled card lets Ink draw all four sides, which
+ * `frameGlyphs`'s character set makes byte-identical to `frameBlock`'s own
+ * untitled output (proven against the committed fixtures).
+ *
+ * `text=center`/`text=right` (batch 11's justification rule: exactly ONE
+ * implementation, `text-grid.ts`'s `padText`, pre-justifying a STRING before
+ * Ink ever sees it, never a second Ink-`alignItems`-based mechanism) falls
+ * back to building the body as one flattened, pre-justified string, exactly
+ * like the pre-Ink engine did — an accepted, documented trade: a `tabs`/
+ * `details` nested inside a CENTERED or RIGHT-aligned card body is not
+ * focusable, the same "self-drawing container's own body is a fixed string"
+ * boundary this engine already draws elsewhere (this file's top comment).
+ * `text=left` (the default, and by far the common case) keeps full nested
+ * interactivity.
+ */
+function renderCardElement(
+  element: Element,
+  attributes: DirectiveAttributes,
+  width: number,
+  indent: string,
+  wctx: WalkContext,
+  layout: ResolvedLayoutPresets | undefined,
+): ReactElement {
+  const title = attributes.title ?? null;
+  const titleText = title ? stripControlCharacters(title) : undefined;
+  const rawTextAlign = attributes.text;
+  const align: TextAlign =
+    rawTextAlign && isTextAlign(rawTextAlign) ? rawTextAlign : 'left';
+
+  const boxWidth = resolveCardBoxWidth(
+    { ...attributes, title: titleText ?? null },
+    layout,
+    width,
+  );
+  const innerWidth = Math.max(1, boxWidth - CARD_FRAME_OVERHEAD);
+
+  let bodyElement: ReactElement | null;
+  if (align === 'left') {
+    bodyElement = renderBlocksElement(
+      element.children,
+      innerWidth,
+      indent,
+      wctx,
+    );
+  } else {
+    const bodyText = renderDirectiveChildrenString(
+      element.children,
+      innerWidth,
+      indent,
+      wctx,
+    );
+    const justified = bodyText
+      .split('\n')
+      .map((line) => padText(line, innerWidth, align))
+      .join('\n');
+    bodyElement = justified === '' ? null : styledText(justified);
+  }
+
+  const bordered = (
+    <Box
+      width={boxWidth}
+      flexDirection="column"
+      borderStyle={CARD_BORDER}
+      borderTop={!titleText}
+    >
+      {bodyElement ?? <Text> </Text>}
+    </Box>
+  );
+
+  const framed = titleText ? (
+    <Box flexDirection="column" width={boxWidth}>
+      {styledText(
+        frameTopLine({ style: 'solid', title: titleText, width: boxWidth }),
+      )}
+      {bordered}
+    </Box>
+  ) : (
+    bordered
+  );
+
+  const positioned = selfLayoutAlignElement(framed, boxWidth, layout, width);
+
+  // The invalid-`text=`-value marker is appended AFTER alignment, on its
+  // own unindented line, exactly like the STRING engine's own
+  // `renderDirectiveContentString` (the marker is never itself aligned or
+  // framed) — see `invalidEnumMarkerElement`'s call sites elsewhere in this
+  // file for the same shape.
+  const marker = invalidEnumMarkerElement(CARD_NAME, attributes, wctx);
+  if (!marker) return positioned;
+  return (
+    <Box flexDirection="column">
+      {positioned}
+      {marker}
+    </Box>
+  );
+}
+
+/**
+ * `:::figure{src="..." alt="..."} caption markdown :::` as a real Ink
+ * element (batch 11: `figure` never drew a hand-drawn frame — it is a plain
+ * dim alt/src line followed by its caption body — but its body still only
+ * ever reached STRING mode before this change, so a `tabs`/`details` in its
+ * caption could never become focusable. `body` here is built through
+ * `renderBlocksElement`, ELEMENT mode, exactly mirroring `figure.ts`'s own
+ * STRING-mode component line for line: the header lines (alt/src/refused)
+ * stack directly above the caption with NO blank row between them, matching
+ * `Figure`'s own `lines.join('\n')` (a single line break, not a blank
+ * paragraph gap) — `Box`'s default zero margin between column children
+ * reproduces that exactly.
+ */
+const FIGURE_DIRECTIVE_NAME = 'figure';
+
+function renderFigureElement(
+  element: Element,
+  attributes: DirectiveAttributes,
+  width: number,
+  indent: string,
+  wctx: WalkContext,
+): ReactElement | null {
+  const rawSrc = attributes.src ?? null;
+  const alt = attributes.alt ?? '';
+  const refused = Boolean(rawSrc) && !isSafeUrl(rawSrc as string);
+  const safeSrc = rawSrc && !refused ? rawSrc : null;
+  const src = safeSrc
+    ? stripControlCharacters(
+        resolveImageAttribute(safeSrc, wctx.resolveImageSrc),
+      )
+    : null;
+
+  const headerLines: string[] = [];
+  if (rawSrc) {
+    if (alt) {
+      headerLines.push(dim(`alt: ${stripControlCharacters(alt)}`, wctx.color));
+    }
+    if (refused) {
+      reportDiagnostic(wctx.onDiagnostic, {
+        kind: 'unsafe-image-src',
+        directive: FIGURE_DIRECTIVE_NAME,
+        message: unsafeImageSrcTitle(FIGURE_DIRECTIVE_NAME),
+      });
+      headerLines.push(
+        dim(`[${unsafeImageSrcLabel(FIGURE_DIRECTIVE_NAME)}]`, wctx.color),
+      );
+    } else if (src) {
+      headerLines.push(dim(src, wctx.color));
+    }
+  }
+
+  const headerElement =
+    headerLines.length > 0 ? styledText(headerLines.join('\n')) : null;
+  const body = renderBlocksElement(element.children, width, indent, wctx);
+
+  if (!headerElement && !body) return null;
+  return (
+    <Box flexDirection="column">
+      {headerElement}
+      {body}
+    </Box>
+  );
+}
+
+/** Renders one directive as a real Ink element (block position only). Dispatches `row`/`tabs`/`details`/`card`/`figure` to their real builders; every other directive falls back to the string engine, wrapped in one `<Text>`. */
 function renderDirectiveElement(
   element: Element,
   width: number,
@@ -1433,26 +1713,46 @@ function renderDirectiveElement(
 
   if (
     !formMismatch &&
-    (name === ROW_NAME || name === TABS_NAME || name === DETAILS_NAME) &&
+    (name === ROW_NAME ||
+      name === TABS_NAME ||
+      name === DETAILS_NAME ||
+      name === CARD_NAME ||
+      name === FIGURE_NAME) &&
     hasRealComponent(wctx.registry, name)
   ) {
-    // None of `row`/`tabs`/`details` own a layout axis (`registryLayoutAxis`
-    // is undefined for all three in the standard registry), so, unlike a
+    // None of these six own a layout axis (`registryLayoutAxis` is
+    // undefined for all of them in the standard registry), so, unlike a
     // layout-wrapper scope, a `width=`/`align=` the author wrote still needs
-    // the GENERIC post-render treatment — `applyLayoutElement` below, the
-    // JSX-based twin of `layout.ts`'s string `applyLayout`.
+    // resolving here rather than being handled by the directive's own name.
     const { attributes, resolved: layoutResolved } = resolveLayoutAttributes(
       aliased,
       undefined,
     );
     try {
+      if (name === CARD_NAME) {
+        // `card` resolves its OWN width (including `fit`, which the generic
+        // `applyLayoutElement` below does not implement) and aligns itself
+        // with `selfLayoutAlignElement` — see `renderCardElement`'s doc
+        // comment. It never goes through the generic post-render wrap.
+        return renderCardElement(
+          element,
+          attributes,
+          width,
+          indent,
+          wctx,
+          layoutResolved,
+        );
+      }
+
       let el: ReactElement | null = null;
       if (name === ROW_NAME) {
         el = renderRowElement(element, attributes, width, indent, wctx);
       } else if (name === TABS_NAME) {
         el = renderTabsElement(element, width, indent, wctx);
-      } else {
+      } else if (name === DETAILS_NAME) {
         el = renderDetailsElement(element, attributes, width, indent, wctx);
+      } else {
+        el = renderFigureElement(element, attributes, width, indent, wctx);
       }
       if (!el) return null;
       const marker = invalidEnumMarkerElement(name, attributes, wctx);

@@ -1,0 +1,5 @@
+{
+  "outcomes": [{ "kind": "completions", "labels": ["callout"] }],
+  "diagnostics": [],
+  "prompts": []
+}

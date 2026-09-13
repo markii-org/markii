@@ -1,0 +1,8 @@
+{
+  "outcomes": [
+    { "kind": "opened" },
+    { "kind": "ran", "values": {}, "failureKinds": ["tier-blocked"] }
+  ],
+  "diagnostics": [],
+  "prompts": []
+}

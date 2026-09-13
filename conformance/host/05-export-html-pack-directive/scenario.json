@@ -1,0 +1,6 @@
+{
+  "id": "export-html-pack-directive",
+  "invariant": "a pack directive the host did not load exports as the unknown-component fallback, and the export excludes script machinery",
+  "clock": 1700000000000,
+  "actions": [{ "type": "exportHtml" }]
+}

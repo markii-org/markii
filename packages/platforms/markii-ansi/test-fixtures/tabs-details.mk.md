@@ -7,7 +7,7 @@ Panel two text.
 :::
 ::::
 
-:::details{summary="Summary here"}
+:::details{title="Summary here"}
 Details body text.
 :::
 
@@ -23,7 +23,22 @@ Beta panel text.
 :::::
 
 :::::card{title="Folded"}
-::::details{summary="More"}
+::::details{title="More"}
 Hidden body text here.
+::::
+:::::
+
+:::::callout{type=info title="Aside"}
+::::tabs
+:::tab{label="Gamma"}
+Gamma panel text.
+:::
+:::tab{label="Delta"}
+Delta panel text.
+:::
+::::
+
+::::details{title="Buried"}
+Buried body text here.
 ::::
 :::::

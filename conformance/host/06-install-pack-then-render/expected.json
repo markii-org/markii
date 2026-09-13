@@ -1,0 +1,18 @@
+{
+  "outcomes": [
+    { "kind": "opened" },
+    { "kind": "installed", "namespace": "ana", "replaced": false },
+    { "kind": "loaded", "namespaces": ["ana"] },
+    { "kind": "installed", "namespace": "ana", "replaced": true }
+  ],
+  "diagnostics": [
+    "Install pack from file installed pack \"ana\" from \"files/ana-1.0.0\"",
+    "Loaded pack \"ana\" (namespace: ana, 1 component)",
+    "replacing the previous install"
+  ],
+  "prompts": [
+    "Installing \"ana\" lets its code run inside",
+    "Installing \"ana\" lets its code run inside",
+    "A pack named \"ana\" is already installed. Replacing it removes the installed copy and cannot be undone."
+  ]
+}

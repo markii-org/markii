@@ -9,10 +9,10 @@
  * `./insert-modals.ts` (which imports `obsidian` for its `SuggestModal`)
  * and `main.ts` are wiring only: `main.ts` requires an active
  * `MarkdownView` with an editor, discovers configured packs
- * (`./packs/discover-configured-packs.ts`), builds the catalog
+ * (`@markii/host`'s `discoverConfiguredPacks`), builds the catalog
  * (`@markii/host`'s `buildComponentCatalog`), shows `./insert-modals.ts`'s
  * picker built from this module's items, and on a choice builds the
- * skeleton (`@markii/host`'s `componentSkeleton`) and inserts it via the
+ * skeleton (`@markii/host`'s `insertComponentPlan`) and inserts it via the
  * Obsidian Editor API.
  *
  * The picker stays a FLAT fuzzy list by design (no separators, no fake

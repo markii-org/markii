@@ -1,9 +1,17 @@
 /**
- * `vscode`-free half of fence auto-extension: turns `@markii/host`'s
- * `FenceLineEdit` data into the line/column spans `extension.ts` hands to
- * `vscode.TextEdit`, for the two places this extension inserts a container
- * directive on the author's behalf (the `markii.insertComponent` command,
- * and accepting a container item from the completion popup).
+ * `vscode`-free half of fence auto-extension for the ONE place this
+ * extension still computes it directly: accepting a container item from
+ * the completion popup. The `markii.insertComponent` command's own fence
+ * auto-extension moved into `@markii/host`'s `insertComponentPlan` (batch
+ * 11), which builds the skeleton, computes the fence edits, and places the
+ * cursor all as one plan; `extension.ts`'s command handler calls that
+ * directly and no longer needs this module's `fenceTextEdits` at all.
+ *
+ * A completion accept has no already-built skeleton or insertion plan to
+ * reuse `insertComponentPlan` against — it is choosing among several
+ * completion items, only one of which (if any) is a container — so it
+ * still computes its own fence edits here, over the same
+ * `@markii/host` primitives `insertComponentPlan` itself uses.
  *
  * There is no wording and no user-visible surface here on purpose. Fence
  * extension is quiet: either the enclosing fences come out right, or
@@ -35,7 +43,7 @@ export interface FenceTextEdit {
  * Never throws: a failure to compute fence edits degrades to inserting
  * the component exactly as this extension did before.
  */
-export function fenceTextEdits(
+function fenceTextEdits(
   documentText: string,
   insertionLine: number,
   insertedText: string,

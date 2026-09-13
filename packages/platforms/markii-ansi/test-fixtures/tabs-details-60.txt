@@ -5,7 +5,7 @@ under test.
 Two
 Panel two text.
 
-▸ Details (collapsible section, shown expanded)
+▸ Summary here (collapsible section, shown expanded)
   Details body text.
 
 ┌─ Holder ─────────────────────────────────────────────────┐
@@ -17,6 +17,17 @@ Panel two text.
 └──────────────────────────────────────────────────────────┘
 
 ┌─ Folded ─────────────────────────────────────────────────┐
-│▸ Details (collapsible section, shown expanded)           │
+│▸ More (collapsible section, shown expanded)              │
 │  Hidden body text here.                                  │
 └──────────────────────────────────────────────────────────┘
+
+▌ ℹ Info
+▌ Aside
+▌ Gamma (active)
+▌ Gamma panel text.
+▌
+▌ Delta
+▌ Delta panel text.
+▌
+▌ ▸ Buried (collapsible section, shown expanded)
+▌   Buried body text here.

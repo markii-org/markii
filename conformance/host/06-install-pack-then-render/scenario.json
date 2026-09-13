@@ -1,0 +1,15 @@
+{
+  "id": "install-pack-then-render",
+  "invariant": "installing a .mkp loads its namespace; a second install of the same namespace asks before replacing",
+  "clock": 1700000000000,
+  "actions": [
+    { "type": "open" },
+    { "type": "installPack", "archive": "files/ana-1.0.0", "answers": ["allow"] },
+    { "type": "loadPacks" },
+    {
+      "type": "installPack",
+      "archive": "files/ana-1.0.0",
+      "answers": ["allow", "allow"]
+    }
+  ]
+}

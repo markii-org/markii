@@ -336,17 +336,31 @@ describe('the status line', () => {
     view.unmount();
   });
 
-  it('keeps naming the tabs block by its first panel label after switching the active tab', async () => {
+  it('names the tabs block by its first panel label before any switch, and by the ACTIVE panel label after one', async () => {
+    // Batch 11, item 4: the status line follows the active panel, not a
+    // fixed first-panel identity. `reportActiveLabel` is called from
+    // `tabs.tsx`'s key handler (an ordinary event-driven `setState`, not a
+    // render-time report channel), so this is the mechanism, not a
+    // guess about it.
     const view = await mountInteractive(TABS_AND_DETAILS_DOC, 60);
+    expect(view.lastFrame()).toContain('tabs "One"');
     await view.press('\t'); // switches the active tab; the tabs block is still the focused component
-    const frame = view.lastFrame();
-    expect(frame).toContain('tabs "One"');
+    expect(view.lastFrame()).toContain('tabs "Two"');
+    expect(view.lastFrame()).not.toContain('tabs "One"');
+    await view.press('\t'); // wraps back to the first panel
+    expect(view.lastFrame()).toContain('tabs "One"');
+    view.unmount();
+  });
+
+  it('falls back to the first panel label when the reader has not switched yet', async () => {
+    const view = await mountInteractive(TABS_AND_DETAILS_DOC, 60);
+    expect(view.lastFrame()).toContain('tabs "One"');
     view.unmount();
   });
 });
 
-describe('blocks nested inside a framed component are not focusable', () => {
-  it('the focus cycle over test-fixtures/tabs-details.mk.md has exactly two stops, never the nested Alpha tabs or nested details', async () => {
+describe('a tabs/details nested inside a card is focusable; nested inside a callout it is not', () => {
+  it('the focus cycle over test-fixtures/tabs-details.mk.md visits the card-nested Alpha tabs and More details, never the callout-nested Gamma tabs or Buried details', async () => {
     const { readFileSync } = await import('node:fs');
     const { join } = await import('node:path');
     const { fileURLToPath } = await import('node:url');
@@ -357,16 +371,93 @@ describe('blocks nested inside a framed component are not focusable', () => {
     );
     const view = await mountInteractive(source, 80);
     const labels = new Set<string>();
-    for (let i = 0; i < 6; i += 1) {
+    // Batch 11 (Ink frames): `card` moved onto a real Ink `Box` border, so a
+    // `tabs`/`details` nested in a card's body IS now a real focusable —
+    // this fixture has four in document order: the top-level tabs, the
+    // top-level details, `Holder`'s nested Alpha/Beta tabs, and `Folded`'s
+    // nested More details. `callout` did NOT move (its per-line colored bar
+    // has no Ink-native equivalent under the never-`borderColor` styling
+    // rule — see `render.tsx`'s `CARD_NAME`/`FIGURE_NAME` doc comment), so
+    // the fixture's trailing callout's nested Gamma tabs and Buried details
+    // stay excluded from the cycle, the same boundary this test used to
+    // assert for card before this batch.
+    for (let i = 0; i < 8; i += 1) {
       const frame = view.lastFrame();
       const match = frame.match(/(tabs|details) "([^"]*)"/);
       expect(match).not.toBeNull();
       labels.add(`${match?.[1]} "${match?.[2]}"`);
-      expect(frame).not.toMatch(/tabs "Alpha"/);
-      expect(frame).not.toMatch(/details "More"/);
+      expect(frame).not.toMatch(/tabs "Gamma"/);
+      expect(frame).not.toMatch(/details "Buried"/);
       await view.press('j');
     }
-    expect(labels.size).toBe(2);
+    expect(labels).toEqual(
+      new Set([
+        'tabs "One"',
+        'details "Summary here"',
+        'tabs "Alpha"',
+        'details "More"',
+      ]),
+    );
+    view.unmount();
+  });
+});
+
+describe('card moved onto an Ink Box border (batch 11): its body keeps real focus', () => {
+  it('enter toggles a details block nested directly inside a card', async () => {
+    const doc =
+      ':::::card{title="Holder"}\n::::details{title="Nested"}\nhidden body\n::::\n:::::\n';
+    const view = await mountInteractive(doc, 60);
+    expect(view.lastFrame()).toContain('▸');
+    expect(view.lastFrame()).not.toContain('hidden body');
+    await view.press('\r');
+    expect(view.lastFrame()).toContain('▾');
+    expect(view.lastFrame()).toContain('hidden body');
+    view.unmount();
+  });
+
+  it('the card frame itself is drawn by Ink (a full border, byte-identical top/bottom width)', async () => {
+    const doc = ':::card{title="Framed"}\nplain body\n:::\n';
+    const view = await mountInteractive(doc, 40);
+    // Interactive (live-loop) frames carry Ink's own cursor-hide escape
+    // ahead of the content, unlike the render-once string path — strip
+    // every escape sequence before matching the plain frame glyphs.
+    const stripEscapes = (text: string): string =>
+      text.replace(/\x1b\[[0-9?;]*[a-zA-Z]/g, '');
+    const frame = stripEscapes(view.lastFrame());
+    const lines = frame.split('\n').filter((l) => l.trim() !== '');
+    expect(lines[0]).toMatch(/^┌.*Framed.*┐$/);
+    expect(lines.some((line) => /^└─+┘$/.test(line))).toBe(true);
+    view.unmount();
+  });
+});
+
+describe('callout stayed STRING-mode (batch 11): its body has no real focus', () => {
+  it('a details block nested inside a callout never becomes focusable (STRING mode always shows its body; no status line names it, and Enter does nothing)', async () => {
+    const doc =
+      ':::::callout{type=info}\n::::details{title="Nested"}\nhidden body\n::::\n:::::\n';
+    const view = await mountInteractive(doc, 60);
+    // The STRING-mode `Details` fallback (details-string.ts) has no
+    // open/closed state at all — it always shows its body, exactly like
+    // the pre-Ink engine's non-interactive render. The point under test is
+    // that it never joins the focus cycle: no status line names it, and it
+    // is unaffected by a keypress.
+    expect(view.lastFrame()).toContain('nothing focusable');
+    expect(view.lastFrame()).not.toContain('details "Nested"');
+    const before = view.lastFrame();
+    await view.press('\r');
+    expect(view.lastFrame()).toBe(before);
+    view.unmount();
+  });
+});
+
+describe('figure gained ELEMENT-mode children (batch 11): a caption details block keeps real focus', () => {
+  it('enter toggles a details block nested in a figure caption', async () => {
+    const doc =
+      ':::::figure{alt="x"}\n::::details{title="Nested"}\nhidden body\n::::\n:::::\n';
+    const view = await mountInteractive(doc, 60);
+    expect(view.lastFrame()).not.toContain('hidden body');
+    await view.press('\r');
+    expect(view.lastFrame()).toContain('hidden body');
     view.unmount();
   });
 });

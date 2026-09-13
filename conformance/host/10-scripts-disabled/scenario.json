@@ -1,0 +1,9 @@
+{
+  "id": "scripts-disabled",
+  "invariant": "the device switch blocks the run before the isolate, and says so on both surfaces",
+  "clock": 1700000000000,
+  "actions": [
+    { "type": "open" },
+    { "type": "run", "trigger": "manual", "scriptsDisabled": true }
+  ]
+}

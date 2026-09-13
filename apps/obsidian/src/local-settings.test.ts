@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_LOCAL_SETTINGS,
-  MIN_REFRESH_INTERVAL_SECONDS,
   normalizeLocalSettings,
-  refreshIntervalMsFromSeconds,
 } from './local-settings.js';
+
+// `MIN_REFRESH_INTERVAL_SECONDS`/`refreshIntervalMsFromSeconds` moved to
+// `@markii/host`'s `host/refresh-interval.ts` (batch 11) and are tested
+// there. This file keeps only what is genuinely this host's own: the
+// `LocalSettings` shape and its hostile-input normalization.
 
 describe('normalizeLocalSettings', () => {
   it('returns the defaults for null/non-object input', () => {
@@ -71,30 +74,5 @@ describe('scriptsDisabled (issue #34)', () => {
       scriptsDisabled: true,
     };
     expect(normalizeLocalSettings(stored)).toEqual(stored);
-  });
-});
-
-describe('refreshIntervalMsFromSeconds', () => {
-  it('is off (undefined) for zero, negative, or non-finite input', () => {
-    expect(refreshIntervalMsFromSeconds(0)).toBeUndefined();
-    expect(refreshIntervalMsFromSeconds(-1)).toBeUndefined();
-    expect(refreshIntervalMsFromSeconds(Number.NaN)).toBeUndefined();
-    expect(
-      refreshIntervalMsFromSeconds(Number.POSITIVE_INFINITY),
-    ).toBeUndefined();
-  });
-
-  it('clamps a positive value under the minimum up to it', () => {
-    expect(refreshIntervalMsFromSeconds(1)).toBe(
-      MIN_REFRESH_INTERVAL_SECONDS * 1000,
-    );
-    expect(refreshIntervalMsFromSeconds(2)).toBe(
-      MIN_REFRESH_INTERVAL_SECONDS * 1000,
-    );
-  });
-
-  it('passes a value at or above the minimum through unclamped', () => {
-    expect(refreshIntervalMsFromSeconds(5)).toBe(5000);
-    expect(refreshIntervalMsFromSeconds(60)).toBe(60_000);
   });
 });

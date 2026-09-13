@@ -1,0 +1,14 @@
+{
+  "id": "run-manual-grant-refused",
+  "invariant": "the same prompt, refused, leaves the host reaching nothing and reports the failure on both surfaces",
+  "clock": 1700000000000,
+  "actions": [
+    { "type": "open" },
+    {
+      "type": "run",
+      "trigger": "manual",
+      "answers": ["deny"],
+      "simulate": { "name": "total", "value": 3, "requiresHost": "api.example.com" }
+    }
+  ]
+}

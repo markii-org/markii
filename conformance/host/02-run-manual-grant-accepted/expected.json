@@ -1,0 +1,8 @@
+{
+  "outcomes": [
+    { "kind": "opened" },
+    { "kind": "ran", "values": { "total": 3 }, "failureKinds": [] }
+  ],
+  "diagnostics": [],
+  "prompts": ["This note's scripts can send data to api.example.com. Allow?"]
+}

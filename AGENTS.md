@@ -55,7 +55,11 @@ docs/                the spec + documentation — source of truth. spec.md is th
 conformance/         language-agnostic corpus: *.mk.md inputs + expected-AST *.json;
                      render/ holds render-level fixtures (*.mk.md + committed
                      *.html), byte-diffed by @markii/html's conformance.test.ts
-                     and cross-checked for classes/structure by @markii/react
+                     and cross-checked for classes/structure by @markii/react;
+                     host/ holds host SCENARIO fixtures (note.mk.md +
+                     scenario.json + expected.json), run against every app's
+                     HostAdapter by @markii/host's conformance-runner under a
+                     fake editor, so the three hosts cannot drift apart
 packages/markii-core    framework-agnostic reference impl — ZERO React dependency:
   src/parse.ts       text → mdast AST (unified + remark-parse + remark-directive)
   src/to-hast.ts     mdast → hast: directive tagging (data.hName) + URL sanitizer
@@ -144,7 +148,12 @@ packages/platforms/markii-ansi   the terminal renderer, a third platform
   src/registry.ts    AnsiRegistry: a React component taking
                      {attributes, children, ctx}
   src/components/    the standard set as Ink components + defaultAnsiRegistry;
-                     contract-drift.test.ts fails closed like @markii/react's
+                     card and figure frame with Ink Box borders (so tabs/
+                     details inside them take focus); callout keeps its
+                     string-drawn colored type bar on purpose, since a
+                     border glyph cannot carry the type color under the
+                     no-Ink-color rule; contract-drift.test.ts fails closed
+                     like @markii/react's
   src/conformance.test.ts + src/nesting.test.ts  the L1 corpus, the
                      committed conformance/render/*.txt (width 80, color
                      never) and one *.ansi, and test-fixtures/ (nesting and
@@ -242,6 +251,32 @@ packages/markii-host    PRIVATE, never published (no npm presence, absent from
   src/run/grant-flow.ts    prompts and grant storage, both injected
   src/run/net-pinning.ts, src/run/ip-address.ts  resolve-then-pin (issue #10)
   src/run/run-trace.ts     last-run outcome, for the host's run marker
+  src/host/          the HOST CONTRACT: adapter.ts defines HostAdapter,
+                     the small set of primitives a host provides
+                     (readFile/exists/writeFile/listFolder, ONE prompt for
+                     every yes-or-no question, the GrantMemento as
+                     device-local state, a diagnostics line, now()) plus
+                     four OPTIONAL capability groups (isolate, editor,
+                     packs, exports). create-host.ts's createMarkiiHost
+                     turns an adapter into the behaviors every app used to
+                     assemble itself: open, run, exportNote, installPack,
+                     loadPacks, completeAt, hoverAt, insertComponent,
+                     diagnostics. A behavior whose capability the adapter
+                     does not declare returns an Unsupported outcome AND
+                     writes one diagnostics line: declining is never a
+                     silent no-op. labels.ts holds the per-host wording
+                     nouns the shared message templates interpolate. The
+                     behavior modules beside them (script-execution,
+                     refresh-interval, run-behavior, run-diagnostics,
+                     pack-archive, pack-install, pack-load,
+                     export-behavior, export/md-plain, editor-behavior)
+                     are each the ONE home of what the three apps used to
+                     duplicate; conformance-runner.ts drives
+                     conformance/host/ against any adapter under a fake
+                     editor. adapter.ts, labels.ts, script-execution.ts,
+                     refresh-interval.ts and editor-behavior.ts are
+                     Node-free and re-exported from src/browser.ts;
+                     everything else is main-entry only
   src/browser.ts     the environment-free subpath entry (@markii/host/browser,
                      issue #20): registry building/keep-first merge, insert
                      catalog/skeletons, and the other pure logic a browser
@@ -341,22 +376,25 @@ apps/vscode          the "Markii" VS Code extension (preview + Run + packs) — 
                      (user-scope) against the workspace root; pack-scripts.ts
                      pre-reads each pack's scripts/*.lua; lua-resolver.ts is the
                      pure worker-side PackModuleResolver; pack-context.ts
-                     composes them; export-pack.ts + discover-configured-packs.ts
-                     back the markii.exportPack command (issue #16), which
+                     composes them; export-pack.ts backs the
+                     markii.exportPack command (issue #16), which
                      writes a .mkp through a save dialog and nothing else;
                      bundled-packs.ts + build-bundled-packs.ts build packs/
                      into dist/packs at extension build time and register
                      that folder as the always-present pack root;
-                     archive-packs.ts resolves a markii.packs entry that
-                     names a .mkp file; install-pack.ts backs
-                     markii.installPack (validate, consent, then write into
-                     globalStorage, in that order);
+                     a markii.packs entry naming a .mkp file and the
+                     markii.installPack command (validate, consent, then
+                     write into globalStorage, in that order) go through
+                     @markii/host's pack-archive/pack-install via
+                     src/host-adapter.ts;
                      src/insert-component.ts backs markii.insertComponent
                      (issue #17); src/completion.ts (wording, snippet and
-                     filter text) + src/completion-catalog.ts (cached pack
-                     discovery) back the completion and hover providers
+                     filter text) backs the completion and hover providers
                      registered in extension.ts for the markii language
                      only (issue #27)
+  src/host-adapter.ts  the VS Code HostAdapter (the only app-side host
+                     logic); src/host-conformance.test.ts runs
+                     conformance/host/ through it under the fake editor
   src/export-html.ts wording + outcome shape behind markii.exportHtml
                      (issue #28); preview-panel.ts holds the handler
   syntaxes/          TextMate injection grammar for the three directive forms
@@ -384,7 +422,9 @@ apps/cli             the "markii" command line tool, a third host and a
   src/grant-store.ts the device-local GrantMemento: one state.json under the
                      platform config dir, 0600, atomic, hostile-file safe
   src/run-note.ts    runOnce through the shared path, manual tier only
-  src/export-note.ts html via @markii/host, ansi, and the md-plain downgrade
+  src/host-adapter.ts  the CLI HostAdapter (exports and run go through
+                     createMarkiiHost); src/host-conformance.test.ts runs
+                     conformance/host/ through it
   src/view-mode.ts   live vs static decision (pure); src/live-view.ts mounts
                      buildMarkElement with Ink, owns width/resize and onExit
   Loads no packs by design: a pack directive renders as the unknown
@@ -436,13 +476,14 @@ apps/obsidian        the "Markii" Obsidian plugin (desktop only) — an
                      "present, not enabled on this device" and never
                      evaluated (pack-trust.probe.test.ts proves it with real
                      registration scripts). installed-packs.ts owns the
-                     list; install-pack.ts refuses a bundled namespace before
-                     any write; pack-context, pack-runtime, pack-styles,
+                     list; install goes through @markii/host's pack-install
+                     (src/host-adapter.ts), which refuses a bundled
+                     namespace before any write; pack-context, pack-runtime, pack-styles,
                      pack-diagnostics (the console + notice surface named in
                      docs/integration.md). Install, remove, enable, and the
                      Reload Markii packs command reload packs and re-render
-                     every open view. discover-configured-packs.ts feeds the
-                     insert command's catalog. No export/build command here by design (see
+                     every open view. The host contract's loadPacks feeds
+                     the insert command's catalog. No export/build command here by design (see
                      Host positioning below): src/insert-component.ts +
                      src/insert-modals.ts back Insert Markii component
                      (issue #17); src/complete-component.ts +
@@ -456,8 +497,10 @@ apps/obsidian        the "Markii" Obsidian plugin (desktop only) — an
   src/packs/bundled-packs.ts (+ the build-substituted embedded sibling)
                      the bundled packs base64-embedded in main.js like the
                      worker, so a 3-file install carries them;
-                     archive-packs.ts + install-pack.ts are the .mkp entry
-                     and the Install Markii pack from file command
+                     src/host-adapter.ts is the Obsidian HostAdapter and
+                     the .mkp entry behind the Install Markii pack from
+                     file command; src/host-conformance.test.ts runs
+                     conformance/host/ through it
   src/export-note.ts + src/export/html-to-pdf.ts  the two export commands
                      (issue #28): export-note.ts is the obsidian-free flow,
                      wording, and failure classification behind Export as
@@ -725,6 +768,18 @@ same commit as the change that triggers them:
   what a host without it does, how the worker bytes and the Lua wasm reach
   the isolate, what an export cannot contain, and where each host's
   diagnostics surface is.
+- **A host behavior** (anything in createMarkiiHost: open, run, export,
+  install pack, load packs, complete, hover, insert, diagnostics) → it
+  lives in `packages/markii-host/src/host/`, never in an app. An app
+  implements `HostAdapter` and nothing else. Adding a behavior means a
+  `conformance/host/` scenario plus its expected outcome in the same
+  commit, and each app's adapter test picks it up automatically. A host
+  that does not offer the behavior declares the capability absent rather
+  than returning an empty or faked result, so the corpus records
+  `unsupported` instead of a false success. An adapter is constructible
+  from injected dependencies: one that reads a module-scope global or
+  imports its host SDK directly cannot be driven by the corpus, and that
+  is a bug, not a style preference.
 - **Any change visible in authored Markii content** (directive naming or
   composition, component names/attributes, script or frontmatter syntax) →
   sweep ALL demo and doc content in the same pass: `README.md`'s example,
@@ -766,7 +821,8 @@ same commit as the change that triggers them:
 
 ## Session rules for agents
 
-- Subagents must NOT run any `git` command (no commit, no branch, no init).
+- Subagents must NOT run any `git` command at all, read-only ones
+  included (no status, diff, log, commit, branch, or init).
   The orchestrator commits. Report what you changed instead.
 - Do not create files outside your assigned scope; if two agents run in
   parallel they own disjoint directories.

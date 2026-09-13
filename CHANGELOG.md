@@ -19,9 +19,13 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
   details block also shows a dim "enter to open" hint ("enter to close"
   once open). A status line at the bottom names the focused block (for
   example `tabs "One"` or `details "Summary"`, or "nothing focusable") and
-  repeats the key legend. A tabs or details block nested inside a card,
-  callout, or figure is read-only in this version and is not part of the
-  focus cycle. The viewer needs both stdin and stdout to be terminals:
+  repeats the key legend, naming a tabs block by its active panel so the
+  line follows the reader as they switch panels. A tabs or details block
+  nested inside a card or a figure joins the focus cycle like any other;
+  one nested inside a callout is read-only, because a callout marks its
+  type with a colored bar rather than a frame and that bar has no
+  equivalent in the layout engine's borders. The viewer needs both stdin
+  and stdout to be terminals:
   piping, redirecting, or passing the new `--static` flag renders the note
   once and exits, byte for byte as before, which is what scripts and CI
   depend on.
@@ -32,8 +36,29 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
   keeps its own output off the screen while the viewer is mounted. See the
   terminal section of `docs/integration.md`.
 
+### Fixed
+
+- **`details` reads `title=` in the terminal engine.** A `details` block
+  written with `summary=` fell back to the generic label "Details"; the
+  attribute every engine reads is `title=`, and the terminal engine now
+  shows that label like the other two.
+- **`text=center` and `text=right` apply inside a `row`.** A cell's
+  justification was dropped when the row was laid out as elements. Both
+  paths pre-justify each line through one shared primitive, so the two can
+  no longer disagree.
+
 ### Changed
 
+- **The three host applications are adapters over one shared layer.** The
+  VS Code extension, the Obsidian plugin, and the command line tool
+  implement one small set of host primitives (file access, one yes or no
+  prompt, device-local state, a diagnostics line, a clock) and declare
+  which capabilities they offer; every behavior built on those primitives
+  lives once and is shared. A scenario corpus under `conformance/host/`
+  runs against each application's adapter, so the three cannot drift
+  apart unnoticed. The shared layer is internal and unpublished, so no
+  `@markii/*` package changes here; `docs/integration.md` describes the
+  shape for a host built outside this repository.
 - **`@markii/ansi`'s three entry points are asynchronous.**
   `renderMarkToAnsi`, `renderMarkNodeToAnsi` and `renderMarkInlineToAnsi`
   return a promise. This is a breaking change for any caller of the

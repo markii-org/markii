@@ -19,6 +19,12 @@ export default tseslint.config(
       // a relative helper import, compiled by the same @markii/host
       // pack-build.ts used above): same reasoning as the two entries above.
       'apps/obsidian/test-fixtures/**',
+      // Host conformance corpus pack fixtures (batch 11 Phase 3,
+      // conformance/host/README.md): a plain, un-tsconfig'd webview.js a
+      // scenario's `files/` directory ships, zipped into `.mkp` archive
+      // bytes at test time by `@markii/host`'s conformance runner — same
+      // reasoning as the three entries above.
+      'conformance/host/**/files/**',
     ],
   },
   tseslint.configs.recommended,

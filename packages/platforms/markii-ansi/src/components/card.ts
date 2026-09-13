@@ -15,8 +15,27 @@ function isTextAlign(value: string): value is TextAlign {
 
 /** `width=fit` with no `title` and an unhelpfully-shaped body falls back to this column count rather than the full available width. */
 const FIT_DEFAULT_WIDTH = 40;
-/** Frame border + one space of interior padding on each side. */
-const FRAME_OVERHEAD = 2;
+/** Frame border + one space of interior padding on each side. Exported: `render.tsx`'s Ink-`Box`-bordered ELEMENT builder needs the same overhead to go from a box width to an inner width. */
+export const CARD_FRAME_OVERHEAD = 2;
+
+/**
+ * `card`'s own natural/self-drawn OUTER (frame-including) width, given ONLY
+ * its own attributes, the resolved `width=`/`align=` layout preset, and the
+ * outer budget — never the body. Exported for `render.tsx`'s ELEMENT-mode
+ * builder, which needs the outer box width itself (to size its Ink `Box`)
+ * rather than only the inner budget `resolveCardInnerWidth` below returns.
+ */
+export function resolveCardBoxWidth(
+  attributes: DirectiveAttributes,
+  layout: ResolvedLayoutPresets | undefined,
+  outerWidth: number,
+): number {
+  const title = attributes.title ?? null;
+  const naturalWidth = title
+    ? measureWidth(title) + CARD_FRAME_OVERHEAD * 2
+    : FIT_DEFAULT_WIDTH;
+  return selfLayoutWidth(layout, outerWidth, naturalWidth);
+}
 
 /**
  * The inner budget `card`'s body renders at, given ONLY its own attributes
@@ -40,12 +59,8 @@ export function resolveCardInnerWidth(
   layout: ResolvedLayoutPresets | undefined,
   outerWidth: number,
 ): number {
-  const title = attributes.title ?? null;
-  const naturalWidth = title
-    ? measureWidth(title) + FRAME_OVERHEAD * 2
-    : FIT_DEFAULT_WIDTH;
-  const boxWidth = selfLayoutWidth(layout, outerWidth, naturalWidth);
-  return Math.max(1, boxWidth - FRAME_OVERHEAD);
+  const boxWidth = resolveCardBoxWidth(attributes, layout, outerWidth);
+  return Math.max(1, boxWidth - CARD_FRAME_OVERHEAD);
 }
 
 /**
@@ -68,11 +83,12 @@ export const Card: AnsiComponent = ({ attributes, children, ctx }) => {
   const align: TextAlign =
     rawTextAlign && isTextAlign(rawTextAlign) ? rawTextAlign : 'left';
 
-  const naturalWidth = titleText
-    ? measureWidth(titleText) + FRAME_OVERHEAD * 2
-    : FIT_DEFAULT_WIDTH;
-  const boxWidth = selfLayoutWidth(ctx.layout, ctx.width, naturalWidth);
-  const innerWidth = Math.max(1, boxWidth - FRAME_OVERHEAD);
+  const boxWidth = resolveCardBoxWidth(
+    { ...attributes, title: titleText ?? null },
+    ctx.layout,
+    ctx.width,
+  );
+  const innerWidth = Math.max(1, boxWidth - CARD_FRAME_OVERHEAD);
 
   const bodyText = childrenText(children);
   const body =

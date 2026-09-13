@@ -11,13 +11,15 @@
  * Exit codes: 0 ok, 1 a render/parse failure or an unreadable file, 2 a
  * script failure, 3 a usage error.
  */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
+  createMarkiiHost,
   createRenderDiagnosticCollector,
   noteHasScripts,
   readPersistedValues,
+  type GrantMemento,
 } from '@markii/host';
 import { createValueStore, type StoredValue } from '@markii/runtime';
 import { parseArgs, type ParsedCommand } from './args.js';
@@ -30,7 +32,7 @@ import {
 } from './grant-store.js';
 import { buildViewElement, renderNote, resolveWidth } from './render-note.js';
 import { runNote } from './run-note.js';
-import { exportHtml, mdPlainFromSource } from './export-note.js';
+import { createCliHostAdapter } from './host-adapter.js';
 import { resolveViewMode } from './view-mode.js';
 import { runLiveViewer } from './live-view.js';
 import type { MountLiveViewerInput, ViewDeps } from './view-deps.js';
@@ -273,6 +275,17 @@ async function runViewCommand(
   return exitCode;
 }
 
+/**
+ * A `GrantMemento` that never touches disk: used for a `md-plain` export,
+ * which needs no persisted grants or values, so it never reads the
+ * device's state file at all — matching this command's behavior before
+ * `@markii/host`'s shared export path took over the write.
+ */
+const NOOP_MEMENTO: GrantMemento = {
+  get: <T>(_key: string, defaultValue?: T): T | undefined => defaultValue,
+  update: (): Promise<void> => Promise.resolve(),
+};
+
 async function runExportCommand(
   command: Extract<ParsedCommand, { kind: 'export' }>,
   terminal: Terminal,
@@ -285,36 +298,58 @@ async function runExportCommand(
   }
   const note = read.note;
 
-  if (command.format === 'md-plain') {
-    const out = mdPlainFromSource(note.text);
-    writeFileSync(command.out, out, 'utf-8');
-    return 0;
+  let values: Record<string, StoredValue> | undefined;
+  let memento: GrantMemento = NOOP_MEMENTO;
+  if (command.format !== 'md-plain') {
+    memento = buildGrantMemento(terminal);
+    const documentKey = pathToFileURL(absolutePath).toString();
+    values = readPersistedValues(memento, documentKey);
   }
 
-  const memento = buildGrantMemento(terminal);
-  const documentKey = pathToFileURL(absolutePath).toString();
-  const values = readPersistedValues(memento, documentKey);
+  // The render-diagnostics collector only ever fills for 'ansi' (the one
+  // format rendered through this CLI's own `renderNote`); it stays empty,
+  // and this loop a no-op, for 'html' and 'md-plain'.
+  const renderDiagnostics = createRenderDiagnosticCollector();
+  const renderAnsi = (text: string): Promise<string> =>
+    renderNote(text, terminal, {
+      colorFlag: command.color ?? 'never',
+      store: createValueStore(values ?? {}),
+      onDiagnostic: renderDiagnostics.onDiagnostic,
+    });
 
-  if (command.format === 'html') {
-    const html = exportHtml(note.text, path.basename(command.file), values);
-    writeFileSync(command.out, html, 'utf-8');
-    return 0;
-  }
-
-  // 'ansi': color defaults to 'never' for a file (nobody's terminal reads
-  // it directly), honouring an explicit --color when given.
-  const store = createValueStore(values);
-  const diagnostics = createRenderDiagnosticCollector();
-  const output = await renderNote(note.text, terminal, {
-    colorFlag: command.color ?? 'never',
-    store,
-    onDiagnostic: diagnostics.onDiagnostic,
+  const adapter = createCliHostAdapter({
+    terminal,
+    memento,
+    exportTarget: command.out,
+    diagnostics: (line) => {
+      if (command.verbose) terminal.writeError(`markii: ${line}\n`);
+    },
   });
-  writeFileSync(command.out, output, 'utf-8');
-  for (const line of diagnostics.lines()) {
+  const host = createMarkiiHost(adapter, { renderAnsi });
+
+  const outcome = await host.exportNote({
+    format: command.format,
+    notePath: absolutePath,
+    text: note.text,
+    ...(values !== undefined ? { values } : {}),
+  });
+
+  for (const line of renderDiagnostics.lines()) {
     terminal.writeError(`markii: ${line}\n`);
   }
-  return 0;
+
+  if (outcome.kind === 'exported') return 0;
+  if (outcome.kind === 'failed') {
+    terminal.writeError(
+      `markii: could not export this note: ${outcome.reason}\n`,
+    );
+    return 1;
+  }
+  // 'cancelled' or 'unsupported': neither is reachable through this app's
+  // own supported formats today, but the outcome type covers them, so
+  // this command reports rather than assumes they can't happen.
+  terminal.writeError('markii: export did not produce a file.\n');
+  return 1;
 }
 
 async function runRunCommand(

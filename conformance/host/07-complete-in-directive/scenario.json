@@ -1,0 +1,6 @@
+{
+  "id": "complete-in-directive",
+  "invariant": "completion inside a directive returns the standard set",
+  "clock": 1700000000000,
+  "actions": [{ "type": "completeAt", "line": 2, "column": 6 }]
+}

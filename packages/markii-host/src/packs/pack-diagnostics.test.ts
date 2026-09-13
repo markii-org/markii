@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   formatPackDiagnosticLines,
+  prebuiltShadowLine,
   skippedPackCount,
 } from './pack-diagnostics.js';
 import type {
@@ -186,5 +187,29 @@ describe('skippedPackCount', () => {
       { folder: '/b', reason: 'y' },
     ];
     expect(skippedPackCount(context([], skipped))).toBe(2);
+  });
+});
+
+describe('prebuiltShadowLine', () => {
+  const shadow = { name: 'ana', folder: '/packs/ana' };
+
+  it('names the pack and defers to the given rebuild instruction', () => {
+    expect(
+      prebuiltShadowLine(
+        shadow,
+        'export the pack again with Markii: Export Pack',
+      ),
+    ).toBe(
+      'Pack "ana" is using its prebuilt webview.js, so the component sources in that folder are not compiled. Edits to them take effect only after you delete webview.js, or export the pack again with Markii: Export Pack.',
+    );
+  });
+
+  it('never a failure: reads as informational, never mentions "error" or "fail"', () => {
+    const line = prebuiltShadowLine(
+      shadow,
+      'rebuild it with the VS Code Export Pack command',
+    );
+    expect(line.toLowerCase()).not.toContain('error');
+    expect(line.toLowerCase()).not.toContain('fail');
   });
 });

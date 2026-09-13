@@ -1,0 +1,6 @@
+{
+  "id": "hover-standard-component",
+  "invariant": "hover on a standard component returns its documented attributes",
+  "clock": 1700000000000,
+  "actions": [{ "type": "hoverAt", "line": 2, "column": 5 }]
+}

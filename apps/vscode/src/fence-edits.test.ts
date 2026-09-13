@@ -1,52 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import {
   completionFenceTextEdits,
-  fenceTextEdits,
   isContainerInsertText,
 } from './fence-edits.js';
 
 const CONTAINER_SKELETON = ':::tabs{}\n\n:::';
 
-describe('fenceTextEdits', () => {
-  it('spans exactly the colon run it lengthens', () => {
-    const text = [':::card{}', '', '', ':::'].join('\n');
-    expect(fenceTextEdits(text, 2, CONTAINER_SKELETON)).toEqual([
-      { line: 0, startColumn: 0, endColumn: 3, newText: '::::' },
-      { line: 3, startColumn: 0, endColumn: 3, newText: '::::' },
-    ]);
-  });
-
-  it('offsets the span by the fence indentation', () => {
-    const text = ['  :::card{}', '', '  :::'].join('\n');
-    expect(fenceTextEdits(text, 1, CONTAINER_SKELETON)).toEqual([
-      { line: 0, startColumn: 2, endColumn: 5, newText: '::::' },
-      { line: 2, startColumn: 2, endColumn: 5, newText: '::::' },
-    ]);
-  });
-
-  it('returns nothing at the top level, for a leaf insertion, or for an unpaired document', () => {
-    expect(fenceTextEdits('plain\n\ntext', 1, CONTAINER_SKELETON)).toEqual([]);
-    const text = [':::card{}', '', '', ':::'].join('\n');
-    expect(fenceTextEdits(text, 2, '::divider{}')).toEqual([]);
-    expect(
-      fenceTextEdits(':::card{}\n\nnever closed', 1, CONTAINER_SKELETON),
-    ).toEqual([]);
-  });
-
-  it('never returns an edit on the insertion line, so it cannot overlap a completion replace range', () => {
-    const text = ['::::center{}', ':::card{}', '', ':::', '::::'].join('\n');
-    const edits = fenceTextEdits(text, 2, CONTAINER_SKELETON);
-    expect(edits.length).toBeGreaterThan(0);
-    expect(edits.every((edit) => edit.line !== 2)).toBe(true);
-  });
-
-  it('degrades to no edits rather than throwing on hostile input', () => {
-    expect(
-      fenceTextEdits(undefined as unknown as string, 0, CONTAINER_SKELETON),
-    ).toEqual([]);
-    expect(fenceTextEdits('', -5, CONTAINER_SKELETON)).toEqual([]);
-  });
-});
+// `fenceTextEdits` itself (spanning the colon run, indentation offset,
+// never touching the insertion line, degrading quietly on hostile input)
+// is no longer exported: the `markii.insertComponent` command path now
+// goes through `@markii/host`'s `insertComponentPlan`, which is built on
+// the SAME underlying `fenceExtensionEdits`/`insertedContainerColonCount`
+// primitives and carries that exact coverage in
+// `packages/markii-host/src/host/editor-behavior.test.ts`. What remains
+// worth testing here is `completionFenceTextEdits`'s own composition
+// (below) and `isContainerInsertText`, which extension.ts still calls
+// directly for the completion-popup's `additionalTextEdits` decision.
 
 describe('isContainerInsertText', () => {
   it('recognizes a container skeleton and nothing else', () => {

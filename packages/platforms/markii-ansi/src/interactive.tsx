@@ -1,4 +1,10 @@
-import { createContext, useContext, useMemo, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+} from 'react';
 import type { ReactNode } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { dim } from './ansi.js';
@@ -29,12 +35,27 @@ interface FocusApi {
   focusedId: number | undefined;
   /** The accent-colored focus ring text a focused component draws around its own heading, styled at the render's resolved color level. */
   focusMarker(text: string): string;
+  /**
+   * Lets a `tabs` instance tell `InteractiveRoot` which panel is active NOW,
+   * so the status line can name it. Called from a KEY HANDLER (`tabs.tsx`'s
+   * `useInput` callback) when the reader switches panels, never during
+   * render — this is an ordinary React "child calls a parent callback on an
+   * event" pattern, not a render-time report channel. The distinction
+   * matters: batch 10.1 deliberately avoided a report channel invoked DURING
+   * render (that shape can trigger a render loop, since it would call
+   * `setState` while React is still computing the current render). A
+   * callback invoked from a keypress handler carries no such risk — it runs
+   * strictly BETWEEN renders, exactly like any other event handler calling
+   * `setState`.
+   */
+  reportActiveLabel(focusId: number, label: string): void;
 }
 
 const FocusContext = createContext<FocusApi>({
   interactive: false,
   focusedId: undefined,
   focusMarker: (text) => text,
+  reportActiveLabel: () => {},
 });
 
 /** Whether the component identified by `focusId` is the currently focused one. `undefined` (a non-interactive render, or a component that never got a `focusId`) is never focused. */
@@ -55,13 +76,27 @@ export function useFocusMarker(
 }
 
 /**
+ * Lets a `tabs` instance report its currently active panel's label to
+ * `InteractiveRoot`, so the status line can name it. Call this from a KEY
+ * HANDLER only (see `FocusApi.reportActiveLabel`'s doc comment for why that
+ * is not the render-time report channel batch 10.1 avoided).
+ */
+export function useReportActiveLabel(): (
+  focusId: number,
+  label: string,
+) => void {
+  const api = useContext(FocusContext);
+  return api.reportActiveLabel;
+}
+
+/**
  * One focusable component, in the same document order `render.tsx`'s
  * counting walk assigns `focusId`s in — `focusables[focusId]` is always
- * that component's descriptor. `label` is a stable identity: for `tabs`,
- * the FIRST panel's label, never the currently active one. A `tabs` block's
- * active panel is its own component state, so naming it on the status line
- * would need a report channel back up to this root on every switch; the
- * first label identifies the block just as well and cannot loop.
+ * that component's descriptor. `label` is the descriptor's STABLE identity
+ * (for `tabs`, the FIRST panel's label): it is used on the status line only
+ * until a `tabs` instance reports its actual active panel via
+ * `reportActiveLabel`, and as the fallback before any report has happened
+ * yet (mount, or a reader who has not switched panels).
  */
 export interface FocusableDescriptor {
   kind: 'tabs' | 'details';
@@ -101,6 +136,12 @@ export function InteractiveRoot({
 }: InteractiveRootProps): ReactNode {
   const focusableCount = focusables.length;
   const [focusIndex, setFocusIndex] = useState(0);
+  // `focusId -> the label its last active-panel report carried`. Only a
+  // `tabs` descriptor is ever reported against; `details` never calls
+  // `reportActiveLabel`, so its entry here simply never appears. Absent
+  // keys are expected (mount, or a `tabs` the reader has not switched yet)
+  // and fall back to the descriptor's own stable `label` below.
+  const [activeLabels, setActiveLabels] = useState<Record<number, string>>({});
 
   useInput(
     (input, key) => {
@@ -123,18 +164,34 @@ export function InteractiveRoot({
   const focusedId =
     focusableCount > 0 ? focusIndex % focusableCount : undefined;
 
+  // Invoked from `tabs.tsx`'s KEY HANDLER, never during render — see
+  // `FocusApi.reportActiveLabel`'s doc comment. The equality guard avoids an
+  // unnecessary re-render when a switch reports the label it already had
+  // (e.g. wrapping from the last panel back past the first is still a real
+  // change, but re-reporting the same active panel is not).
+  const reportActiveLabel = useCallback((focusId: number, label: string) => {
+    setActiveLabels((current) =>
+      current[focusId] === label ? current : { ...current, [focusId]: label },
+    );
+  }, []);
+
   const api = useMemo<FocusApi>(
     () => ({
       interactive: true,
       focusedId,
       focusMarker: (text: string) => style(text, '--mk-accent', theme, color),
+      reportActiveLabel,
     }),
-    [focusedId, color, theme],
+    [focusedId, color, theme, reportActiveLabel],
   );
 
   const focused = focusedId !== undefined ? focusables[focusedId] : undefined;
+  const focusedLabel =
+    focused && focusedId !== undefined
+      ? (activeLabels[focusedId] ?? focused.label)
+      : undefined;
   const statusLabel = focused
-    ? `${focused.kind} "${focused.label}"`
+    ? `${focused.kind} "${focusedLabel}"`
     : 'nothing focusable';
   const statusLine = dim(`${statusLabel}  ${KEY_LEGEND}`, color);
 

@@ -27,6 +27,7 @@
  */
 import {
   formatPackDiagnosticLines as formatPackDiagnosticLinesShared,
+  prebuiltShadowLine as prebuiltShadowLineShared,
   skippedPackCount as skippedPackCountShared,
 } from '@markii/host';
 import type { PackContext } from './pack-context.js';
@@ -48,7 +49,10 @@ function relativeEntryLine(entry: string): string {
  * supported state, not a failure.
  */
 function prebuiltShadowLine(pack: { name: string; folder: string }): string {
-  return `Pack "${pack.name}" is using its prebuilt webview.js, so the component sources in that folder are not compiled. Edits to them take effect only after you delete webview.js or export the pack again with Markii: Export Pack.`;
+  return prebuiltShadowLineShared(
+    pack,
+    'export the pack again with Markii: Export Pack',
+  );
 }
 
 /**

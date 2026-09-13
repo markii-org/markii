@@ -1,0 +1,11 @@
+{
+  "outcomes": [
+    { "kind": "opened" },
+    {
+      "kind": "declined",
+      "reasonContains": "script execution is off"
+    }
+  ],
+  "diagnostics": ["run (manual) blocked: script execution is off on this device"],
+  "prompts": []
+}

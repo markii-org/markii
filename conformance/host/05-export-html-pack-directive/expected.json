@@ -1,0 +1,14 @@
+{
+  "outcomes": [
+    {
+      "kind": "exported",
+      "contains": ["mk-unknown", "ana_timeline"],
+      "excludes": ["<script"]
+    }
+  ],
+  "diagnostics": [
+    "Export wrote",
+    "Rendered with the static engine because no pack components are loaded"
+  ],
+  "prompts": []
+}

@@ -140,3 +140,25 @@ export function skippedPackCount(context: {
 }): number {
   return context.skipped.length;
 }
+
+/**
+ * One informational line for a pack whose prebuilt `webview.js` shadows
+ * component sources still present in the same folder — survey finding A9:
+ * `apps/vscode/src/packs/pack-diagnostics.ts` and
+ * `apps/obsidian/src/packs/pack-diagnostics.ts` each defined this exact
+ * sentence shape, differing only in the tail clause naming how a user
+ * would rebuild the prebuilt artifact from those sources (VS Code's own
+ * Export Pack command versus, from Obsidian, VS Code's Export Pack command
+ * by name, since Obsidian has no build command of its own).
+ *
+ * Never a failure: shipping both the built artifact and its sources is a
+ * supported distribution shape. `rebuildInstruction` is the one thing that
+ * differs per host — a short clause completing "Edits to them take effect
+ * only after you delete webview.js, or ...".
+ */
+export function prebuiltShadowLine(
+  pack: { readonly name: string; readonly folder: string },
+  rebuildInstruction: string,
+): string {
+  return `Pack "${pack.name}" is using its prebuilt webview.js, so the component sources in that folder are not compiled. Edits to them take effect only after you delete webview.js, or ${rebuildInstruction}.`;
+}

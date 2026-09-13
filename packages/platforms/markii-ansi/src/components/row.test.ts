@@ -42,4 +42,19 @@ describe('Row / Cell', () => {
       renderMarkToAnsi('::::row{cols=7}\n:::cell\nX\n:::\n::::\n'),
     ).resolves.toBeTypeOf('string');
   });
+
+  it('text=center centers each cell at the TOP level (ELEMENT mode), not only when nested inside a self-drawing container', async () => {
+    // Batch 11: `renderRowElement` used to silently drop `text=` entirely —
+    // only the STRING-mode fallback (reached when a `row` is nested inside
+    // a `card`/`callout`) honored it. Locks in the fix: a top-level row
+    // now pre-justifies each cell through `text-grid.ts`'s `padText` before
+    // handing it to Ink, the same one mechanism the STRING mode always used.
+    const doc = '::::row{cols=1 text=center}\n:::cell\nHi\n:::\n::::\n';
+    const out = await renderMarkToAnsi(doc, undefined, undefined, undefined, {
+      width: 20,
+    });
+    const line = out.split('\n').find((l) => l.includes('Hi')) ?? '';
+    expect(line.startsWith(' ')).toBe(true);
+    expect(line.trim()).toBe('Hi');
+  });
 });

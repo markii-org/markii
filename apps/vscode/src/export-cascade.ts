@@ -32,6 +32,9 @@ import {
   assignCascadeFileNames,
   buildNoteExport,
   exportBaseName,
+  fileNameOf,
+  imageEmbedDiagnosticLines,
+  renderEngineDiagnosticLine,
   rewriteCascadeLinks,
   walkNoteCascade,
   zipExportArchive,
@@ -49,11 +52,6 @@ import type {
   StaticExportReason,
 } from '@markii/host';
 import type { StoredValue } from '@markii/runtime';
-import {
-  fileNameOf,
-  imageEmbedDiagnosticLines,
-  renderEngineDiagnosticLine,
-} from './export-html.js';
 
 /** Shown when the command runs with no Markii document to export. */
 export const EXPORT_CASCADE_NO_DOCUMENT_MESSAGE =
@@ -75,7 +73,7 @@ export const EXPORT_CASCADE_FILTERS: Readonly<
  * The file name the save dialog opens with: the root note's base name with
  * a `.zip` extension, so the archive lands beside the note unless the user
  * navigates elsewhere. Takes the URI *path*, never `fsPath`, exactly like
- * `exportHtmlDefaultFileName`.
+ * `exportDefaultFileName`.
  */
 export function exportCascadeDefaultFileName(uriPath: string): string {
   return `${exportBaseName(uriPath)}.zip`;

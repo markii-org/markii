@@ -58,12 +58,21 @@ describe('device-local storage boundary', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('the Run path (src/run/**, src/packs/**, view.tsx, run-modals.ts) never touches saveData/loadData', () => {
+  it('the Run path (src/run/**, src/packs/**, view.tsx, run-modals.ts, host-adapter.ts) never touches saveData/loadData', () => {
     const runPathFiles = [
       ...collectSourceFiles(join(here, 'run')),
       ...collectSourceFiles(join(here, 'packs')),
       join(here, 'view.tsx'),
       join(here, 'run-modals.ts'),
+      // batch 11: `host-adapter.ts` is where `createLocalStorageMemento`
+      // is now WIRED (its `deps.loadLocalStorage`/`deps.saveLocalStorage`
+      // parameters), even though the real `app.loadLocalStorage`/
+      // `app.saveLocalStorage` bindings are still built in `view.tsx`/
+      // `main.ts` (both `obsidian`-import files this test cannot see
+      // into). Listed here so a future change that has this file reach
+      // for `saveData`/`loadData` directly — rather than taking them as
+      // injected dependencies — fails this suite immediately.
+      join(here, 'host-adapter.ts'),
     ];
     const offenders: string[] = [];
     for (const file of runPathFiles) {

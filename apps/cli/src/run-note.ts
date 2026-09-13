@@ -1,50 +1,25 @@
 /**
- * The run path: builds `@markii/host`'s `RunOnceOptions` and calls
- * `runOnce`, the same shared, security-critical run path both GUI hosts
- * use. This module owns none of the sandboxing, grant policy, or tier
- * gating itself — all of that lives in `@markii/host`; this module only
- * supplies the CLI's own seams (the worker path, the terminal prompts, and
- * the bundle read/write adapters).
+ * The run path: builds the CLI's `HostAdapter` (`./host-adapter.ts`) and
+ * calls `createMarkiiHost(adapter).run(...)`, the same shared,
+ * security-critical run path every host now goes through. This module
+ * owns none of the sandboxing, grant policy, tier gating, or spawn
+ * wiring itself — all of that lives in `@markii/host`; this module only
+ * supplies the CLI's own seams (the bundle read/write adapters) and
+ * shapes the outcome back into the plain `RunOnceResult` its callers
+ * already expect.
  */
 import { pathToFileURL } from 'node:url';
 import {
-  runOnce,
-  spawnRun as spawnRunHost,
   buildBundleSnapshot,
-  writeLastRunTrace,
+  createMarkiiHost,
   type GrantMemento,
   type RunOnceOptions,
   type RunOnceResult,
-  type RunTrace,
-  type SpawnRunOptions,
-  type RunResult,
 } from '@markii/host';
 import { openDirBundle } from '@markii/bundle/fs';
 import type { ResolvedNote } from './read-note.js';
-import { createTerminalPrompts } from './prompts.js';
+import { createCliHostAdapter } from './host-adapter.js';
 import type { Terminal } from './terminal.js';
-import { resolveWorkerPath } from './worker-path.js';
-
-/**
- * External wall-clock budget for one run, matching `apps/vscode`'s own
- * manual-run budget (`RUN_TIMEOUT_MS` in `preview-panel.ts`) — the same
- * figure, so a note behaves the same way under either host's watchdog.
- */
-export const RUN_TIMEOUT_MS = 15_000;
-
-/**
- * This CLI's own `spawnRun` adapter, mirroring `apps/vscode/src/preview-panel.ts`'s
- * identical function: `@markii/host`'s `spawnRun` takes an explicit
- * `workerPath` rather than guessing a host's bundle layout, and
- * `./worker-path.ts`'s `resolveWorkerPath` is this CLI's answer for the
- * packaged case.
- */
-function spawnRun(options: SpawnRunOptions): Promise<RunResult> {
-  return spawnRunHost({
-    ...options,
-    workerPath: options.workerPath ?? resolveWorkerPath(),
-  });
-}
 
 function bundleOptionsFor(
   bundle: NonNullable<ResolvedNote['bundle']>,
@@ -96,40 +71,50 @@ export interface RunNoteOptions {
   readonly onDiagnosticLine?: (line: string) => void;
 }
 
-/** Runs `note`'s scripts once, at the manual tier, through the shared run path. Never throws — `@markii/host`'s `runOnce`/`spawnRun` already guarantee that. */
+/**
+ * A run outcome for a host whose `isolate` capability is somehow missing.
+ * Never expected in practice — this CLI always declares `isolate` — but
+ * kept so `runNote`'s return type stays the plain `RunOnceResult` every
+ * caller already expects, rather than the wider `RunOutcome` union.
+ */
+function unsupportedRunResult(detail: string | undefined): RunOnceResult {
+  const message = detail ?? 'this host has no isolate configured.';
+  return {
+    values: {},
+    failures: [{ name: '<document>', kind: 'capability-denied' }],
+    failureDetails: [
+      { name: '<document>', kind: 'capability-denied', message },
+    ],
+    netDeclarationDiagnostics: [],
+  };
+}
+
+/** Runs `note`'s scripts once, at the manual tier, through the shared run path. Never throws — `@markii/host`'s `createMarkiiHost`/`runOnce` already guarantee that. */
 export async function runNote(options: RunNoteOptions): Promise<RunOnceResult> {
   const { absolutePath, note, terminal, memento } = options;
   const onDiagnosticLine = options.onDiagnosticLine ?? ((): void => {});
   const documentKey = pathToFileURL(absolutePath).toString();
-  const prompts = createTerminalPrompts(terminal, onDiagnosticLine);
 
-  const result = await runOnce({
+  const adapter = createCliHostAdapter({
+    terminal,
+    memento,
+    diagnostics: onDiagnosticLine,
+  });
+  const host = createMarkiiHost(adapter);
+
+  const outcome = await host.run({
     documentKey,
     text: note.text,
     trigger: 'manual',
-    memento,
-    promptHost: prompts.promptHost,
-    promptUnknownHosts: prompts.promptUnknownHosts,
-    promptManyHosts: prompts.promptManyHosts,
-    spawnRun,
-    timeoutMs: RUN_TIMEOUT_MS,
     ...(note.bundle
       ? { bundle: bundleOptionsFor(note.bundle, onDiagnosticLine) }
       : {}),
   });
 
-  const trace: RunTrace = {
-    trigger: 'manual',
-    ranAt: Date.now(),
-    ok: result.failures.length === 0,
-    ...(result.failures.length > 0
-      ? {
-          reason: `${result.failures.length} script${result.failures.length === 1 ? '' : 's'} failed`,
-        }
-      : {}),
-  };
-  await writeLastRunTrace(memento, documentKey, trace);
-
+  if (outcome.kind === 'unsupported') {
+    return unsupportedRunResult(outcome.detail);
+  }
+  const { kind: _kind, ...result } = outcome;
   return result;
 }
 

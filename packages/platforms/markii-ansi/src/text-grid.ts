@@ -220,21 +220,47 @@ export interface FrameOptions {
   width: number;
 }
 
-/** Draws a box around `block`, one glyph set for `'solid'`, another for `'dashed'`, with an optional title woven into the top edge. */
-export function frameBlock(block: string, options: FrameOptions): string {
-  const { style: kind, title, width } = options;
-  const horizontal = kind === 'dashed' ? '╌' : '─';
-  const vertical = kind === 'dashed' ? '┆' : '│';
-  const innerWidth = Math.max(1, width - 2);
+/**
+ * The three character sets a self-drawing frame ever uses. Exposed so a
+ * caller that draws its OWN edges (`render.tsx`'s Ink-`Box`-bordered `card`)
+ * can match `frameBlock`'s glyphs exactly without duplicating them.
+ */
+export function frameGlyphs(style: 'solid' | 'dashed'): {
+  horizontal: string;
+  vertical: string;
+} {
+  return style === 'dashed'
+    ? { horizontal: '╌', vertical: '┆' }
+    : { horizontal: '─', vertical: '│' };
+}
 
-  let top: string;
+/**
+ * Just the top edge of a self-drawing frame, with an optional title woven
+ * in. Factored out of `frameBlock` for `render.tsx`'s `card`: an Ink `Box`
+ * border draws a plain edge perfectly well on its own (left, right, and an
+ * untitled top/bottom), but has no primitive for weaving text into a
+ * border line, so a titled card still builds this one line by hand and
+ * disables Ink's own top border for it.
+ */
+export function frameTopLine(options: FrameOptions): string {
+  const { style: kind, title, width } = options;
+  const { horizontal } = frameGlyphs(kind);
+  const innerWidth = Math.max(1, width - 2);
   if (title) {
     const label = ` ${title} `;
     const remaining = Math.max(0, innerWidth - measureWidth(label) - 1);
-    top = `┌${horizontal}${label}${horizontal.repeat(remaining)}┐`;
-  } else {
-    top = `┌${horizontal.repeat(innerWidth)}┐`;
+    return `┌${horizontal}${label}${horizontal.repeat(remaining)}┐`;
   }
+  return `┌${horizontal.repeat(innerWidth)}┐`;
+}
+
+/** Draws a box around `block`, one glyph set for `'solid'`, another for `'dashed'`, with an optional title woven into the top edge. */
+export function frameBlock(block: string, options: FrameOptions): string {
+  const { style: kind, width } = options;
+  const { horizontal, vertical } = frameGlyphs(kind);
+  const innerWidth = Math.max(1, width - 2);
+
+  const top = frameTopLine(options);
   const bottom = `└${horizontal.repeat(innerWidth)}┘`;
   const lines = block
     .split('\n')
@@ -242,6 +268,37 @@ export function frameBlock(block: string, options: FrameOptions): string {
       (line) => `${vertical}${padText(line, innerWidth, 'left')}${vertical}`,
     );
   return [top, ...lines, bottom].join('\n');
+}
+
+/** The `left`/`right`/`top`/`bottom`/`topLeft`/`topRight`/`bottomLeft`/`bottomRight` glyph set Ink's `Box` `borderStyle` prop takes, matching `frameBlock`'s own character set exactly for `style`. Corners are always the solid set, exactly like `frameBlock`'s (a dashed frame still has solid corners). */
+export function inkBorderStyle(style: 'solid' | 'dashed'): {
+  topLeft: string;
+  top: string;
+  topRight: string;
+  right: string;
+  bottomRight: string;
+  bottom: string;
+  bottomLeft: string;
+  left: string;
+} {
+  const { horizontal, vertical } = frameGlyphs(style);
+  return {
+    topLeft: '┌',
+    top: horizontal,
+    topRight: '┐',
+    right: vertical,
+    bottomRight: '┘',
+    bottom: horizontal,
+    bottomLeft: '└',
+    left: vertical,
+  };
+}
+
+/** The three-value per-line alignment every self-drawing component's `text=` attribute and every generic `align=` layout preset ultimately reduces to — the ONE spelling both `padText` (a pre-built string) and a caller pre-justifying a line before handing it to Ink share. */
+export const TEXT_ALIGNS = ['left', 'center', 'right'] as const;
+export type TextAlign = (typeof TEXT_ALIGNS)[number];
+export function isTextAlign(value: string): value is TextAlign {
+  return (TEXT_ALIGNS as readonly string[]).includes(value);
 }
 
 /** A full-width horizontal rule, `char` (default `─`) repeated to `width` columns. */

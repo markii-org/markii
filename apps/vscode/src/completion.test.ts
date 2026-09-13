@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildComponentCatalog } from '@markii/host';
+import { buildComponentCatalog, completionOriginTag } from '@markii/host';
 import type { DiscoveredPack } from '@markii/host';
 import { completionAt, hoverAt } from '@markii/stdlib/editor';
 import type {
@@ -11,7 +11,6 @@ import {
   completionFilterText,
   completionItemDetail,
   completionMarkdown,
-  completionOriginTag,
   completionSortText,
   snippetText,
 } from './completion.js';

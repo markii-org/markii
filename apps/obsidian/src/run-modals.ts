@@ -1,11 +1,6 @@
 import { App, Modal } from 'obsidian';
-import {
-  ALLOW_LABEL,
-  DONT_ALLOW_LABEL,
-  UNKNOWN_HOSTS_PROMPT_MESSAGE,
-  hostPromptMessage,
-  manyHostsPromptMessage,
-} from '@markii/host';
+import { ALLOW_LABEL, DONT_ALLOW_LABEL } from '@markii/host';
+import type { HostPromptRequest } from '@markii/host';
 
 /**
  * Imports `obsidian` — added deliberately to `src/obsidian-import-guard.test.ts`'s
@@ -16,17 +11,20 @@ import {
  * here is unit-testable anyway (it's modal UI wiring), so the split costs
  * nothing.
  *
- * Wording is NOT re-authored here: every message string comes straight
- * from `@markii/host`'s exported builders (`hostPromptMessage`,
- * `UNKNOWN_HOSTS_PROMPT_MESSAGE`, `manyHostsPromptMessage`) and its
- * `ALLOW_LABEL`/`DONT_ALLOW_LABEL` button labels — the same ones
- * `apps/vscode/src/preview-panel.ts`'s prompt adapters use, so the wording
- * lives in exactly one place regardless of host.
+ * BATCH 11: the nine near-identical prompt adapters this file used to
+ * carry (`promptHostModal`/`promptUnknownHostsModal`/`promptManyHostsModal`)
+ * collapsed into `createObsidianPrompt` below, the one
+ * `HostAdapter.prompt` implementation every consequential question —
+ * grants, pack install consent, pack replace — routes through. Every
+ * message string, and now every button label too, comes straight from the
+ * already-built `HostPromptRequest` `@markii/host`'s behavior modules
+ * construct (`hostPromptMessage`, `installConsentMessage`, ...); this
+ * file only shows them.
  *
- * `confirmModal` (GitHub issue #16) is the same Allow/Don't allow shape,
- * exported for `../main.ts`'s "Install Markii pack from file" command,
- * whose consent and replace-confirmation wording lives in
- * `./packs/install-pack.ts` rather than in a `@markii/host` builder.
+ * `confirmModal` (GitHub issue #16) stays as a plain Allow/Don't-allow
+ * dialog for a caller with its own message and no `HostPromptRequest` to
+ * build (kept for parity with older call sites; new call sites should
+ * prefer `createObsidianPrompt`).
  */
 
 /**
@@ -39,12 +37,21 @@ import {
  */
 class ConfirmModal extends Modal {
   private readonly message: string;
+  private readonly allowLabel: string;
+  private readonly denyLabel: string;
   private settled = false;
   private resolveChoice: (allowed: boolean) => void = () => {};
 
-  constructor(app: App, message: string) {
+  constructor(
+    app: App,
+    message: string,
+    allowLabel: string = ALLOW_LABEL,
+    denyLabel: string = DONT_ALLOW_LABEL,
+  ) {
     super(app);
     this.message = message;
+    this.allowLabel = allowLabel;
+    this.denyLabel = denyLabel;
   }
 
   override onOpen(): void {
@@ -53,15 +60,15 @@ class ConfirmModal extends Modal {
     contentEl.createEl('p', { text: this.message });
     // Obsidian's own `modal-button-container` class carries the flex row
     // and inter-button gap every core dialog uses; a bare div left the two
-    // buttons touching. `mod-cta` marks Allow as the accented action, again
-    // matching core dialogs.
+    // buttons touching. `mod-cta` marks the allow action as the accented
+    // one, again matching core dialogs.
     const buttons = contentEl.createDiv({ cls: 'modal-button-container' });
     const allow = buttons.createEl('button', {
-      text: ALLOW_LABEL,
+      text: this.allowLabel,
       cls: 'mod-cta',
     });
     allow.addEventListener('click', () => this.settle(true));
-    const dontAllow = buttons.createEl('button', { text: DONT_ALLOW_LABEL });
+    const dontAllow = buttons.createEl('button', { text: this.denyLabel });
     dontAllow.addEventListener('click', () => this.settle(false));
   }
 
@@ -86,28 +93,27 @@ class ConfirmModal extends Modal {
   }
 }
 
-/** A generic Allow/Don't allow confirmation built from a plain message, for a caller that supplies its own wording rather than one of `@markii/host`'s prompt builders. */
+/** A generic Allow/Don't allow confirmation built from a plain message, for a caller that supplies its own wording rather than a `HostPromptRequest`. */
 export function confirmModal(app: App, message: string): Promise<boolean> {
   return new ConfirmModal(app, message).ask();
 }
 
-/** Prompts once for a specific host, worded exactly as `@markii/host`'s `hostPromptMessage`. */
-export function promptHostModal(
+/**
+ * This plugin's `HostAdapter.prompt` implementation (batch 11): one
+ * `ConfirmModal`, shown with exactly the message and button labels the
+ * request already carries. Every grant prompt, pack-install consent, and
+ * pack-replace confirmation routes through this single function —
+ * collapsing the three modal-building functions this file used to export
+ * (survey finding A1).
+ */
+export function createObsidianPrompt(
   app: App,
-): (host: string, declaredHosts: readonly string[]) => Promise<boolean> {
-  return (host: string, declaredHosts: readonly string[]) =>
-    new ConfirmModal(app, hostPromptMessage(host, declaredHosts)).ask();
-}
-
-/** Prompts once for the "this note builds a network address dynamically" consent gate. */
-export function promptUnknownHostsModal(app: App): () => Promise<boolean> {
-  return () => new ConfirmModal(app, UNKNOWN_HOSTS_PROMPT_MESSAGE).ask();
-}
-
-/** Prompts once for the PROMPT-STORM guard's consolidated "many hosts" gate, in place of one modal per host once the distinct static host count exceeds `@markii/host`'s `MAX_HOST_PROMPTS`. */
-export function promptManyHostsModal(
-  app: App,
-): (hostCount: number) => Promise<boolean> {
-  return (hostCount: number) =>
-    new ConfirmModal(app, manyHostsPromptMessage(hostCount)).ask();
+): (request: HostPromptRequest) => Promise<boolean> {
+  return (request: HostPromptRequest) =>
+    new ConfirmModal(
+      app,
+      request.message,
+      request.allowLabel,
+      request.denyLabel,
+    ).ask();
 }

@@ -1,28 +1,25 @@
 /**
- * `vscode`-free logic behind the `markii.exportHtml` command
- * ("Markii: Export as HTML", GitHub issue #28 slice 1): the exported file's
- * default name, the outcome shape, and every user-facing string the command
- * produces. This is the command's wording home, matching how
- * `./packs/export-pack.ts` owns the Export Pack command's wording and
- * `./insert-component.ts` owns Insert Component's.
+ * `vscode`-free UI constants for the `markii.exportHtml` command
+ * ("Markii: Export as HTML", GitHub issue #28 slice 1): the save dialog's
+ * title, labels, and filter, and the no-document message. These are
+ * VS Code presentation only (a save dialog's title bar, its filter list),
+ * so they stay here rather than moving with the shared behavior.
  *
- * `extension.ts` is wiring only: it finds the active Markii document, reads
- * that note's persisted last-run values out of `workspaceState`, builds the
- * document with `@markii/host`'s `buildNoteHtmlExport`, asks where to save,
- * writes the bytes with `vscode.workspace.fs`, and reports the outcome on
- * both of this extension's surfaces (a short message plus a full line on the
- * "Markii" output channel).
+ * The exported file's default name, the outcome shape, and the wording for
+ * a result message or a diagnostics line moved to `@markii/host` (batch
+ * 11): `exportDefaultFileName`, `NoteFileExportOutcome`,
+ * `exportResultMessage`, `renderEngineDiagnosticLine`,
+ * `imageEmbedDiagnosticLines`, and `exportDiagnosticLines`, matching the
+ * same functions `apps/obsidian` and `apps/cli` now call for their own
+ * exports so all three hosts cannot drift on this wording.
  *
- * The rendering itself is `@markii/html`'s, reached through `@markii/host`.
- * Nothing here renders anything.
+ * `preview-panel.ts` is wiring only: it finds the active Markii document,
+ * reads that note's persisted last-run values out of `workspaceState`,
+ * builds the document with `@markii/host`'s `buildNoteExport`, asks where
+ * to save, writes the bytes with `vscode.workspace.fs`, and reports the
+ * outcome on both of this extension's surfaces (a short message plus a
+ * full line on the "Markii" output channel).
  */
-import { MAX_EMBEDDED_IMAGE_BYTES, exportedFileName } from '@markii/host';
-import type {
-  EmbeddedImageReport,
-  ExportRenderInfo,
-  SkippedImage,
-} from '@markii/host';
-import { formatByteSize } from './export-images.js';
 
 /** Shown when the command runs with no Markii document to export. */
 export const EXPORT_HTML_NO_DOCUMENT_MESSAGE =
@@ -40,175 +37,3 @@ export const EXPORT_HTML_REVEAL_LABEL = 'Show in Folder';
 /** The save dialog's filter, so the picker defaults to HTML files. */
 export const EXPORT_HTML_FILTERS: Readonly<Record<string, readonly string[]>> =
   { HTML: ['html', 'htm'] };
-
-/**
- * The file name the save dialog opens with: the note's own base name with
- * an `.html` extension, so the export lands beside the note unless the user
- * navigates elsewhere. Takes the URI *path* (always `/`-separated), never
- * `fsPath`, so this module needs no `node:path` and no platform branching.
- */
-export function exportHtmlDefaultFileName(uriPath: string): string {
-  return exportedFileName(uriPath, '.html');
-}
-
-/** What one export attempt did, for both the message and the diagnostics line. */
-export type HtmlExportOutcome =
-  | {
-      readonly kind: 'written';
-      /** The written file's display path. */
-      readonly path: string;
-      readonly bytes: number;
-      /** How many last-run values were baked into the file. */
-      readonly valueCount: number;
-      /** True when the note contains a script fence. Absent or false means no scripts, so the popup never explains empty states the note cannot have. */
-      readonly hasScripts?: boolean;
-      /** Which engine rendered the body, and why when it was the static one (GitHub issue #28 slice 2). Diagnostics-facing only; see `exportHtmlDiagnosticLines`. */
-      readonly render: ExportRenderInfo;
-      /** What image embedding did, for the diagnostics surface only (GitHub issue #28 slice 3). The empty report when the note has no images or none was offered a reader. */
-      readonly images: EmbeddedImageReport;
-    }
-  | {
-      readonly kind: 'failed';
-      /** Where the write was attempted, when it got that far. */
-      readonly path?: string;
-      /** The verbatim reason. Diagnostics only, never the popup. */
-      readonly reason: string;
-    };
-
-/** The last path segment of a `/`-separated or `\`-separated path, for naming a file in a message. Exported for `./export-cascade.ts`, which names its archive the same way. */
-export function fileNameOf(path: string): string {
-  const segments = path.split(/[/\\]/);
-  return segments[segments.length - 1] ?? path;
-}
-
-/**
- * The short message shown after an export. A success names the file. A
- * failure says what failed and points at the diagnostics surface, never at
- * a stack trace: the verbatim reason goes to the output channel instead.
- *
- * HOW MANY VALUES were baked in is deliberately NOT here. It is one number
- * that only matters when a reader is checking their work, and the output
- * channel already carries it next to the byte count, the render engine,
- * and the image report, where per-count detail belongs. Both hosts now say
- * the same thing in the popup, each in its own voice: the file's name, and
- * a run hint only when the note actually has scripts.
- *
- * THE RUN HINT is unchanged. A note with scripts that has never been run
- * exports with empty states, and a reader who was not told would think the
- * export dropped their data. A scriptless note has nothing to run and gets
- * the plain confirmation, which is what `noteHasScripts` is for.
- */
-export function exportHtmlResultMessage(outcome: HtmlExportOutcome): string {
-  if (outcome.kind === 'failed') {
-    return 'Markii: could not export this note as HTML. Open the Markii output for details.';
-  }
-  const name = fileNameOf(outcome.path);
-  return outcome.valueCount === 0 && outcome.hasScripts === true
-    ? `Markii: exported ${name}. The note has no stored script values, so data-bound components show their empty states.`
-    : `Markii: exported ${name}.`;
-}
-
-/**
- * The one diagnostic line describing HOW an export's body was rendered
- * (GitHub issue #28 slice 2): the pack-vs-static distinction the user asked
- * to keep out of the popup and put here instead, in
- * `exportHtmlDiagnosticLines`'s designated diagnostics surface.
- *
- * Exported so `./export-cascade.ts` says this the same way for every note
- * in a cascade rather than growing a second copy of the wording.
- */
-export function renderEngineDiagnosticLine(render: ExportRenderInfo): string {
-  if (render.engine === 'react') {
-    const packs =
-      render.packCount === 1 ? '1 pack' : `${String(render.packCount)} packs`;
-    const stylesheets =
-      render.stylesheetCount === 1
-        ? '1 stylesheet'
-        : `${String(render.stylesheetCount)} stylesheets`;
-    return `Rendered through the preview's React engine, with ${packs} and ${stylesheets} embedded.`;
-  }
-  if (render.reason === 'no-packs') {
-    return 'Rendered with the static engine because no pack components are loaded, which matches what the preview shows.';
-  }
-  if (render.reason === 'no-renderer') {
-    return 'Rendered with the static engine because a preview panel could not be opened for this note. Pack components exported as labeled boxes; open the preview and export again to include them.';
-  }
-  if (render.reason === 'timeout') {
-    const detail = render.detail ? ` Detail: ${render.detail}` : '';
-    return `Rendered with the static engine because the preview did not answer in time. Pack components exported as labeled boxes.${detail}`;
-  }
-  const detail = render.detail ? ` Detail: ${render.detail}` : '';
-  return `Rendered with the static engine because the preview could not render the note. Pack components exported as labeled boxes.${detail}`;
-}
-
-/**
- * One skipped image's diagnostics line: which file, and why it kept its
- * original source instead of being embedded.
- */
-function skippedImageLine(skipped: SkippedImage): string {
-  if (skipped.reason === 'too-large') {
-    const size =
-      skipped.byteLength !== undefined
-        ? formatByteSize(skipped.byteLength)
-        : 'an unknown size';
-    return `Skipped ${skipped.src}: ${size}, over the ${formatByteSize(MAX_EMBEDDED_IMAGE_BYTES)} embed limit.`;
-  }
-  if (skipped.reason === 'unsupported-type') {
-    return `Skipped ${skipped.src}: this file type is not supported for embedding.`;
-  }
-  return `Skipped ${skipped.src}: ${skipped.detail ?? 'the file could not be read'}.`;
-}
-
-/**
- * The image lines for `exportHtmlDiagnosticLines`: how many images were
- * embedded and how many bytes they added, one line per skipped image, and a
- * remote-source count when any sources still reach the network. Empty when
- * a note has no images at all, so an export with nothing to say about
- * images adds nothing to the diagnostics. Exported for the same reason
- * `renderEngineDiagnosticLine` is: the cascade command reports each note's
- * images with these exact lines.
- */
-export function imageEmbedDiagnosticLines(
-  images: EmbeddedImageReport,
-): string[] {
-  const lines: string[] = [];
-  if (images.embedded.length > 0) {
-    const count =
-      images.embedded.length === 1
-        ? '1 image'
-        : `${String(images.embedded.length)} images`;
-    lines.push(
-      `Embedded ${count}, adding ${formatByteSize(images.embeddedBytes)} to the exported file.`,
-    );
-  }
-  for (const skipped of images.skipped) {
-    lines.push(skippedImageLine(skipped));
-  }
-  if (images.remote > 0) {
-    const line =
-      images.remote === 1
-        ? '1 image source still points at a remote URL and needs network access to load.'
-        : `${String(images.remote)} image sources still point at remote URLs and need network access to load.`;
-    lines.push(line);
-  }
-  return lines;
-}
-
-/**
- * The lines written to the "Markii" output channel for one export — this
- * extension's designated diagnostics surface. Every failure reaches here in
- * full, including the reason the popup deliberately omits.
- */
-export function exportHtmlDiagnosticLines(
-  outcome: HtmlExportOutcome,
-): string[] {
-  if (outcome.kind === 'failed') {
-    const where = outcome.path ? ` to ${outcome.path}` : '';
-    return [`HTML export failed${where}: ${outcome.reason}`];
-  }
-  return [
-    `HTML export wrote ${outcome.path}: ${String(outcome.bytes)} bytes, ${String(outcome.valueCount)} stored values baked in.`,
-    renderEngineDiagnosticLine(outcome.render),
-    ...imageEmbedDiagnosticLines(outcome.images),
-  ];
-}

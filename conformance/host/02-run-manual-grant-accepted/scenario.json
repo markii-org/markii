@@ -1,0 +1,14 @@
+{
+  "id": "run-manual-grant-accepted",
+  "invariant": "a manual run prompts once, worded with the canonical wording, and a granted host's value lands",
+  "clock": 1700000000000,
+  "actions": [
+    { "type": "open" },
+    {
+      "type": "run",
+      "trigger": "manual",
+      "answers": ["allow"],
+      "simulate": { "name": "total", "value": 3, "requiresHost": "api.example.com" }
+    }
+  ]
+}

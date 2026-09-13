@@ -3,30 +3,43 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { RunTrigger } from '@markii/runtime';
 import {
-  SCHEDULED_REFRESH_NOT_STARTED_LINE,
-  SCRIPTS_DISABLED_CONFIRMATION,
-  SCRIPTS_DISABLED_NOTICE,
-  SCRIPTS_ENABLED_CONFIRMATION,
+  OBSIDIAN_LABELS,
+  scheduledRefreshNotStartedLine,
+  scriptsDisabledConfirmationText,
   scriptsDisabledDiagnosticLine,
   scriptsDisabledNotice,
-} from './script-execution.js';
+  scriptsDisabledNoticeText,
+  scriptsEnabledConfirmationText,
+} from '@markii/host';
+
+/**
+ * Batch 11: the wording itself (`scriptsDisabledNoticeText` and friends)
+ * moved into `@markii/host`'s `host/script-execution.ts`, and is tested
+ * there. What stays worth pinning HERE is this host's own piece: that
+ * `OBSIDIAN_LABELS` produces exactly the sentences this plugin has always
+ * shown (a wording regression here would be silent to every other host's
+ * test suite), and that `src/view.tsx`'s gate still sits at the one choke
+ * point every trigger passes through.
+ */
 
 /** Every trigger the Run path has — the gate has to answer for all three, not just the one a user presses. */
 const TRIGGERS: readonly RunTrigger[] = ['manual', 'auto', 'scheduled'];
 
-describe('scriptsDisabled notice wording (issue #34)', () => {
+describe("OBSIDIAN_LABELS produces this host's exact wording (issue #34)", () => {
   it('is two short sentences: what happened, and where to change it', () => {
-    expect(SCRIPTS_DISABLED_NOTICE).toBe(
+    expect(scriptsDisabledNoticeText(OBSIDIAN_LABELS)).toBe(
       'Markii: script execution is off on this device. Turn it on in the Markii settings to run this note.',
     );
-    expect(SCRIPTS_DISABLED_NOTICE.split('. ')).toHaveLength(2);
+    expect(scriptsDisabledNoticeText(OBSIDIAN_LABELS).split('. ')).toHaveLength(
+      2,
+    );
   });
 
-  it('uses no em dash and no parentheses, in any string this module can show', () => {
+  it('uses no em dash and no parentheses, in any string this host can show', () => {
     for (const text of [
-      SCRIPTS_DISABLED_NOTICE,
-      SCRIPTS_DISABLED_CONFIRMATION,
-      SCRIPTS_ENABLED_CONFIRMATION,
+      scriptsDisabledNoticeText(OBSIDIAN_LABELS),
+      scriptsDisabledConfirmationText(OBSIDIAN_LABELS),
+      scriptsEnabledConfirmationText(OBSIDIAN_LABELS),
     ]) {
       expect(text).not.toMatch(/[—–]/);
       expect(text).not.toMatch(/[()]/);
@@ -34,29 +47,34 @@ describe('scriptsDisabled notice wording (issue #34)', () => {
   });
 
   it('says out loud that turning execution back on re-authorizes nothing', () => {
-    expect(SCRIPTS_ENABLED_CONFIRMATION).toContain(
+    expect(scriptsEnabledConfirmationText(OBSIDIAN_LABELS)).toContain(
       'existing grants are unchanged',
     );
   });
 });
 
-describe('the gate answers for all three triggers', () => {
+describe('the gate answers for all three triggers, worded for this host', () => {
   it('notifies the trigger a user is watching, and only that one', () => {
-    expect(scriptsDisabledNotice('manual')).toBe(SCRIPTS_DISABLED_NOTICE);
-    expect(scriptsDisabledNotice('auto')).toBeUndefined();
-    expect(scriptsDisabledNotice('scheduled')).toBeUndefined();
+    expect(scriptsDisabledNotice('manual', OBSIDIAN_LABELS)).toBe(
+      scriptsDisabledNoticeText(OBSIDIAN_LABELS),
+    );
+    expect(scriptsDisabledNotice('auto', OBSIDIAN_LABELS)).toBeUndefined();
+    expect(scriptsDisabledNotice('scheduled', OBSIDIAN_LABELS)).toBeUndefined();
   });
 
-  it('writes a console line for every trigger, so a blocked run is never mute', () => {
+  it('writes a diagnostics-surface line for every trigger, so a blocked run is never mute', () => {
     for (const trigger of TRIGGERS) {
-      const line = scriptsDisabledDiagnosticLine(trigger);
-      expect(line.startsWith('[markii] ')).toBe(true);
+      const line = scriptsDisabledDiagnosticLine(trigger, OBSIDIAN_LABELS);
       expect(line).toContain(`run (${trigger}) blocked`);
+      // The `[markii] ` prefix is this host's console SINK's job
+      // (`src/host-adapter.ts`'s `diagnostics`), never baked into the
+      // shared wording — see that file's test for the prefix itself.
+      expect(line.startsWith('[markii]')).toBe(false);
     }
   });
 
   it('has a line for a preview that opens with an interval configured but execution off', () => {
-    expect(SCHEDULED_REFRESH_NOT_STARTED_LINE).toContain(
+    expect(scheduledRefreshNotStartedLine(OBSIDIAN_LABELS)).toContain(
       'scheduled refresh not started',
     );
   });
@@ -80,16 +98,16 @@ describe('the gate sits at the one choke point every trigger passes through', ()
     const gate = runScripts.indexOf(
       'if (this.plugin.localSettings.scriptsDisabled) {',
     );
-    const spawn = runScripts.indexOf('await runOnce({');
+    const spawn = runScripts.indexOf('await runViaAdapter(');
     expect(gate).toBeGreaterThan(-1);
     expect(spawn).toBeGreaterThan(-1);
     expect(gate).toBeLessThan(spawn);
   });
 
   it('leaves the grant store alone: the gate returns before any prompt adapter is reached', () => {
-    const gateEnd = runScripts.indexOf('scriptsDisabledNotice(trigger)');
+    const gateEnd = runScripts.indexOf('scriptsDisabledNotice(trigger');
     expect(gateEnd).toBeGreaterThan(-1);
-    expect(runScripts.slice(0, gateEnd)).not.toContain('promptHostModal');
+    expect(runScripts.slice(0, gateEnd)).not.toContain('createObsidianPrompt');
   });
 
   it('reads the live device-local settings, so turning it on stops an already-open preview', () => {

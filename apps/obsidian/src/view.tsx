@@ -4,14 +4,18 @@ import { createRoot, type Root } from 'react-dom/client';
 import { createValueStore } from '@markii/runtime';
 import type { RunTrigger, StoredValue } from '@markii/runtime';
 import {
+  OBSIDIAN_LABELS,
   createRenderDiagnosticReporter,
   mergeArrivingValue,
   readPersistedValues,
-  runOnce,
-  spawnRun as spawnRunHost,
+  runViaAdapter,
+  scheduledRefreshNotStartedLine,
+  scriptsDisabledDiagnosticLine,
+  scriptsDisabledNotice,
   staleValuesForRehydration,
+  refreshIntervalMsFromSeconds,
 } from '@markii/host';
-import type { RunOnceResult, SpawnRunOptions } from '@markii/host';
+import type { HostAdapter, RunOnceResult } from '@markii/host';
 import { extractFrontmatterUses } from '@markii/core';
 import { resolveUses } from '@markii/pack';
 import { renderDocument } from './render-document.js';
@@ -20,33 +24,20 @@ import {
   createVaultImageResolver,
 } from './preview-images.js';
 import type { VaultImageResolver } from './preview-images.js';
-import { createLocalStorageMemento } from './run/local-storage-memento.js';
-import {
-  promptHostModal,
-  promptManyHostsModal,
-  promptUnknownHostsModal,
-} from './run-modals.js';
-import { refreshIntervalMsFromSeconds } from './local-settings.js';
+import { createObsidianHostAdapter } from './host-adapter.js';
+import { createObsidianPrompt } from './run-modals.js';
 import { emitValuesChanged } from './run/run-events.js';
 import {
   HIDE_SCRIPT_BLOCKS_CLASS,
   PREVIEW_WIDTH_CLASSES,
   previewWidthClassName,
 } from './settings.js';
-import {
-  SCHEDULED_REFRESH_NOT_STARTED_LINE,
-  scriptsDisabledDiagnosticLine,
-  scriptsDisabledNotice,
-} from './script-execution.js';
 import { convertNoteWikilinks } from './reading-view/wikilinks.js';
 import type MarkiiPlugin from './main.js';
 
 export const MARKII_PREVIEW_VIEW_TYPE = 'markii-preview';
 
 const MK_MD_SUFFIX = '.mk.md';
-
-/** External wall-clock budget for one run — forwarded verbatim to `spawnRun`'s own watchdog (`@markii/host`'s `run/run-host.ts`); the worker cannot influence or extend it. Matches `apps/vscode/src/preview-panel.ts`'s `RUN_TIMEOUT_MS`. */
-const RUN_TIMEOUT_MS = 15_000;
 
 /**
  * Imports `obsidian` — see `src/main.ts`'s file-scope note and
@@ -61,7 +52,8 @@ const RUN_TIMEOUT_MS = 15_000;
  * logic lives entirely in `@markii/host` and `@markii/runtime`.
  *
  * STORAGE: every persisted value this view touches (network grants, the
- * run cache, last-known values) goes through
+ * run cache, last-known values) goes through this view's `HostAdapter`
+ * (`this.adapter()` below, batch 11), whose `memento` is
  * `createLocalStorageMemento`, backed by `app.saveLocalStorage`/
  * `loadLocalStorage` — device-local, never `saveData`. See
  * `src/run/local-storage-memento.ts`'s top comment and
@@ -174,7 +166,9 @@ export class MarkiiPreviewView extends ItemView {
       // GitHub issue #34: a configured interval plus script execution off
       // is not an error, but it must not be mute either — the note would
       // simply stop updating with no explanation anywhere.
-      console.log(SCHEDULED_REFRESH_NOT_STARTED_LINE);
+      console.log(
+        `[markii] ${scheduledRefreshNotStartedLine(OBSIDIAN_LABELS)}`,
+      );
     } else if (intervalMs !== undefined) {
       this.refreshTimer = setInterval(() => {
         void this.runScripts('scheduled');
@@ -284,14 +278,33 @@ export class MarkiiPreviewView extends ItemView {
     };
   }
 
-  /** The `GrantMemento` for this run's whole session — see this class's top comment on why every key it touches is device-local, never `saveData`. Built once per call so a stale reference is never reused across an `await`. */
-  private memento(): ReturnType<typeof createLocalStorageMemento> {
-    return createLocalStorageMemento(
-      (key) => this.app.loadLocalStorage(key),
-      (key, value) => {
+  /**
+   * This view's `HostAdapter` (batch 11: `tmp/W11-adapter-design.md`),
+   * built fresh per call so a stale reference is never reused across an
+   * `await`. Every persisted key it touches (grants, the run cache,
+   * last-known values) is device-local — see this class's top comment on
+   * why, and `src/storage-boundary.test.ts`, which fails the suite if
+   * that ever changes.
+   *
+   * `isolate` is present whenever this plugin has an embedded worker
+   * bundle to spawn from (`this.plugin.browserWorker`); `runScripts`
+   * below still guards for its absence before calling in. Its
+   * `entryLabel` is left unset, so `@markii/host`'s
+   * `spawnRunViaAdapter` uses its own default
+   * (`BROWSER_ISOLATE_ENTRY`, `'markii:embedded-worker'`) — the exact
+   * label this plugin has always passed, which the Web Worker
+   * implementation ignores anyway (it starts from the blob URL it
+   * minted at load).
+   */
+  private adapter(): HostAdapter {
+    const browserWorker = this.plugin.browserWorker;
+    return createObsidianHostAdapter({
+      prompt: createObsidianPrompt(this.app),
+      loadLocalStorage: (key) => this.app.loadLocalStorage(key),
+      saveLocalStorage: (key, value) => {
         this.app.saveLocalStorage(key, value);
       },
-      (key, error) => {
+      onMementoWriteFailure: (key, error) => {
         // Device-local storage is finite and can genuinely fill up. The run
         // itself already succeeded; only persistence was lost, so this is
         // reported and not surfaced as a failed run.
@@ -300,19 +313,36 @@ export class MarkiiPreviewView extends ItemView {
           'Markii: device storage is full, so this run was not saved for next time. The results above are still current.',
         );
       },
-    );
+      diagnostics: (line) => {
+        console.log(line);
+      },
+      ...(browserWorker !== undefined
+        ? {
+            isolate: {
+              kind: 'browser' as const,
+              spawner: async () => browserWorker.spawnIsolate,
+              dispose: () => {
+                browserWorker.dispose();
+              },
+            },
+          }
+        : {}),
+    });
   }
 
   /**
    * Runs the currently-shown note's scripts once. `trigger` flows straight
-   * to `@markii/host`'s `runOnce`, which is what enforces the whole "effects
-   * always cost a click" rule: only `'manual'` (the `run-markii-scripts`
-   * command) runs the INTERACTIVE grant flow (the `run-modals.ts` prompts
-   * below are simply never invoked for `'auto'`/`'scheduled'`); those two
-   * triggers resolve grants from what was already granted by hand and never
-   * prompt, and `@markii/runtime`'s trigger-to-tier gate caps them to the
-   * read-only tier inside the worker itself — this view never works around
-   * either gate, it only supplies the trigger.
+   * to `@markii/host`'s `runViaAdapter` (batch 11: wraps `runOnce`, the
+   * grant-flow-plus-spawn orchestration, over this view's `HostAdapter`),
+   * which is what enforces the whole "effects always cost a click" rule:
+   * only `'manual'` (the `run-markii-scripts` command) runs the
+   * INTERACTIVE grant flow (`this.adapter()`'s `prompt`, built from
+   * `run-modals.ts`'s `createObsidianPrompt`, is simply never invoked for
+   * `'auto'`/`'scheduled'`); those two triggers resolve grants from what
+   * was already granted by hand and never prompt, and
+   * `@markii/runtime`'s trigger-to-tier gate caps them to the read-only
+   * tier inside the worker itself — this view never works around either
+   * gate, it only supplies the trigger.
    *
    * A press that arrives with no worker bundled (dev, before `npm run
    * build`), no current file, or while a previous run is still in flight is
@@ -332,7 +362,9 @@ export class MarkiiPreviewView extends ItemView {
     // Grants are deliberately untouched: this decides whether a run
     // happens at all, and it returns before any grant flow is reached.
     if (this.plugin.localSettings.scriptsDisabled) {
-      console.log(scriptsDisabledDiagnosticLine(trigger));
+      this.adapter().diagnostics(
+        scriptsDisabledDiagnosticLine(trigger, OBSIDIAN_LABELS),
+      );
       if (trigger === 'scheduled' && this.refreshTimer !== undefined) {
         // Stopped rather than left ticking against a closed door: the log
         // line above would otherwise repeat every interval for as long as
@@ -340,7 +372,7 @@ export class MarkiiPreviewView extends ItemView {
         clearInterval(this.refreshTimer);
         this.refreshTimer = undefined;
       }
-      const notice = scriptsDisabledNotice(trigger);
+      const notice = scriptsDisabledNotice(trigger, OBSIDIAN_LABELS);
       if (notice) new Notice(notice);
       return;
     }
@@ -356,11 +388,9 @@ export class MarkiiPreviewView extends ItemView {
       }
       return;
     }
-    const { spawnIsolate } = this.plugin.browserWorker;
-
     this.running = true;
     const documentKey = file.path;
-    const memento = this.memento();
+    const adapter = this.adapter();
 
     try {
       const text = await this.app.vault.cachedRead(file);
@@ -368,30 +398,10 @@ export class MarkiiPreviewView extends ItemView {
         this.plugin.packContext && this.plugin.packContext.packs.length > 0
           ? this.plugin.packContext.packModules
           : undefined;
-      const result = await runOnce({
+      const result = await runViaAdapter(adapter, {
         documentKey,
         text,
         trigger,
-        memento,
-        promptHost: promptHostModal(this.app),
-        promptUnknownHosts: promptUnknownHostsModal(this.app),
-        promptManyHosts: promptManyHostsModal(this.app),
-        // `workerPath` is still passed because `spawnRun` hands it to the
-        // isolate as its entry; the Web Worker implementation ignores the
-        // value and starts from the blob URL it minted at load. It is a
-        // label rather than a path on purpose: there is no such FILE any
-        // more, since the worker bundle ships base64-embedded inside
-        // `main.js` (`src/run/embedded-assets.ts`), so naming a real-looking
-        // filename here would only mislead whoever reads it next. The
-        // watchdog, the settlement rules, and the never-rejects contract
-        // are `spawnRun`'s either way.
-        spawnRun: (options: SpawnRunOptions) =>
-          spawnRunHost({
-            ...options,
-            workerPath: 'markii:embedded-worker',
-            spawnIsolate,
-          }),
-        timeoutMs: RUN_TIMEOUT_MS,
         ...(packModules !== undefined ? { packModules } : {}),
         // GitHub issue #35: each script's value is applied the moment it
         // arrives, so its component goes fresh while the rest of the note
@@ -503,7 +513,7 @@ export class MarkiiPreviewView extends ItemView {
       // issue #11's rehydration behavior, `staleValuesForRehydration`) so
       // it renders its last figures instantly, before (or without) any
       // fresh run.
-      const persisted = readPersistedValues(this.memento(), file.path);
+      const persisted = readPersistedValues(this.adapter().memento, file.path);
       this.values =
         Object.keys(persisted).length > 0
           ? staleValuesForRehydration(persisted)

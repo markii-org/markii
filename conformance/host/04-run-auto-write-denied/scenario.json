@@ -1,0 +1,13 @@
+{
+  "id": "run-auto-write-denied",
+  "invariant": "an auto trigger is read-only: a write attempt is denied by the tier gate, not by luck, and never prompts",
+  "clock": 1700000000000,
+  "actions": [
+    { "type": "open" },
+    {
+      "type": "run",
+      "trigger": "auto",
+      "simulate": { "name": "counter", "requiresManualTier": true }
+    }
+  ]
+}

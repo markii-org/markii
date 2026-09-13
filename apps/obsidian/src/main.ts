@@ -8,6 +8,7 @@ import {
   TFile,
   WorkspaceLeaf,
 } from 'obsidian';
+import type { Editor } from 'obsidian';
 import * as path from 'node:path';
 import { MARKII_PREVIEW_VIEW_TYPE, MarkiiPreviewView } from './view.js';
 import { MarkiiSettingTab } from './settings-tab.js';
@@ -37,26 +38,36 @@ import {
   type BrowserWorkerSetup,
 } from './run/browser-worker.js';
 import {
+  OBSIDIAN_LABELS,
   buildComponentCatalog,
-  componentSkeleton,
+  createMarkiiHost,
   createNetProvider,
+  createNodeArchiveExtractFs,
+  discoverConfiguredPacks,
+  installConsentMessage,
+  installPackDiagnosticLines,
+  installPackFromArchive,
+  installPackMessage,
+  insertComponentPlan,
   MARK_EXTENSION,
-  offsetToLineColumn,
   readPersistedValues,
+  scriptsDisabledConfirmationText,
+  scriptsEnabledConfirmationText,
 } from '@markii/host';
 import type {
   CascadeLinkResolver,
   DiscoveredPack,
   ExportImageReader,
+  HostAdapter,
+  HostEditor,
+  HostTextEdit,
   InsertableComponent,
 } from '@markii/host';
-import { discoverConfiguredPacks } from './packs/discover-configured-packs.js';
 import {
   bundledDiscoveredPacks,
   bundledPackAssets,
 } from './packs/bundled-packs.js';
 import { pickInsertableComponent } from './insert-modals.js';
-import { fenceEditorChanges } from './fence-edits.js';
 import { MarkiiCompletionSuggest } from './complete-suggest.js';
 import {
   NO_ACTIVE_NOTE_NOTICE,
@@ -77,10 +88,6 @@ import {
 } from './export/cascade-export.js';
 import type { CascadeExportOutcome } from './export/cascade-export.js';
 import { createLocalStorageMemento } from './run/local-storage-memento.js';
-import {
-  SCRIPTS_DISABLED_CONFIRMATION,
-  SCRIPTS_ENABLED_CONFIRMATION,
-} from './script-execution.js';
 import type { Registry } from '@markii/react';
 import { defaultRegistry } from '@markii/react/components';
 import { loadPackContext } from './packs/pack-context.js';
@@ -101,15 +108,8 @@ import {
 } from './packs/pack-styles.js';
 import { registerReadingView } from './reading-view.js';
 import { pickPackArchiveFile } from './pick-folder.js';
-import { confirmModal } from './run-modals.js';
-import { createNodeArchiveExtractFs } from './packs/archive-packs.js';
-import {
-  installConsentMessage,
-  installPackDiagnosticLines,
-  installPackFromArchive,
-  installPackNoticeText,
-  installReplaceConfirmMessage,
-} from './packs/install-pack.js';
+import { confirmModal, createObsidianPrompt } from './run-modals.js';
+import { createObsidianHostAdapter } from './host-adapter.js';
 
 /**
  * Imports `obsidian` — deliberately NOT unit-tested (Vitest cannot resolve
@@ -305,7 +305,9 @@ export default class MarkiiPlugin extends Plugin {
           scriptsDisabled: next,
         });
         new Notice(
-          next ? SCRIPTS_DISABLED_CONFIRMATION : SCRIPTS_ENABLED_CONFIRMATION,
+          next
+            ? scriptsDisabledConfirmationText(OBSIDIAN_LABELS)
+            : scriptsEnabledConfirmationText(OBSIDIAN_LABELS),
         );
       },
     });
@@ -668,10 +670,25 @@ export default class MarkiiPlugin extends Plugin {
   /**
    * The "Insert Markii component" command (GitHub issue #17, slice 1):
    * offers every standard component plus every loaded pack's components,
-   * and inserts the chosen one's directive skeleton at the cursor. Reuses
-   * `completionCatalog` (kept fresh by `reloadPacks`) rather than
-   * rediscovering packs on every invocation — packs are loaded once now,
-   * not per view or per command.
+   * and inserts the chosen one's directive skeleton at the cursor. The
+   * picker still reads `completionCatalog` (kept fresh by `reloadPacks`),
+   * but the skeleton build, the fence-lengthening edits, and the actual
+   * transaction now run through `@markii/host`'s
+   * `createMarkiiHost(adapter).insertComponent` (batch 11 Phase 2b) — the
+   * same shared path the VS Code extension drives — over an `editor`
+   * capability built from this method's own `view.editor` closures.
+   *
+   * FALLBACK, reported rather than silently absorbed: `HostPackSource`
+   * names pack folders on disk, and this plugin's BUNDLED packs
+   * (`read`/`dash`/`prep`) are embedded in `main.js` and reconstructed
+   * purely in memory (`bundledDiscoveredPacks()`) — they have no folder
+   * path to hand `authorizedFolders()`. The shared path's own catalog
+   * rebuild therefore never sees a bundled-pack component, so a `chosen`
+   * one comes back `not-found`; this method falls back to the previous
+   * direct `insertComponentPlan`/`editor.transaction` wiring only in that
+   * one case, so a bundled-pack component still inserts correctly. Every
+   * other component (standard or an installed, on-disk pack) goes through
+   * the shared path alone.
    */
   private async insertComponent(view: MarkdownView): Promise<void> {
     const editor = view.editor;
@@ -682,53 +699,39 @@ export default class MarkiiPlugin extends Plugin {
     );
     if (!chosen) return; // dismissed
 
-    const skeleton = componentSkeleton(
-      chosen.directiveName,
-      chosen.kind,
-      chosen.requiredAttributes,
-    );
-    // `'from'`, not the default head: `replaceSelection` writes starting at
-    // the selection's START, so anchoring the cursor math anywhere else is
-    // wrong whenever text is selected (and for a selection made backwards,
-    // the head IS the earlier position). Mirrors the VS Code command.
-    const insertPosition = editor.getCursor('from');
+    const { loadable } = this.installedPackFolders();
+    const adapter = createObsidianHostAdapter({
+      prompt: createObsidianPrompt(this.app),
+      loadLocalStorage: (key) => this.app.loadLocalStorage(key),
+      saveLocalStorage: (key, value) => {
+        this.app.saveLocalStorage(key, value);
+      },
+      diagnostics: (line) => {
+        console.log(line);
+      },
+      packs: {
+        authorizedFolders: async () => loadable.map((entry) => entry.folder),
+        reservedNamespaces: () => new Set<string>(),
+      },
+      editor: obsidianHostEditor(editor),
+    });
 
-    // Fence auto-extension: nesting a container inside a container needs
-    // the OUTER pair to carry more colons. The enclosing fences grow in
-    // the SAME transaction as the insertion, so the whole thing is one
-    // undo step. Quiet by contract: an ambiguous or unpaired document
-    // yields no changes and the insertion proceeds as it did before.
-    const fenceChanges = fenceEditorChanges(
-      editor.getValue(),
-      insertPosition.line,
-      skeleton.text,
-    );
-
-    if (fenceChanges.length === 0) {
-      editor.replaceSelection(skeleton.text);
-    } else {
-      editor.transaction({
-        changes: [
-          ...fenceChanges.map((change) => ({
-            from: { ...change.from },
-            to: { ...change.to },
-            text: change.text,
-          })),
-          {
-            from: insertPosition,
-            to: editor.getCursor('to'),
-            text: skeleton.text,
-          },
-        ],
+    const outcome = await createMarkiiHost(adapter).insertComponent({
+      name: chosen.directiveName,
+    });
+    if (outcome.kind === 'inserted') {
+      editor.setCursor({
+        line: outcome.cursor.line,
+        ch: outcome.cursor.column,
       });
+      return;
     }
+    if (outcome.kind !== 'not-found') return; // 'failed'/'unsupported': already diagnosed
 
-    const cursor = offsetToLineColumn(skeleton.text, skeleton.cursorOffset);
-    const cursorPosition =
-      cursor.line === 0
-        ? { line: insertPosition.line, ch: insertPosition.ch + cursor.column }
-        : { line: insertPosition.line + cursor.line, ch: cursor.column };
-    editor.setCursor(cursorPosition);
+    // Bundled-pack fallback (see this method's doc comment): the same
+    // plan-and-transaction wiring the shared path now owns for every
+    // other component.
+    insertComponentDirectly(editor, chosen);
   }
 
   /**
@@ -742,6 +745,25 @@ export default class MarkiiPlugin extends Plugin {
     const adapter = this.app.vault.adapter;
     if (!(adapter instanceof FileSystemAdapter)) return undefined;
     return path.join(adapter.getBasePath(), this.manifest.dir ?? '');
+  }
+
+  /**
+   * This plugin's `HostAdapter` (batch 11), for the behaviors this file
+   * drives directly (pack install today). Built fresh per call, like
+   * `src/view.tsx`'s own `adapter()` — see that method's doc comment for
+   * why every key it touches is device-local, never `saveData`.
+   */
+  private hostAdapter(): HostAdapter {
+    return createObsidianHostAdapter({
+      prompt: createObsidianPrompt(this.app),
+      loadLocalStorage: (key) => this.app.loadLocalStorage(key),
+      saveLocalStorage: (key, value) => {
+        this.app.saveLocalStorage(key, value);
+      },
+      diagnostics: (line) => {
+        console.log(line);
+      },
+    });
   }
 
   /**
@@ -839,7 +861,7 @@ export default class MarkiiPlugin extends Plugin {
 
   /**
    * Rebuilds `completionCatalog`: every loaded pack's manifest (a cheap,
-   * eval-free discovery — `./packs/discover-configured-packs.ts` — rather
+   * eval-free discovery — `@markii/host`'s `discoverConfiguredPacks` — rather
    * than reusing `packContext`, so this catalog stays correct even for a
    * pack that is discoverable but whose script failed to evaluate) plus
    * the standard set, the same catalog `insertComponent` and directive
@@ -850,9 +872,9 @@ export default class MarkiiPlugin extends Plugin {
     const { loadable } = this.installedPackFolders();
     let packs: readonly DiscoveredPack[] = [];
     try {
-      packs = await discoverConfiguredPacks(
-        loadable.map((entry) => entry.folder),
-      );
+      packs = (
+        await discoverConfiguredPacks(loadable.map((entry) => entry.folder))
+      ).packs;
     } catch {
       packs = [];
     }
@@ -944,7 +966,7 @@ export default class MarkiiPlugin extends Plugin {
    * bundled pack's, asks consent to run its code, asks before replacing an
    * already-installed pack of the same namespace, and unzips it into
    * `installedPacksDir()`. Every decision and every user-facing string
-   * lives in `./packs/install-pack.ts`; this method is wiring only. A
+   * lives in `@markii/host`'s `host/pack-install.ts`; this method is wiring only. A
    * successful install adds the namespace to this device's trust list and
    * reloads every open view immediately — no "reopen the preview" step.
    */
@@ -976,23 +998,21 @@ export default class MarkiiPlugin extends Plugin {
       return;
     }
 
-    const outcome = await installPackFromArchive({
+    const outcome = await installPackFromArchive(this.hostAdapter(), {
       archiveBytes,
       archivePath,
       installRoot,
       exists: async (dir) => existsSync(dir),
       extractFs: createNodeArchiveExtractFs(),
-      confirmConsent: (name) =>
-        confirmModal(this.app, installConsentMessage(name)),
-      confirmReplace: (name) =>
-        confirmModal(this.app, installReplaceConfirmMessage(name)),
-      bundledNamespaces: this.bundledNamespaces(),
+      reservedNamespaces: this.bundledNamespaces(),
     });
 
     for (const line of installPackDiagnosticLines(outcome, archivePath)) {
       console.info(`[markii] ${line}`);
     }
-    new Notice(installPackNoticeText(outcome, archivePath));
+    // Obsidian reloads every open view's packs automatically on a
+    // successful install (below); VS Code's does not.
+    new Notice(installPackMessage(outcome, archivePath, OBSIDIAN_LABELS, true));
 
     if (outcome.kind === 'installed') {
       const version = await this.readInstalledPackVersion(outcome.installedDir);
@@ -1011,7 +1031,7 @@ export default class MarkiiPlugin extends Plugin {
   async enablePresentPack(namespace: string): Promise<void> {
     const consented = await confirmModal(
       this.app,
-      installConsentMessage(namespace),
+      installConsentMessage(namespace, OBSIDIAN_LABELS),
     );
     if (!consented) return;
 
@@ -1160,4 +1180,86 @@ export default class MarkiiPlugin extends Plugin {
     // narrow utility sidebar.
     return this.app.workspace.getLeaf('split', 'vertical');
   }
+}
+
+/**
+ * Builds a `HostEditor` over one Obsidian `Editor`, read at CALL TIME
+ * (every accessor closes over `editor`, never over a value captured once),
+ * so `MarkiiPlugin.insertComponent`'s adapter always reflects the live
+ * document even though the adapter itself is built fresh per invocation.
+ * `cursor()` reads `'from'` (the selection START), matching the pre-batch-11
+ * wiring: for a selection made backwards, `'from'` is the earlier position,
+ * and a transaction's `from` writes starting there.
+ */
+function obsidianHostEditor(editor: Editor): HostEditor {
+  return {
+    documentText: () => editor.getValue(),
+    documentPath: () => undefined,
+    cursor: () => {
+      const position = editor.getCursor('from');
+      return { line: position.line, column: position.ch };
+    },
+    applyEdits: async (edits: readonly HostTextEdit[]): Promise<boolean> => {
+      const insertPosition = editor.getCursor('from');
+      editor.transaction({
+        changes: edits.map((edit) => {
+          const isInsertion =
+            edit.line === insertPosition.line &&
+            edit.startColumn === insertPosition.ch &&
+            edit.endColumn === insertPosition.ch;
+          // The insertion edit is a zero-width point at `insertPosition`; a
+          // non-empty selection there must still be REPLACED, not merely
+          // inserted beside it, so that case alone spans to the cursor's
+          // `'to'` side instead of the edit's own zero-width span. Mirrors
+          // `apps/vscode/src/extension.ts`'s own wiring exactly.
+          return {
+            from: { line: edit.line, ch: edit.startColumn },
+            to: isInsertion
+              ? editor.getCursor('to')
+              : { line: edit.line, ch: edit.endColumn },
+            text: edit.text,
+          };
+        }),
+      });
+      return true;
+    },
+  };
+}
+
+/**
+ * The pre-batch-11 direct wiring, kept ONLY as `insertComponent`'s
+ * bundled-pack fallback (see that method's doc comment): builds the
+ * skeleton and any fence-lengthening edits with `@markii/host`'s
+ * `insertComponentPlan` and applies them in one transaction, exactly as
+ * every component's insertion worked before the shared host path existed.
+ */
+function insertComponentDirectly(
+  editor: Editor,
+  chosen: InsertableComponent,
+): void {
+  const insertPosition = editor.getCursor('from');
+  const plan = insertComponentPlan(
+    chosen,
+    editor.getValue(),
+    insertPosition.line,
+    insertPosition.ch,
+  );
+
+  editor.transaction({
+    changes: plan.edits.map((edit) => {
+      const isInsertion =
+        edit.line === insertPosition.line &&
+        edit.startColumn === insertPosition.ch &&
+        edit.endColumn === insertPosition.ch;
+      return {
+        from: { line: edit.line, ch: edit.startColumn },
+        to: isInsertion
+          ? editor.getCursor('to')
+          : { line: edit.line, ch: edit.endColumn },
+        text: edit.text,
+      };
+    }),
+  });
+
+  editor.setCursor({ line: plan.cursor.line, ch: plan.cursor.column });
 }

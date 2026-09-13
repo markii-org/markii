@@ -81,7 +81,7 @@ describe('run-note probe: the real isolate', () => {
         ].join('\n'),
       };
       // A non-TTY terminal: every grant prompt resolves `false` without
-      // asking (`prompts.ts`), so no host is ever granted and this proves
+      // asking (`host-adapter.ts`), so no host is ever granted and this proves
       // the request is refused at the CAPABILITY gate rather than actually
       // attempted and failing for a network reason.
       const terminal = createFakeTerminal({ stdinIsTty: false });

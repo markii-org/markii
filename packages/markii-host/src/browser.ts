@@ -118,3 +118,64 @@ export {
   createRenderDiagnosticReporter,
   renderDiagnosticLine,
 } from './diagnostics/render-diagnostics.js';
+
+// Batch 11: the HostAdapter contract's TYPES (erased before a bundler ever
+// sees them) plus the pure, Node-free behavior modules — `./host/labels.ts`,
+// `./host/script-execution.ts`, and `./host/refresh-interval.ts` import
+// nothing but `@markii/runtime`'s `RunTrigger` type and each other, so they
+// are reachable from here per `tmp/W11-adapter-design.md` section 1's rule.
+// `./host/create-host.ts` and `./host/run-behavior.ts` are NOT re-exported
+// here: they reach the isolate and the filesystem, and stay main-entry only.
+export type {
+  HostAdapter,
+  HostDirEntry,
+  HostEditor,
+  HostExportCapabilities,
+  HostExportFormat,
+  HostIsolate,
+  HostLabels,
+  HostPackSource,
+  HostPromptRequest,
+  HostTextEdit,
+} from './host/adapter.js';
+export { BROWSER_ISOLATE_ENTRY } from './host/adapter.js';
+export { CLI_LABELS, OBSIDIAN_LABELS, VSCODE_LABELS } from './host/labels.js';
+export {
+  scheduledRefreshNotStartedLine,
+  scriptsDisabledConfirmationText,
+  scriptsDisabledDiagnosticLine,
+  scriptsDisabledNotice,
+  scriptsDisabledNoticeText,
+  scriptsEnabledConfirmationText,
+} from './host/script-execution.js';
+export {
+  MIN_REFRESH_INTERVAL_SECONDS,
+  parseRefreshIntervalSeconds,
+  refreshIntervalMsFromSeconds,
+  refreshIntervalValidationMessage,
+} from './host/refresh-interval.js';
+
+// Batch 11 Phase 1b: `./host/editor-behavior.ts` is required to be
+// Node-free (`tmp/BRIEF-11-host.md`'s Phase 1b instructions) — it imports
+// only `@markii/stdlib/editor`'s pure completion/hover/skeleton math — so
+// it is reachable from here exactly like the Phase 1a modules above.
+// `./host/pack-install.ts`, `./host/pack-archive.ts`, `./host/pack-load.ts`,
+// and `./host/export-behavior.ts` all reach `node:*` (directly, or via
+// `../export/note-export.js`'s `@markii/html` dependency) or the
+// filesystem-based pack discovery in `../packs/discover.ts`, so they stay
+// main-entry only.
+export type {
+  CatalogCache,
+  InsertComponentEdit,
+  InsertComponentPlan,
+} from './host/editor-behavior.js';
+export {
+  LAYOUT_ORIGIN_TAG,
+  STANDARD_ORIGIN_TAG,
+  completeAtViaEditor,
+  completionOriginTag,
+  createCatalogCache,
+  hoverAtViaEditor,
+  hoverDocumentationText,
+  insertComponentPlan,
+} from './host/editor-behavior.js';

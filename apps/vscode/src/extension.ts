@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import { homedir } from 'node:os';
+import { bundledPacksFolder } from './packs/bundled-packs.js';
 import {
   esbuildBrowserModulePath,
   esbuildWasmBinaryPath,
@@ -33,26 +35,28 @@ import {
   writePackArchiveFile,
 } from './packs/export-pack.js';
 import { discoverConfiguredPacks } from './packs/discover-configured-packs.js';
-import { createNodeArchiveExtractFs } from './packs/archive-packs.js';
+import { createVSCodeHostAdapter } from './host-adapter.js';
 import {
-  installConsentMessage,
+  buildComponentCatalog,
+  buildPackRegistrationScript,
+  createMarkiiHost,
+  createNodeArchiveExtractFs,
+  exportPackArchive,
   installPackDiagnosticLines,
   installPackFromArchive,
-  installPackResultMessage,
-  installReplaceConfirmMessage,
-} from './packs/install-pack.js';
-import {
-  buildPackRegistrationScript,
-  buildComponentCatalog,
-  exportPackArchive,
+  installPackMessage,
+  parseRefreshIntervalSeconds,
+  refreshIntervalValidationMessage,
+  resolvePackPaths,
+  scriptsDisabledConfirmationText,
+  scriptsEnabledConfirmationText,
+  VSCODE_LABELS,
 } from '@markii/host';
-import type { DiscoveredPack } from '@markii/host';
+import type { DiscoveredPack, HostPromptRequest } from '@markii/host';
 import {
   closesOpenContainerFence,
   completionAt,
-  componentSkeleton,
   hoverAt,
-  offsetToLineColumn,
 } from '@markii/stdlib/editor';
 import type { CompletionItem as MarkCompletionItem } from '@markii/stdlib/editor';
 import {
@@ -61,8 +65,8 @@ import {
   unusablePackFolderMessage,
   validatePackFolder,
 } from './packs/validate-pack-folder.js';
-import { createCatalogCache } from './completion-catalog.js';
-import type { CatalogCache } from './completion-catalog.js';
+import { createCatalogCache } from '@markii/host';
+import type { CatalogCache } from '@markii/host';
 import {
   MARKII_COMPLETION_TRIGGER_CHARACTERS,
   completionFilterText,
@@ -71,14 +75,6 @@ import {
   completionSortText,
   snippetText,
 } from './completion.js';
-import {
-  parseRefreshIntervalSeconds,
-  refreshIntervalValidationMessage,
-} from './refresh-interval.js';
-import {
-  SCRIPTS_DISABLED_CONFIRMATION,
-  SCRIPTS_ENABLED_CONFIRMATION,
-} from './script-execution.js';
 import { isPreviewableDocument } from './mark-document.js';
 import {
   insertComponentQuickPickItems,
@@ -89,7 +85,6 @@ import {
 import type { InsertComponentQuickPickEntry } from './insert-component.js';
 import {
   completionFenceTextEdits,
-  fenceTextEdits,
   isContainerInsertText,
 } from './fence-edits.js';
 import type { FenceTextEdit } from './fence-edits.js';
@@ -156,8 +151,9 @@ async function addPackFolder(
  * `markii.packs`, the same GLOBAL, user-scoped write `addPackFolder`
  * already makes, and for the same reason: a workspace can never install a
  * pack on the reader's behalf. Every decision worth testing (validation,
- * the collision check, the wording) lives in `./packs/install-pack.ts`;
- * this function is `vscode` wiring only.
+ * the collision check, the wording) lives in `@markii/host`'s
+ * `installPackFromArchive`; this function is `vscode` wiring only, over
+ * `./host-adapter.ts`'s `HostAdapter`.
  */
 async function installPackCommand(
   context: vscode.ExtensionContext,
@@ -188,7 +184,13 @@ async function installPackCommand(
     return;
   }
 
-  const outcome = await installPackFromArchive({
+  const adapter = createVSCodeHostAdapter({
+    memento: context.workspaceState,
+    prompt: (request) => promptViaModal(request),
+    diagnostics: (line) => diagnosticsChannel.appendLine(line),
+  });
+
+  const outcome = await installPackFromArchive(adapter, {
     archiveBytes,
     archivePath,
     installRoot: installedPacksDir(context),
@@ -201,29 +203,14 @@ async function installPackCommand(
       }
     },
     extractFs: createNodeArchiveExtractFs(),
-    confirmConsent: async (packName) => {
-      const choice = await vscode.window.showWarningMessage(
-        installConsentMessage(packName),
-        { modal: true },
-        'Install',
-      );
-      return choice === 'Install';
-    },
-    confirmReplace: async (packName) => {
-      const choice = await vscode.window.showWarningMessage(
-        installReplaceConfirmMessage(packName),
-        { modal: true },
-        'Replace',
-      );
-      return choice === 'Replace';
-    },
+    reservedNamespaces: new Set(),
   });
 
   for (const line of installPackDiagnosticLines(outcome, archivePath)) {
     diagnosticsChannel.appendLine(line);
   }
-  const message = installPackResultMessage(outcome, archivePath);
-  if (outcome.kind === 'rejected') {
+  const message = installPackMessage(outcome, archivePath, adapter.labels);
+  if (outcome.kind === 'rejected' || outcome.kind === 'reserved') {
     void vscode.window.showWarningMessage(message);
     return;
   }
@@ -239,6 +226,21 @@ async function installPackCommand(
   }
   await reloadActivePreviewPacks(context);
   void vscode.window.showInformationMessage(message);
+}
+
+/**
+ * This extension's `HostAdapter.prompt` implementation: a modal warning
+ * message with `request.allowLabel` as its one action. Resolves `false`
+ * on dismiss, exactly like a declined prompt — a host adapter never
+ * throws on "the user closed the dialog."
+ */
+async function promptViaModal(request: HostPromptRequest): Promise<boolean> {
+  const choice = await vscode.window.showWarningMessage(
+    request.message,
+    { modal: true },
+    request.allowLabel,
+  );
+  return choice === request.allowLabel;
 }
 
 /** Reads a `.mkp` file's raw bytes via `vscode.workspace.fs`, so a remote/virtual workspace file system is honored the same way every other file read in this extension is. */
@@ -435,7 +437,9 @@ async function toggleScriptExecution(): Promise<void> {
     vscode.ConfigurationTarget.Global,
   );
   void vscode.window.showInformationMessage(
-    next ? SCRIPTS_DISABLED_CONFIRMATION : SCRIPTS_ENABLED_CONFIRMATION,
+    next
+      ? scriptsDisabledConfirmationText(VSCODE_LABELS)
+      : scriptsEnabledConfirmationText(VSCODE_LABELS),
   );
 }
 
@@ -586,10 +590,13 @@ function quickPickItemFromEntry(
  * The `markii.insertComponent` command ("Markii: Insert Component…",
  * GitHub issue #17, slice 1): offers every standard component plus every
  * configured pack's components, and inserts the chosen one's directive
- * skeleton at the cursor. Every testable piece (the quick-pick item shape,
- * every user-facing string) lives in `./insert-component.ts`; the catalog
- * and skeleton builders are `@markii/host`'s (shared with the Obsidian
- * plugin). This function is `vscode` wiring only.
+ * skeleton at the cursor. The quick-pick item shape and every user-facing
+ * string live in `./insert-component.ts`; the skeleton build, the
+ * fence-lengthening edits, and the actual edit application now run through
+ * `@markii/host`'s `createMarkiiHost(adapter).insertComponent` (batch 11
+ * Phase 2b) — the same shared path the Obsidian plugin drives — over an
+ * `editor` capability built from this function's own `vscode` closures.
+ * This function is `vscode` wiring and picker presentation only.
  *
  * A pack-discovery failure never blocks the command: `discoverConfiguredPacks`
  * already degrades quietly (a bad folder is simply skipped, never thrown),
@@ -598,6 +605,7 @@ function quickPickItemFromEntry(
  */
 async function insertComponentCommand(
   context: vscode.ExtensionContext,
+  diagnosticsChannel: vscode.OutputChannel,
 ): Promise<void> {
   const editor = vscode.window.activeTextEditor;
   if (!editor || !isPreviewableDocument(editor.document)) {
@@ -634,50 +642,73 @@ async function insertComponentCommand(
   const chosen = catalog[picked.catalogIndex];
   if (!chosen) return;
 
-  const skeleton = componentSkeleton(
-    chosen.directiveName,
-    chosen.kind,
-    chosen.requiredAttributes,
+  // The same folder list `catalog` above was built from (`resolvePackPaths`
+  // merged with the extension's own bundled packs), handed to the adapter
+  // as `authorizedFolders` so the shared path's own catalog lookup (by
+  // `chosen.directiveName`) finds the identical entry the picker showed.
+  const resolvedPaths = resolvePackPaths(
+    configuredPacks,
+    workspaceRoot,
+    homedir(),
   );
-  // `replace` over the whole selection, anchored at its START, rather than
-  // `insert` at the active end: with text selected those differ, and the
-  // Obsidian plugin's `replaceSelection` already replaces. Anchoring at
-  // `start` also keeps the cursor math right for a selection made
-  // backwards, where `active` is the earlier position.
-  const insertPosition = editor.selection.start;
-
-  // Fence auto-extension: nesting a container inside a container needs the
-  // OUTER pair to carry more colons, so the enclosing fences grow in the
-  // SAME `editor.edit` as the insertion, making the pair one undo step.
-  // Quiet by contract: an ambiguous or unpaired document simply yields no
-  // edits and the insertion proceeds exactly as it did before.
-  const fenceEdits = fenceTextEdits(
-    editor.document.getText(),
-    insertPosition.line,
-    skeleton.text,
-  );
-
-  await editor.edit((editBuilder) => {
-    editBuilder.replace(editor.selection, skeleton.text);
-    for (const edit of fenceEdits) {
-      editBuilder.replace(
-        new vscode.Range(
-          new vscode.Position(edit.line, edit.startColumn),
-          new vscode.Position(edit.line, edit.endColumn),
-        ),
-        edit.newText,
-      );
-    }
+  const adapter = createVSCodeHostAdapter({
+    memento: context.workspaceState,
+    prompt: (request) => promptViaModal(request),
+    diagnostics: (line) => diagnosticsChannel.appendLine(line),
+    authorizedFolders: async () => [
+      ...resolvedPaths,
+      bundledPacksFolder(context.extensionUri.fsPath),
+    ],
+    editorDocumentText: () => editor.document.getText(),
+    editorDocumentPath: () => editor.document.uri.fsPath,
+    // `replace` over the whole selection, anchored at its START, rather
+    // than `insert` at the active end: with text selected those differ,
+    // and the Obsidian plugin's `replaceSelection` already replaces.
+    // Anchoring at `start` also keeps the cursor math right for a
+    // selection made backwards, where `active` is the earlier position.
+    editorCursor: () => ({
+      line: editor.selection.start.line,
+      column: editor.selection.start.character,
+    }),
+    editorApplyEdits: async (edits) => {
+      const insertPosition = editor.selection.start;
+      try {
+        await editor.edit((editBuilder) => {
+          for (const edit of edits) {
+            const isInsertion =
+              edit.line === insertPosition.line &&
+              edit.startColumn === insertPosition.character &&
+              edit.endColumn === insertPosition.character;
+            // The insertion edit is a zero-width point at
+            // `insertPosition`; a non-empty selection there must still be
+            // REPLACED (not merely inserted beside), so that case alone
+            // uses `editor.selection`'s full range instead of the plan's
+            // own zero-width span.
+            const range = isInsertion
+              ? editor.selection
+              : new vscode.Range(
+                  new vscode.Position(edit.line, edit.startColumn),
+                  new vscode.Position(edit.line, edit.endColumn),
+                );
+            editBuilder.replace(range, edit.text);
+          }
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    },
   });
 
-  const cursor = offsetToLineColumn(skeleton.text, skeleton.cursorOffset);
-  const cursorPosition =
-    cursor.line === 0
-      ? new vscode.Position(
-          insertPosition.line,
-          insertPosition.character + cursor.column,
-        )
-      : new vscode.Position(insertPosition.line + cursor.line, cursor.column);
+  const outcome = await createMarkiiHost(adapter).insertComponent({
+    name: chosen.directiveName,
+  });
+  if (outcome.kind !== 'inserted') return; // not-found/failed already diagnosed
+
+  const cursorPosition = new vscode.Position(
+    outcome.cursor.line,
+    outcome.cursor.column,
+  );
   editor.selection = new vscode.Selection(cursorPosition, cursorPosition);
 }
 
@@ -980,7 +1011,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const insertComponentCommandHandle = vscode.commands.registerCommand(
     'markii.insertComponent',
     () => {
-      void insertComponentCommand(context);
+      void insertComponentCommand(context, diagnosticsChannel);
     },
   );
   const exportHtmlCommandHandle = vscode.commands.registerCommand(
@@ -1001,9 +1032,17 @@ export function activate(context: vscode.ExtensionContext): void {
   // invalidated whenever what it would discover could have changed:
   // `markii.packs` edited, or a workspace folder added/removed (packs are
   // discovered relative to the workspace root).
-  const catalogCache = createCatalogCache(() =>
-    loadConfiguredPacksForCompletion(context.extensionUri.fsPath),
-  );
+  const catalogCache = createCatalogCache(async () => {
+    let packs: readonly DiscoveredPack[] = [];
+    try {
+      packs = await loadConfiguredPacksForCompletion(
+        context.extensionUri.fsPath,
+      );
+    } catch {
+      packs = [];
+    }
+    return buildComponentCatalog(packs);
+  });
   const { completionProvider, hoverProvider } =
     createCompletionAndHoverProviders(catalogCache);
   const completionProviderHandle =

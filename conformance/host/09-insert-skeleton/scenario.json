@@ -1,0 +1,6 @@
+{
+  "id": "insert-skeleton",
+  "invariant": "inserting a component applies one undoable edit",
+  "clock": 1700000000000,
+  "actions": [{ "type": "insertComponent", "name": "callout" }]
+}

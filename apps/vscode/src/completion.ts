@@ -14,10 +14,7 @@ import type {
   CompletionItem,
   ComponentDocumentation,
 } from '@markii/stdlib/editor';
-import {
-  LAYOUT_SECTION_LABEL,
-  STANDARD_SECTION_LABEL,
-} from './insert-component.js';
+import { completionOriginTag } from '@markii/host';
 
 /**
  * The characters that (re)open the completion popup while typing a
@@ -33,20 +30,6 @@ export const MARKII_COMPLETION_TRIGGER_CHARACTERS = [
   '"',
   ' ',
 ] as const;
-
-/**
- * The small origin label for a component completion row: `'standard'` or
- * `'layout'` (the same vocabulary `./insert-component.ts`'s picker
- * sections use, lower-cased to read as an inline tag rather than a section
- * heading), or the owning pack's own name for a pack component. Empty
- * string for an attribute or value item, which has no `group`.
- */
-export function completionOriginTag(item: CompletionItem): string {
-  if (item.kind !== 'component') return '';
-  if (item.group === 'standard') return STANDARD_SECTION_LABEL.toLowerCase();
-  if (item.group === 'layout') return LAYOUT_SECTION_LABEL.toLowerCase();
-  return item.packName ?? '';
-}
 
 /**
  * The completion row's secondary text, shown inline beside the label in a

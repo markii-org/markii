@@ -185,13 +185,16 @@ focus moves. A focused, closed details block also shows a dim `enter to
 open` hint beside its summary, and `enter to close` once it is open. The
 engine renders one dim status line as the last line of the tree, naming
 the focused block and repeating the key legend; a host mounting the tree
-gets it for free and needs no status surface of its own.
+gets it for free and needs no status surface of its own. A tabs block is
+named by its active panel, so the line follows the reader across a switch.
 
-Only a tabs or details block at the top level of the document is
-focusable. One nested inside a card, callout, or figure renders as the
-string form of itself, exactly as it does in a static render, and is not
-part of the focus cycle. A self-drawing container's body is a fixed
-string by its own nature, so nothing inside one can be live.
+A tabs or details block is focusable at the top level of the document and
+inside a card or a figure, both of which are drawn with the layout
+engine's own borders and so can hold live children. One nested inside a
+callout renders as the string form of itself, exactly as it does in a
+static render, and is not part of the focus cycle: a callout marks its
+type with a colored bar rather than a frame, and a border cannot carry
+that color, so its body stays a fixed string.
 
 Interactivity is a property of the render, not of the note. The same
 document rendered through the string entry points is the flat page
@@ -388,8 +391,51 @@ to what the renderer does by default.
 ## Host responsibilities for scripting (L3)
 
 The libraries deliberately stop at the seam where application policy begins.
-An application that enables scripting owns the following, in rough order of
-importance:
+An application that enables scripting owns the responsibilities below, in
+rough order of importance.
+
+### One contract, three hosts
+
+The responsibilities are normative, but the way a host meets them does not
+have to be invented from scratch. The reference hosts factor every one of
+them behind a single interface, and a new host is easier to get right if it
+adopts the same split.
+
+The split has two halves. The first is a small set of primitives that only
+the host can provide, because each one is a real call into its own
+application: read a file, list a folder, write a file, ask the user one
+yes or no question, read and write device-local state, write one diagnostics
+line, and read the clock. The second half is everything built on top of
+those primitives, which is identical for every host: the tier gate, the
+grant flow and its prompt wording, the watchdog, pack discovery and
+installation, export, completion, hover, and component insertion. A host
+that supplies the first half gets the second half without writing it.
+
+Two properties make this work in practice, and both are worth copying.
+
+A primitive takes injected values rather than reaching for a global. The
+adapter in each reference host is a factory over the application objects it
+needs, so the same adapter can be constructed over test doubles. That is
+what lets one scenario corpus run against all three hosts and prove they
+behave alike, which is the only real defense against three hosts drifting
+apart. That corpus is `conformance/host/`, and like the rest of
+`conformance/` it is plain data: a note, an ordered list of actions with
+scripted answers to any prompt, and the outcome each action must produce.
+It records the exact questions a run asks, in order, because agreeing on
+what is asked before code runs matters more than agreeing on anything
+else.
+
+Capabilities are declared, not faked. A host that has no live cursor, no
+pack support, or no PDF writer says so by leaving that capability out, and
+every behavior needing it answers with a plain unsupported result and one
+diagnostics line. Returning an empty list or a silent no-op instead would
+make an absent feature look like a working one that found nothing, which is
+the failure the cleanliness rule exists to prevent. A host offering fewer
+capabilities is a supported host, not an unfinished one.
+
+The shared layer is internal to this repository and is not published, so
+these paragraphs describe a shape to copy rather than a dependency to take.
+The responsibilities below are what conformance is measured against.
 
 1. **A terminatable isolate.** Run scripts in a Web Worker or worker thread
    with an external wall-clock watchdog that terminates it on overrun. This
@@ -422,6 +468,11 @@ importance:
    Re-validate stored hosts when you read them back, so a record written by
    an older or buggy version cannot reintroduce a host your current checks
    would reject.
+   Every question a run asks is a yes or no question, and the wording of
+   each one is fixed rather than left to the host, so a host implements one
+   prompt primitive instead of one prompt per question. A host whose only
+   available surface cannot block and wait for an answer denies instead of
+   assuming consent.
 3. **A bounded network capability.** The `net` implementation is the real
    allowlist boundary, so it enforces it: resolve redirects yourself and
    check every hop's host before requesting it, and bound each response to

@@ -24,11 +24,13 @@ import {
   EXPORT_HTML_REVEAL_LABEL,
   EXPORT_HTML_SAVE_DIALOG_TITLE,
   EXPORT_HTML_SAVE_LABEL,
-  exportHtmlDefaultFileName,
-  exportHtmlDiagnosticLines,
-  exportHtmlResultMessage,
 } from './export-html.js';
-import type { HtmlExportOutcome } from './export-html.js';
+import {
+  exportDefaultFileName,
+  exportDiagnosticLines,
+  exportResultMessage,
+} from '@markii/host';
+import type { NoteFileExportOutcome } from '@markii/host';
 import {
   EXPORT_CASCADE_FILTERS,
   EXPORT_CASCADE_NO_DOCUMENT_MESSAGE,
@@ -65,13 +67,7 @@ import {
 } from './resource-roots.js';
 import { buildWebviewHtml, createNonce } from './webview-html.js';
 import {
-  ALLOW_LABEL,
-  DONT_ALLOW_LABEL,
-  UNKNOWN_HOSTS_PROMPT_MESSAGE,
   clearGrantForDocument,
-  hostPromptMessage,
-  manyHostsPromptMessage,
-  spawnRun as spawnRunHost,
   readPersistedValues,
   runOnce,
   staleValuesForRehydration,
@@ -85,31 +81,33 @@ import {
   buildNoteExport,
   noteHasScripts,
   MAX_EMBEDDED_IMAGE_BYTES,
+  formatRunFailureLines,
+  promptsFromAdapter,
+  spawnRunViaAdapter,
+  HOST_RUN_TIMEOUT_MS,
+  MIN_REFRESH_INTERVAL_SECONDS,
+  scheduledRefreshNotStartedLine,
+  scriptsDisabledDiagnosticLine,
+  scriptsDisabledNotice,
+  VSCODE_LABELS,
 } from '@markii/host';
 import type {
   CascadeLinkResolver,
   CascadeNoteReader,
   ExportBodyResult,
   ExportImageReader,
+  HostPromptRequest,
   RunOnceResult,
-  RunResult,
-  SpawnRunOptions,
 } from '@markii/host';
-import { formatRunFailureLines } from './run-diagnostics.js';
+import { createVSCodeHostAdapter } from './host-adapter.js';
 import { resolveWorkerPath } from './worker-path.js';
 import type { RunTrigger, StoredValue } from '@markii/runtime';
-import { MIN_REFRESH_INTERVAL_SECONDS } from './refresh-interval.js';
 import {
   DEFAULT_PREVIEW_WIDTH,
   normalizeHideScriptBlocks,
   normalizePreviewWidth,
 } from './preview-width.js';
 import type { PreviewWidth } from './preview-width.js';
-import {
-  SCHEDULED_REFRESH_NOT_STARTED_LINE,
-  scriptsDisabledDiagnosticLine,
-  scriptsDisabledNotice,
-} from './script-execution.js';
 import { loadPackContext } from './packs/pack-context.js';
 import type { PackContext } from './packs/pack-context.js';
 import {
@@ -127,24 +125,37 @@ import {
  */
 
 const VIEW_TYPE = 'markii.preview';
-/** External wall-clock budget for one `markii.runScripts` press — forwarded verbatim to `spawnRun`'s own watchdog (`@markii/host`'s `run/run-host.ts`); the worker cannot influence or extend it. */
-const RUN_TIMEOUT_MS = 15_000;
 
 /**
- * This extension's own `spawnRun` adapter: `@markii/host`'s `spawnRun`
- * (`spawnRunHost`, imported above) takes an explicit `workerPath` rather
- * than guessing a host's bundle layout — see that package's `run-host.ts`
- * doc comment. `./worker-path.ts`'s `resolveWorkerPath` is THIS
- * extension's answer for the packaged case (`dist/run/worker.js`); when it
- * returns `undefined` (dev/Vitest, no `dist/` built yet), the explicit
- * `undefined` still reaches `spawnRunHost` and its own `defaultWorkerPath`
- * dev fallback (the sibling `worker-entry.ts` run via `tsx`) takes over,
- * exactly as it did before this adapter existed.
+ * This extension's `HostAdapter.prompt` implementation for the Run path's
+ * grant flow: a modal information message with both `request.allowLabel`
+ * and `request.denyLabel` as its actions (the exact shape every grant
+ * prompt used before this adapter existed). Resolves `false` on dismiss,
+ * exactly like a declined prompt.
  */
-function spawnRun(options: SpawnRunOptions): Promise<RunResult> {
-  return spawnRunHost({
-    ...options,
-    workerPath: options.workerPath ?? resolveWorkerPath(),
+async function promptViaModal(request: HostPromptRequest): Promise<boolean> {
+  const choice = await vscode.window.showInformationMessage(
+    request.message,
+    { modal: true },
+    request.allowLabel,
+    request.denyLabel,
+  );
+  return choice === request.allowLabel;
+}
+
+/**
+ * This extension's `HostAdapter` for the Run path: `./worker-path.ts`'s
+ * `resolveWorkerPath` supplies the packaged worker path (`dist/run/worker.js`),
+ * falling back to `@markii/host`'s own dev fallback when it resolves to
+ * `undefined` (dev/Vitest, no `dist/` built yet) — `createVSCodeHostAdapter`
+ * owns that fallback, so this call site no longer duplicates it.
+ */
+function runHostAdapter(context: vscode.ExtensionContext) {
+  return createVSCodeHostAdapter({
+    memento: context.workspaceState,
+    prompt: promptViaModal,
+    diagnostics: (line) => diagnosticsChannel?.appendLine(line),
+    workerPath: resolveWorkerPath,
   });
 }
 /** The `when`-clause context key `package.json`'s `markii.runScripts` menu entries gate on — kept in sync with true whenever a preview panel exists, false once it's disposed. */
@@ -1199,7 +1210,7 @@ async function createPreview(
     // GitHub issue #34: a configured interval plus script execution off is
     // not an error, but it must not be mute either — the note would simply
     // stop updating with no explanation anywhere.
-    logScriptExecutionLine(SCHEDULED_REFRESH_NOT_STARTED_LINE);
+    logScriptExecutionLine(scheduledRefreshNotStartedLine(VSCODE_LABELS));
   } else if (intervalMs !== undefined) {
     preview.refreshTimer = setInterval(() => {
       if (active !== preview) return;
@@ -1469,47 +1480,6 @@ async function openPreviewForUri(
   }
 }
 
-/** Prompts once for a specific host, with the normative modal wording (`run/grant-flow.ts`'s `hostPromptMessage`) and the Allow / Don't allow button pair. */
-async function promptHostAdapter(
-  host: string,
-  declaredHosts: readonly string[],
-): Promise<boolean> {
-  const choice = await vscode.window.showInformationMessage(
-    hostPromptMessage(host, declaredHosts),
-    { modal: true },
-    ALLOW_LABEL,
-    DONT_ALLOW_LABEL,
-  );
-  return choice === ALLOW_LABEL;
-}
-
-/** Prompts once for the "this note builds a network address dynamically" consent gate (`run/grant-flow.ts`'s `UNKNOWN_HOSTS_PROMPT_MESSAGE`). */
-async function promptUnknownHostsAdapter(): Promise<boolean> {
-  const choice = await vscode.window.showInformationMessage(
-    UNKNOWN_HOSTS_PROMPT_MESSAGE,
-    { modal: true },
-    ALLOW_LABEL,
-    DONT_ALLOW_LABEL,
-  );
-  return choice === ALLOW_LABEL;
-}
-
-/**
- * Prompts once for the PROMPT-STORM guard's consolidated "many hosts" gate
- * (`run/grant-flow.ts`'s `MAX_HOST_PROMPTS`/`manyHostsPromptMessage`) instead
- * of opening one modal per host once a note's distinct static host count
- * exceeds the cap.
- */
-async function promptManyHostsAdapter(hostCount: number): Promise<boolean> {
-  const choice = await vscode.window.showInformationMessage(
-    manyHostsPromptMessage(hostCount),
-    { modal: true },
-    ALLOW_LABEL,
-    DONT_ALLOW_LABEL,
-  );
-  return choice === ALLOW_LABEL;
-}
-
 /**
  * The `markii.runScripts` command handler: runs the currently previewed
  * document's scripts once (grant flow, then `spawnRun`) and posts the
@@ -1630,12 +1600,12 @@ function logScriptExecutionLine(line: string): void {
  * happens at all, and re-enabling it must not silently widen anything.
  */
 function blockRun(preview: ActivePreview, trigger: RunTrigger): void {
-  logScriptExecutionLine(scriptsDisabledDiagnosticLine(trigger));
+  logScriptExecutionLine(scriptsDisabledDiagnosticLine(trigger, VSCODE_LABELS));
   if (trigger === 'scheduled' && preview.refreshTimer !== undefined) {
     clearInterval(preview.refreshTimer);
     preview.refreshTimer = undefined;
   }
-  const notice = scriptsDisabledNotice(trigger);
+  const notice = scriptsDisabledNotice(trigger, VSCODE_LABELS);
   if (notice) void vscode.window.showInformationMessage(notice);
 }
 
@@ -1679,6 +1649,7 @@ async function runWithTrigger(
   const bundleOptions = source.bundle
     ? bundleOptionsFor(context, source.bundle)
     : undefined;
+  const adapter = runHostAdapter(context);
 
   try {
     const result = await runOnce({
@@ -1688,12 +1659,10 @@ async function runWithTrigger(
       netPolicy: {
         allowRestrictedAddresses: allowPrivateNetworkAddresses(),
       },
-      memento: context.workspaceState,
-      promptHost: promptHostAdapter,
-      promptUnknownHosts: promptUnknownHostsAdapter,
-      promptManyHosts: promptManyHostsAdapter,
-      spawnRun,
-      timeoutMs: RUN_TIMEOUT_MS,
+      memento: adapter.memento,
+      ...promptsFromAdapter(adapter),
+      spawnRun: (options) => spawnRunViaAdapter(adapter.isolate, options),
+      timeoutMs: HOST_RUN_TIMEOUT_MS,
       // Omitted entirely (not an empty object) when no packs are
       // installed: `@markii/lua`'s `require` classifies a pack-namespaced
       // `require` differently depending on whether a resolver exists at
@@ -1734,7 +1703,19 @@ async function runWithTrigger(
     logRunFailures(trigger, result.failureDetails);
     logNetDeclarationDiagnostics(trigger, result.netDeclarationDiagnostics);
 
-    const lastRun = { trigger, ranAt: Date.now(), ok: true as const };
+    // `ok` means "no script failed", the same thing it means on every
+    // other host, so one note's run marker reads the same way whichever
+    // application opened it. A per-script failure also has its own value
+    // marker and its own diagnostics line; this is the run's own summary,
+    // and a summary that said "ran" while a script failed would be the
+    // quiet kind of success AGENTS.md's cleanliness rule rules out.
+    // The clock comes from the adapter so a fixed clock makes the trace
+    // reproducible.
+    const lastRun = {
+      trigger,
+      ranAt: adapter.now(),
+      ok: result.failures.length === 0,
+    };
     const message: ValuesMessage = {
       type: 'values',
       revision,
@@ -1892,12 +1873,12 @@ function requestExportBody(
  * failure's two homes (AGENTS.md's "clean is not silent"). The popup carries
  * the short sentence; the verbatim reason only ever lands here.
  */
-function logExportDiagnostics(outcome: HtmlExportOutcome): void {
+function logExportDiagnostics(outcome: NoteFileExportOutcome): void {
   if (!diagnosticsChannel) return;
   diagnosticsChannel.appendLine(
     `Markii: HTML export at ${new Date().toISOString()}`,
   );
-  for (const line of exportHtmlDiagnosticLines(outcome)) {
+  for (const line of exportDiagnosticLines(outcome)) {
     diagnosticsChannel.appendLine(`  ${line}`);
   }
 }
@@ -1932,7 +1913,7 @@ function panelHasWebviewPacks(preview: ActivePreview): boolean {
  *   then comes out as that engine's ordinary unknown-component fallback, a
  *   labeled box with the author's inner markdown still rendered inside it.
  *   This is documented behavior, not a failure, so it is not reported as
- *   one — see `export-html.ts`'s `exportHtmlDiagnosticLines` for exactly
+ *   one — see `@markii/host`'s `exportDiagnosticLines` for exactly
  *   how each case is worded on the diagnostics surface. The user-facing
  *   popup never distinguishes the two engines; only the "Markii" output
  *   channel does.
@@ -1956,7 +1937,7 @@ function panelHasWebviewPacks(preview: ActivePreview): boolean {
  * self-contained wherever it is saved. An image outside the note's own
  * folder and every open workspace folder, one over `MAX_EMBEDDED_IMAGE_BYTES`,
  * or an unsupported file type keeps its original source instead; a remote
- * image is untouched either way. See `exportHtmlDiagnosticLines` for how
+ * image is untouched either way. See `exportDiagnosticLines` for how
  * each of those is worded on the diagnostics surface.
  */
 export async function exportHtml(
@@ -1970,7 +1951,7 @@ export async function exportHtml(
     return;
   }
 
-  const defaultName = exportHtmlDefaultFileName(document.uri.path);
+  const defaultName = exportDefaultFileName(document.uri.path, 'html');
   const defaultUri =
     document.uri.scheme === 'untitled'
       ? undefined
@@ -1987,7 +1968,7 @@ export async function exportHtml(
     context.workspaceState,
     document.uri.toString(),
   );
-  let outcome: HtmlExportOutcome;
+  let outcome: NoteFileExportOutcome;
   try {
     // Issue #28 slice 2 follow-up: rendering pack components needs the
     // preview webview, and the original design silently fell back to the
@@ -2067,7 +2048,7 @@ export async function exportHtml(
   }
 
   logExportDiagnostics(outcome);
-  const message = exportHtmlResultMessage(outcome);
+  const message = exportResultMessage(outcome, VSCODE_LABELS);
   if (outcome.kind === 'failed') {
     void vscode.window.showWarningMessage(message);
     return;
