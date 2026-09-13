@@ -48,6 +48,7 @@ env:
     packages/markii-lua
     packages/platforms/markii-react
     packages/platforms/markii-html
+    packages/platforms/markii-ansi
 
 jobs:
   publish-npm:

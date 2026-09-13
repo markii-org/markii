@@ -6,6 +6,49 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-09-14
+
+The `@markii/*` packages and the VS Code extension ship this release as
+0.15.0, the Obsidian plugin as 0.12.0.
+
+### Added
+
+- **`@markii/ansi`: a terminal renderer.** A third platform engine beside
+  `@markii/react` and `@markii/html`, for a note that is read in a shell:
+  a command line tool, a CI log, a pager, a file someone will `cat`. It
+  consumes the same sanitized tree the other engines do and emits a plain
+  string, with `renderMarkToAnsi`, `renderMarkNodeToAnsi` and
+  `renderMarkInlineToAnsi` mirroring their counterparts. The whole standard
+  component set is there, drawn with box-drawing characters and block
+  characters: framed cards and tables, a bar-and-sparkline chart, side by
+  side row cells that stack when the terminal is narrow. The package depends
+  on `@markii/core` and `@markii/stdlib` and nothing else, so the ANSI
+  escapes, the display-width measurement and the box drawing are all its own.
+
+  Color is the caller's decision, not the engine's. It never reads
+  `process`, standard output, or the environment, so the same render is
+  correct going to a terminal, to a log file, and to a test; `detectColorLevel`
+  is exported for a caller that wants detection and honors `NO_COLOR`,
+  `FORCE_COLOR`, `TERM` and `COLORTERM`. Colors come from a theme that maps
+  every Tier 1 `doc.css` token, with a coverage test that fails when a new
+  token has no entry, the same rule the two host theme layers follow.
+
+  Author text can never put an escape sequence into a reader's terminal.
+  Every string is stripped of control characters before it is printed, so the
+  only escapes in the output are the engine's own, and a probe suite proves it
+  by stripping the permitted sequences and asserting nothing is left.
+
+- **`markii`, a command line tool** (`apps/cli`, not published yet; build it
+  from source). `markii view` renders a note, a directory bundle or a `.mkz`
+  to standard output, running its scripts first when it is talking to a real
+  terminal. `markii export` writes HTML through the same path the editor
+  hosts export with, the terminal rendering, or a plain CommonMark downgrade.
+  `markii run` runs a note's scripts once at the manual tier, prompting on the
+  terminal for each host the closure scan finds. It runs scripts through the
+  same shared, security-critical run path both editor hosts use, in a Node
+  worker thread with the same watchdog, and stores grants per device under the
+  platform's own configuration directory. There is no unattended-grant flag.
+
 ### Removed
 
 - **This repository's own GitHub Pages deployment of `apps/playground`.**

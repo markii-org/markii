@@ -1,0 +1,45 @@
+{
+  "name": "markii-cli",
+  "version": "0.15.0",
+  "description": "A terminal front end for Markii (.mk.md): view, export, and run a note's scripts from the command line.",
+  "keywords": [
+    "markdown",
+    "markii",
+    "mk.md",
+    "cli",
+    "terminal"
+  ],
+  "private": false,
+  "license": "MIT",
+  "author": "sadigaxund",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/markii-org/markii.git",
+    "directory": "apps/cli"
+  },
+  "bin": {
+    "markii": "./dist/markii.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc --noEmit -p tsconfig.json && node esbuild.config.mjs --production",
+    "test": "vitest run",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "@markii/ansi": "*",
+    "@markii/bundle": "*",
+    "@markii/core": "*",
+    "@markii/host": "*",
+    "@markii/lua": "*",
+    "@markii/runtime": "*",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.23.12"
+  }
+}

@@ -44,9 +44,10 @@ jobs:
   # does not compile) would sail through test/build/lint and only surface
   # for a real npm consumer. This job packs every library package exactly
   # as the release workflow does and installs the tarballs into a fresh
-  # out-of-tree project that imports the two ends of the dependency graph
-  # (@markii/core at the bottom, the zero-React @markii/html renderer at
-  # the top) and renders a real document through them.
+  # out-of-tree project that imports three points across the dependency
+  # graph (@markii/core at the bottom, the zero-React @markii/html renderer,
+  # and the zero-React @markii/ansi renderer) and renders a real document
+  # through each.
   packed-consumer:
     runs-on: ubuntu-latest
     steps:
@@ -67,7 +68,8 @@ jobs:
           for dir in packages/markii-core packages/markii-stdlib \
                      packages/markii-bundle packages/markii-pack \
                      packages/markii-runtime packages/markii-lua \
-                     packages/platforms/markii-react packages/platforms/markii-html; do
+                     packages/platforms/markii-react packages/platforms/markii-html \
+                     packages/platforms/markii-ansi; do
             name=$(node -p "require('./$dir/package.json').name")
             npm pack -w "$name" --pack-destination /tmp/markii-tarballs >/dev/null
           done
@@ -79,13 +81,15 @@ jobs:
           mkdir /tmp/markii-consumer && cd /tmp/markii-consumer
           npm init -y >/dev/null
           npm pkg set type=module
-          # All eight tarballs at once, so @markii/* dependency ranges
+          # All nine tarballs at once, so @markii/* dependency ranges
           # resolve against the packed versions rather than the registry.
           npm install /tmp/markii-tarballs/*.tgz react@18 react-dom@18 >/dev/null
           cat > smoke.mjs <<'SMOKE'
           import { parse, toHast } from '@markii/core';
           import { renderMarkToHtml } from '@markii/html';
           import { defaultHtmlRegistry } from '@markii/html/components';
+          import { renderMarkToAnsi } from '@markii/ansi';
+          import { defaultAnsiRegistry } from '@markii/ansi/components';
           import { createValueStore } from '@markii/runtime';
           const doc = [
             '# Packed consumer',
@@ -108,5 +112,14 @@ jobs:
             process.exit(1);
           }
           console.log('packed consumer render OK,', html.length, 'chars');
+          const ansi = renderMarkToAnsi(doc, defaultAnsiRegistry, undefined, undefined, {
+            width: 80,
+            color: 'never',
+          });
+          if (ansi.length === 0 || ansi.includes('failed to render document')) {
+            console.error('unexpected ansi render output:', ansi.slice(0, 400));
+            process.exit(1);
+          }
+          console.log('packed consumer ansi render OK,', ansi.length, 'chars');
           SMOKE
           node smoke.mjs

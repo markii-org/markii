@@ -76,7 +76,7 @@ Ways to use Markii with no coding:
 
 <table>
   <tr>
-    <td width="33%" valign="top" align="center">
+    <td width="25%" valign="top" align="center">
       <br>
       <img src="res/icons/playground.svg" width="40" height="40" alt="" /><br />
       <h4>Playground</h4>
@@ -85,7 +85,7 @@ Ways to use Markii with no coding:
       <a href="https://github.com/markii-org/markii-vault">Open the playground &rarr;</a>
       <br><br>
     </td>
-    <td width="33%" valign="top" align="center">
+    <td width="25%" valign="top" align="center">
       <br>
       <img src="res/icons/vscode-mark.png" width="40" height="40" alt="" /><br />
       <h4>VS Code extension</h4>
@@ -94,13 +94,22 @@ Ways to use Markii with no coding:
       <a href="https://marketplace.visualstudio.com/items?itemName=markii.markii-vscode">Get it on the Marketplace &rarr;</a>
       <br><br>
     </td>
-    <td width="33%" valign="top" align="center">
+    <td width="25%" valign="top" align="center">
       <br>
       <img src="res/icons/obsidian.svg" width="40" height="40" alt="" /><br />
       <h4>Obsidian plugin</h4>
       Markii components inside an Obsidian vault.
       <br /><br />
       <a href="https://github.com/markii-org/markii-obsidian/releases/latest">Download for Obsidian &rarr;</a>
+      <br><br>
+    </td>
+    <td width="25%" valign="top" align="center">
+      <br>
+      <img src="res/icons/terminal.svg" width="40" height="40" alt="" /><br />
+      <h4>Command line</h4>
+      View, export and run a note straight in the terminal.
+      <br /><br />
+      <a href="apps/cli/README.md">Build it from source &rarr;</a>
       <br><br>
     </td>
   </tr>
@@ -119,7 +128,7 @@ const view = renderMark(source, defaultRegistry);
 
 <table>
   <tr>
-    <td width="33%" valign="top" align="center">
+    <td width="25%" valign="top" align="center">
       <br>
       <img src="res/icons/react.svg" width="40" height="40" alt="" /><br />
       <h4>React</h4>
@@ -129,7 +138,7 @@ const view = renderMark(source, defaultRegistry);
       <br>
       <br>
     </td>
-    <td width="33%" valign="top" align="center">
+    <td width="25%" valign="top" align="center">
       <br>
       <img src="res/icons/html5.svg" width="40" height="40" alt="" /><br />
       <h4>Static HTML</h4>
@@ -139,11 +148,21 @@ const view = renderMark(source, defaultRegistry);
       <br>
       <br>
     </td>
-    <td width="33%" valign="top" align="center">
+    <td width="25%" valign="top" align="center">
+      <br>
+      <img src="res/icons/terminal.svg" width="40" height="40" alt="" /><br />
+      <h4>Terminal</h4>
+      <code>@markii/ansi</code> renders a note as ANSI text.
+      <br /><br />
+      <strong>Available</strong>
+      <br>
+      <br>
+    </td>
+    <td width="25%" valign="top" align="center">
       <br>
       <img src="res/icons/toolkit.svg" width="40" height="40" alt="" /><br />
       <h4>Other toolkits</h4>
-      Vue, terminal, native: the format is engine-neutral.
+      Vue, native, print: the format is engine-neutral.
       <br /><br />
       <em>Planned</em>
       <br>

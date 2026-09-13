@@ -110,6 +110,37 @@ packages/platforms/markii-html   the static HTML renderer (issue #2), a second
                      wrappers, and the data-bound stat/progress/chart/table — chart is
                      dependency-free SVG) + defaultHtmlRegistry; markup/classes
                      match @markii/react so doc.css is shared
+packages/platforms/markii-ansi   the terminal renderer, a third platform
+                        adapter for a note read in a shell (CLI, CI log,
+                        pager). Zero React, and dependencies exactly
+                        @markii/core + @markii/stdlib, so the escapes, width
+                        measurement and box drawing are all its own:
+  src/render.ts      hast → ANSI string walk; same unknown/form-mismatch
+                     fallback wording as the other engines, as a framed
+                     dim box; markdown nodes rendered to text
+  src/sanitize.ts    SECURITY CRITICAL: the one place control characters
+                     leave author text. The only escapes in the output are
+                     this engine's own (docs/security.md)
+  src/ansi.ts        ColorLevel/AnsiColor + the SGR and OSC 8 primitives,
+                     and detectColorLevel(env, isTTY). The engine NEVER
+                     reads process/stdout/env: 'auto' resolves to no color
+                     and a caller that wants detection asks for it
+  src/theme.ts       Tier 1 doc.css token → {ansi16, ansi256, truecolor};
+                     theme-coverage.test.ts fails on an unmapped token,
+                     same rule as the host theme layers
+  src/measure.ts     hand-written display width (combining 0, CJK/emoji 2),
+                     a documented approximation of UAX #11, no dependency
+  src/box.ts         wrap/pad/columns/frame/rule, all escape-aware
+  src/value-types.ts the local structural ValueStatus/FailureKind/store
+                     shapes, so nothing imports @markii/runtime at runtime;
+                     value-types.drift.test.ts pins them to the real ones
+  src/registry.ts    AnsiRegistry: (attrs, childrenText, ctx) → string; adds
+                     selfLayout for a component that draws its own box
+  src/components/    the standard set as text emitters + defaultAnsiRegistry;
+                     contract-drift.test.ts fails closed like @markii/react's
+  src/conformance.test.ts  the L1 corpus plus the committed
+                     conformance/render/*.txt (width 80, color never) and one
+                     *.ansi; scripts/regenerate-ansi-fixtures.ts is manual
 packages/markii-runtime host-side scripting glue (docs/scripting.md) — neutral, no React,
                         no wasmoon; stays runtime-agnostic (executor injected):
   src/store.ts       ValueStore + createValueStore (null-proto, hasOwn-guarded)
@@ -326,6 +357,23 @@ apps/vscode          the "Markii" VS Code extension (preview + Run + packs) — 
   src/packs/pack-diagnostics.ts  the lines written to the Markii output
                      channel: packs loaded, packs skipped and why,
                      deprecated relative markii.packs entries
+apps/cli             the "markii" command line tool, a third host and a
+                     consumer of @markii/ansi, never a renderer. Publishable
+                     but UNPUBLISHED: absent from build:dist and the release
+                     workflow until the user bootstraps it on npm. Bundled
+                     with esbuild like apps/vscode, carrying @markii/host's
+                     worker entry and wasmoon's glue.wasm in its own
+                     dist/run/, so it needs no runtime dependency at all
+                     (every @markii/* entry is a devDependency):
+  src/main.ts        the entry, exit codes (0/1/2/3), and with terminal.ts
+                     the ONLY module that reads env/argv/the terminal
+  src/args.ts        the hand-written parser; src/terminal.ts the IO seam
+  src/grant-store.ts the device-local GrantMemento: one state.json under the
+                     platform config dir, 0600, atomic, hostile-file safe
+  src/run-note.ts    runOnce through the shared path, manual tier only
+  src/export-note.ts html via @markii/host, ansi, and the md-plain downgrade
+  Loads no packs by design: a pack directive renders as the unknown
+  component fallback, like the static HTML export
 apps/obsidian        the "Markii" Obsidian plugin (desktop only) — an
                      app/consumer of @markii/react, never a renderer. A full
                      second host: preview, Run, packs, and in-place
@@ -417,7 +465,8 @@ apps/obsidian        the "Markii" Obsidian plugin (desktop only) — an
 Platform renderers live under `packages/platforms/*` (a workspace root alongside
 `packages/*` and `apps/*`); the neutral core packages stay directly under
 `packages/*`. Future non-React renderers go under `packages/platforms/` too.
-Consumer applications (the playground, the VS Code extension) go under
+Consumer applications (the playground, the VS Code extension, the Obsidian
+plugin, the CLI) go under
 `apps/*` — they consume platform renderers, they are not renderers themselves.
 
 Import rule: @markii/core must never import React or anything from @markii/react;
@@ -487,6 +536,9 @@ join the authoring side; nothing is built for that in advance.
   measured faster cold. One path, no divergence to maintain. It costs
   roughly 14 MB unpacked in the extension, which is acceptable there.
 
+- Command line tool only (`apps/cli`): `esbuild` (bundling) and `tsx`
+  (dev-only: spawns the TypeScript worker under Vitest), the same two
+  `apps/vscode` already carries. These never enter `packages/*`.
 - Obsidian plugin only (`apps/obsidian`, user-approved 2026-08-25):
   `obsidian` (API types, dev-only, external at build time) and `esbuild`
   (plugin bundling). These never enter `packages/*`.

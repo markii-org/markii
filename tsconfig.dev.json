@@ -43,6 +43,10 @@
       "@markii/html/components": [
         "packages/platforms/markii-html/src/components/index.ts"
       ],
+      "@markii/ansi": ["packages/platforms/markii-ansi/src/index.ts"],
+      "@markii/ansi/components": [
+        "packages/platforms/markii-ansi/src/components/index.ts"
+      ],
       "@markii/host": ["packages/markii-host/src/index.ts"],
       "@markii/host/browser": ["packages/markii-host/src/browser.ts"]
     }

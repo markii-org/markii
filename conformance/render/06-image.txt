@@ -1,0 +1,5 @@
+[a cat] (cat.png)
+
+alt: A good dog
+dog.png
+A good dog.

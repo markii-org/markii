@@ -407,6 +407,47 @@ tested, and the skills in `skills/` grade against this table.
 | `unattended-is-user-scoped` | A setting that can make scripts run without a user gesture is user-scope only, so a workspace cannot enable unattended execution for whoever opens it. | [Triggers cap capabilities](#triggers-cap-capabilities); the extension's `contributes.configuration` scopes |
 | `values-are-data` | A script value reaches the page as data only; its text never becomes markup, and a failure carries only its kind, never its text. | [Capabilities](#capabilities); the failure-presentation seam in `@markii/react` |
 
+## Escape sequences in terminal output
+
+A renderer that writes to a terminal has a boundary the page renderers do
+not. A terminal reads its input as a mixed stream of text and commands, so
+a byte sequence sitting in a note can move the cursor, repaint the screen,
+retitle the window, or open a hyperlink, purely by being printed. The note
+is untrusted text. Treating it as a stream the terminal may interpret would
+hand every note author a way to write on the reader's screen outside the
+document.
+
+The rule is absolute and narrow: the only escape sequences in `@markii/ansi`'s
+output are the ones `@markii/ansi` generated. Every string that reaches the
+output passes a sanitizer first. Inline text loses every C0 control including
+ESC, DEL, and every C1 control, with a tab, carriage return or line feed
+becoming a single space so words do not run together. Preformatted text
+inside a code fence keeps its line feeds and expands its tabs, and loses
+everything else in that set. A URL about to be written into a hyperlink
+sequence loses that whole set plus the space, because the sequence's own
+terminator is a control byte and a URL carrying one would close the engine's
+escape early and leave the rest to be read as commands.
+
+Two smaller rules follow from the same place. A hyperlink is emitted only
+when color is on and the destination passes the same URL check the other
+engines apply, so a refused scheme cannot become a clickable link and a
+terminal that would ignore the sequence is never asked to. Author text is
+never reinterpreted as markup: the engine consumes the tree `@markii/core`
+already sanitized and has no raw-output path, so an HTML node renders its
+text content and nothing else.
+
+The boundary is verified by executed probes rather than by review. A note
+carrying a CSI sequence, an OSC 8 hyperlink, a C1 control introducer, a bell,
+a carriage return, and a delete character, placed in body text, in a heading,
+in a code fence, in a link's visible text, in a link's destination, in an
+image's alt text, and in a directive attribute a component prints, is
+rendered at every color level. The output is then stripped of exactly the
+sequences the engine is allowed to produce, and the assertion is that no
+escape introducer, bell, or delete byte survives anywhere in what remains.
+That check is what makes the rule falsifiable rather than aspirational: it
+fails if any future component prints an author string without sanitizing it,
+not merely if the sanitizer itself regresses.
+
 ## Verification status of the reference sandbox
 
 The `@markii/lua` sandbox was audited adversarially in August 2026 (commit
@@ -606,8 +647,8 @@ followed.
 
 ### Turning script execution off
 
-Both hosts offer a switch that turns script execution off for one machine:
-`markii.scriptsDisabled` in VS Code, and a device-local `scriptsDisabled`
+Both editor hosts offer a switch that turns script execution off for one
+machine: `markii.scriptsDisabled` in VS Code, and a device-local `scriptsDisabled`
 setting in the Obsidian plugin. While it is on, no trigger runs a note's
 scripts, whether the user presses Run, opens a note with run on open
 enabled, or waits for a scheduled refresh. The check sits in the single

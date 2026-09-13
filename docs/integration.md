@@ -59,6 +59,12 @@ application. The split is:
   `renderMark`, and the standard component set. One consumer of core among possible many; it lives
   under `packages/platforms/` precisely so a sibling renderer for another
   toolkit has a place to sit.
+- `@markii/html`: the static string renderer. It emits an HTML document
+  for a note that has stopped changing, which is what publishing, CI,
+  email, and archives need. Zero React.
+- `@markii/ansi`: the terminal renderer. It emits text with optional ANSI
+  color for a note read in a shell. Zero React, and no dependencies beyond
+  core and stdlib.
 - `@markii/runtime`: the value store, run orchestration, vault store, and
   grant-key computation. Framework-free and runtime-agnostic; the script
   executor is injected.
@@ -108,6 +114,105 @@ files as values. All three route every path through the same jail, so none
 of them is a place to reimplement it, and all three enforce structure only:
 confining writes to `.cache/` is the script view's job, whichever storage it
 wraps. The memory form sits on the main entry, so a browser build can use it.
+
+## The terminal engine
+
+`@markii/ansi` renders a note to text. Reach for it when the reader is
+looking at a shell: a command line tool, a CI log, a pager, a file someone
+will `cat`. It consumes the same sanitized tree the other engines do and
+emits a plain string with `\n` line endings, so nothing about it is
+specific to one terminal emulator.
+
+Its three entry points mirror the other engines. `renderMarkToAnsi` takes
+document text, `renderMarkNodeToAnsi` takes one already parsed node or a
+whole parsed document, and `renderMarkInlineToAnsi` renders a lone inline
+directive without the paragraph wrapper. The registry argument is optional
+here, defaulting to the standard set:
+
+```ts
+import { renderMarkToAnsi } from '@markii/ansi';
+
+const text = renderMarkToAnsi(source, undefined, store, undefined, {
+  width: 100,
+  color: 'truecolor',
+});
+```
+
+The standard components live at the `@markii/ansi/components` subpath, as
+`defaultAnsiRegistry`, on the same principle as the other engines: an
+application bringing its own registry never pays for the standard set.
+
+### Color is the caller's decision
+
+The engine never reads the environment. It has no access to `process`, to
+standard output, or to any global that would tell it whether color is
+welcome, and that is deliberate: the same render has to be correct when it
+is going to a terminal, to a log file, and to a test. So it treats both
+`'never'` and the default `'auto'` as "emit no escapes at all", and a
+caller who wants detection asks for it:
+
+```ts
+import { detectColorLevel } from '@markii/ansi';
+
+const color = detectColorLevel(process.env, Boolean(process.stdout.isTTY));
+```
+
+`detectColorLevel` honors `NO_COLOR`, `FORCE_COLOR`, `TERM`, and
+`COLORTERM`, and returns no color for a destination that is not a terminal.
+Pass its answer back as the `color` option. The three explicit levels,
+`'16'`, `'256'` and `'truecolor'`, always mean what they say, so a caller
+that has already decided can skip detection entirely.
+
+Colors come from a theme, and the theme is the same contract the host style
+layers implement: every Tier 1 token in `doc.css` maps to one entry, given
+at all three depths so the engine never has to convert at render time. The
+four width tokens carry no color, because in a terminal they are column
+arithmetic rather than paint. `defaultAnsiTheme` is derived from `doc.css`'s
+light palette and a caller may pass another through the `theme` option. A
+coverage test fails when a new Tier 1 token has no entry, exactly as it does
+for the two host theme layers.
+
+### Width
+
+Layout is column arithmetic, so the engine needs to know how wide the page
+is. The `width` option defaults to 80. A command line tool should pass the
+real terminal width when it has one and fall back to 80 when it does not.
+
+Character width is measured by hand rather than by a dependency. Combining
+marks and zero width characters count as nothing, East Asian wide and
+fullwidth ranges and the common emoji blocks count as two, and everything
+else counts as one. Escape sequences are stripped before anything is
+measured. This is an approximation of the Unicode rules, not a full width
+table: a sequence joined into one glyph by zero width joiners measures as
+the sum of its parts, and will therefore be a little wider than it looks.
+The module says which ranges it knows, and the tests name each of them.
+
+### What a terminal cannot do
+
+Some of the format degrades on the way to text, and it degrades predictably.
+
+Tabs stack instead of switching, and a collapsible section renders open with
+a marker line, because there is nothing to click. An image renders as its
+alt text and its source, since the pixels cannot arrive. A link carries an
+OSC 8 hyperlink only when color is on and the destination passes the same
+URL check every engine applies, and otherwise prints its address in
+parentheses, which reads correctly whether or not the terminal understands
+hyperlinks. Marking an interactive element has no counterpart at all: text
+output has no control to mark, so the interactive attribute produces
+nothing rather than a marker that would promise something.
+
+Quiet markers work the way they do everywhere else, with one adjustment. A
+terminal has no tooltip, so the reason a value was declined is printed as
+dim text next to the component rather than hidden behind a hover, on its own
+line for a block component and inline for an inline one. The wording is
+shared with the static engine and lives in one module, so a failing name
+reads the same in a terminal as it does on a page. The same event still
+reaches `onDiagnostic`, and a host routes it to its own diagnostics surface.
+
+Author text can never put an escape sequence into the output. Every string
+that reaches the terminal has its control characters removed first, so the
+only escapes present are the ones the engine generated. [security.md](security.md)
+has the rule and its evidence.
 
 ## Theming a host
 
@@ -209,8 +314,8 @@ intended behavior.
 A host preference about what the reader sees, rather than about what a
 component is, belongs in the host's own theme layer, not in the renderer.
 Put a class on the document root and write one rule for it beside the token
-mapping. Hiding script markers works this way in both reference hosts: the
-renderer still emits every marker, and the host's rule hides `.mk-script`
+mapping. Hiding script markers works this way in both editor hosts: the renderer
+still emits every marker, and the host's rule hides `.mk-script`
 and nothing else, so value failure markers, run markers, and pack markers
 stay where they were. A preference that reached into the renderer instead
 would have to be an option defaulting to today's behavior, never a change
@@ -240,6 +345,13 @@ importance:
    it as the worker bundle does, but decide deliberately: a host that
    embeds the worker and leaves the wasm on disk runs scripts only where
    the install channel happened to copy the extra file.
+   A host that ships its own executable rather than plugging into someone
+   else's application has the easiest version of this problem and should
+   not invent a harder one: bundle the worker entry into the same output
+   directory as the program and copy the WebAssembly binary next to it, then
+   resolve both relative to the program's own location at run time. The
+   reference command line tool does exactly that, and falls back to running
+   the worker from source only in its own development and test runs.
 2. **The grant store and prompts.** Persist grants keyed by
    `computeGrantKey`'s executable-closure hash, re-prompt when the key
    changes, and word network prompts as "can send data to `<host>`".
@@ -294,7 +406,11 @@ importance:
    here. A failure recorded internally and reachable from neither is a bug.
    The VS Code extension uses an output channel named Markii; the Obsidian
    plugin uses the developer console with a notice for anything the user
-   must act on. Both expose a command that shows the current state.
+   must act on. Both expose a command that shows the current state. The
+   command line tool uses standard error, which keeps the diagnostics out of
+   the rendered note even when that note is being piped into another
+   program; it writes a failure line for every failed script always, and the
+   full detail behind a verbose flag.
    The renderers' `onDiagnostic` callback belongs here too: a quiet marker
    in the page is half of the contract, and the reason has to reach this
    surface as well. Deduplicate before writing, because a preview re-renders
@@ -359,7 +475,11 @@ importance:
     surface rather than presenting it as broken. The reference hosts split
     exactly here, and the split is deliberate. VS Code is the authoring
     host and compiles from source; Obsidian is the consuming host, carries
-    no compiler at all, and loads the prebuilt form only.
+    no compiler at all, and loads the prebuilt form only. A host may also
+    load no packs whatsoever, which is a third supported position rather
+    than an unfinished one: every pack directive then renders as the
+    unknown-component box, the note stays readable, and the host says so
+    where its users will look. The reference command line tool sits here.
 12. **Storage that does not travel.** Anything that authorizes execution or
     network access, meaning grants, auto-run, any scheduled interval, the
     list of packs a device loads, and any switch that decides whether
@@ -367,6 +487,12 @@ importance:
     that moves with the content. VS Code's application-scoped settings and global state satisfy
     this. Obsidian has no equivalent, because plugin data lives inside the
     vault and rides Sync, so the plugin uses device-local storage instead.
+    A host with no application around it writes its own file, under the
+    per-user configuration directory its platform defines, with permissions
+    that keep it to that user. Name that file for everything it holds
+    rather than for grants alone: the same store carries each note's last
+    values and its run record, and a reader who deletes it expecting to
+    reset permissions should not be surprised by what else goes.
     Getting this wrong hands whoever receives a copy of the content
     authority they never granted.
 
@@ -387,8 +513,8 @@ only, never while typing, and it stays quiet: `@markii/stdlib/editor`'s
 scanner acts only on a document whose fences pair cleanly from the top of
 the file, and leaves anything ambiguous alone rather than guessing.
 
-Completion and hover are note-authoring features, so both hosts carry them,
-the same way both carry Insert Component. A host implements them against
+Completion and hover are note-authoring features, so both editor hosts carry
+them, the same way both carry Insert Component. A host implements them against
 `@markii/stdlib/editor`'s `completionAt` and `hoverAt`, which read the line
 around the cursor and return the items and the range to replace. A host
 never re-derives directive parsing of its own.
@@ -524,13 +650,23 @@ code, so a host should treat an element without the attribute as text.
 
 ## Exporting a note
 
-A host can hand the reader a file rather than a view. Both reference hosts do:
-VS Code writes an HTML file at a path the user picks, and Obsidian writes one
-beside the note in the vault, or prints it straight to PDF.
+A host can hand the reader a file rather than a view. All three reference
+hosts do. VS Code writes an HTML file at a path the user picks, Obsidian
+writes one beside the note in the vault or prints it straight to PDF, and the
+command line tool writes one at the path its caller names, optionally as the
+terminal rendering or as a plain CommonMark downgrade instead of HTML.
+
+The downgrade is worth naming as its own thing, because it is the one export
+that is not a rendering. It rewrites the author's own source: a container
+directive loses its fence lines and keeps its inner markdown, a leaf directive
+goes away, a text directive becomes its own text, and script fences are
+dropped. What comes out is readable markdown for a tool that knows nothing
+about Markii, and it is not what any component would have shown. A host that
+offers it says so.
 
 An export is not a screenshot of the preview, but it renders the same
 components. A host that already has a renderer and a loaded registry in front
-of it, which both reference hosts do for their preview, renders the export
+of it, which both editor hosts do for their preview, renders the export
 body with exactly that registry and hands the resulting markup to
 `@markii/host`'s `composeNoteHtmlExport`, this repository's own shared host
 layer, which is not published. A host with nothing to render
@@ -589,7 +725,7 @@ surface named in the host checklist above.
 
 ### Exporting a linked set
 
-One note rarely stands alone. Both reference hosts can follow the links out
+One note rarely stands alone. Both editor hosts can follow the links out
 of a note, export every note they reach, and write the whole set as one zip
 archive. Obsidian writes the archive beside the root note in the vault. VS
 Code asks where to save it, offering the root note's own name with a `.zip`
