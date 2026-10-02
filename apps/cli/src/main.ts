@@ -65,8 +65,9 @@ function resolveCliVersion(): string {
 const HELP_TEXT = `markii: a terminal front end for Markii (.mk.md) notes.
 
 Usage:
-  markii view <file> [--width <n>] [--color <auto|never|16|256|truecolor>] [--no-run] [--static]
-  markii export <file> --format <html|ansi|md-plain> -o <file>
+  markii view <file> [--width <n>] [--color <auto|never|16|256|truecolor>]
+              [--box <unicode|ascii>] [--no-run] [--static]
+  markii export <file> --format <html|ansi|md-plain> -o <file> [--box <unicode|ascii>]
   markii run <file>
 
 Global flags:
@@ -78,6 +79,9 @@ view flags:
   --width <n>      Render at this column width. Defaults to the terminal
                     width, or 80 when that is not available.
   --color <mode>   auto (default), never, 16, 256, or truecolor.
+  --box <style>    unicode or ascii. ascii draws frames, rules, and markers
+                    with plain ASCII characters. Defaults to ascii when TERM
+                    is dumb or the locale is not UTF-8, unicode otherwise.
   --no-run         Never run the note's scripts, even in an interactive
                     terminal; render with cached values only.
   --static         Render once and exit, even when both stdin and stdout
@@ -92,6 +96,7 @@ exits instead.
 export flags:
   --format <fmt>   html, ansi, or md-plain. Required.
   -o, --output <file>   Where to write the exported file. Required.
+  --box <style>    For --format ansi: unicode (default) or ascii.
 
 Grants for a note's scripts are stored per device; see README.md for the
 exact location on each platform. A grant cannot be given non-interactively.
@@ -143,6 +148,7 @@ const defaultViewDeps: ViewDeps = {
         ...(input.colorFlag !== undefined
           ? { colorFlag: input.colorFlag }
           : {}),
+        ...(input.boxFlag !== undefined ? { boxFlag: input.boxFlag } : {}),
         store: input.store,
         onDiagnostic: input.onDiagnostic,
         onExit,
@@ -240,6 +246,7 @@ async function runViewCommand(
     const output = await renderNote(note.text, terminal, {
       ...(command.width !== undefined ? { widthFlag: command.width } : {}),
       ...(command.color !== undefined ? { colorFlag: command.color } : {}),
+      ...(command.box !== undefined ? { boxFlag: command.box } : {}),
       store,
       onDiagnostic: diagnostics.onDiagnostic,
     });
@@ -262,6 +269,7 @@ async function runViewCommand(
     terminal,
     ...(command.width !== undefined ? { widthFlag: command.width } : {}),
     ...(command.color !== undefined ? { colorFlag: command.color } : {}),
+    ...(command.box !== undefined ? { boxFlag: command.box } : {}),
     store,
     onDiagnostic: diagnostics.onDiagnostic,
   });
@@ -313,6 +321,9 @@ async function runExportCommand(
   const renderAnsi = (text: string): Promise<string> =>
     renderNote(text, terminal, {
       colorFlag: command.color ?? 'never',
+      // An exported file is read in some other terminal, so like its color
+      // it does not follow this one's environment: unicode unless asked.
+      boxFlag: command.box ?? 'unicode',
       store: createValueStore(values ?? {}),
       onDiagnostic: renderDiagnostics.onDiagnostic,
     });

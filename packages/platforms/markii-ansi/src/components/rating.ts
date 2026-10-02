@@ -20,13 +20,13 @@ function clamp(value: number, min: number, max: number): number {
  * degrades gracefully instead of throwing. Terminal form: filled (`★`) and
  * empty (`☆`) stars, one per position up to `max`.
  */
-export const Rating: AnsiComponent = ({ attributes }) => {
+export const Rating: AnsiComponent = ({ attributes, ctx }) => {
   const max = clamp(parseCount(attributes.max, DEFAULT_MAX), MIN_MAX, MAX_MAX);
   const value = clamp(parseCount(attributes.value, 0), 0, max);
 
   let stars = '';
   for (let index = 0; index < max; index += 1) {
-    stars += index < value ? '★' : '☆';
+    stars += index < value ? ctx.glyphs.starFilled : ctx.glyphs.starEmpty;
   }
   return stars;
 };

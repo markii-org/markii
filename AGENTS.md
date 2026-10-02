@@ -128,8 +128,9 @@ packages/platforms/markii-ansi   the terminal renderer, a third platform
   src/interactive.tsx focus (accent + a leading glyph), tab switching,
                      details folding, the dim status line with the key
                      legend; q calls the host's onExit, never process.exit.
-                     A tabs/details inside a string-framed block (card,
-                     callout, figure, cell) gets no focus id: read-only
+                     A tabs/details inside a string-framed block (a
+                     callout, or any body drawn as a string) gets no
+                     focus id: read-only
   src/sanitize.ts    SECURITY CRITICAL: the one place control characters
                      leave author text. The engine uses NO Ink color/style
                      props and never sets chalk.level, so the only escapes
@@ -139,6 +140,12 @@ packages/platforms/markii-ansi   the terminal renderer, a third platform
                      embedded newline, so a styled block re-opens per line)
   src/theme.ts       Tier 1 doc.css token -> {ansi16, ansi256, truecolor};
                      theme-coverage.test.ts fails on an unmapped token
+  src/glyphs.ts      the ONE glyph table: every frame, rule, bar, marker,
+                     icon and the key legend, as a unicode set and a
+                     7-bit ascii set behind the `box` option (components
+                     read ctx.glyphs, never a literal); glyphs.test.ts
+                     renders the whole corpus in ascii and fails on any
+                     byte above 0x7f
   src/text-grid.ts   the private measure/pad/wrap/frame helpers the
                      self-drawing components (card, callout, details) still
                      need. NOT exported

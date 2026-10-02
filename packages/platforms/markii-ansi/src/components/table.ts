@@ -116,6 +116,7 @@ export const Table: AnsiComponent = ({ attributes, ctx }) => {
     header,
     rows,
     boxWidth,
+    ctx.glyphs,
     (text) => ctx.bold(text),
     align,
   );

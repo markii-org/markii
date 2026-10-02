@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { resolveColor, resolveWidth } from './render-note.js';
+import { createFakeTerminal } from './test-terminal.js';
+import {
+  detectBoxStyle,
+  renderNote,
+  resolveBox,
+  resolveColor,
+  resolveWidth,
+} from './render-note.js';
 
 describe('resolveWidth', () => {
   it('prefers an explicit --width', () => {
@@ -64,5 +71,50 @@ describe('resolveColor', () => {
   it('passes through 16 and 256 explicitly', () => {
     expect(resolveColor('16', { env: {}, stdoutIsTty: false })).toBe('16');
     expect(resolveColor('256', { env: {}, stdoutIsTty: false })).toBe('256');
+  });
+});
+
+describe('detectBoxStyle', () => {
+  it('is unicode with no locale or TERM to go on', () => {
+    expect(detectBoxStyle({})).toBe('unicode');
+  });
+
+  it('is ascii for TERM=dumb, whatever the locale', () => {
+    expect(detectBoxStyle({ TERM: 'dumb', LANG: 'en_US.UTF-8' })).toBe('ascii');
+  });
+
+  it('follows the first locale variable that is set: LC_ALL, LC_CTYPE, LANG', () => {
+    expect(detectBoxStyle({ LANG: 'en_US.UTF-8' })).toBe('unicode');
+    expect(detectBoxStyle({ LANG: 'C' })).toBe('ascii');
+    expect(detectBoxStyle({ LC_ALL: 'POSIX', LANG: 'en_US.UTF-8' })).toBe(
+      'ascii',
+    );
+    expect(detectBoxStyle({ LC_CTYPE: 'de_DE.utf8', LANG: 'C' })).toBe(
+      'unicode',
+    );
+    expect(detectBoxStyle({ LC_ALL: '', LANG: 'C.UTF-8' })).toBe('unicode');
+  });
+});
+
+describe('resolveBox', () => {
+  it('prefers an explicit --box over the environment', () => {
+    expect(resolveBox('unicode', { env: { TERM: 'dumb' } })).toBe('unicode');
+    expect(resolveBox('ascii', { env: { LANG: 'en_US.UTF-8' } })).toBe('ascii');
+  });
+
+  it('detects from the environment when unset', () => {
+    expect(resolveBox(undefined, { env: { LANG: 'C' } })).toBe('ascii');
+  });
+});
+
+describe('renderNote box style', () => {
+  it('draws a card with ASCII frames on a dumb terminal', async () => {
+    const out = await renderNote(
+      ':::card{title="T"}\nx\n:::\n',
+      createFakeTerminal({ env: { TERM: 'dumb' }, columns: 20 }),
+      { colorFlag: 'never' },
+    );
+    expect(out.split('\n')[0]).toBe('+- T --------------+');
+    expect([...out].every((ch) => ch.charCodeAt(0) < 0x80)).toBe(true);
   });
 });

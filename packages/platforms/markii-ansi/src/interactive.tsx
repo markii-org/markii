@@ -103,9 +103,6 @@ export interface FocusableDescriptor {
   label: string;
 }
 
-/** The key legend shown on the status line, identical regardless of what is focused. */
-const KEY_LEGEND = '↑↓/jk focus  ←→/tab switch  enter open/close  q quit';
-
 export interface InteractiveRootProps {
   /** Every focusable component the walk assigned a `focusId` to, in `focusId` order (empty for none). */
   focusables: readonly FocusableDescriptor[];
@@ -113,6 +110,8 @@ export interface InteractiveRootProps {
   onExit?: () => void;
   color: ColorLevel;
   theme: AnsiTheme;
+  /** The key legend on the status line, identical regardless of what is focused: the render's `GlyphSet.keyLegend`, so it follows the box style. */
+  keyLegend: string;
   children: ReactNode;
 }
 
@@ -132,6 +131,7 @@ export function InteractiveRoot({
   onExit,
   color,
   theme,
+  keyLegend,
   children,
 }: InteractiveRootProps): ReactNode {
   const focusableCount = focusables.length;
@@ -193,7 +193,7 @@ export function InteractiveRoot({
   const statusLabel = focused
     ? `${focused.kind} "${focusedLabel}"`
     : 'nothing focusable';
-  const statusLine = dim(`${statusLabel}  ${KEY_LEGEND}`, color);
+  const statusLine = dim(`${statusLabel}  ${keyLegend}`, color);
 
   return (
     <FocusContext.Provider value={api}>

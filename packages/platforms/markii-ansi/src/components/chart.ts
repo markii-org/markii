@@ -65,16 +65,14 @@ function resolvePoints(
   return [];
 }
 
-/** `▁▂▃▄▅▆▇█`, the eight-step block-height ramp a line chart's sparkline row is built from. */
-const SPARKLINE_CHARS = '▁▂▃▄▅▆▇█';
-
 function formatPoint(value: number): string {
   return Number.isFinite(value)
     ? String(Math.round(value * 100) / 100)
     : String(value);
 }
 
-function sparkline(points: readonly number[]): string {
+/** One sparkline row over `ramp`, the render's eight-step `GlyphSet.sparkline`. */
+function sparkline(points: readonly number[], ramp: string): string {
   const min = Math.min(...points);
   const max = Math.max(...points);
   const range = max - min;
@@ -82,15 +80,15 @@ function sparkline(points: readonly number[]): string {
     .map((point) => {
       const normalized = range > 0 ? (point - min) / range : 0.5;
       const index = Math.min(
-        SPARKLINE_CHARS.length - 1,
-        Math.max(0, Math.round(normalized * (SPARKLINE_CHARS.length - 1))),
+        ramp.length - 1,
+        Math.max(0, Math.round(normalized * (ramp.length - 1))),
       );
-      return SPARKLINE_CHARS[index];
+      return ramp[index];
     })
     .join('');
 }
 
-/** `██████` bar length for `point`, scaled against the series' largest magnitude and capped at `budget` columns. */
+/** A bar's length for `point`, scaled against the series' largest magnitude and capped at `budget` columns. */
 function barLength(
   point: number,
   maxMagnitude: number,
@@ -108,7 +106,7 @@ function barLength(
  * chart. Data binding (§8): a bound `data` array of numbers (or `{value}`
  * objects) takes priority over the static `values=` attribute. Terminal
  * form: a `line` chart is a single sparkline row, a `bar` chart is one
- * horizontal `█` bar per point.
+ * horizontal bar per point.
  */
 export const Chart: AnsiComponent = ({ attributes, ctx }) => {
   const { data, dataStatus, dataFailureKind } = ctx;
@@ -137,7 +135,7 @@ export const Chart: AnsiComponent = ({ attributes, ctx }) => {
   if (kind === 'line') {
     const min = ctx.dim(formatPoint(Math.min(...points)));
     const max = ctx.dim(formatPoint(Math.max(...points)));
-    return `${min} ${sparkline(points)} ${max}${styledSuffix}`;
+    return `${min} ${sparkline(points, ctx.glyphs.sparkline)} ${max}${styledSuffix}`;
   }
 
   const labels = points.map((point) => formatPoint(point));
@@ -145,7 +143,9 @@ export const Chart: AnsiComponent = ({ attributes, ctx }) => {
   const budget = Math.max(1, ctx.width - labelWidth - 1);
   const maxMagnitude = Math.max(...points.map((point) => Math.abs(point)));
   const lines = points.map((point, index) => {
-    const bar = '█'.repeat(barLength(point, maxMagnitude, budget));
+    const bar = ctx.glyphs.barFilled.repeat(
+      barLength(point, maxMagnitude, budget),
+    );
     return `${padText(labels[index]!, labelWidth, 'right')} ${bar}`;
   });
   return `${lines.join('\n')}${styledSuffix}`;

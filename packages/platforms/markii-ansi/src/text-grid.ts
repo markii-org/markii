@@ -20,6 +20,8 @@
  * documented limitation).
  */
 
+import type { FrameEdges, GlyphSet } from './glyphs.js';
+
 /** SGR: `ESC [ ... m`. */
 const SGR_PATTERN = /\x1b\[[0-9;]*m/g;
 /** OSC 8 hyperlink open/close: `ESC ] 8 ; ; ... BEL`. */
@@ -218,20 +220,20 @@ export interface FrameOptions {
   style: 'solid' | 'dashed';
   title?: string;
   width: number;
+  /** The render's glyph set (`./glyphs.ts`), so a frame follows the box style. */
+  glyphs: GlyphSet;
 }
 
 /**
- * The three character sets a self-drawing frame ever uses. Exposed so a
- * caller that draws its OWN edges (`render.tsx`'s Ink-`Box`-bordered `card`)
- * can match `frameBlock`'s glyphs exactly without duplicating them.
+ * The edge glyphs for a frame of `style`. Exposed so a caller that draws
+ * its OWN edges (`render.tsx`'s Ink-`Box`-bordered `card`) can match
+ * `frameBlock`'s glyphs exactly without duplicating them.
  */
-export function frameGlyphs(style: 'solid' | 'dashed'): {
-  horizontal: string;
-  vertical: string;
-} {
-  return style === 'dashed'
-    ? { horizontal: '╌', vertical: '┆' }
-    : { horizontal: '─', vertical: '│' };
+export function frameGlyphs(
+  style: 'solid' | 'dashed',
+  glyphs: GlyphSet,
+): FrameEdges {
+  return style === 'dashed' ? glyphs.dashed : glyphs.solid;
 }
 
 /**
@@ -243,25 +245,25 @@ export function frameGlyphs(style: 'solid' | 'dashed'): {
  * disables Ink's own top border for it.
  */
 export function frameTopLine(options: FrameOptions): string {
-  const { style: kind, title, width } = options;
-  const { horizontal } = frameGlyphs(kind);
+  const { style: kind, title, width, glyphs } = options;
+  const { horizontal } = frameGlyphs(kind, glyphs);
   const innerWidth = Math.max(1, width - 2);
   if (title) {
     const label = ` ${title} `;
     const remaining = Math.max(0, innerWidth - measureWidth(label) - 1);
-    return `┌${horizontal}${label}${horizontal.repeat(remaining)}┐`;
+    return `${glyphs.topLeft}${horizontal}${label}${horizontal.repeat(remaining)}${glyphs.topRight}`;
   }
-  return `┌${horizontal.repeat(innerWidth)}┐`;
+  return `${glyphs.topLeft}${horizontal.repeat(innerWidth)}${glyphs.topRight}`;
 }
 
 /** Draws a box around `block`, one glyph set for `'solid'`, another for `'dashed'`, with an optional title woven into the top edge. */
 export function frameBlock(block: string, options: FrameOptions): string {
-  const { style: kind, width } = options;
-  const { horizontal, vertical } = frameGlyphs(kind);
+  const { style: kind, width, glyphs } = options;
+  const { horizontal, vertical } = frameGlyphs(kind, glyphs);
   const innerWidth = Math.max(1, width - 2);
 
   const top = frameTopLine(options);
-  const bottom = `└${horizontal.repeat(innerWidth)}┘`;
+  const bottom = `${glyphs.bottomLeft}${horizontal.repeat(innerWidth)}${glyphs.bottomRight}`;
   const lines = block
     .split('\n')
     .map(
@@ -270,8 +272,11 @@ export function frameBlock(block: string, options: FrameOptions): string {
   return [top, ...lines, bottom].join('\n');
 }
 
-/** The `left`/`right`/`top`/`bottom`/`topLeft`/`topRight`/`bottomLeft`/`bottomRight` glyph set Ink's `Box` `borderStyle` prop takes, matching `frameBlock`'s own character set exactly for `style`. Corners are always the solid set, exactly like `frameBlock`'s (a dashed frame still has solid corners). */
-export function inkBorderStyle(style: 'solid' | 'dashed'): {
+/** The `left`/`right`/`top`/`bottom`/`topLeft`/`topRight`/`bottomLeft`/`bottomRight` glyph set Ink's `Box` `borderStyle` prop takes, matching `frameBlock`'s own character set exactly for `style`. Corners are always the shared set, exactly like `frameBlock`'s (a dashed frame still has solid corners). */
+export function inkBorderStyle(
+  style: 'solid' | 'dashed',
+  glyphs: GlyphSet,
+): {
   topLeft: string;
   top: string;
   topRight: string;
@@ -281,15 +286,15 @@ export function inkBorderStyle(style: 'solid' | 'dashed'): {
   bottomLeft: string;
   left: string;
 } {
-  const { horizontal, vertical } = frameGlyphs(style);
+  const { horizontal, vertical } = frameGlyphs(style, glyphs);
   return {
-    topLeft: '┌',
+    topLeft: glyphs.topLeft,
     top: horizontal,
-    topRight: '┐',
+    topRight: glyphs.topRight,
     right: vertical,
-    bottomRight: '┘',
+    bottomRight: glyphs.bottomRight,
     bottom: horizontal,
-    bottomLeft: '└',
+    bottomLeft: glyphs.bottomLeft,
     left: vertical,
   };
 }
@@ -301,12 +306,12 @@ export function isTextAlign(value: string): value is TextAlign {
   return (TEXT_ALIGNS as readonly string[]).includes(value);
 }
 
-/** A full-width horizontal rule, `char` (default `─`) repeated to `width` columns. */
-export function ruleLine(width: number, char = '─'): string {
+/** A full-width horizontal rule, `char` repeated to `width` columns. */
+export function ruleLine(width: number, char: string): string {
   return char.repeat(Math.max(0, width));
 }
 
-/** Prefixes every line of `block` (split on `\n`) with `prefix`, e.g. a blockquote's `│ `. */
+/** Prefixes every line of `block` (split on `\n`) with `prefix`, e.g. a blockquote's bar. */
 export function indentBlock(block: string, prefix: string): string {
   return block
     .split('\n')

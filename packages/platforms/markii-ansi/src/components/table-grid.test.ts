@@ -5,6 +5,9 @@ import {
   measureTableGridWidth,
 } from './table-grid.js';
 import { measureWidth } from '../text-grid.js';
+import { glyphsFor } from '../glyphs.js';
+
+const UNICODE = glyphsFor('unicode');
 
 describe('drawTableGrid', () => {
   it('draws a header, separator, and body rows with box-drawing glyphs', () => {
@@ -15,6 +18,7 @@ describe('drawTableGrid', () => {
         ['Bo', 'User'],
       ],
       40,
+      UNICODE,
     );
     expect(grid).toContain('┌');
     expect(grid).toContain('┬');
@@ -37,6 +41,7 @@ describe('drawTableGrid', () => {
         ['333', '4'],
       ],
       40,
+      UNICODE,
     );
     const widths = new Set(grid.split('\n').map((line) => measureWidth(line)));
     expect(widths.size).toBe(1);
@@ -47,6 +52,7 @@ describe('drawTableGrid', () => {
       ['short', 'a very long column header indeed'],
       [['x', 'y']],
       30,
+      UNICODE,
     );
     const widths = new Set(grid.split('\n').map((line) => measureWidth(line)));
     expect(widths.size).toBe(1);
@@ -58,6 +64,7 @@ describe('drawTableGrid', () => {
       undefined,
       [['a rather long single cell value']],
       15,
+      UNICODE,
     );
     expect(grid).toContain('rather');
     expect(grid).toContain('long');
@@ -65,7 +72,7 @@ describe('drawTableGrid', () => {
 
   it('applies bold only to the header row', () => {
     const bold = (text: string) => `<b>${text}</b>`;
-    const grid = drawTableGrid(['h'], [['x']], 20, bold);
+    const grid = drawTableGrid(['h'], [['x']], 20, UNICODE, bold);
     expect(grid).toContain('<b>');
     const bodyLine = grid.split('\n').find((line) => line.includes('x'));
     expect(bodyLine).not.toContain('<b>');
@@ -77,7 +84,7 @@ describe('drawTableGrid', () => {
   });
 
   it('draws with no header when none is given', () => {
-    const grid = drawTableGrid(undefined, [['x']], 10);
+    const grid = drawTableGrid(undefined, [['x']], 10, UNICODE);
     expect(grid.split('\n')).toHaveLength(3); // top, one row, bottom
   });
 });

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { GlyphSet } from '../glyphs.js';
 import type { ReactNode } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { bold, dim } from '../ansi.js';
@@ -36,6 +37,7 @@ import type { ElementTabPanel } from '../render.js';
 export interface InteractiveTabsProps {
   panels: readonly ElementTabPanel[];
   color: ColorLevel;
+  glyphs: GlyphSet;
   interactive: boolean;
   focusId: number | undefined;
 }
@@ -43,6 +45,7 @@ export interface InteractiveTabsProps {
 export function InteractiveTabs({
   panels,
   color,
+  glyphs,
   interactive,
   focusId,
 }: InteractiveTabsProps): ReactNode {
@@ -87,7 +90,7 @@ export function InteractiveTabs({
       return index > 0 ? `  ${rendered}` : rendered;
     })
     .join('');
-  const focusGlyph = focused ? '› ' : '  ';
+  const focusGlyph = focused ? glyphs.focus : '  ';
   const headingLine = useFocusMarker(`${focusGlyph}${strip}`, focusId);
 
   if (!interactive) {

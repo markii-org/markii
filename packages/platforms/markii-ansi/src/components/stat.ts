@@ -3,8 +3,6 @@ import { safeRead } from '../resolve.js';
 import { dataStateSuffix, failureToken } from '../failure-presentation.js';
 import type { AnsiComponent } from '../registry.js';
 
-const EMPTY_VALUE = '—';
-
 type Trend = 'up' | 'down' | 'flat';
 const TRENDS: readonly Trend[] = ['up', 'down', 'flat'];
 function isTrend(value: string): value is Trend {
@@ -84,7 +82,7 @@ export const Stat: AnsiComponent = ({ attributes, ctx }) => {
   const lines: string[] = [];
   if (label) lines.push(ctx.style(ctx.text(label), '--mk-muted'));
 
-  let valueLine = ctx.bold(ctx.text(formattedValue || EMPTY_VALUE));
+  let valueLine = ctx.bold(ctx.text(formattedValue || ctx.glyphs.emptyValue));
   if (delta) {
     const deltaToken =
       trend === 'up'

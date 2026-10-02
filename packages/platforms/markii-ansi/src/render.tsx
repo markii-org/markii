@@ -94,6 +94,7 @@ import type { AnsiValueStore, AnsiVaultStore } from './value-types.js';
 import { defaultAnsiRegistry } from './components/index.js';
 import { renderInkToString } from './ink-string.js';
 import { InteractiveRoot } from './interactive.js';
+import { glyphsFor, type BoxStyle, type GlyphSet } from './glyphs.js';
 import type { FocusableDescriptor } from './interactive.js';
 import { InteractiveTabs } from './components/tabs.js';
 import { InteractiveDetails } from './components/details.js';
@@ -221,6 +222,7 @@ interface WalkContext {
   scope: ValueScope;
   color: ColorLevel;
   theme: AnsiTheme;
+  glyphs: GlyphSet;
   interactive: boolean;
   resolveImageSrc: ResolveImageSrc | undefined;
   resolveHref: ResolveHref | undefined;
@@ -346,6 +348,7 @@ function unknownDirective(
   reason: 'unregistered' | 'form-mismatch',
   width: number,
   color: ColorLevel,
+  glyphs: GlyphSet,
 ): string {
   const label = fallbackLabel(name, inline, reason);
   if (inline) {
@@ -362,7 +365,7 @@ function unknownDirective(
         .join('\n')
     : '';
   const body = wrappedChildren ? `${label}\n\n${wrappedChildren}` : label;
-  return dim(frameBlock(body, { style: 'dashed', width }), color);
+  return dim(frameBlock(body, { style: 'dashed', width, glyphs }), color);
 }
 
 /** A registered component that threw while rendering, contained to a neutral box rather than failing the whole document. Never dumps the error text. */
@@ -372,6 +375,7 @@ function componentError(
   childrenText: string,
   width: number,
   color: ColorLevel,
+  glyphs: GlyphSet,
 ): string {
   const label = `component \`${stripControlCharacters(name)}\` failed to render`;
   if (inline) {
@@ -379,7 +383,7 @@ function componentError(
       ? dim(label, color)
       : `${dim(`${label}:`, color)} ${childrenText}`;
   }
-  return dim(frameBlock(label, { style: 'dashed', width }), color);
+  return dim(frameBlock(label, { style: 'dashed', width, glyphs }), color);
 }
 
 interface ResolvedDataBinding {
@@ -482,6 +486,7 @@ function buildComponentContext(
     indent,
     color,
     theme,
+    glyphs: wctx.glyphs,
     interactive: wctx.interactive,
     style: (text, token) => style(text, token, theme, color),
     bold: (text) => bold(text, color),
@@ -567,6 +572,7 @@ function renderDirectiveContentString(
       'unregistered',
       width,
       wctx.color,
+      wctx.glyphs,
     );
   }
   if (isFormMismatch(entry, kind)) {
@@ -582,6 +588,7 @@ function renderDirectiveContentString(
       'form-mismatch',
       width,
       wctx.color,
+      wctx.glyphs,
     );
   }
 
@@ -609,6 +616,7 @@ function renderDirectiveContentString(
       safeChildrenText(childrenText),
       width,
       wctx.color,
+      wctx.glyphs,
     );
   }
 
@@ -789,10 +797,10 @@ function renderBlockString(
     const inner = renderBlocksString(
       node.children as RootContent[],
       innerWidth,
-      `${indent}│ `,
+      `${indent}${wctx.glyphs.quoteBar}`,
       wctx,
     );
-    const prefix = dim('│ ', wctx.color);
+    const prefix = dim(wctx.glyphs.quoteBar, wctx.color);
     return inner
       .split('\n')
       .map((line) => `${prefix}${line}`)
@@ -801,10 +809,12 @@ function renderBlockString(
   if (node.tagName === 'ul' || node.tagName === 'ol') {
     return renderListString(node, width, indent, wctx);
   }
-  if (node.tagName === 'hr') return dim(ruleLine(width), wctx.color);
+  if (node.tagName === 'hr') {
+    return dim(ruleLine(width, wctx.glyphs.rule), wctx.color);
+  }
   if (node.tagName === 'table') return renderGfmTableString(node, width, wctx);
   if (node.tagName === 'pre') {
-    const marker = renderScriptMarker(node, wctx.color);
+    const marker = renderScriptMarker(node, wctx.color, wctx.glyphs);
     if (marker !== undefined) return marker;
     return renderCodeBlock(node, wctx.color);
   }
@@ -936,6 +946,7 @@ function getCodeText(codeNode: Element | undefined): string {
 function renderScriptMarker(
   node: Element,
   color: ColorLevel,
+  glyphs: GlyphSet,
 ): string | undefined {
   try {
     const codeNode = findChildElement(node, 'code');
@@ -949,7 +960,9 @@ function renderScriptMarker(
 
     const src = attrs.src || undefined;
     const detail = src ?? getLanguage(codeNode);
-    const summary = detail ? `⚙ ${name} · ${detail}` : `⚙ ${name}`;
+    const summary = detail
+      ? `${glyphs.script} ${name} ${glyphs.scriptSeparator} ${detail}`
+      : `${glyphs.script} ${name}`;
     return dim(summary, color);
   } catch {
     return undefined;
@@ -1010,6 +1023,7 @@ function renderGfmTableString(
     headerCells.length > 0 ? headerCells : undefined,
     bodyRows,
     width,
+    wctx.glyphs,
     (text) => bold(text, wctx.color),
   );
 }
@@ -1213,7 +1227,12 @@ function renderDirectiveString(
   if (isBlock && name === 'card') {
     childrenWidth = resolveCardInnerWidth(attributes, layoutForWidth, width);
   } else if (isBlock && name === 'callout') {
-    childrenWidth = resolveCalloutInnerWidth(attributes, layoutForWidth, width);
+    childrenWidth = resolveCalloutInnerWidth(
+      attributes,
+      layoutForWidth,
+      width,
+      wctx.glyphs,
+    );
   } else if (isBlock && name === DETAILS_NAME) {
     childrenWidth = resolveDetailsInnerWidth(width);
   }
@@ -1408,6 +1427,7 @@ function renderTabsElement(
     <InteractiveTabs
       panels={panels}
       color={wctx.color}
+      glyphs={wctx.glyphs}
       interactive={wctx.interactive}
       focusId={focusId}
     />
@@ -1475,14 +1495,12 @@ function renderDetailsElement(
       body={body}
       defaultOpen={open}
       color={wctx.color}
+      glyphs={wctx.glyphs}
       interactive={wctx.interactive}
       focusId={focusId}
     />
   );
 }
-
-/** Ink's `Box` `borderStyle` for `card`'s frame, `frameBlock`'s own solid glyph set. `card` never draws a dashed frame (only the unknown-directive/component-error fallbacks do), so this is the one set it ever needs. */
-const CARD_BORDER = inkBorderStyle('solid');
 
 /**
  * Places a self-sized element (a `card`'s own bordered `Box`, already drawn
@@ -1587,7 +1605,7 @@ function renderCardElement(
     <Box
       width={boxWidth}
       flexDirection="column"
-      borderStyle={CARD_BORDER}
+      borderStyle={inkBorderStyle('solid', wctx.glyphs)}
       borderTop={!titleText}
     >
       {bodyElement ?? <Text> </Text>}
@@ -1597,7 +1615,12 @@ function renderCardElement(
   const framed = titleText ? (
     <Box flexDirection="column" width={boxWidth}>
       {styledText(
-        frameTopLine({ style: 'solid', title: titleText, width: boxWidth }),
+        frameTopLine({
+          style: 'solid',
+          title: titleText,
+          width: boxWidth,
+          glyphs: wctx.glyphs,
+        }),
       )}
       {bordered}
     </Box>
@@ -1773,7 +1796,14 @@ function renderDirectiveElement(
       return applyLayoutElement(withMarker, layoutResolved, width);
     } catch {
       return styledText(
-        componentError(name || '(unnamed)', false, '', width, wctx.color),
+        componentError(
+          name || '(unnamed)',
+          false,
+          '',
+          width,
+          wctx.color,
+          wctx.glyphs,
+        ),
       );
     }
   }
@@ -1806,13 +1836,13 @@ function renderBlockElement(
     const inner = renderBlocksElement(
       node.children,
       innerWidth,
-      `${indent}│ `,
+      `${indent}${wctx.glyphs.quoteBar}`,
       wctx,
     );
     if (!inner) return null;
     return (
       <Box width={width}>
-        {styledText(dim('│ ', wctx.color))}
+        {styledText(dim(wctx.glyphs.quoteBar, wctx.color))}
         <Box flexDirection="column" width={innerWidth}>
           {inner}
         </Box>
@@ -1940,6 +1970,7 @@ function buildWalkContext(
   scope: ValueScope,
   color: ColorLevel,
   theme: AnsiTheme,
+  glyphs: GlyphSet,
   interactive: boolean,
   resolveImageSrc: ResolveImageSrc | undefined,
   resolveHref: ResolveHref | undefined,
@@ -1950,6 +1981,7 @@ function buildWalkContext(
     scope,
     color,
     theme,
+    glyphs,
     interactive,
     resolveImageSrc,
     resolveHref,
@@ -1971,6 +2003,13 @@ export interface RenderMarkOptions {
   readonly width?: number;
   readonly color?: ColorOption;
   readonly theme?: AnsiTheme;
+  /**
+   * `'unicode'` (the default) draws frames, rules, bars, and markers with
+   * box-drawing and symbol characters; `'ascii'` draws every one of them
+   * with 7-bit characters, for a terminal that cannot show the others. The
+   * engine never chooses this from the environment: the host does.
+   */
+  readonly box?: BoxStyle;
   readonly resolveImageSrc?: ResolveImageSrc;
   readonly resolveHref?: ResolveHref;
   readonly onDiagnostic?: OnDiagnostic;
@@ -1995,6 +2034,7 @@ function buildRootElement(
   scope: ValueScope,
   color: ColorLevel,
   theme: AnsiTheme,
+  glyphs: GlyphSet,
   interactive: boolean,
   resolveImageSrc: ResolveImageSrc | undefined,
   resolveHref: ResolveHref | undefined,
@@ -2006,6 +2046,7 @@ function buildRootElement(
     scope,
     color,
     theme,
+    glyphs,
     interactive,
     resolveImageSrc,
     resolveHref,
@@ -2025,6 +2066,7 @@ async function renderRootToString(
   scope: ValueScope,
   color: ColorLevel,
   theme: AnsiTheme,
+  glyphs: GlyphSet,
   interactive: boolean,
   resolveImageSrc: ResolveImageSrc | undefined,
   resolveHref: ResolveHref | undefined,
@@ -2037,6 +2079,7 @@ async function renderRootToString(
     scope,
     color,
     theme,
+    glyphs,
     interactive,
     resolveImageSrc,
     resolveHref,
@@ -2080,6 +2123,7 @@ export async function renderMarkToAnsi(
       { store: options?.store ?? store, vault: options?.vault ?? vault },
       color,
       options?.theme ?? defaultAnsiTheme,
+      glyphsFor(options?.box),
       options?.interactive ?? false,
       options?.resolveImageSrc,
       options?.resolveHref,
@@ -2112,6 +2156,7 @@ export async function renderMarkNodeToAnsi(
       { store: options?.store ?? store, vault: options?.vault ?? vault },
       color,
       options?.theme ?? defaultAnsiTheme,
+      glyphsFor(options?.box),
       options?.interactive ?? false,
       options?.resolveImageSrc,
       options?.resolveHref,
@@ -2176,6 +2221,7 @@ export function buildMarkElement(
 ): ReactElement {
   const color = resolveColorOption(options?.color);
   const theme = options?.theme ?? defaultAnsiTheme;
+  const glyphs = glyphsFor(options?.box);
   const scope: ValueScope = { store: options?.store, vault: options?.vault };
   const width = options?.width ?? DEFAULT_WIDTH;
   const interactive = options?.interactive ?? true;
@@ -2196,6 +2242,7 @@ export function buildMarkElement(
     scope,
     color,
     theme,
+    glyphs,
     interactive,
     options?.resolveImageSrc,
     options?.resolveHref,
@@ -2220,6 +2267,7 @@ export function buildMarkElement(
     scope,
     color,
     theme,
+    glyphs,
     true,
     options?.resolveImageSrc,
     options?.resolveHref,
@@ -2239,6 +2287,7 @@ export function buildMarkElement(
       onExit={options?.onExit}
       color={color}
       theme={theme}
+      keyLegend={glyphs.keyLegend}
     >
       {content}
     </InteractiveRoot>

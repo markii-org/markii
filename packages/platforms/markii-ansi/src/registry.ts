@@ -3,6 +3,7 @@ import type { FailureKind, ValueStatus } from './value-types.js';
 import type { LayoutAxis, OnDiagnostic } from '@markii/stdlib';
 import type { ColorLevel } from './ansi.js';
 import type { AnsiTheme, Tier1Token } from './theme.js';
+import type { GlyphSet } from './glyphs.js';
 import type { ResolvedLayoutAttributes } from './layout.js';
 import type { ResolveImageSrc } from './image-resolve.js';
 import type { ResolveHref } from './href-resolve.js';
@@ -67,6 +68,12 @@ export interface AnsiRenderContext {
   color: ColorLevel;
   /** The resolved theme for this render. */
   theme: AnsiTheme;
+  /**
+   * The glyphs for this render's box style (`./glyphs.ts`). A component that
+   * draws a frame, rule, bar, or symbol takes it from here, never from a
+   * literal, so `box: 'ascii'` reaches it.
+   */
+  glyphs: GlyphSet;
   /**
    * Whether this render is in INTERACTIVE mode (a live viewer), as opposed
    * to the default render-once mode. NAME COLLISION, documented at both

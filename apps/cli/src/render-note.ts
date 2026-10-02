@@ -12,11 +12,12 @@ import {
   renderMarkToAnsi,
   resolveColorOption,
   type AnsiValueStore,
+  type BoxStyle,
   type ColorLevel,
   type ColorOption,
 } from '@markii/ansi';
 import type { OnDiagnostic } from '@markii/stdlib';
-import type { ColorFlag } from './args.js';
+import type { BoxFlag, ColorFlag } from './args.js';
 import type { Terminal } from './terminal.js';
 
 const DEFAULT_WIDTH = 80;
@@ -49,6 +50,33 @@ export function resolveColor(
   return resolveColorOption(colorFlag as ColorOption);
 }
 
+/**
+ * Whether a terminal can be trusted to draw box-drawing and symbol
+ * characters, judged from the environment the `Terminal` seam hands over
+ * (the engine never reads it). `TERM=dumb` means no. Otherwise the first
+ * of `LC_ALL`, `LC_CTYPE`, `LANG` that is set decides: a UTF-8 locale
+ * means yes, any other locale means no. With none of them set, there is
+ * nothing to go on, and the default (unicode) stands.
+ */
+export function detectBoxStyle(
+  env: Readonly<Record<string, string | undefined>>,
+): BoxStyle {
+  if (env.TERM === 'dumb') return 'ascii';
+  const locale = [env.LC_ALL, env.LC_CTYPE, env.LANG].find(
+    (value) => value !== undefined && value !== '',
+  );
+  if (locale === undefined) return 'unicode';
+  return /utf-?8/i.test(locale) ? 'unicode' : 'ascii';
+}
+
+/** `--box` flag, else detected from the terminal's environment. */
+export function resolveBox(
+  boxFlag: BoxFlag | undefined,
+  terminal: Pick<Terminal, 'env'>,
+): BoxStyle {
+  return boxFlag ?? detectBoxStyle(terminal.env);
+}
+
 /** `@markii/ansi`'s `RenderMarkOptions.color` is a `ColorOption` ('auto'/'never'/level), while this module resolves all the way to a final `ColorLevel`. `'never'` is the ColorOption that reliably resolves back to `'none'` through the engine's own `resolveColorOption` (see that function's doc comment: `'auto'` and `'never'` both mean "no escapes" to the engine, since it has no environment knowledge of its own); every other level passes through unchanged. */
 function colorLevelToOption(level: ColorLevel): ColorOption {
   return level === 'none' ? 'never' : level;
@@ -57,6 +85,8 @@ function colorLevelToOption(level: ColorLevel): ColorOption {
 export interface RenderNoteOptions {
   readonly widthFlag?: number;
   readonly colorFlag?: ColorFlag;
+  /** `--box`; when absent, `resolveBox` detects it from the environment. */
+  readonly boxFlag?: BoxFlag;
   readonly store?: AnsiValueStore;
   /**
    * `@markii/stdlib`'s `OnDiagnostic` — the caller wires this to
@@ -85,6 +115,7 @@ export async function renderNote(
   return renderMarkToAnsi(text, undefined, options.store, undefined, {
     width,
     color: colorLevelToOption(color),
+    box: resolveBox(options.boxFlag, terminal),
     ...(options.onDiagnostic ? { onDiagnostic: options.onDiagnostic } : {}),
   });
 }
@@ -108,6 +139,7 @@ export function buildViewElement(
   return buildMarkElement(text, undefined, {
     width,
     color: colorLevelToOption(color),
+    box: resolveBox(options.boxFlag, terminal),
     ...(options.store ? { store: options.store } : {}),
     ...(options.onDiagnostic ? { onDiagnostic: options.onDiagnostic } : {}),
     ...(options.onExit ? { onExit: options.onExit } : {}),

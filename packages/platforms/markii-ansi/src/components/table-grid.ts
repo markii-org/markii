@@ -3,6 +3,7 @@ import {
   wrapText as wrap,
   measureWidth as measure,
 } from '../text-grid.js';
+import type { GlyphSet } from '../glyphs.js';
 
 /**
  * The ONE box-drawing/width-negotiation routine every table this engine
@@ -103,6 +104,7 @@ function drawRow(
   boldRow: boolean,
   boldFn: (text: string) => string,
   align: 'left' | 'center' | 'right',
+  glyphs: GlyphSet,
 ): string {
   const { lines, height } = wrapRow(row, widths);
   const rowLines: string[] = [];
@@ -111,7 +113,8 @@ function drawRow(
       const text = pad(lines[c]?.[line] ?? '', w, align);
       return boldRow ? boldFn(text) : text;
     });
-    rowLines.push(`│ ${cells.join(' │ ')} │`);
+    const bar = glyphs.solid.vertical;
+    rowLines.push(`${bar} ${cells.join(` ${bar} `)} ${bar}`);
   }
   return rowLines.join('\n');
 }
@@ -121,8 +124,10 @@ function drawSeparator(
   left: string,
   mid: string,
   right: string,
+  glyphs: GlyphSet,
 ): string {
-  return `${left}${widths.map((w) => '─'.repeat(w + CELL_PADDING)).join(mid)}${right}`;
+  const rule = glyphs.solid.horizontal;
+  return `${left}${widths.map((w) => rule.repeat(w + CELL_PADDING)).join(mid)}${right}`;
 }
 
 /**
@@ -139,6 +144,7 @@ export function drawTableGrid(
   header: readonly string[] | undefined,
   rows: readonly (readonly string[])[],
   width: number,
+  glyphs: GlyphSet,
   boldFn: (text: string) => string = (text) => text,
   align: 'left' | 'center' | 'right' = 'left',
 ): string {
@@ -151,14 +157,15 @@ export function drawTableGrid(
   const widths = negotiateColumnWidths(natural, width);
 
   const lines: string[] = [];
-  lines.push(drawSeparator(widths, '┌', '┬', '┐'));
+  const g = glyphs;
+  lines.push(drawSeparator(widths, g.topLeft, g.teeDown, g.topRight, g));
   if (header) {
-    lines.push(drawRow(header, widths, true, boldFn, align));
-    lines.push(drawSeparator(widths, '├', '┼', '┤'));
+    lines.push(drawRow(header, widths, true, boldFn, align, g));
+    lines.push(drawSeparator(widths, g.teeRight, g.cross, g.teeLeft, g));
   }
   for (const row of rows)
-    lines.push(drawRow(row, widths, false, boldFn, align));
-  lines.push(drawSeparator(widths, '└', '┴', '┘'));
+    lines.push(drawRow(row, widths, false, boldFn, align, g));
+  lines.push(drawSeparator(widths, g.bottomLeft, g.teeUp, g.bottomRight, g));
   return lines.join('\n');
 }
 

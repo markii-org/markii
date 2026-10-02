@@ -1,3 +1,4 @@
+import type { GlyphSet } from '../glyphs.js';
 import { measureWidth, padText } from '../text-grid.js';
 import { selfLayoutAlign, selfLayoutWidth } from '../layout.js';
 import type { ResolvedLayoutPresets } from '../layout.js';
@@ -11,12 +12,6 @@ import type { Tier1Token } from '../theme.js';
 export type CalloutType = 'info' | 'warning' | 'danger';
 
 const CALLOUT_TYPES: readonly CalloutType[] = ['info', 'warning', 'danger'];
-
-const CALLOUT_ICONS: Record<CalloutType, string> = {
-  info: 'ℹ',
-  warning: '▲',
-  danger: '✕',
-};
 
 const CALLOUT_LABELS: Record<CalloutType, string> = {
   info: 'Info',
@@ -40,12 +35,9 @@ function isTextAlign(value: string): value is TextAlign {
   return (TEXT_ALIGNS as readonly string[]).includes(value);
 }
 
-/** The left bar every line of a callout carries, marking it as one colored block at a glance. */
-const BAR = '▌ ';
-
 /** `headerText` for `type`, e.g. `ℹ Info` — needed by both `resolveCalloutInnerWidth` (before there is a component instance) and `Callout` itself. */
-function headerTextFor(type: CalloutType): string {
-  return `${CALLOUT_ICONS[type]} ${CALLOUT_LABELS[type]}`;
+function headerTextFor(type: CalloutType, glyphs: GlyphSet): string {
+  return `${glyphs.calloutIcons[type]} ${CALLOUT_LABELS[type]}`;
 }
 
 /**
@@ -62,15 +54,22 @@ export function resolveCalloutInnerWidth(
   attributes: DirectiveAttributes,
   layout: ResolvedLayoutPresets | undefined,
   outerWidth: number,
+  glyphs: GlyphSet,
 ): number {
+  // The left bar every line of a callout carries, marking it as one
+  // colored block at a glance.
+  const barWidth = measureWidth(glyphs.calloutBar);
   const rawType = attributes.type ?? 'info';
   const type: CalloutType = isCalloutType(rawType) ? rawType : 'info';
   const title = attributes.title ?? null;
   const naturalWidth =
-    BAR.length +
-    Math.max(measureWidth(headerTextFor(type)), measureWidth(title ?? ''));
+    barWidth +
+    Math.max(
+      measureWidth(headerTextFor(type, glyphs)),
+      measureWidth(title ?? ''),
+    );
   const boxWidth = selfLayoutWidth(layout, outerWidth, naturalWidth);
-  return Math.max(1, boxWidth - BAR.length);
+  return Math.max(1, boxWidth - barWidth);
 }
 
 /**
@@ -98,15 +97,16 @@ export const Callout: AnsiComponent = ({ attributes, children, ctx }) => {
   const align: TextAlign =
     rawTextAlign && isTextAlign(rawTextAlign) ? rawTextAlign : 'left';
 
-  const headerText = headerTextFor(type);
+  const headerText = headerTextFor(type, ctx.glyphs);
   const titleText = title ? ctx.text(title) : undefined;
+  const barWidth = measureWidth(ctx.glyphs.calloutBar);
   const naturalWidth =
-    BAR.length +
+    barWidth +
     Math.max(measureWidth(headerText), measureWidth(titleText ?? ''));
   const boxWidth = selfLayoutWidth(ctx.layout, ctx.width, naturalWidth);
 
-  const bar = ctx.style(BAR, token);
-  const innerWidth = Math.max(1, boxWidth - BAR.length);
+  const bar = ctx.style(ctx.glyphs.calloutBar, token);
+  const innerWidth = Math.max(1, boxWidth - barWidth);
   const placeLine = (line: string): string =>
     align === 'left' ? line : padText(line, innerWidth, align);
 

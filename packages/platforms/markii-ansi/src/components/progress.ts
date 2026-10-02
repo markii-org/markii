@@ -45,8 +45,6 @@ function readProgressFields(data: unknown): ProgressFields {
 }
 
 /** Block characters the bar fills with, and its widest allowed footprint (columns), sized down further when the label/percent text leaves less room. */
-const FILLED_CHAR = '█';
-const EMPTY_CHAR = '░';
 const MAX_BAR_WIDTH = 30;
 const MIN_BAR_WIDTH = 3;
 
@@ -91,7 +89,8 @@ export const Progress: AnsiComponent = ({ attributes, ctx }) => {
   );
   const filledCount = Math.round((percent / 100) * barWidth);
   const bar =
-    FILLED_CHAR.repeat(filledCount) + EMPTY_CHAR.repeat(barWidth - filledCount);
+    ctx.glyphs.barFilled.repeat(filledCount) +
+    ctx.glyphs.barEmpty.repeat(barWidth - filledCount);
 
   return `${labelPart}${bar}${percentPart}`;
 };

@@ -310,6 +310,52 @@ const cases: Case[] = [
       message: 'unknown flag "-weird.mk.md"',
     },
   },
+  {
+    name: 'view --box ascii',
+    argv: ['view', 'note.mk.md', '--box', 'ascii'],
+    expected: {
+      kind: 'view',
+      file: 'note.mk.md',
+      box: 'ascii',
+      run: true,
+      verbose: false,
+      static: false,
+    },
+  },
+  {
+    name: 'export --box unicode',
+    argv: [
+      'export',
+      'note.mk.md',
+      '--format',
+      'ansi',
+      '-o',
+      'out.txt',
+      '--box',
+      'unicode',
+    ],
+    expected: {
+      kind: 'export',
+      file: 'note.mk.md',
+      format: 'ansi',
+      out: 'out.txt',
+      box: 'unicode',
+      verbose: false,
+    },
+  },
+  {
+    name: '--box with an unknown style is a usage error',
+    argv: ['view', 'note.mk.md', '--box', 'heavy'],
+    expected: {
+      kind: 'usage-error',
+      message: '--box must be one of unicode, ascii, got "heavy"',
+    },
+  },
+  {
+    name: '--box with no value is a usage error',
+    argv: ['view', 'note.mk.md', '--box'],
+    expected: { kind: 'usage-error', message: '--box requires a value' },
+  },
 ];
 
 describe('parseArgs', () => {

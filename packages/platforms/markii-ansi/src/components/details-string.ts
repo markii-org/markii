@@ -33,7 +33,7 @@ export function resolveDetailsInnerWidth(outerWidth: number): number {
 export const Details: AnsiComponent = ({ attributes, children, ctx }) => {
   const title = attributes.title ?? DEFAULT_TITLE;
   const open = Object.hasOwn(attributes, 'open');
-  const glyph = open ? '▾' : '▸';
+  const glyph = open ? ctx.glyphs.foldOpen : ctx.glyphs.foldClosed;
   const marker = ctx.dim(
     `${glyph} ${ctx.bold(ctx.text(title))} (collapsible section, shown expanded)`,
   );

@@ -103,6 +103,7 @@ export const Card: AnsiComponent = ({ attributes, children, ctx }) => {
     style: 'solid',
     title: titleText,
     width: boxWidth,
+    glyphs: ctx.glyphs,
   });
   return selfLayoutAlign(framed, ctx.layout, ctx.width);
 };

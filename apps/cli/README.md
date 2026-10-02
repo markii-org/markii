@@ -36,6 +36,11 @@ Renders a note to the terminal.
   (the default) detects from `NO_COLOR`, `FORCE_COLOR`, `TERM`, `COLORTERM`,
   and whether stdout is a terminal, the same rules a well-behaved terminal
   program follows. `never` always renders plain text.
+- `--box <unicode|ascii>` picks the characters frames, rules, bars, and
+  markers are drawn with. `ascii` uses plain 7-bit characters, for a
+  terminal or a log that cannot show box drawing. Without the flag, the CLI
+  uses `ascii` when `TERM` is `dumb` or the locale (the first of `LC_ALL`,
+  `LC_CTYPE`, `LANG` that is set) is not UTF-8, and `unicode` otherwise.
 - `--no-run` never runs the note's scripts, even in an interactive
   terminal.
 - `--static` renders the note once and exits, even in a terminal.
@@ -59,16 +64,16 @@ starts folded unless it was written with `open`.
 | up, down, j, k   | Move focus to the previous or next foldable block |
 | q                | Quit                                              |
 
-The focused block is marked in the accent color and with a `›` glyph before
-its heading, so focus is visible even on a theme with no perceptible accent
+The focused block is marked in the accent color and with a `›` glyph (`>`
+with `--box ascii`) before its heading, so focus is visible even on a theme with no perceptible accent
 color. A focused, closed details block also shows a dim `enter to open`
 hint next to its summary (`enter to close` once it is open). A status line
 at the bottom of the view names the focused block and repeats the key
 legend.
 
-A tabs or details block nested inside a card, callout, or figure is
-read-only in this version: it renders as it does in the static view and is
-not part of the focus cycle.
+A tabs or details block nested inside a callout is read-only: it renders
+as it does in the static view and is not part of the focus cycle. Nested
+inside a card or a figure, it takes focus like any other.
 
 The viewer needs both stdin and stdout to be terminals. Piping the output,
 redirecting it to a file, or passing `--static` renders the note once and
@@ -84,7 +89,8 @@ Exports a note to a file. Both `--format` and `-o`/`--output` are required.
   host would export for the same note and the same last-run values.
 - `ansi` writes the same rendering `markii view` shows, to a file. Color
   defaults to `never` for a file (nobody's terminal reads it directly); an
-  explicit `--color` is still honored.
+  explicit `--color` is still honored. The box style defaults to
+  `unicode` for the same reason; `--box ascii` is honored.
 - `md-plain` downgrades the note to plain CommonMark. See "Ceilings" below.
 
 `markii export` never runs a note's scripts. `html` and `ansi` bake in

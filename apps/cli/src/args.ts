@@ -12,6 +12,7 @@
 
 export type ColorFlag = 'auto' | 'never' | '16' | '256' | 'truecolor';
 export type ExportFormat = 'html' | 'ansi' | 'md-plain';
+export type BoxFlag = 'unicode' | 'ascii';
 
 export type ParsedCommand =
   | {
@@ -19,6 +20,7 @@ export type ParsedCommand =
       readonly file: string;
       readonly width?: number;
       readonly color?: ColorFlag;
+      readonly box?: BoxFlag;
       readonly run: boolean;
       readonly verbose: boolean;
       /** Forces the render-once path even when both stdin and stdout are terminals. */
@@ -30,6 +32,7 @@ export type ParsedCommand =
       readonly format: ExportFormat;
       readonly out: string;
       readonly color?: ColorFlag;
+      readonly box?: BoxFlag;
       readonly verbose: boolean;
     }
   | {
@@ -58,6 +61,10 @@ function isColorFlag(value: string): value is ColorFlag {
   return COLOR_VALUES.has(value);
 }
 
+function isBoxFlag(value: string): value is BoxFlag {
+  return value === 'unicode' || value === 'ascii';
+}
+
 function isExportFormat(value: string): value is ExportFormat {
   return EXPORT_FORMATS.has(value);
 }
@@ -79,6 +86,7 @@ interface Flags {
   verbose: boolean;
   width?: number;
   color?: ColorFlag;
+  box?: BoxFlag;
   noRun: boolean;
   static: boolean;
   format?: ExportFormat;
@@ -177,6 +185,19 @@ function parseTokens(
         flags.color = value;
         continue;
       }
+      case '--box': {
+        const value = tokens[++i];
+        if (value === undefined) {
+          return { error: '--box requires a value' };
+        }
+        if (!isBoxFlag(value)) {
+          return {
+            error: `--box must be one of unicode, ascii, got ${JSON.stringify(value)}`,
+          };
+        }
+        flags.box = value;
+        continue;
+      }
       case '--format': {
         const value = tokens[++i];
         if (value === undefined) {
@@ -249,6 +270,7 @@ export function parseArgs(argv: readonly string[]): ParsedCommand {
       file,
       ...(flags.width !== undefined ? { width: flags.width } : {}),
       ...(flags.color !== undefined ? { color: flags.color } : {}),
+      ...(flags.box !== undefined ? { box: flags.box } : {}),
       run: !flags.noRun,
       verbose: flags.verbose,
       static: flags.static,
@@ -272,6 +294,7 @@ export function parseArgs(argv: readonly string[]): ParsedCommand {
       format: flags.format,
       out: flags.output,
       ...(flags.color !== undefined ? { color: flags.color } : {}),
+      ...(flags.box !== undefined ? { box: flags.box } : {}),
       verbose: flags.verbose,
     };
   }

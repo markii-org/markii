@@ -36,6 +36,21 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
   keeps its own output off the screen while the viewer is mounted. See the
   terminal section of `docs/integration.md`.
 
+- **An ASCII box style for the terminal engine.** `@markii/ansi`'s render
+  options and `buildMarkElement` take `box: 'unicode' | 'ascii'`. With
+  `'ascii'`, every frame, table grid, rule, bar, sparkline, star, callout
+  icon, fold and focus marker, and the live viewer's key legend is drawn
+  with 7-bit characters, for a terminal or a log that cannot show box
+  drawing. `'unicode'` stays the default and its output is unchanged. All
+  of these glyphs come from one table, exported as `glyphsFor`,
+  `BOX_STYLES`, `isBoxStyle` and the `BoxStyle`, `GlyphSet` and
+  `FrameEdges` types, and `AnsiRenderContext` gains `glyphs` so a pack
+  component can draw in the same style. A test renders the whole render
+  corpus in ascii and fails on any byte above 0x7f.
+- **`markii --box`.** `markii view` and `markii export --format ansi` take
+  `--box <unicode|ascii>`. Without it, `markii view` uses ascii when `TERM`
+  is `dumb` or the locale is not UTF-8; an ansi export stays unicode, as
+  its color stays off, because the file is read in some other terminal.
 - **A `form-mismatch` diagnostic.** `@markii/stdlib`'s `DiagnosticKind`
   gains `'form-mismatch'`, and `@markii/react`, `@markii/html` and
   `@markii/ansi` report it through `onDiagnostic` when a registered block

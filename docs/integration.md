@@ -246,6 +246,23 @@ table: a sequence joined into one glyph by zero width joiners measures as
 the sum of its parts, and will therefore be a little wider than it looks.
 The module says which ranges it knows, and the tests name each of them.
 
+### Box style
+
+Frames, table grids, rules, bars, star ratings, fold and focus markers,
+callout icons, and the live viewer's key legend are drawn from one glyph
+table. The `box` option picks its set. `'unicode'` is the default and uses
+box drawing and symbol characters. `'ascii'` draws every one of them with
+7-bit characters, for a terminal or a log that cannot show the others. A
+note's own text is never rewritten, so only glyphs the engine adds change.
+The two sets give the same widths wherever layout depends on them, so a
+note wraps identically in both. A component written for this engine takes
+its glyphs from `ctx.glyphs` rather than from literals, which is how the
+option reaches it.
+
+The engine never chooses the style itself. A host decides, the same way it
+decides color: the command line tool uses ascii when `TERM` is `dumb` or
+the locale is not UTF-8, and its `--box` flag overrides that.
+
 ### What a terminal cannot do
 
 Some of the format degrades on the way to text, and it degrades predictably.

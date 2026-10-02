@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { GlyphSet } from '../glyphs.js';
 import type { ReactNode } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { bold, dim } from '../ansi.js';
@@ -31,6 +32,7 @@ export interface InteractiveDetailsProps {
   body: ReactNode;
   defaultOpen: boolean;
   color: ColorLevel;
+  glyphs: GlyphSet;
   interactive: boolean;
   focusId: number | undefined;
 }
@@ -40,6 +42,7 @@ export function InteractiveDetails({
   body,
   defaultOpen,
   color,
+  glyphs,
   interactive,
   focusId,
 }: InteractiveDetailsProps): ReactNode {
@@ -57,14 +60,14 @@ export function InteractiveDetails({
   // return below, so the hook order is identical in both modes. The summary
   // line is cheap to build and unused in the non-interactive branch; that
   // waste is the price of never making a hook call conditional.
-  const openGlyph = open ? '▾' : '▸';
+  const openGlyph = open ? glyphs.foldOpen : glyphs.foldClosed;
   const hint = focused ? (open ? '  enter to close' : '  enter to open') : '';
   const summaryLine = dim(`${openGlyph} ${bold(title, color)}${hint}`, color);
-  const focusGlyph = focused ? '› ' : '  ';
+  const focusGlyph = focused ? glyphs.focus : '  ';
   const headingLine = useFocusMarker(`${focusGlyph}${summaryLine}`, focusId);
 
   if (!interactive) {
-    const glyph = defaultOpen ? '▾' : '▸';
+    const glyph = defaultOpen ? glyphs.foldOpen : glyphs.foldClosed;
     return (
       <Box flexDirection="column">
         <Text>

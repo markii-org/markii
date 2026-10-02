@@ -107,7 +107,11 @@ describe('render-level conformance fixtures (conformance/render/)', () => {
     '06-image',
     '07-notice',
     '08-row-cards',
+    '09-ascii-boxes',
   ];
+
+  /** Fixtures whose committed `.txt` is rendered with `box: 'ascii'`; every other one uses the default unicode glyphs. */
+  const ASCII_RENDER_FIXTURES = new Set(['09-ascii-boxes']);
 
   it('the fixture list above accounts for every *.mk.md file in conformance/render/ (nothing silently skipped)', async () => {
     expect(listRenderFixtureNames()).toEqual(RENDER_FIXTURE_NAMES);
@@ -131,6 +135,7 @@ describe('render-level conformance fixtures (conformance/render/)', () => {
         {
           width: 80,
           color: 'never',
+          box: ASCII_RENDER_FIXTURES.has(name) ? 'ascii' : 'unicode',
         },
       );
       expect(text.replace(/\n$/, '')).toBe(expectedText.replace(/\n$/, ''));

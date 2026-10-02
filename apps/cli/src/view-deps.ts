@@ -6,7 +6,7 @@
  */
 import type { AnsiValueStore } from '@markii/ansi';
 import type { OnDiagnostic } from '@markii/stdlib';
-import type { ColorFlag } from './args.js';
+import type { BoxFlag, ColorFlag } from './args.js';
 import type { Terminal } from './terminal.js';
 
 export interface MountLiveViewerInput {
@@ -14,6 +14,7 @@ export interface MountLiveViewerInput {
   readonly terminal: Pick<Terminal, 'env' | 'stdoutIsTty' | 'columns'>;
   readonly widthFlag?: number;
   readonly colorFlag?: ColorFlag;
+  readonly boxFlag?: BoxFlag;
   readonly store: AnsiValueStore;
   readonly onDiagnostic: OnDiagnostic;
 }

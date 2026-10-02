@@ -22,9 +22,7 @@ function isDividerLabelAlign(value: string): value is DividerLabelAlign {
   return (LABEL_ALIGNS as readonly string[]).includes(value);
 }
 
-const ORNAMENT_GLYPH = '❖';
 /** The rule character each non-ornament variant draws with. */
-const RULE_CHAR: Record<'line' | 'dots', string> = { line: '─', dots: '·' };
 /** How much of a labeled rule's rule fill sits on the SHORT side when the label is pushed left/right (the rest fills the long side). */
 const SHORT_SIDE_RULE = 2;
 
@@ -83,11 +81,11 @@ export const Divider: AnsiComponent = ({ attributes, ctx }) => {
   let line: string;
   if (variant === 'ornament') {
     const inner = label
-      ? `${ORNAMENT_GLYPH} ${label} ${ORNAMENT_GLYPH}`
-      : ORNAMENT_GLYPH;
+      ? `${ctx.glyphs.ornament} ${label} ${ctx.glyphs.ornament}`
+      : ctx.glyphs.ornament;
     line = padText(inner, width, labelAlign);
   } else {
-    const ruleChar = RULE_CHAR[variant];
+    const ruleChar = variant === 'dots' ? ctx.glyphs.ruleDots : ctx.glyphs.rule;
     line = label
       ? labeledRule(ruleChar, label, width, labelAlign)
       : ruleLine(width, ruleChar);

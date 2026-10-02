@@ -27,6 +27,14 @@ export {
   type AnsiColor,
 } from './ansi.js';
 export { defaultAnsiTheme, type AnsiTheme, type Tier1Token } from './theme.js';
+export {
+  BOX_STYLES,
+  isBoxStyle,
+  glyphsFor,
+  type BoxStyle,
+  type FrameEdges,
+  type GlyphSet,
+} from './glyphs.js';
 export { style } from './style.js';
 export {
   createAnsiRegistry,

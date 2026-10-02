@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { buildMarkElement } from './render.js';
 import { defaultAnsiTheme } from './theme.js';
 import type { ColorOption } from './ansi.js';
+import type { BoxStyle } from './glyphs.js';
 
 /**
  * Interactive-mode tests, feeding real keys through Ink's own input pipeline
@@ -83,6 +84,7 @@ async function mountInteractive(
   source: string,
   width = 40,
   color: ColorOption = 'never',
+  box: BoxStyle = 'unicode',
 ) {
   const { render } = await import('ink');
   const stdin = makeFakeStdin();
@@ -90,6 +92,7 @@ async function mountInteractive(
   const element = buildMarkElement(source, undefined, {
     width,
     color,
+    box,
     interactive: true,
   });
   const instance = render(element, {
@@ -159,6 +162,24 @@ describe('interactive details', () => {
     expect(view.lastFrame()).toContain('hidden body');
     await view.press('\r');
     expect(view.lastFrame()).not.toContain('hidden body');
+    view.unmount();
+  });
+});
+
+describe("box: 'ascii' in the live viewer", () => {
+  it('draws the focus marker, fold markers, and status line in 7-bit characters', async () => {
+    const view = await mountInteractive(
+      `${TABS_DOC}\n${DETAILS_DOC}`,
+      60,
+      'never',
+      'ascii',
+    );
+    await view.press('j');
+    await view.press('\r');
+    const frame = view.lastFrame();
+    expect(frame).toContain('> - More');
+    expect(frame).toContain('left/right/tab switch');
+    expect([...frame].filter((ch) => ch.charCodeAt(0) > 0x7f)).toEqual([]);
     view.unmount();
   });
 });
