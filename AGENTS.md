@@ -417,9 +417,9 @@ apps/cli             the "markii" command line tool, a third host and a
                      as @markii/cli (files: dist + README + LICENSE; bin
                      markii -> dist/markii.mjs; node >= 22; prepack builds).
                      In the root build:dist chain; release.yml publishes it
-                     only while its CLI_PUBLISH_ENABLED gate is 'true',
-                     which stays 'false' until the user has published
-                     0.0.1 by hand with trusted publishing. Bundled
+                     while its CLI_PUBLISH_ENABLED gate is 'true' (on since
+                     the user bootstrapped 0.0.1 with trusted publishing,
+                     2026-10-02). Bundled
                      with esbuild as ESM (dist/markii.mjs, since Ink cannot
                      be bundled as CJS), carrying @markii/host's worker
                      entry and wasmoon's glue.wasm in its own dist/run/, so

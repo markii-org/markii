@@ -8,34 +8,6 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- **A live terminal viewer.** `markii view` in a terminal opens the note
-  instead of printing it and exiting. A tabbed panel shows a header strip
-  with the active tab bracketed and switches with left and right or tab; a
-  collapsible section starts folded, showing only its glyph and summary,
-  and opens with enter; up and down (or j and k) move focus between the
-  foldable blocks; and q quits. The focused block is marked with the
-  accent color and a `›` glyph before its heading, so focus is visible
-  even on a theme with no perceptible accent color; a focused, closed
-  details block also shows a dim "enter to open" hint ("enter to close"
-  once open). A status line at the bottom names the focused block (for
-  example `tabs "One"` or `details "Summary"`, or "nothing focusable") and
-  repeats the key legend, naming a tabs block by its active panel so the
-  line follows the reader as they switch panels. A tabs or details block
-  nested inside a card or a figure joins the focus cycle like any other;
-  one nested inside a callout is read-only, because a callout marks its
-  type with a colored bar rather than a frame and that bar has no
-  equivalent in the layout engine's borders. The viewer needs both stdin
-  and stdout to be terminals:
-  piping, redirecting, or passing the new `--static` flag renders the note
-  once and exits, byte for byte as before, which is what scripts and CI
-  depend on.
-- **`@markii/ansi` exports `buildMarkElement`.** It returns the element
-  tree for a note rather than a rendered string, so a host can mount the
-  note itself and drive it from the keyboard. The host supplies the width
-  and re-supplies it on resize, supplies `onExit` for the quit key, and
-  keeps its own output off the screen while the viewer is mounted. See the
-  terminal section of `docs/integration.md`.
-
 - **An ASCII box style for the terminal engine.** `@markii/ansi`'s render
   options and `buildMarkElement` take `box: 'unicode' | 'ascii'`. With
   `'ascii'`, every frame, table grid, rule, bar, sparkline, star, callout
@@ -102,6 +74,46 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
   apart unnoticed. The shared layer is internal and unpublished, so no
   `@markii/*` package changes here; `docs/integration.md` describes the
   shape for a host built outside this repository.
+- **A tabs or details block nested in a card or a figure takes focus in the
+  live viewer.** It joins the focus cycle like any other; one nested in a
+  callout stays read-only, because a callout marks its type with a colored
+  bar that has no equivalent in the layout engine's borders. The status
+  line names a tabs block by its active panel, so it follows the reader as
+  they switch panels.
+
+## [0.16.0] - 2026-09-13
+
+The `@markii/*` packages and the VS Code extension ship this release as
+0.16.0, the Obsidian plugin as 0.13.0.
+
+### Added
+
+- **A live terminal viewer.** `markii view` in a terminal opens the note
+  instead of printing it and exiting. A tabbed panel shows a header strip
+  with the active tab bracketed and switches with left and right or tab; a
+  collapsible section starts folded, showing only its glyph and summary,
+  and opens with enter; up and down (or j and k) move focus between the
+  foldable blocks; and q quits. The focused block is marked with the
+  accent color and a `›` glyph before its heading, so focus is visible
+  even on a theme with no perceptible accent color; a focused, closed
+  details block also shows a dim "enter to open" hint ("enter to close"
+  once open). A status line at the bottom names the focused block (for
+  example `tabs "One"` or `details "Summary"`, or "nothing focusable") and
+  repeats the key legend. A tabs or details block nested inside a card,
+  callout, or figure is read-only in this version and is not part of the
+  focus cycle. The viewer needs both stdin and stdout to be terminals:
+  piping, redirecting, or passing the new `--static` flag renders the note
+  once and exits, byte for byte as before, which is what scripts and CI
+  depend on.
+- **`@markii/ansi` exports `buildMarkElement`.** It returns the element
+  tree for a note rather than a rendered string, so a host can mount the
+  note itself and drive it from the keyboard. The host supplies the width
+  and re-supplies it on resize, supplies `onExit` for the quit key, and
+  keeps its own output off the screen while the viewer is mounted. See the
+  terminal section of `docs/integration.md`.
+
+### Changed
+
 - **`@markii/ansi`'s three entry points are asynchronous.**
   `renderMarkToAnsi`, `renderMarkNodeToAnsi` and `renderMarkInlineToAnsi`
   return a promise. This is a breaking change for any caller of the
@@ -131,7 +143,7 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
   in a CommonJS bundle. Anyone invoking the built file by path needs the
   new name; the `markii` command itself is unchanged.
 
-## [0.15.0] - 2026-09-14
+## [0.15.0] - 2026-09-13
 
 The `@markii/*` packages and the VS Code extension ship this release as
 0.15.0, the Obsidian plugin as 0.12.0.

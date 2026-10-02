@@ -51,14 +51,11 @@ env:
     packages/platforms/markii-html
     packages/platforms/markii-ansi
   # ------------------------------------------------------------------------
-  # @markii/cli publish gate. KEEP 'false' until @markii/cli 0.0.1 exists on
-  # npm (published by hand) AND its Trusted Publisher points at this repo
-  # and release.yml. Trusted publishing cannot create a package, so with
-  # this on before the bootstrap the publish step below fails the release.
-  # Flip it to 'true' in the same commit that bumps the CLI to its first
-  # real version.
+  # @markii/cli publish gate. @markii/cli 0.0.1 was published by hand and
+  # its Trusted Publisher points at this repo and release.yml, so the gate
+  # is on. Set it to 'false' to hold the CLI back from a release.
   # ------------------------------------------------------------------------
-  CLI_PUBLISH_ENABLED: 'false'
+  CLI_PUBLISH_ENABLED: 'true'
 
 jobs:
   publish-npm:
