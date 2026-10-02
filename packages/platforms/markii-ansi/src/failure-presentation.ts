@@ -123,6 +123,11 @@ export function unsafeImageSrcTitle(directive: string): string {
   return `${directive}: image source was refused as unsafe and was not shown`;
 }
 
+/** The diagnostic text for a registered block component written as an inline directive. Wording identical to `@markii/html`'s `formMismatchTitle`. */
+export function formMismatchTitle(directive: string): string {
+  return `${directive}: block component was written inline and was not rendered`;
+}
+
 /**
  * The INLINE marker text for a known attribute's value outside its closed
  * enum, this engine's own departure from `@markii/html`'s identical wording:

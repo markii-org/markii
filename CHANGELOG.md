@@ -36,8 +36,25 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
   keeps its own output off the screen while the viewer is mounted. See the
   terminal section of `docs/integration.md`.
 
+- **A `form-mismatch` diagnostic.** `@markii/stdlib`'s `DiagnosticKind`
+  gains `'form-mismatch'`, and `@markii/react`, `@markii/html` and
+  `@markii/ansi` report it through `onDiagnostic` when a registered block
+  component is written as an inline directive (`:callout[x]`). Each
+  engine's failure-presentation module exports the wording as
+  `formMismatchTitle`. A host that switches on the kind exhaustively needs
+  a case for it.
+
 ### Fixed
 
+- **An inline fallback reads the same in every engine.** An inline
+  unknown directive and a block component written inline show their label,
+  a `: ` separator, then the content in `@markii/react` and `@markii/html`,
+  as the terminal engine already did; so does `@markii/html`'s inline
+  "failed to render" box. The separator is real text in a `mk-unknown__separator`
+  span inside the label, so a copied fallback reads `label: content`
+  instead of running the two together. A fallback with no content shows
+  the bare label. Both engines export the string as
+  `INLINE_FALLBACK_SEPARATOR`.
 - **`details` reads `title=` in the terminal engine.** A `details` block
   written with `summary=` fell back to the generic label "Details"; the
   attribute every engine reads is `title=`, and the terminal engine now

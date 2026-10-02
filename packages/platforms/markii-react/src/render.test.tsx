@@ -1064,7 +1064,19 @@ describe('renderMark — render-level conformance fixtures (conformance/render/)
     expect(marker?.querySelector('.mk-unknown__label')).toHaveTextContent(
       'block component callout written inline',
     );
-    expect(marker).toHaveTextContent('oops');
+    expect(marker?.textContent).toBe(
+      'block component callout written inline: oops',
+    );
+    expect(
+      marker?.querySelector('.mk-unknown__label > .mk-unknown__separator')
+        ?.textContent,
+    ).toBe(': ');
+    const markers = container.querySelectorAll('.mk-unknown--mismatch');
+    expect(markers).toHaveLength(2);
+    expect(markers[1]?.textContent).toBe(
+      'block component callout written inline',
+    );
+    expect(markers[1]?.querySelector('.mk-unknown__separator')).toBeNull();
   });
 
   it('03-layout-attributes: width/align classes on the wrapper div', () => {
@@ -1487,6 +1499,27 @@ describe('renderMark — the silent-value-drop notice mechanism', () => {
         directive: 'card',
         attribute: 'text',
         message: 'card: "Hey" is not a valid text value (ignored)',
+      },
+    ]);
+  });
+
+  it('calls onDiagnostic with the form-mismatch event', () => {
+    const events: unknown[] = [];
+    render(
+      renderMark(
+        'Before :callout[oops] after.',
+        defaultRegistry,
+        undefined,
+        undefined,
+        { onDiagnostic: (event) => events.push(event) },
+      ),
+    );
+    expect(events).toEqual([
+      {
+        kind: 'form-mismatch',
+        directive: 'callout',
+        message:
+          'callout: block component was written inline and was not rendered',
       },
     ]);
   });

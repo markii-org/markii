@@ -1,1 +1,3 @@
 Before block component `callout` written inline: oops after.
+
+Empty block component `callout` written inline here.

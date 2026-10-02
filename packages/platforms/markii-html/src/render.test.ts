@@ -67,7 +67,7 @@ describe('unknown-directive fallback', () => {
     const html = renderMarkToHtml('before :ghost[label] after\n', empty);
     expect(html).toContain('mk-unknown mk-unknown--inline');
     expect(html).toContain(
-      '<span class="mk-unknown__label">unknown component <code>ghost</code></span>label</span>',
+      '<span class="mk-unknown__label">unknown component <code>ghost</code><span class="mk-unknown__separator">: </span></span>label</span>',
     );
     expect(html).not.toContain('mk-unknown--block');
   });
@@ -741,6 +741,34 @@ describe('renderMarkToHtml — the silent-value-drop notice mechanism', () => {
         message: 'card: "Hey" is not a valid text value (ignored)',
       },
     ]);
+  });
+
+  it('calls onDiagnostic with the form-mismatch event', () => {
+    const events: unknown[] = [];
+    renderMarkToHtml(
+      'Before :callout[oops] after.',
+      defaultHtmlRegistry,
+      undefined,
+      undefined,
+      { onDiagnostic: (event) => events.push(event) },
+    );
+    expect(events).toEqual([
+      {
+        kind: 'form-mismatch',
+        directive: 'callout',
+        message:
+          'callout: block component was written inline and was not rendered',
+      },
+    ]);
+  });
+
+  it('gives an inline fallback a separator only when it has content', () => {
+    const withContent = renderMarkToHtml(':mystery[hi]', defaultHtmlRegistry);
+    expect(withContent).toContain(
+      '<span class="mk-unknown__separator">: </span></span>hi',
+    );
+    const empty = renderMarkToHtml(':mystery[]', defaultHtmlRegistry);
+    expect(empty).not.toContain('mk-unknown__separator');
   });
 
   it('calls onDiagnostic with the unsafe-image-src event', () => {

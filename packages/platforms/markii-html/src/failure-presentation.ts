@@ -109,3 +109,16 @@ export function invalidAttributeValueTitle(
 export function unsafeImageSrcTitle(directive: string): string {
   return `${directive}: image source was refused as unsafe and was not shown`;
 }
+
+/** The diagnostic text for a registered block component written as an inline directive, which renders as the inline fallback instead. */
+export function formMismatchTitle(directive: string): string {
+  return `${directive}: block component was written inline and was not rendered`;
+}
+
+/**
+ * The visible separator between an inline fallback's label and its content,
+ * emitted as real text (`mk-unknown__separator`) so a copy or a plain-text
+ * export reads the same as `@markii/ansi`'s output. An inline fallback with
+ * no content shows the bare label and no separator.
+ */
+export const INLINE_FALLBACK_SEPARATOR = ': ';

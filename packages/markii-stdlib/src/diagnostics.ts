@@ -23,8 +23,13 @@
  * `'unsafe-image-src'` — a component-built `<img>` (the standard `figure`)
  * had its `src` refused as an unsafe URL scheme; the component rendered
  * without the image, with a quiet marker.
+ *
+ * `'form-mismatch'` — a registered block component was written as an
+ * inline directive (`:callout[x]`); it rendered as the inline fallback
+ * marker instead of the component.
  */
-export type DiagnosticKind = 'invalid-attribute-value' | 'unsafe-image-src';
+export type DiagnosticKind =
+  'invalid-attribute-value' | 'unsafe-image-src' | 'form-mismatch';
 
 export interface DiagnosticEvent {
   readonly kind: DiagnosticKind;

@@ -73,6 +73,7 @@ import {
   dataStateSuffix,
   emptyInlineTitle,
   failureToken,
+  formMismatchTitle,
   invalidAttributeValueLabel,
   invalidAttributeValueTitle,
   unsafeImageSrcLabel,
@@ -569,6 +570,11 @@ function renderDirectiveContentString(
     );
   }
   if (isFormMismatch(entry, kind)) {
+    reportDiagnostic(wctx.onDiagnostic, {
+      kind: 'form-mismatch',
+      directive: name,
+      message: formMismatchTitle(name),
+    });
     return unknownDirective(
       name || '(unnamed)',
       inline,

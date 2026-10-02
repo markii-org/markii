@@ -30,6 +30,8 @@ import {
   failureTitle,
   EMPTY_INLINE_MARKER_CLASS,
   emptyInlineTitle,
+  formMismatchTitle,
+  INLINE_FALLBACK_SEPARATOR,
   invalidAttributeValueTitle,
 } from './failure-presentation.js';
 import {
@@ -314,6 +316,17 @@ function fallbackLabel(
 }
 
 /**
+ * The separator an inline fallback's label ends with when the fallback has
+ * content to show after it, matching `@markii/ansi`'s `label: content`.
+ * Nested inside the label span so it takes the label's styling.
+ */
+function inlineSeparator(childrenHtml: string): string {
+  return childrenHtml.trim() === ''
+    ? ''
+    : `<span class="mk-unknown__separator">${INLINE_FALLBACK_SEPARATOR}</span>`;
+}
+
+/**
  * The unknown-directive fallback, matching `@markii/react`'s `UnknownDirective`
  * markup and class names byte-for-byte so one stylesheet covers both renderers.
  * An inline directive is built from `<span>`s (it lives inside a paragraph); a
@@ -330,7 +343,7 @@ function unknownDirective(
   if (inline) {
     return (
       `<span class="mk-unknown mk-unknown--inline${reasonClass}">` +
-      `<span class="mk-unknown__label">${label}</span>` +
+      `<span class="mk-unknown__label">${label}${inlineSeparator(childrenHtml)}</span>` +
       `${childrenHtml}</span>`
     );
   }
@@ -359,7 +372,7 @@ function componentError(
   if (inline) {
     return (
       `<span class="mk-unknown mk-unknown--inline mk-unknown--error">` +
-      `<span class="mk-unknown__label">component ${code} failed to render</span>` +
+      `<span class="mk-unknown__label">component ${code} failed to render${inlineSeparator(childrenHtml)}</span>` +
       `${childrenHtml}</span>`
     );
   }
@@ -514,6 +527,11 @@ function renderDirectiveContent(
     );
   }
   if (isFormMismatch(entry, kind)) {
+    reportDiagnostic(ctx.onDiagnostic, {
+      kind: 'form-mismatch',
+      directive: name,
+      message: formMismatchTitle(name),
+    });
     return unknownDirective(
       name || '(unnamed)',
       inline,

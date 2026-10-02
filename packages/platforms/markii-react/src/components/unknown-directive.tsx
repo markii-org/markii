@@ -1,4 +1,6 @@
 import type { ReactElement, ReactNode } from 'react';
+import { INLINE_FALLBACK_SEPARATOR } from './failure-presentation.js';
+import { isEmptyContent } from './is-empty-content.js';
 
 /**
  * Why a directive fell back instead of rendering its component:
@@ -68,7 +70,9 @@ function fallbackLabel(
  * `<p>` and reopens one after, so the resulting DOM stops matching what the
  * renderer built. The fallback for an inline directive is therefore built
  * from `<span>`s throughout, including its label, so it can nest inside a
- * paragraph as ordinary phrasing content.
+ * paragraph as ordinary phrasing content. When it has content, the label
+ * ends with a `: ` separator, so it reads `label: content` like
+ * `@markii/ansi`'s output.
  */
 export function UnknownDirective({
   name,
@@ -87,6 +91,11 @@ export function UnknownDirective({
       <span className={`mk-unknown mk-unknown--inline${reasonClass}`}>
         <span className="mk-unknown__label">
           {fallbackLabel(name, true, reason)}
+          {isEmptyContent(children) ? null : (
+            <span className="mk-unknown__separator">
+              {INLINE_FALLBACK_SEPARATOR}
+            </span>
+          )}
         </span>
         {children}
       </span>

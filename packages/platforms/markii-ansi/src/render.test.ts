@@ -405,6 +405,28 @@ describe('empty-inline and invalid-enum quiet markers', () => {
       'is not a valid type value',
     );
   });
+  it('a block component written inline reports a form-mismatch diagnostic', async () => {
+    const diagnostics: unknown[] = [];
+    const reg = createAnsiRegistry({
+      callout: { component: () => 'callout', inline: false },
+    });
+    const text = await renderMarkToAnsi(
+      'Before :callout[oops] after.\n',
+      reg,
+      undefined,
+      undefined,
+      { onDiagnostic: (event) => diagnostics.push(event) },
+    );
+    expect(stripEscapes(text)).toContain('written inline: oops');
+    expect(diagnostics).toEqual([
+      {
+        kind: 'form-mismatch',
+        directive: 'callout',
+        message:
+          'callout: block component was written inline and was not rendered',
+      },
+    ]);
+  });
 });
 
 describe('links and images', () => {

@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   emptyInlineTitle,
+  formMismatchTitle,
   failurePhrase,
   invalidAttributeValueTitle,
   unsafeImageSrcTitle,
@@ -135,6 +136,14 @@ describe('failure-presentation drift: title templates', () => {
         attribute: 'type',
         value: 'bogus',
       }),
+    );
+  });
+
+  it("formMismatchTitle matches @markii/html's template", () => {
+    const template = extractReturnTemplate(htmlSource, 'formMismatchTitle');
+    expect(template).toContain('written inline');
+    expect(formMismatchTitle('callout')).toBe(
+      fillTemplate(template, { directive: 'callout' }),
     );
   });
 

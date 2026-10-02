@@ -42,8 +42,10 @@ import type { ResolveHref } from './href-resolve.js';
 import {
   EMPTY_INLINE_MARKER_CLASS,
   emptyInlineTitle,
+  formMismatchTitle,
   invalidAttributeValueTitle,
 } from './components/failure-presentation.js';
+import { isEmptyContent } from './components/is-empty-content.js';
 
 // The wrapper below uses the literal `data-mk-notice` attribute name,
 // matching `failure-presentation.ts`'s `NOTICE_ATTRIBUTE` (see `figure.tsx`'s
@@ -298,28 +300,6 @@ function isRegisteredInline(entry: RegistryEntry): boolean {
 }
 
 /**
- * Whether `children` amounts to no content at all — `undefined`/`null`/
- * `false`, an all-whitespace string, or an array whose members are all
- * themselves empty by this same test (recursing through the arrays
- * hast-util-to-jsx-runtime produces for a directive with zero or
- * whitespace-only inner markdown). Used only to detect the ITEM 1 case: an
- * `inline: true` component written with nothing between its brackets/braces
- * (`::badge{label="x"}` instead of `:badge[x]`) — the inline form exists to
- * wrap text, so zero content there is an authoring mistake worth a quiet
- * marker, never a reason to withhold rendering.
- */
-function isEmptyContent(children: ReactNode): boolean {
-  if (children === undefined || children === null || children === false) {
-    return true;
-  }
-  if (typeof children === 'string') return children.trim() === '';
-  if (Array.isArray(children)) {
-    return (children as ReactNode[]).every((child) => isEmptyContent(child));
-  }
-  return false;
-}
-
-/**
  * Whether one of `name`'s `@markii/stdlib` contract attributes with a
  * closed `enum` is present in `attributes` with a value outside that enum
  * — e.g. `card{text="Hey"}` (`text` only accepts `left`/`center`/`right`).
@@ -436,6 +416,11 @@ function renderDirectiveContent(
   // "is there a component at all" test so an unregistered name keeps
   // reporting itself as unregistered, which is the more useful of the two.
   if (isFormMismatch(entry, kind)) {
+    reportDiagnostic(onDiagnostic, {
+      kind: 'form-mismatch',
+      directive: name,
+      message: formMismatchTitle(name),
+    });
     return (
       <UnknownDirective
         name={name || '(unnamed)'}
