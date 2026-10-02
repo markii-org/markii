@@ -47,6 +47,7 @@ const cases: Case[] = [
       run: true,
       verbose: false,
       static: false,
+      watch: false,
     },
   },
   {
@@ -59,6 +60,7 @@ const cases: Case[] = [
       run: true,
       verbose: false,
       static: false,
+      watch: false,
     },
   },
   {
@@ -72,6 +74,7 @@ const cases: Case[] = [
       run: true,
       verbose: false,
       static: false,
+      watch: false,
     },
   },
   {
@@ -83,6 +86,7 @@ const cases: Case[] = [
       run: false,
       verbose: false,
       static: false,
+      watch: false,
     },
   },
   {
@@ -94,6 +98,7 @@ const cases: Case[] = [
       run: true,
       verbose: true,
       static: false,
+      watch: false,
     },
   },
   {
@@ -106,6 +111,7 @@ const cases: Case[] = [
       run: true,
       verbose: false,
       static: false,
+      watch: false,
     },
   },
   {
@@ -117,6 +123,7 @@ const cases: Case[] = [
       run: true,
       verbose: false,
       static: true,
+      watch: false,
     },
   },
   {
@@ -288,6 +295,7 @@ const cases: Case[] = [
       run: true,
       verbose: false,
       static: false,
+      watch: false,
     },
   },
   {
@@ -300,6 +308,7 @@ const cases: Case[] = [
       run: true,
       verbose: false,
       static: false,
+      watch: false,
     },
   },
   {
@@ -320,6 +329,7 @@ const cases: Case[] = [
       run: true,
       verbose: false,
       static: false,
+      watch: false,
     },
   },
   {

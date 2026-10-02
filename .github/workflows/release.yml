@@ -1,6 +1,7 @@
 # Fires on a pushed `v*.*.*` tag and does two things:
 #
-#   1. publish-npm    Publishes the eight @markii/* library packages to npm.
+#   1. publish-npm    Publishes the nine @markii/* library packages to npm,
+#                     and @markii/cli when CLI_PUBLISH_ENABLED (below) is on.
 #                     Idempotent: any package whose version is already on the
 #                     registry is skipped, so re-running a tag (or tagging a
 #                     version that was published by hand) is safe and does not
@@ -49,6 +50,15 @@ env:
     packages/platforms/markii-react
     packages/platforms/markii-html
     packages/platforms/markii-ansi
+  # ------------------------------------------------------------------------
+  # @markii/cli publish gate. KEEP 'false' until @markii/cli 0.0.1 exists on
+  # npm (published by hand) AND its Trusted Publisher points at this repo
+  # and release.yml. Trusted publishing cannot create a package, so with
+  # this on before the bootstrap the publish step below fails the release.
+  # Flip it to 'true' in the same commit that bumps the CLI to its first
+  # real version.
+  # ------------------------------------------------------------------------
+  CLI_PUBLISH_ENABLED: 'false'
 
 jobs:
   publish-npm:
@@ -94,6 +104,21 @@ jobs:
               npm publish -w "$name" --access public
             fi
           done
+
+      # The command line tool (apps/cli). Its `npm run build:dist` above
+      # already bundled it; this step only publishes, and only when the gate
+      # at the top of this file is on.
+      - name: Publish @markii/cli if not yet on npm (gated)
+        if: env.CLI_PUBLISH_ENABLED == 'true'
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./apps/cli/package.json').version")
+          if npm view "@markii/cli@$version" version >/dev/null 2>&1; then
+            echo "@markii/cli@$version already on npm, skipping"
+          else
+            echo "publishing @markii/cli@$version"
+            npm publish -w @markii/cli --access public
+          fi
 
   github-release:
     needs: publish-npm

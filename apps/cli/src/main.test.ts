@@ -254,3 +254,182 @@ describe('view: live/static mode selection', () => {
     expect(terminal.errLines.join('')).toContain('script "broken" failed');
   });
 });
+
+describe('view --watch', () => {
+  const tempDirs: string[] = [];
+
+  afterEach(() => {
+    while (tempDirs.length > 0) {
+      const dir = tempDirs.pop();
+      if (dir) rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  function makeNote(text: string): { dir: string; file: string } {
+    const dir = mkdtempSync(path.join(tmpdir(), 'markii-cli-main-watch-'));
+    tempDirs.push(dir);
+    const file = path.join(dir, 'note.mk.md');
+    writeFileSync(file, text, 'utf8');
+    return { dir, file };
+  }
+
+  /** A watch the test fires by hand, and an interrupt it releases by hand. */
+  function controlledDeps(mount?: ViewDeps['mountLiveViewer']) {
+    const state: {
+      watched: string[];
+      fire: (() => void) | undefined;
+      closed: boolean;
+      interrupt: (() => void) | undefined;
+    } = {
+      watched: [],
+      fire: undefined,
+      closed: false,
+      interrupt: undefined,
+    };
+    const deps: ViewDeps = {
+      mountLiveViewer: mount ?? (async () => {}),
+      watchNote: (absolutePath, onChange) => {
+        state.watched.push(absolutePath);
+        state.fire = onChange;
+        return {
+          close: () => {
+            state.closed = true;
+          },
+        };
+      },
+      untilInterrupted: () =>
+        new Promise<void>((resolve) => {
+          state.interrupt = resolve;
+        }),
+    };
+    return { deps, state };
+  }
+
+  /** Lets the read-and-render chain behind one change settle. */
+  async function settle(): Promise<void> {
+    for (let i = 0; i < 20; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+  }
+
+  it('refuses a pipe with exit code 3 and one line of reason', async () => {
+    const { dir, file } = makeNote('# Note\n');
+    const terminal = createFakeTerminal({
+      stdoutIsTty: false,
+      env: { XDG_CONFIG_HOME: dir },
+    });
+
+    const exitCode = await run(['view', file, '--watch'], terminal);
+
+    expect(exitCode).toBe(3);
+    expect(terminal.outLines).toEqual([]);
+    expect(terminal.errLines).toEqual([
+      'markii: --watch needs a terminal on stdout, since it redraws the screen on every change\n',
+    ]);
+  });
+
+  it('static: clears and redraws on each change until interrupted', async () => {
+    const { dir, file } = makeNote('# First\n');
+    const terminal = createFakeTerminal({
+      stdinIsTty: false,
+      stdoutIsTty: true,
+      env: { XDG_CONFIG_HOME: dir },
+    });
+    const { deps, state } = controlledDeps();
+
+    const done = run(
+      ['view', file, '--watch', '--color', 'never', '--width', '40'],
+      terminal,
+      { view: deps },
+    );
+    await settle();
+    expect(state.watched).toEqual([file]);
+    expect(terminal.outLines).toHaveLength(1);
+    expect(terminal.outLines[0]).toMatch(/^\x1b\[2J\x1b\[H/);
+    expect(terminal.outLines[0]).toContain('First');
+
+    writeFileSync(file, '# Second\n', 'utf8');
+    state.fire?.();
+    await settle();
+    expect(terminal.outLines).toHaveLength(2);
+    expect(terminal.outLines[1]).toMatch(/^\x1b\[2J\x1b\[H/);
+    expect(terminal.outLines[1]).toContain('Second');
+
+    state.interrupt?.();
+    expect(await done).toBe(0);
+    expect(state.closed).toBe(true);
+  });
+
+  it('static: keeps the last render and says why once when the note goes missing', async () => {
+    const { dir, file } = makeNote('# Here\n');
+    const terminal = createFakeTerminal({
+      stdoutIsTty: true,
+      env: { XDG_CONFIG_HOME: dir },
+    });
+    const { deps, state } = controlledDeps();
+
+    const done = run(['view', file, '--watch', '--color', 'never'], terminal, {
+      view: deps,
+    });
+    await settle();
+    rmSync(file);
+    state.fire?.();
+    await settle();
+    state.fire?.();
+    await settle();
+
+    expect(terminal.outLines).toHaveLength(1);
+    const reasons = terminal.errLines.filter((line) =>
+      line.includes('note.mk.md'),
+    );
+    expect(reasons).toHaveLength(1);
+
+    state.interrupt?.();
+    expect(await done).toBe(0);
+  });
+
+  it('live: hands the viewer each new text', async () => {
+    const { dir, file } = makeNote('# One\n');
+    const terminal = createFakeTerminal({
+      stdinIsTty: true,
+      stdoutIsTty: true,
+      env: { XDG_CONFIG_HOME: dir },
+    });
+    const seen: string[] = [];
+    let fireRef: (() => void) | undefined;
+    const { deps, state } = controlledDeps(async (input) => {
+      const stop = input.onTextChange?.((text) => seen.push(text));
+      fireRef = state.fire;
+      writeFileSync(file, '# Two\n', 'utf8');
+      fireRef?.();
+      await settle();
+      stop?.();
+    });
+
+    const exitCode = await run(['view', file, '--watch'], terminal, {
+      view: deps,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(seen).toEqual(['# Two\n']);
+    expect(state.closed).toBe(true);
+  });
+
+  it('live: without --watch the viewer gets no change hook', async () => {
+    const { dir, file } = makeNote('# One\n');
+    const terminal = createFakeTerminal({
+      stdinIsTty: true,
+      stdoutIsTty: true,
+      env: { XDG_CONFIG_HOME: dir },
+    });
+    const inputs: MountLiveViewerInput[] = [];
+    const { deps, state } = controlledDeps(async (input) => {
+      inputs.push(input);
+    });
+
+    await run(['view', file], terminal, { view: deps });
+
+    expect(inputs[0]?.onTextChange).toBeUndefined();
+    expect(state.watched).toEqual([]);
+  });
+});

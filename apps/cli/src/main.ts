@@ -35,6 +35,7 @@ import { runNote } from './run-note.js';
 import { createCliHostAdapter } from './host-adapter.js';
 import { resolveViewMode } from './view-mode.js';
 import { runLiveViewer } from './live-view.js';
+import { watchNote } from './watch-file.js';
 import type { MountLiveViewerInput, ViewDeps } from './view-deps.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -66,7 +67,7 @@ const HELP_TEXT = `markii: a terminal front end for Markii (.mk.md) notes.
 
 Usage:
   markii view <file> [--width <n>] [--color <auto|never|16|256|truecolor>]
-              [--box <unicode|ascii>] [--no-run] [--static]
+              [--box <unicode|ascii>] [--no-run] [--static] [--watch]
   markii export <file> --format <html|ansi|md-plain> -o <file> [--box <unicode|ascii>]
   markii run <file>
 
@@ -86,6 +87,9 @@ view flags:
                     terminal; render with cached values only.
   --static         Render once and exit, even when both stdin and stdout
                     are terminals.
+  --watch          Render again whenever the note changes on disk, until
+                    q (live viewer) or Ctrl+C. Needs a terminal on stdout.
+                    Scripts are not re-run on a change.
 
 In a terminal, markii view opens the note in a live viewer. Left and right
 (or tab) switch tabs, enter folds a details block open or closed, up and
@@ -143,8 +147,9 @@ function writeFailureDetails(
 const defaultViewDeps: ViewDeps = {
   mountLiveViewer: async (input: MountLiveViewerInput): Promise<void> => {
     const initialWidth = resolveWidth(input.widthFlag, input.terminal);
+    let text = input.text;
     const buildElement = (width: number, onExit: () => void) =>
-      buildViewElement(input.text, input.terminal, width, {
+      buildViewElement(text, input.terminal, width, {
         ...(input.colorFlag !== undefined
           ? { colorFlag: input.colorFlag }
           : {}),
@@ -153,20 +158,47 @@ const defaultViewDeps: ViewDeps = {
         onDiagnostic: input.onDiagnostic,
         onExit,
       });
+    const onTextChange = input.onTextChange;
     await runLiveViewer({
       stdout: process.stdout,
       stdin: process.stdin,
       initialWidth,
       buildElement,
+      ...(onTextChange
+        ? {
+            subscribe: (refresh: () => void) =>
+              onTextChange((next) => {
+                text = next;
+                refresh();
+              }),
+          }
+        : {}),
     });
   },
+  watchNote: (absolutePath, onChange) => watchNote(absolutePath, onChange),
+  untilInterrupted: () =>
+    new Promise<void>((resolve) => {
+      process.once('SIGINT', () => resolve());
+    }),
 };
+
+/** Clears the screen and homes the cursor before a static `--watch` redraw. */
+const CLEAR_SCREEN = '\x1b[2J\x1b[H';
 
 async function runViewCommand(
   command: Extract<ParsedCommand, { kind: 'view' }>,
   terminal: Terminal,
   deps: ViewDeps = defaultViewDeps,
 ): Promise<number> {
+  // A static redraw clears the screen, which only makes sense on a
+  // terminal; into a pipe or a file it would be a stream of escapes.
+  if (command.watch && !terminal.stdoutIsTty) {
+    terminal.writeError(
+      'markii: --watch needs a terminal on stdout, since it redraws the screen on every change\n',
+    );
+    return 3;
+  }
+
   const absolutePath = path.resolve(command.file);
   const read = await readNote(absolutePath);
   if (!read.ok) {
@@ -242,14 +274,68 @@ async function runViewCommand(
   const store = createValueStore(values);
   const diagnostics = createRenderDiagnosticCollector();
 
-  if (mode === 'static') {
-    const output = await renderNote(note.text, terminal, {
-      ...(command.width !== undefined ? { widthFlag: command.width } : {}),
-      ...(command.color !== undefined ? { colorFlag: command.color } : {}),
-      ...(command.box !== undefined ? { boxFlag: command.box } : {}),
-      store,
-      onDiagnostic: diagnostics.onDiagnostic,
+  // `--watch`: every change re-reads the note and hands the new text to
+  // `onText`. A note that cannot be read mid-watch (deleted, or caught
+  // half-written) keeps the last good render on screen and says why once
+  // per failure on stderr; in the live viewer that line is held like
+  // every other one until the viewer closes.
+  const startWatch = (onText: (text: string) => void): (() => void) => {
+    const watchFn = deps.watchNote;
+    if (!watchFn) return () => {};
+    let lastError: string | undefined;
+    const watch = watchFn(absolutePath, () => {
+      void readNote(absolutePath).then((next) => {
+        if (!next.ok) {
+          if (next.message !== lastError) {
+            lastError = next.message;
+            writeError(`markii: ${next.message}\n`);
+          }
+          return;
+        }
+        lastError = undefined;
+        onText(next.note.text);
+      });
     });
+    return () => watch.close();
+  };
+
+  if (mode === 'static') {
+    const renderText = (text: string): Promise<string> =>
+      renderNote(text, terminal, {
+        ...(command.width !== undefined ? { widthFlag: command.width } : {}),
+        ...(command.color !== undefined ? { colorFlag: command.color } : {}),
+        ...(command.box !== undefined ? { boxFlag: command.box } : {}),
+        store,
+        onDiagnostic: diagnostics.onDiagnostic,
+      });
+    if (command.watch) {
+      terminal.write(`${CLEAR_SCREEN}${await renderText(note.text)}`);
+      // The collector dedupes for the whole watch, so a reason reaches
+      // stderr once, the first time a render produces it.
+      let reported = 0;
+      const flushDiagnostics = (): void => {
+        const lines = diagnostics.lines();
+        for (const line of lines.slice(reported)) {
+          terminal.writeError(`markii: ${line}\n`);
+        }
+        reported = lines.length;
+      };
+      flushDiagnostics();
+      // Renders are chained so two quick changes can never draw out of
+      // order.
+      let rendering = Promise.resolve();
+      const stop = startWatch((text) => {
+        rendering = rendering.then(async () => {
+          terminal.write(`${CLEAR_SCREEN}${await renderText(text)}`);
+          flushDiagnostics();
+        });
+      });
+      await (deps.untilInterrupted?.() ?? Promise.resolve());
+      stop();
+      await rendering;
+      return exitCode;
+    }
+    const output = await renderText(note.text);
     terminal.write(output);
     // Render diagnostics (a declined attribute value, a refused image
     // source) are the reason behind an in-note marker that has no tooltip
@@ -272,6 +358,12 @@ async function runViewCommand(
     ...(command.box !== undefined ? { boxFlag: command.box } : {}),
     store,
     onDiagnostic: diagnostics.onDiagnostic,
+    ...(command.watch
+      ? {
+          onTextChange: (listener: (text: string) => void) =>
+            startWatch(listener),
+        }
+      : {}),
   });
   for (const line of diagnostics.lines()) {
     heldErrorLines.push(`markii: ${line}\n`);

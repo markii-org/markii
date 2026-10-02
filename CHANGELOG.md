@@ -47,6 +47,17 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
   `FrameEdges` types, and `AnsiRenderContext` gains `glyphs` so a pack
   component can draw in the same style. A test renders the whole render
   corpus in ascii and fails on any byte above 0x7f.
+- **The command line tool is published as `@markii/cli`.** Install it with
+  `npm install -g @markii/cli`; it needs Node.js 22 or later and has no
+  runtime dependencies, since the renderer, the script runner and the Lua
+  engine are bundled. Its workspace name changes from `markii-cli` to
+  `@markii/cli`.
+- **`markii view --watch`.** The note renders again whenever its file
+  changes. The live viewer re-renders in place and keeps its focus and open
+  tabs; a static render clears the screen and prints again, so `--watch`
+  refuses a pipe with exit code 3. An editor that saves by renaming a
+  temporary file over the note is seen, and a filesystem without change
+  events falls back to polling. Scripts are not re-run on a change.
 - **`markii --box`.** `markii view` and `markii export --format ansi` take
   `--box <unicode|ascii>`. Without it, `markii view` uses ascii when `TERM`
   is `dumb` or the locale is not UTF-8; an ansi export stays unicode, as

@@ -11,14 +11,23 @@ running scripts is `@markii/host`'s job. This app supplies only its own
 seams: argument parsing, terminal input and output, file and bundle access,
 and device-local state.
 
-This package is not published yet. Run it from source.
+## Install
+
+The CLI needs Node.js 22 or later. It has no runtime dependencies: the
+renderer, the script runner, and the Lua engine are bundled into the
+package.
+
+```
+npm install -g @markii/cli
+markii --help
+```
 
 ## Running from source
 
 From the repository root:
 
 ```
-npm run build --workspace markii-cli
+npm run build --workspace @markii/cli
 node apps/cli/dist/markii.mjs --help
 ```
 
@@ -44,6 +53,13 @@ Renders a note to the terminal.
 - `--no-run` never runs the note's scripts, even in an interactive
   terminal.
 - `--static` renders the note once and exits, even in a terminal.
+- `--watch` renders the note again whenever its file changes, until you
+  quit the live viewer with q or stop a static render with Ctrl+C. The live
+  viewer keeps its focus and open tabs across a change. A static render
+  clears the screen and prints the note again, so `--watch` needs a
+  terminal on stdout and exits with code 3 when given a pipe. Scripts are
+  not re-run on a change. If the file disappears or cannot be read, the
+  last render stays on screen and the reason goes to stderr once.
 
 If the note has scripts, `--no-run` was not given, and both stdin and
 stdout are terminals, `markii view` runs the note's scripts once before

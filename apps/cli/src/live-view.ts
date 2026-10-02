@@ -24,6 +24,12 @@ export interface LiveViewerOptions {
    * reaches this module's unmount.
    */
   readonly buildElement: (width: number, onExit: () => void) => ReactElement;
+  /**
+   * `--watch`: registers `refresh`, which re-renders the tree at the
+   * current width; returns a function that unregisters it. A re-render,
+   * not a remount, so the engine keeps its focus and open state.
+   */
+  readonly subscribe?: (refresh: () => void) => () => void;
 }
 
 /**
@@ -57,15 +63,20 @@ export async function runLiveViewer(options: LiveViewerOptions): Promise<void> {
   );
   instanceRef.current = instance;
 
+  let width = options.initialWidth;
   const onResize = (): void => {
-    const width = options.stdout.columns ?? options.initialWidth;
+    width = options.stdout.columns ?? options.initialWidth;
     instance.rerender(options.buildElement(width, handleExit));
   };
   options.stdout.on('resize', onResize);
+  const unsubscribe = options.subscribe?.(() => {
+    instance.rerender(options.buildElement(width, handleExit));
+  });
 
   try {
     await instance.waitUntilExit();
   } finally {
     options.stdout.off('resize', onResize);
+    unsubscribe?.();
   }
 }

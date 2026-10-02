@@ -25,6 +25,8 @@ export type ParsedCommand =
       readonly verbose: boolean;
       /** Forces the render-once path even when both stdin and stdout are terminals. */
       readonly static: boolean;
+      /** Re-renders whenever the note changes on disk. */
+      readonly watch: boolean;
     }
   | {
       readonly kind: 'export';
@@ -89,6 +91,7 @@ interface Flags {
   box?: BoxFlag;
   noRun: boolean;
   static: boolean;
+  watch: boolean;
   format?: ExportFormat;
   output?: string;
 }
@@ -123,6 +126,7 @@ function parseTokens(
     verbose: false,
     noRun: false,
     static: false,
+    watch: false,
   };
   const positionals: string[] = [];
   let onlyPositionals = false;
@@ -157,6 +161,9 @@ function parseTokens(
         continue;
       case '--static':
         flags.static = true;
+        continue;
+      case '--watch':
+        flags.watch = true;
         continue;
       case '--width': {
         const value = tokens[++i];
@@ -274,6 +281,7 @@ export function parseArgs(argv: readonly string[]): ParsedCommand {
       run: !flags.noRun,
       verbose: flags.verbose,
       static: flags.static,
+      watch: flags.watch,
     };
   }
 

@@ -17,8 +17,26 @@ export interface MountLiveViewerInput {
   readonly boxFlag?: BoxFlag;
   readonly store: AnsiValueStore;
   readonly onDiagnostic: OnDiagnostic;
+  /**
+   * `--watch`: registers a listener the caller calls with the note's new
+   * text after each change on disk, and returns a function that removes it.
+   * The viewer re-renders in place, so focus and open state survive.
+   */
+  readonly onTextChange?: (listener: (text: string) => void) => () => void;
+}
+
+/** A started watch on a note; `close` stops it. */
+export interface NoteWatch {
+  close(): void;
 }
 
 export interface ViewDeps {
   readonly mountLiveViewer: (input: MountLiveViewerInput) => Promise<void>;
+  /** Calls `onChange` (debounced) whenever the note at `absolutePath` changes. */
+  readonly watchNote?: (
+    absolutePath: string,
+    onChange: () => void,
+  ) => NoteWatch;
+  /** Resolves when the user interrupts (Ctrl+C) a static `--watch`. */
+  readonly untilInterrupted?: () => Promise<void>;
 }

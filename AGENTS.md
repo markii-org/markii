@@ -413,9 +413,13 @@ apps/vscode          the "Markii" VS Code extension (preview + Run + packs) — 
                      channel: packs loaded, packs skipped and why,
                      deprecated relative markii.packs entries
 apps/cli             the "markii" command line tool, a third host and a
-                     consumer of @markii/ansi, never a renderer. Publishable
-                     but UNPUBLISHED: absent from build:dist and the release
-                     workflow until the user bootstraps it on npm. Bundled
+                     consumer of @markii/ansi, never a renderer. Published
+                     as @markii/cli (files: dist + README + LICENSE; bin
+                     markii -> dist/markii.mjs; node >= 22; prepack builds).
+                     In the root build:dist chain; release.yml publishes it
+                     only while its CLI_PUBLISH_ENABLED gate is 'true',
+                     which stays 'false' until the user has published
+                     0.0.1 by hand with trusted publishing. Bundled
                      with esbuild as ESM (dist/markii.mjs, since Ink cannot
                      be bundled as CJS), carrying @markii/host's worker
                      entry and wasmoon's glue.wasm in its own dist/run/, so
@@ -433,7 +437,14 @@ apps/cli             the "markii" command line tool, a third host and a
                      createMarkiiHost); src/host-conformance.test.ts runs
                      conformance/host/ through it
   src/view-mode.ts   live vs static decision (pure); src/live-view.ts mounts
-                     buildMarkElement with Ink, owns width/resize and onExit
+                     buildMarkElement with Ink, owns width/resize and onExit,
+                     and re-renders in place for --watch
+  src/watch-file.ts  --watch: fs.watch on the note's directory (so a
+                     rename-over save is seen), debounced, with a polling
+                     fallback; fs injected for tests
+  src/render-note.ts the one call into @markii/ansi: width, color, and the
+                     box style (--box, else detectBoxStyle on the env the
+                     Terminal seam hands over)
   Loads no packs by design: a pack directive renders as the unknown
   component fallback, like the static HTML export
 apps/obsidian        the "Markii" Obsidian plugin (desktop only) — an
