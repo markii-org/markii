@@ -1,9 +1,6 @@
 <p align="center">
   <img src="res/logo_512x512.png" alt="Markii" width="256" height="256" />
 </p>
-
-# Markii
-
 <p align="center">
   <a href="https://github.com/markii-org/markii/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/markii-org/markii/ci.yml?branch=main&label=CI" /></a>
   <a href="https://www.npmjs.com/package/@markii/react"><img alt="npm" src="https://img.shields.io/npm/v/@markii/react?logo=npm&label=npm" /></a>
@@ -12,6 +9,15 @@
   <a href="https://markii-org.github.io/markii-vault/"><img alt="playground" src="https://img.shields.io/badge/playground-try%20it-F28C1E" /></a>
   <a href="docs/spec.md"><img alt="spec" src="https://img.shields.io/badge/spec-read-E0A82E" /></a>
 </p>
+
+
+# Markii
+
+
+
+https://github.com/user-attachments/assets/a806b239-8d73-4735-a1f5-53e22a76adf3
+
+
 
 Markii is markdown that renders your own components. A `.mk.md` file is plain
 CommonMark plus one small directive syntax, so it opens as readable markdown
