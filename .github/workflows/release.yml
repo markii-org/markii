@@ -29,7 +29,8 @@
 # The stable tarball names mean the newest assets are always reachable at:
 #   https://github.com/markii-org/markii/releases/latest/download/markii-core.tgz
 #   (and markii-stdlib.tgz, markii-bundle.tgz, markii-pack.tgz,
-#    markii-runtime.tgz, markii-lua.tgz, markii-react.tgz, markii-html.tgz)
+#    markii-runtime.tgz, markii-lua.tgz, markii-react.tgz, markii-html.tgz,
+#    markii-ansi.tgz)
 
 name: Release
 
@@ -170,10 +171,10 @@ jobs:
             echo "npm install @markii/react@${VERSION}"
             echo '```'
             echo
-            echo 'All eight packages, if you want them explicitly:'
+            echo 'All nine packages, if you want them explicitly:'
             echo
             echo '```'
-            for pkg in core stdlib bundle pack runtime lua react html; do
+            for pkg in core stdlib bundle pack runtime lua react html ansi; do
               echo "npm install @markii/${pkg}@${VERSION}"
             done
             echo '```'
@@ -184,7 +185,7 @@ jobs:
             echo 'stable across releases, so the latest of each is always at a fixed URL:'
             echo
             echo '```'
-            for pkg in core stdlib bundle pack runtime lua react html; do
+            for pkg in core stdlib bundle pack runtime lua react html ansi; do
               echo "https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/markii-${pkg}.tgz"
             done
             echo '```'

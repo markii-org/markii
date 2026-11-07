@@ -1,7 +1,7 @@
 {
   "name": "@markii/ansi",
   "version": "0.16.0",
-  "description": "A framework-free terminal renderer for Markii (.mk.md): a registry-driven hast-to-ANSI-text engine. Zero React; for a terminal, a pipe, or any host that wants a plain string with optional color.",
+  "description": "The terminal renderer for Markii (.mk.md): a registry-driven hast-to-terminal engine built on Ink. Renders a note once as a string with optional color, for a pipe or a log, or as a live Ink tree a host can mount.",
   "keywords": [
     "markdown",
     "markii",

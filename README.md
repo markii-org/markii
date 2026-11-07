@@ -110,7 +110,7 @@ Ways to use Markii with no coding:
       <h4>Command line</h4>
       View, export and run a note straight in the terminal.
       <br /><br />
-      <a href="apps/cli/README.md">Build it from source &rarr;</a>
+      <a href="https://www.npmjs.com/package/@markii/cli">Install from npm &rarr;</a>
       <br><br>
     </td>
   </tr>

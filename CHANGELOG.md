@@ -44,6 +44,10 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`@markii/ansi`'s npm description matches the engine.** It no longer
+  claims "Zero React"; the engine is built on Ink. The GitHub release notes
+  list `@markii/ansi` with the other packages and attach its tarball link.
+
 - **An inline fallback reads the same in every engine.** An inline
   unknown directive and a block component written inline show their label,
   a `: ` separator, then the content in `@markii/react` and `@markii/html`,
