@@ -10,14 +10,9 @@
   <a href="docs/spec.md"><img alt="spec" src="https://img.shields.io/badge/spec-read-E0A82E" /></a>
 </p>
 
-
 # Markii
 
-
-
 https://github.com/user-attachments/assets/a806b239-8d73-4735-a1f5-53e22a76adf3
-
-
 
 Markii is markdown that renders your own components. A `.mk.md` file is plain
 CommonMark plus one small directive syntax, so it opens as readable markdown
