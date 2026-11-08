@@ -197,6 +197,7 @@ rather than a skipped test or a faked empty answer.
 | `12-complete-nested-container` | completing a container inside an equal-length container carries the fence edits that keep the pair legal |
 | `13-install-pack-declined` | declining the install consent writes nothing, and removing the never-installed pack reports it |
 | `14-remove-pack` | removing an installed pack deletes it; removing it again reports it is not installed |
+| `15-load-packs-engine-views` | loading packs reports every installed component and, as `unavailable`, the ones this host's engine has no view for |
 
 See `tmp/W11-phase3.md` for which capabilities each of the three real
 adapters currently declares, and which scenarios are consequently

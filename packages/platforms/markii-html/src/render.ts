@@ -33,14 +33,21 @@ import {
   formMismatchTitle,
   INLINE_FALLBACK_SEPARATOR,
   invalidAttributeValueTitle,
+  NO_ENGINE_VIEW_LABEL,
+  noEngineViewTitle,
 } from './failure-presentation.js';
 import {
+  createUnavailableComponentLookup,
   formatValue,
   getContract,
   reportDiagnostic,
   INTERACTIVE_ATTRIBUTE,
 } from '@markii/stdlib';
-import type { OnDiagnostic } from '@markii/stdlib';
+import type {
+  OnDiagnostic,
+  UnavailableComponent,
+  UnavailableComponentLookup,
+} from '@markii/stdlib';
 import { resolveImageAttribute } from './image-resolve.js';
 import type { ResolveImageSrc } from './image-resolve.js';
 import { resolveHrefAttribute } from './href-resolve.js';
@@ -300,13 +307,17 @@ function isRegisteredInline(entry: HtmlRegistryEntry): boolean {
   }
 }
 
+type DirectiveFallbackReason =
+  'unregistered' | 'form-mismatch' | 'no-engine-view';
+
 /** The fallback label line, worded for the reason and the form the directive was written in. Returns HTML. */
 function fallbackLabel(
   name: string,
   inline: boolean,
-  reason: 'unregistered' | 'form-mismatch',
+  reason: DirectiveFallbackReason,
 ): string {
   const code = `<code>${escapeHtml(name)}</code>`;
+  if (reason === 'no-engine-view') return `${NO_ENGINE_VIEW_LABEL} ${code}`;
   if (reason === 'form-mismatch') {
     return inline
       ? `block component ${code} written inline`
@@ -336,13 +347,20 @@ function unknownDirective(
   name: string,
   inline: boolean,
   childrenHtml: string,
-  reason: 'unregistered' | 'form-mismatch',
+  reason: DirectiveFallbackReason,
+  title?: string,
 ): string {
-  const reasonClass = reason === 'form-mismatch' ? ' mk-unknown--mismatch' : '';
+  const reasonClass =
+    reason === 'form-mismatch'
+      ? ' mk-unknown--mismatch'
+      : reason === 'no-engine-view'
+        ? ' mk-unknown--no-view'
+        : '';
+  const titleAttr = title === undefined ? '' : ` title="${escapeHtml(title)}"`;
   const label = fallbackLabel(name, inline, reason);
   if (inline) {
     return (
-      `<span class="mk-unknown mk-unknown--inline${reasonClass}">` +
+      `<span class="mk-unknown mk-unknown--inline${reasonClass}"${titleAttr}>` +
       `<span class="mk-unknown__label">${label}${inlineSeparator(childrenHtml)}</span>` +
       `${childrenHtml}</span>`
     );
@@ -351,7 +369,7 @@ function unknownDirective(
     ? `<div class="mk-unknown__content">${childrenHtml}</div>`
     : '';
   return (
-    `<div class="mk-unknown mk-unknown--block${reasonClass}">` +
+    `<div class="mk-unknown mk-unknown--block${reasonClass}"${titleAttr}>` +
     `<p class="mk-unknown__label">${label}</p>${content}</div>`
   );
 }
@@ -505,6 +523,7 @@ function renderDirectiveContent(
   ctx: HtmlRenderContext,
   scope: ValueScope,
   layoutClassName: string | undefined,
+  unavailable: UnavailableComponentLookup | undefined,
 ): string {
   if (name === VALUE_DIRECTIVE_NAME) {
     return ctx.valueMarker(
@@ -519,6 +538,26 @@ function renderDirectiveContent(
   const component = readRegistryComponent(entry);
 
   if (!entry || component == null) {
+    const missingView = unavailable?.(name);
+    if (missingView !== undefined) {
+      const title = noEngineViewTitle(
+        name,
+        missingView.pack,
+        missingView.engines,
+      );
+      reportDiagnostic(ctx.onDiagnostic, {
+        kind: 'no-engine-view',
+        directive: name,
+        message: title,
+      });
+      return unknownDirective(
+        name,
+        inline,
+        childrenHtml,
+        'no-engine-view',
+        title,
+      );
+    }
     return unknownDirective(
       name || '(unnamed)',
       inline,
@@ -595,6 +634,7 @@ function renderDirective(
   registry: HtmlRegistry,
   ctx: HtmlRenderContext,
   scope: ValueScope,
+  unavailable: UnavailableComponentLookup | undefined,
 ): string {
   const written = stringProperty(element, 'data-mk-name') ?? '';
   const kind = stringProperty(element, 'data-mk-kind');
@@ -630,6 +670,7 @@ function renderDirective(
     ctx,
     scope,
     isLayoutScope ? className : undefined,
+    unavailable,
   );
 
   return isBlock && className && !isLayoutScope
@@ -684,6 +725,7 @@ function makeTransform(
   ctx: HtmlRenderContext,
   scope: ValueScope,
   resolveHref: ResolveHref | undefined,
+  unavailable: UnavailableComponentLookup | undefined,
 ): (node: RootContent) => RootContent {
   function transform(node: RootContent): RootContent {
     if (node.type !== 'element') return node;
@@ -693,7 +735,7 @@ function makeTransform(
     );
 
     if (node.tagName === DIRECTIVE_TAG)
-      return raw(renderDirective(node, registry, ctx, scope));
+      return raw(renderDirective(node, registry, ctx, scope, unavailable));
     if (node.tagName === 'pre') {
       const marker = renderScriptMarker(node);
       if (marker !== undefined) return raw(marker);
@@ -726,9 +768,16 @@ function renderRoot(
   resolveImageSrc: ResolveImageSrc | undefined,
   resolveHref: ResolveHref | undefined,
   onDiagnostic: OnDiagnostic | undefined,
+  unavailable: UnavailableComponentLookup | undefined,
 ): string {
   const ctx = createBaseContext(scope, resolveImageSrc, onDiagnostic);
-  const transform = makeTransform(registry, ctx, scope, resolveHref);
+  const transform = makeTransform(
+    registry,
+    ctx,
+    scope,
+    resolveHref,
+    unavailable,
+  );
   root.children = root.children.map(transform);
   return serialize(root.children);
 }
@@ -790,6 +839,14 @@ export interface RenderMarkOptions {
   readonly resolveHref?: ResolveHref;
   readonly onDiagnostic?: OnDiagnostic;
   /**
+   * Components of installed packs that this render cannot draw, as plain
+   * data from the host. A directive named here renders the usual fallback
+   * box labeled "no HTML view for" instead of "unknown component", and
+   * `onDiagnostic` gets a `'no-engine-view'` event. Omitted, the render is
+   * unchanged.
+   */
+  readonly unavailableComponents?: readonly UnavailableComponent[];
+  /**
    * The note's own last-run values, the same thing the third positional
    * parameter takes. Offered here as well so a caller that already builds
    * an options object does not have to fill positional slots it has no
@@ -815,6 +872,7 @@ export function renderMarkToHtml(
       options?.resolveImageSrc,
       options?.resolveHref,
       options?.onDiagnostic,
+      createUnavailableComponentLookup(options?.unavailableComponents),
     );
   } catch (error) {
     return renderFailureFallback(error);
@@ -849,6 +907,7 @@ export function renderMarkNodeToHtml(
       options?.resolveImageSrc,
       options?.resolveHref,
       options?.onDiagnostic,
+      createUnavailableComponentLookup(options?.unavailableComponents),
     );
   } catch (error) {
     return renderFailureFallback(error);

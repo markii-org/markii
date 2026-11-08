@@ -17,6 +17,7 @@
 import type { HostAdapter, HostExportFormat, HostTextEdit } from './adapter.js';
 import type { RunResult, SpawnRunOptions } from '../run/run-host.js';
 import type { StoredValue } from '@markii/runtime';
+import type { OnDiagnostic, UnavailableComponent } from '@markii/stdlib';
 import type {
   CompletionItem,
   ComponentDocumentation,
@@ -108,6 +109,15 @@ export interface ExportRequest {
   readonly text: string;
   /** The note's last-run values, baked into an html/pdf export. Omitted or empty exports the note's standard empty states. */
   readonly values?: Record<string, StoredValue>;
+  /**
+   * Installed pack components the static HTML engine cannot draw. A
+   * directive naming one is labeled "no HTML view" instead of "unknown
+   * component" in the exported file. Used only when the static engine
+   * renders the body.
+   */
+  readonly unavailableComponents?: readonly UnavailableComponent[];
+  /** Receives the static engine's render diagnostics, such as the `no-engine-view` event. */
+  readonly onDiagnostic?: OnDiagnostic;
 }
 
 export type ExportOutcome =
@@ -148,6 +158,10 @@ export type LoadPacksOutcome =
       readonly packs: readonly DiscoveredPack[];
       /** Folders that produced no usable pack, each with its reason. */
       readonly skipped: readonly SkippedPackFolder[];
+      /** Every installed pack component with the engines it has a view for, dropped packs included. For an engine that draws no pack views. */
+      readonly components: readonly UnavailableComponent[];
+      /** The installed components with no view for this host's engine, for a renderer's `unavailableComponents` option. */
+      readonly unavailable: readonly UnavailableComponent[];
     }
   | Unsupported;
 
@@ -157,6 +171,10 @@ export type LoadTerminalPacksOutcome =
       readonly namespaces: readonly string[];
       readonly packs: readonly DiscoveredPack[];
       readonly skipped: readonly SkippedPackFolder[];
+      /** Every installed pack component with the engines it has a view for, dropped packs included. For an engine that draws no pack views. */
+      readonly components: readonly UnavailableComponent[];
+      /** The installed components with no view for the terminal engine, for its renderer's `unavailableComponents` option. */
+      readonly unavailable: readonly UnavailableComponent[];
       /** Each terminal-capable pack's `terminal.js` text, for the engine's own loader. */
       readonly scripts: readonly TerminalPackScript[];
       /**
@@ -372,6 +390,12 @@ export function createMarkiiHost(
           notePath: request.notePath,
           text: request.text,
           ...(request.values !== undefined ? { values: request.values } : {}),
+          ...(request.unavailableComponents !== undefined
+            ? { unavailableComponents: request.unavailableComponents }
+            : {}),
+          ...(request.onDiagnostic !== undefined
+            ? { onDiagnostic: request.onDiagnostic }
+            : {}),
         },
         options.renderAnsi,
       );
@@ -464,6 +488,8 @@ export function createMarkiiHost(
         namespaces: result.namespaces,
         packs: result.packs,
         skipped: result.skipped,
+        components: result.components,
+        unavailable: result.unavailable,
       };
     },
 
@@ -505,6 +531,8 @@ export function createMarkiiHost(
         namespaces: result.namespaces,
         packs: result.packs,
         skipped: result.skipped,
+        components: result.components,
+        unavailable: result.unavailable,
         scripts: read.scripts,
         failureLines,
       };

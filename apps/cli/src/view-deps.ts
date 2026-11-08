@@ -5,7 +5,7 @@
  * read `process`); this module only declares the shape.
  */
 import type { AnsiRegistry, AnsiValueStore } from '@markii/ansi';
-import type { OnDiagnostic } from '@markii/stdlib';
+import type { OnDiagnostic, UnavailableComponent } from '@markii/stdlib';
 import type { BoxFlag, ColorFlag } from './args.js';
 import type { Terminal } from './terminal.js';
 
@@ -18,6 +18,8 @@ export interface MountLiveViewerInput {
   readonly store: AnsiValueStore;
   /** The standard set plus any loaded terminal packs. Absent, the standard set. */
   readonly registry?: AnsiRegistry;
+  /** Installed pack components with no terminal view. Absent, every unknown directive reads "unknown component". */
+  readonly unavailableComponents?: readonly UnavailableComponent[];
   readonly onDiagnostic: OnDiagnostic;
   /**
    * `--watch`: registers a listener the caller calls with the note's new

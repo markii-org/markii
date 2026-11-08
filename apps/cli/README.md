@@ -124,8 +124,10 @@ without running.
 
 Component packs add directives of their own. A pack can carry terminal
 views next to its React ones, and `markii view` and `markii export --format
-ansi` draw those. A pack component with no terminal view renders as the
-unknown-component box, and so does every pack directive in an HTML export.
+ansi` draw those. A pack component with no terminal view renders as a box
+reading "no terminal view for `name`", and in an HTML export every pack
+component reads "no HTML view for `name`". A misspelled or uninstalled name
+still reads "unknown component".
 The packs `read`, `dash` and `prep` ship with the CLI; their names cannot
 be installed over or removed.
 
@@ -187,7 +189,9 @@ empty states until you run it again.
 
 Everything that is not the rendered note or the exported file goes to
 stderr: a run's failures, a note's declared-vs-actual network mismatches,
-render-time notices, and packs that could not load. `markii run` always
+render-time notices, packs that could not load, and, without `--verbose`,
+one line for each installed pack component the note uses that has no
+terminal view. `markii run` always
 prints these. `markii view` prints only a one-line marker per script
 failure by default, plus one line for each pack that failed to load; pass
 `--verbose` for the full detail and for the list of packs that loaded.

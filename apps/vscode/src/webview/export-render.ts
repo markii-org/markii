@@ -28,6 +28,7 @@ import type { Registry } from '@markii/react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createValueStore } from '@markii/runtime';
 import type { StoredValue } from '@markii/runtime';
+import type { UnavailableComponent } from '@markii/stdlib';
 import type { ExportRequestMessage, ExportResultMessage } from '../protocol.js';
 
 /**
@@ -41,10 +42,21 @@ export function renderExportBody(
   text: string,
   values: Record<string, StoredValue>,
   registry: Registry,
+  unavailableComponents?: readonly UnavailableComponent[],
 ): string {
   const store =
     Object.keys(values).length > 0 ? createValueStore(values) : undefined;
-  return renderToStaticMarkup(renderMark(text, registry, store));
+  return renderToStaticMarkup(
+    renderMark(
+      text,
+      registry,
+      store,
+      undefined,
+      unavailableComponents !== undefined
+        ? { unavailableComponents }
+        : undefined,
+    ),
+  );
 }
 
 /** A short, stack-free reason string for a thrown render failure — diagnostics-only, never shown on screen. */
@@ -65,7 +77,12 @@ export function exportResultFor(
   registry: Registry,
 ): ExportResultMessage {
   try {
-    const html = renderExportBody(message.text, message.values, registry);
+    const html = renderExportBody(
+      message.text,
+      message.values,
+      registry,
+      message.unavailableComponents,
+    );
     return {
       type: 'export-result',
       requestId: message.requestId,

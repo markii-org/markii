@@ -12,6 +12,7 @@
  * manifest the loader sees is the discovered one, and a `terminal.js` that
  * registers a different namespace is refused.
  */
+import type { UnavailableComponent } from '@markii/stdlib';
 import {
   defaultAnsiRegistry,
   installAnsiPacks,
@@ -27,6 +28,10 @@ import {
 
 export interface CliPackRegistry {
   readonly registry: AnsiRegistry;
+  /** Installed pack components with no terminal view, for the renderer's `unavailableComponents` option. */
+  readonly unavailable: readonly UnavailableComponent[];
+  /** Every installed pack component, for the static HTML export, which draws no pack views. */
+  readonly components: readonly UnavailableComponent[];
   /** Lines that report a real failure; also written to the host's diagnostics. A caller shows these even without `--verbose`. */
   readonly failureLines: readonly string[];
 }
@@ -36,7 +41,12 @@ export async function loadCliPackRegistry(
 ): Promise<CliPackRegistry> {
   const outcome = await host.loadTerminalPacks();
   if (outcome.kind !== 'loaded') {
-    return { registry: defaultAnsiRegistry, failureLines: [] };
+    return {
+      registry: defaultAnsiRegistry,
+      unavailable: [],
+      components: [],
+      failureLines: [],
+    };
   }
 
   const failureLines = [...outcome.failureLines];
@@ -74,8 +84,15 @@ export async function loadCliPackRegistry(
     host.diagnostics(line);
     return {
       registry: defaultAnsiRegistry,
+      unavailable: outcome.unavailable,
+      components: outcome.components,
       failureLines: [...failureLines, line],
     };
   }
-  return { registry: installed.registry, failureLines };
+  return {
+    registry: installed.registry,
+    unavailable: outcome.unavailable,
+    components: outcome.components,
+    failureLines,
+  };
 }

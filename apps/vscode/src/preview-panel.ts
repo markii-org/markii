@@ -49,6 +49,7 @@ import type {
   ExportRequestMessage,
   HostToWebviewMessage,
   PackDiagnosticsMessage,
+  UpdateMessage,
   ValueMessage,
   ValuesMessage,
 } from './protocol.js';
@@ -655,6 +656,15 @@ export function setDiagnosticsChannel(channel: vscode.OutputChannel): void {
   diagnosticsChannel = channel;
 }
 
+/** The `unavailableComponents` message field, spread in only when the pack load found any. */
+function unavailableField(
+  packContext: PackContext,
+): Pick<UpdateMessage, 'unavailableComponents'> {
+  return packContext.unavailableComponents.length > 0
+    ? { unavailableComponents: packContext.unavailableComponents }
+    : {};
+}
+
 /**
  * Writes this pack load's diagnostic lines (`./packs/pack-diagnostics.ts`)
  * to the "Markii" output channel — one line per successfully loaded pack
@@ -736,6 +746,7 @@ function postUpdate(preview: ActivePreview): void {
       assets: source.assets,
       readOnly: true,
       packNamespaces: preview.packContext.namespaces,
+      ...unavailableField(preview.packContext),
       packSkippedCount: skippedPackCount(preview.packContext),
       previewWidth: preview.previewWidth,
       hideScriptBlocks: preview.hideScriptBlocks,
@@ -760,6 +771,7 @@ function postUpdate(preview: ActivePreview): void {
     // wire format says a document with no folder OMITS the field.
     ...(baseUri === undefined ? {} : { baseUri }),
     packNamespaces: preview.packContext.namespaces,
+    ...unavailableField(preview.packContext),
     packSkippedCount: skippedPackCount(preview.packContext),
     previewWidth: preview.previewWidth,
     hideScriptBlocks: preview.hideScriptBlocks,
@@ -1791,6 +1803,7 @@ function requestExportBody(
       requestId,
       text,
       values,
+      ...unavailableField(preview.packContext),
     };
     void preview.panel.webview.postMessage(message);
   });

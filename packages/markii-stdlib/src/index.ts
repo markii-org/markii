@@ -35,6 +35,9 @@ export { deriveTableShape, type TableShape } from './table-shape.js';
 
 export {
   reportDiagnostic,
+  createUnavailableComponentLookup,
+  type UnavailableComponent,
+  type UnavailableComponentLookup,
   type DiagnosticEvent,
   type DiagnosticKind,
   type OnDiagnostic,

@@ -110,8 +110,13 @@ describe('a pack built from source, installed, and viewed', () => {
     const out = terminal.outLines.join('');
     // The terminal view ran (value 0.5 of 10 cells) ...
     expect(out).toContain('#####');
-    // ... and the component with no terminal source is the quiet fallback.
-    expect(out).toContain('unknown component');
-    expect(terminal.errLines).toEqual([]);
+    // ... and the component with no terminal source says so, in the note
+    // and (once) on stderr.
+    expect(out).toContain('no terminal view for `termpack_reactonly`');
+    expect(out).not.toContain('unknown component');
+    expect(terminal.errLines.join('')).toContain(
+      'The termpack pack has no terminal view for this component; it has views for: react',
+    );
+    expect(terminal.errLines).toHaveLength(1);
   });
 });

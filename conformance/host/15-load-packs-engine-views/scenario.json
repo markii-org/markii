@@ -1,0 +1,10 @@
+{
+  "id": "load-packs-engine-views",
+  "invariant": "loading packs reports every installed component and the ones this host's engine has no view for",
+  "clock": 1700000000000,
+  "actions": [
+    { "type": "open" },
+    { "type": "installPack", "archive": "files/duo-1.0.0", "answers": ["allow"] },
+    { "type": "loadPacks" }
+  ]
+}

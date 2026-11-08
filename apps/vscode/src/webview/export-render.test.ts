@@ -31,6 +31,17 @@ describe('renderExportBody', () => {
     expect(html).not.toContain('mk-unknown');
   });
 
+  it('labels an unavailable pack component "no preview view" and leaves a typo unknown', () => {
+    const html = renderExportBody(
+      '::ana_meter{}\n\n::ana_typo{}',
+      {},
+      defaultRegistry,
+      [{ directive: 'ana_meter', pack: 'ana', engines: ['ansi'] }],
+    );
+    expect(html).toContain('no preview view for');
+    expect(html).toContain('unknown component');
+  });
+
   it('renders the standard set unchanged with no values', () => {
     const html = renderExportBody('# Hello', {}, defaultRegistry);
     expect(html).toContain('Hello');

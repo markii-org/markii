@@ -5,6 +5,7 @@ import { createRenderDiagnosticCollector } from '@markii/host/browser';
 import type { Registry } from '@markii/react';
 import { createValueStore } from '@markii/runtime';
 import type { StoredValue } from '@markii/runtime';
+import type { UnavailableComponent } from '@markii/stdlib';
 import { mergeArrivingValue } from '@markii/host/browser';
 import { extractFrontmatterUses } from '@markii/core';
 import { resolveUses } from '@markii/pack';
@@ -122,6 +123,8 @@ interface LocalState extends PersistedState {
    * always sends the field (possibly empty) once loaded.
    */
   readonly packNamespaces?: readonly string[];
+  /** Installed pack components with no preview view (`UpdateMessage.unavailableComponents`), as of the most recent `update`. */
+  readonly unavailableComponents?: readonly UnavailableComponent[];
   /**
    * ITEM 3 (AGENTS.md "clean is not silent"): the most recently recorded
    * run outcome for this document (`protocol.ts`'s `WireRunTrace`) — drives
@@ -229,6 +232,7 @@ export function Preview({ registry }: PreviewProps): ReactElement {
             runValues: undefined,
             bundleError: undefined,
             packNamespaces: data.packNamespaces,
+            unavailableComponents: data.unavailableComponents,
             packSkippedCount: data.packSkippedCount,
             // ITEM 3: rehydrated from storage by `postUpdate` — see
             // `preview-panel.ts`'s `readLastRunTrace`. `undefined` when no
@@ -357,9 +361,19 @@ export function Preview({ registry }: PreviewProps): ReactElement {
       resolveImageSrc: (src) =>
         resolveDocumentUrl(src, state.baseUri, state.assets),
       onDiagnostic: collector.onDiagnostic,
+      ...(state.unavailableComponents !== undefined
+        ? { unavailableComponents: state.unavailableComponents }
+        : {}),
     });
     return { rendered: element, diagnosticLines: collector.lines() };
-  }, [state.text, registry, store, state.baseUri, state.assets]);
+  }, [
+    state.text,
+    registry,
+    store,
+    state.baseUri,
+    state.assets,
+    state.unavailableComponents,
+  ]);
 
   useEffect(() => {
     if (diagnosticLines.length === 0) return;

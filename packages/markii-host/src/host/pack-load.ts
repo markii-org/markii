@@ -23,8 +23,11 @@
  * script), since neither of those is anything `loadPacks`'s cheap-catalog
  * callers need.
  */
+import type { UnavailableComponent } from '@markii/stdlib';
 import {
+  componentsWithoutEngineView,
   createNodeFileReader,
+  declaredPackComponents,
   discoverPacks,
   installedNamespaces,
 } from '../packs/discover.js';
@@ -36,6 +39,19 @@ export interface LoadPacksResult {
   readonly packs: readonly DiscoveredPack[];
   readonly skipped: readonly SkippedPackFolder[];
   readonly namespaces: readonly string[];
+  /**
+   * Every component of every installed pack, including a pack dropped whole
+   * because it has nothing for this engine, with the engines each one has a
+   * view for. A host passes it to an engine that draws NO pack views, such
+   * as the static HTML export.
+   */
+  readonly components: readonly UnavailableComponent[];
+  /**
+   * The subset of `components` with no view for this host's engine: the list
+   * a host passes to its renderer's `unavailableComponents` option, so a
+   * note using one says "no view here" instead of "unknown component".
+   */
+  readonly unavailable: readonly UnavailableComponent[];
 }
 
 /**
@@ -54,10 +70,18 @@ export async function discoverConfiguredPacks(
     undefined,
     engine,
   );
+  const components = [
+    ...result.packs.flatMap((pack) => declaredPackComponents(pack.manifest)),
+    ...result.skipped.flatMap(
+      (entry) => entry.engineUnsupported?.components ?? [],
+    ),
+  ];
   return {
     packs: result.packs,
     skipped: result.skipped,
     namespaces: installedNamespaces(result.packs),
+    components,
+    unavailable: componentsWithoutEngineView(components, engine),
   };
 }
 

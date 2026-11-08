@@ -63,6 +63,28 @@ describe('loadPackContext', () => {
     expect(context.webviewPacks).toEqual([]);
   });
 
+  it('lists the components that have no react view, whole packs included', async () => {
+    const root = await makeTempDir();
+    for (const [name, components] of [
+      ['mix', { a: './A.tsx', b: { sources: { ansi: './b.ts' } } }],
+      ['term', { t: { sources: { ansi: './t.ts' } } }],
+    ] as const) {
+      const packDir = path.join(root, name);
+      await mkdir(packDir, { recursive: true });
+      await writeFile(
+        path.join(packDir, 'pack.json'),
+        JSON.stringify({ name, engine: 'react', components }),
+      );
+    }
+
+    const context = await loadPackContext(['mix', 'term'], root);
+
+    expect(context.unavailableComponents).toEqual([
+      { directive: 'mix_b', pack: 'mix', engines: ['ansi'] },
+      { directive: 'term_t', pack: 'term', engines: ['ansi'] },
+    ]);
+  });
+
   it('quietly skips a configured folder with no pack.json', async () => {
     const root = await makeTempDir();
     const context = await loadPackContext(['missing'], root);

@@ -9,6 +9,36 @@ import type { ValuesMessage, WireStoredValue } from './protocol';
 
 const WEBVIEW_BASE = 'https://file+.vscode-resource.vscode-cdn.net/home/u/n/';
 
+describe('isHostToWebviewMessage unavailableComponents', () => {
+  const base = { type: 'update', revision: 1, text: 'hi' };
+
+  it('accepts a well-formed list and its omission', () => {
+    expect(isHostToWebviewMessage(base)).toBe(true);
+    expect(
+      isHostToWebviewMessage({
+        ...base,
+        unavailableComponents: [
+          { directive: 'ana_meter', pack: 'ana', engines: ['ansi'] },
+        ],
+      }),
+    ).toBe(true);
+  });
+
+  it('rejects a malformed list as a hostile message', () => {
+    for (const bad of [
+      'x',
+      [null],
+      [{ directive: 'a', pack: 'p' }],
+      [{ directive: '', pack: 'p', engines: [] }],
+      [{ directive: 'a', pack: 'p', engines: [1] }],
+    ]) {
+      expect(
+        isHostToWebviewMessage({ ...base, unavailableComponents: bad }),
+      ).toBe(false);
+    }
+  });
+});
+
 describe('isHostToWebviewMessage', () => {
   it('accepts a well-formed update message', () => {
     expect(

@@ -127,7 +127,11 @@ both belong to the manifest's top-level `engine`, so a pack written before
 A host loads a pack when at least one of its components has a source for
 the host's engine, or when the pack has no components at all and only
 carries Lua. Within a loaded pack, a component with no source for that
-engine is simply absent, and its directives render as the fallback. A pack
+engine is simply absent, and its directives render as the fallback. The fallback says which case it is: a
+component of an installed pack reads "no terminal view for `name`" (or no
+preview view, or no HTML view, depending on where the note is shown), and the
+host's diagnostics surface names the pack and the engines it does cover. A
+misspelled or uninstalled name still reads "unknown component". A pack
 with components but none for the host's engine is reported as skipped, with
 the engines it does declare.
 

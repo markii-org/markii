@@ -34,10 +34,13 @@ import { existsSync } from 'node:fs';
 import * as path from 'node:path';
 import { readFile as nodeReadFile } from 'node:fs/promises';
 import type { Registry } from '@markii/react';
+import type { UnavailableComponent } from '@markii/stdlib';
 import { REACT_ENGINE_ID } from '@markii/react';
 import {
   buildRenderRegistry,
+  componentsWithoutEngineView,
   createNodeFileReader,
+  declaredPackComponents,
   discoverPacks,
   installedNamespaces,
   loadPackModules,
@@ -72,6 +75,10 @@ export interface PackContext {
   readonly registry: Registry;
   /** Every registered pack's emitted stylesheet, ready for `../packs/pack-styles.ts` to inject after `styles.css`. */
   readonly stylesheets: readonly PackStylesheet[];
+  /** Components of the loaded packs, and of packs dropped whole, that have no view for the preview's engine. The preview and Reading view label a directive naming one "no preview view" instead of "unknown component". */
+  readonly unavailableComponents: readonly UnavailableComponent[];
+  /** Every component of every installed pack, dropped packs included. The static HTML engine draws no pack views, so a static export labels each of these "no HTML view". */
+  readonly installedComponents: readonly UnavailableComponent[];
   /** Every discovered pack's namespace — what `resolveUses` (`@markii/pack`) checks a note's `uses:` declaration against. */
   readonly namespaces: readonly string[];
   /** Folders that produced no usable pack, and why (developer-facing only): no `pack.json`, a manifest that failed validation, no prebuilt `webview.js`, or a script that threw while running. Still counts toward `packs`/`packModules` when the pack was at least discovered — just not toward `registry`. */
@@ -373,10 +380,22 @@ export async function loadPackContext(
     ...installedPacks,
   ];
 
+  const installedComponents = [
+    ...packs.flatMap((pack) => declaredPackComponents(pack.manifest)),
+    ...discovery.skipped.flatMap(
+      (entry) => entry.engineUnsupported?.components ?? [],
+    ),
+  ];
+
   return {
     packs,
     packModules,
     registry,
+    unavailableComponents: componentsWithoutEngineView(
+      installedComponents,
+      REACT_ENGINE_ID,
+    ),
+    installedComponents,
     stylesheets,
     namespaces: installedNamespaces(packs),
     skipped,

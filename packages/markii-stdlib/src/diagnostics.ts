@@ -27,9 +27,18 @@
  * `'form-mismatch'` — a registered block component was written as an
  * inline directive (`:callout[x]`); it rendered as the inline fallback
  * marker instead of the component.
+ *
+ * `'no-engine-view'` — a directive names a component of an INSTALLED pack
+ * that ships no view for this render engine (a React-only pack in the
+ * terminal, a terminal-only component in an editor preview). It rendered
+ * the fallback box, labeled as a missing view rather than an unknown
+ * component. Only reported when the host passed `unavailableComponents`.
  */
 export type DiagnosticKind =
-  'invalid-attribute-value' | 'unsafe-image-src' | 'form-mismatch';
+  | 'invalid-attribute-value'
+  | 'unsafe-image-src'
+  | 'form-mismatch'
+  | 'no-engine-view';
 
 export interface DiagnosticEvent {
   readonly kind: DiagnosticKind;
@@ -61,4 +70,54 @@ export function reportDiagnostic(
   } catch {
     // A throwing callback must never break rendering.
   }
+}
+
+/**
+ * One component of an installed pack that the current render cannot draw,
+ * as plain data a host hands to a renderer's `unavailableComponents`
+ * option. The renderer uses it only to tell this case apart from a typo:
+ * the fallback box keeps its structure and the label changes.
+ *
+ * `directive` is the composed directive name (`ana_meter`), `pack` the
+ * pack's namespace, and `engines` the engine ids (`react`, `ansi`) the
+ * component DOES ship a view for.
+ */
+export interface UnavailableComponent {
+  readonly directive: string;
+  readonly pack: string;
+  readonly engines: readonly string[];
+}
+
+/** A lookup from a directive name to its `UnavailableComponent`, or `undefined`. */
+export type UnavailableComponentLookup = (
+  directive: string,
+) => UnavailableComponent | undefined;
+
+/**
+ * Builds the lookup a renderer queries per directive. Backed by a `Map`
+ * (never a plain object), so a directive named `constructor` or
+ * `__proto__` cannot resolve through the prototype chain. An omitted or
+ * empty list gives `undefined`, so a renderer given no option takes
+ * exactly the path it took before the option existed. Entries that are not
+ * well-formed are skipped, and the first entry for a name wins.
+ */
+export function createUnavailableComponentLookup(
+  components: readonly UnavailableComponent[] | undefined,
+): UnavailableComponentLookup | undefined {
+  if (!Array.isArray(components) || components.length === 0) return undefined;
+  const byName = new Map<string, UnavailableComponent>();
+  for (const entry of components as readonly unknown[]) {
+    if (entry === null || typeof entry !== 'object') continue;
+    const { directive, pack, engines } = entry as Record<string, unknown>;
+    if (typeof directive !== 'string' || typeof pack !== 'string') continue;
+    if (!Array.isArray(engines)) continue;
+    if (byName.has(directive)) continue;
+    byName.set(directive, {
+      directive,
+      pack,
+      engines: engines.filter((e): e is string => typeof e === 'string'),
+    });
+  }
+  if (byName.size === 0) return undefined;
+  return (directive) => byName.get(directive);
 }

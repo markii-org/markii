@@ -208,8 +208,58 @@ describe('markii pack install', () => {
     expect(
       await run(['view', file, '--static', '--color', 'never'], view),
     ).toBe(0);
-    expect(view.outLines.join('')).toContain('unknown component');
+    expect(view.outLines.join('')).toContain(
+      'no terminal view for `ana_timeline`',
+    );
+    expect(view.outLines.join('')).not.toContain('unknown component');
+    // Without --verbose, the reason still reaches stderr, once.
+    expect(view.errLines).toEqual([
+      'markii: Render in ana_timeline: The ana pack has no terminal view for this component; it has views for: react\n',
+    ]);
+  });
+
+  it('keeps "unknown component" for a typo beside an installed React-only pack', async () => {
+    const { env } = configEnv();
+    const dir = makeTempDir();
+    const mkp = writeArchive(
+      dir,
+      'ana.mkp',
+      archive('ana', undefined, { react: './T.tsx' }),
+    );
+    await run(['pack', 'install', mkp, '--yes'], createFakeTerminal({ env }));
+
+    const view = createFakeTerminal({ env });
+    const file = note(dir, '::ana_timelin{title="x"}\ncontent\n::\n');
+    expect(
+      await run(['view', file, '--static', '--color', 'never'], view),
+    ).toBe(0);
+    expect(view.outLines.join('')).toContain('unknown component `ana_timelin`');
+    expect(view.outLines.join('')).not.toContain('no terminal view');
     expect(view.errLines).toEqual([]);
+  });
+
+  it('labels an installed pack component "no HTML view" in an html export', async () => {
+    const { env } = configEnv();
+    const dir = makeTempDir();
+    const mkp = writeArchive(
+      dir,
+      'ana.mkp',
+      archive('ana', TERMINAL_JS(manifestFor('ana', BOTH)), BOTH),
+    );
+    await run(['pack', 'install', mkp, '--yes'], createFakeTerminal({ env }));
+
+    const file = note(dir, `${NOTE}\n::ana_typo\n::\n`);
+    const out = path.join(dir, 'out.html');
+    const exported = createFakeTerminal({ env });
+    expect(
+      await run(['export', file, '--format', 'html', '-o', out], exported),
+    ).toBe(0);
+    const html = readFileSync(out, 'utf8');
+    expect(html).toContain('no HTML view for <code>ana_timeline</code>');
+    expect(html).toContain('unknown component <code>ana_typo</code>');
+    expect(exported.errLines.join('')).toContain(
+      'The ana pack has no HTML view for this component; it has views for: ansi, react',
+    );
   });
 
   it('rejects a file that is not a pack archive', async () => {

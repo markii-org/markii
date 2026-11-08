@@ -408,7 +408,42 @@ describe('createMarkiiHost.loadTerminalPacks', () => {
     if (outcome.kind !== 'loaded') throw new Error('expected loaded');
     expect(outcome.packs).toEqual([]);
     expect(outcome.failureLines).toEqual([]);
-    expect(outcome.skipped[0]?.engineUnsupported).toEqual({ packName: 'rx' });
+    expect(outcome.skipped[0]?.engineUnsupported).toEqual({
+      packName: 'rx',
+      components: [{ directive: 'rx_a', pack: 'rx', engines: ['react'] }],
+    });
+    expect(outcome.unavailable).toEqual([
+      { directive: 'rx_a', pack: 'rx', engines: ['react'] },
+    ]);
+    expect(outcome.components).toEqual(outcome.unavailable);
+  });
+
+  it('lists only the components of a partly supported pack that lack a view', async () => {
+    const folder = await makePackFolder('mix', {
+      name: 'mix',
+      engine: 'react',
+      components: {
+        a: './A.tsx',
+        b: { sources: { react: './B.tsx', ansi: './b.ts' } },
+      },
+    });
+    const adapter = fakeAdapter({
+      packs: {
+        engine: 'ansi',
+        authorizedFolders: async () => [folder],
+        reservedNamespaces: () => new Set(),
+      },
+    });
+    const outcome = await createMarkiiHost(adapter).loadPacks();
+    if (outcome.kind !== 'loaded') throw new Error('expected loaded');
+    expect(outcome.packs).toHaveLength(1);
+    expect(outcome.unavailable).toEqual([
+      { directive: 'mix_a', pack: 'mix', engines: ['react'] },
+    ]);
+    expect(outcome.components.map((c) => c.directive)).toEqual([
+      'mix_a',
+      'mix_b',
+    ]);
   });
 });
 

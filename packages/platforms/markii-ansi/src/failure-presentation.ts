@@ -155,3 +155,28 @@ export function invalidAttributeValueLabel(
 export function unsafeImageSrcLabel(directive: string): string {
   return `${directive}: image not shown`;
 }
+
+/**
+ * The words of a fallback label for a directive that names a component of
+ * an installed pack with no view in this engine. Followed by the directive
+ * name in backticks, like the other fallback labels.
+ */
+export const NO_ENGINE_VIEW_LABEL = 'no terminal view for';
+
+/**
+ * The diagnostic text for the same case: the pack, and the engines the
+ * component does ship a view for. A terminal has no tooltip, so this
+ * sentence reaches the host's diagnostics surface through `onDiagnostic`
+ * and is never printed in the note.
+ */
+export function noEngineViewTitle(
+  directive: string,
+  pack: string,
+  engines: readonly string[],
+): string {
+  const has =
+    engines.length > 0
+      ? `it has views for: ${engines.join(', ')}`
+      : 'it has no views for any engine';
+  return `The ${pack} pack has no terminal view for this component; ${has}`;
+}

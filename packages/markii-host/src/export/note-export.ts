@@ -29,6 +29,7 @@ import { createValueStore } from '@markii/runtime';
 import { EMPTY_IMAGE_REPORT, embedImagesInHtml } from './image-embed.js';
 import type { EmbeddedImageReport, ExportImageReader } from './image-embed.js';
 import type { StoredValue } from '@markii/runtime';
+import type { OnDiagnostic, UnavailableComponent } from '@markii/stdlib';
 
 /** The last path segment of a `/`-separated path, or the string itself when it has no separator. */
 function lastSegment(pathOrName: string): string {
@@ -205,6 +206,10 @@ export interface NoteHtmlExportOptions {
    * would show it with the preference off.
    */
   readonly hideScriptBlocks?: boolean;
+  /** Installed pack components the static engine cannot draw; see `NoteExportBuildRequest`. */
+  readonly unavailableComponents?: readonly UnavailableComponent[];
+  /** Receives the static engine's render diagnostics. */
+  readonly onDiagnostic?: OnDiagnostic;
 }
 
 /**
@@ -215,7 +220,7 @@ export interface NoteHtmlExportOptions {
  */
 export function buildNoteHtmlExport(options: NoteHtmlExportOptions): string {
   return composeNoteHtmlExport({
-    bodyHtml: renderStaticBody(options.text, options.values ?? {}),
+    bodyHtml: renderStaticBody(options.text, options.values ?? {}, options),
     fileName: options.fileName,
     ...(options.extraCss !== undefined ? { extraCss: options.extraCss } : {}),
     ...(options.hideScriptBlocks !== undefined
@@ -233,10 +238,21 @@ export function buildNoteHtmlExport(options: NoteHtmlExportOptions): string {
 function renderStaticBody(
   text: string,
   values: Record<string, StoredValue>,
+  diagnostics: {
+    readonly unavailableComponents?: readonly UnavailableComponent[];
+    readonly onDiagnostic?: OnDiagnostic;
+  } = {},
 ): string {
   const store =
     Object.keys(values).length > 0 ? createValueStore(values) : undefined;
-  return renderMarkToHtml(text, defaultHtmlRegistry, store);
+  return renderMarkToHtml(text, defaultHtmlRegistry, store, undefined, {
+    ...(diagnostics.unavailableComponents !== undefined
+      ? { unavailableComponents: diagnostics.unavailableComponents }
+      : {}),
+    ...(diagnostics.onDiagnostic !== undefined
+      ? { onDiagnostic: diagnostics.onDiagnostic }
+      : {}),
+  });
 }
 
 /**
@@ -429,6 +445,15 @@ export interface NoteExportBuildRequest {
   readonly embedImages?: ExportImageReader;
   /** Hides the collapsed script marker in the exported file. See `NoteHtmlExportOptions.hideScriptBlocks`. Defaults to `false`. */
   readonly hideScriptBlocks?: boolean;
+  /**
+   * Installed pack components the static engine cannot draw. A directive
+   * naming one reads "no HTML view for" instead of "unknown component" in
+   * the exported body. Ignored on the React path, whose host passes the
+   * same list to its own renderer inside `renderBody`.
+   */
+  readonly unavailableComponents?: readonly UnavailableComponent[];
+  /** Receives the static engine's render diagnostics (the `no-engine-view` event). Same scope as `unavailableComponents`. */
+  readonly onDiagnostic?: OnDiagnostic;
 }
 
 /** One built export: the complete document, how it was rendered, and how many values it baked in. */
@@ -499,7 +524,7 @@ export async function buildNoteExport(
   const staticDocument = (
     render: ExportRenderInfo,
   ): Promise<NoteExportDocument> =>
-    finish(renderStaticBody(request.text, values), render, []);
+    finish(renderStaticBody(request.text, values, request), render, []);
 
   if (!request.renderBody) {
     return staticDocument({

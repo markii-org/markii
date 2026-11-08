@@ -32,6 +32,7 @@ function context(
     packModules: {},
     webviewPacks: packs,
     namespaces: packs.map((p) => p.manifest.name),
+    unavailableComponents: [],
     skipped,
     relativeEntries,
     cssWarnings,

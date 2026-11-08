@@ -28,6 +28,7 @@
  * section for why, and what Phase 2 (or a follow-up) still needs to do.
  */
 import type { StoredValue } from '@markii/runtime';
+import type { OnDiagnostic, UnavailableComponent } from '@markii/stdlib';
 import {
   buildNoteExport,
   exportedFileName,
@@ -213,6 +214,10 @@ export interface ExportHtmlDocumentRequest {
   readonly packCount?: number;
   readonly embedImages?: ExportImageReader;
   readonly hideScriptBlocks?: boolean;
+  /** Installed pack components the static engine cannot draw; see `NoteExportBuildRequest`. */
+  readonly unavailableComponents?: readonly UnavailableComponent[];
+  /** Receives the static engine's render diagnostics. */
+  readonly onDiagnostic?: OnDiagnostic;
 }
 
 /** Builds the standalone HTML document `html` and `pdf` both export, via the shared, already-host-neutral `buildNoteExport`. Never throws: a failing `renderBody` degrades to the static engine rather than propagating. */
@@ -247,6 +252,12 @@ export async function buildExportDocument(
       : {}),
     ...(request.hideScriptBlocks !== undefined
       ? { hideScriptBlocks: request.hideScriptBlocks }
+      : {}),
+    ...(request.unavailableComponents !== undefined
+      ? { unavailableComponents: request.unavailableComponents }
+      : {}),
+    ...(request.onDiagnostic !== undefined
+      ? { onDiagnostic: request.onDiagnostic }
       : {}),
   });
   return {

@@ -92,6 +92,17 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
   rest, or an empty string), so a terminal pack shows the engine's own
   wording rather than a copy of it.
 
+- **A component with no view in this engine says so.** `@markii/react`,
+  `@markii/html` and `@markii/ansi` take an `unavailableComponents` render
+  option: a listed directive renders the fallback box reading "no preview
+  view for", "no HTML view for" or "no terminal view for" instead of
+  "unknown component", with the `mk-unknown--no-view` class in React and
+  HTML, and reports the new `no-engine-view` diagnostic kind. Without the
+  option nothing changes. `@markii/stdlib` adds the kind, the
+  `UnavailableComponent` type and `createUnavailableComponentLookup`. The
+  three hosts pass the list from their pack loading, and `markii view`
+  writes the reason to stderr without `--verbose`.
+
 ### Fixed
 
 - **The terminal status line names the active tab**, not the first one,

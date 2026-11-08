@@ -46,6 +46,8 @@ function context(
     packModules: {},
     registry: createRegistry(),
     stylesheets: [],
+    unavailableComponents: [],
+    installedComponents: [],
     namespaces: packs.map((p) => p.manifest.name),
     skipped,
     invalidRegistrationReasons,

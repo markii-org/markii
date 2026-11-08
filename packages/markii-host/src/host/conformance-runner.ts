@@ -671,6 +671,21 @@ export function outcomeMismatches(
           `namespaces: expected ${JSON.stringify(want)}, got ${JSON.stringify(got)}`,
         );
       }
+      // The component counts are engine-neutral on purpose: a pack with one
+      // view per engine has exactly one component unavailable on every host.
+      for (const [expectedKey, actualKey] of [
+        ['componentCount', 'components'],
+        ['unavailableCount', 'unavailable'],
+      ] as const) {
+        if (expected[expectedKey] === undefined) continue;
+        const list = actualRecord[actualKey];
+        const count = Array.isArray(list) ? list.length : 0;
+        if (count !== expected[expectedKey]) {
+          mismatches.push(
+            `${expectedKey}: expected ${String(expected[expectedKey])}, got ${String(count)}`,
+          );
+        }
+      }
       break;
     }
     case 'completions': {

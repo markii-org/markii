@@ -491,9 +491,15 @@ export default class MarkiiPlugin extends Plugin {
         values,
         fs: this.exportFs(),
         embedImages: this.exportImageReader(file.path),
+        ...(this.packContext
+          ? { unavailableComponents: this.packContext.installedComponents }
+          : {}),
         ...(packContext
           ? {
-              renderBody: renderNoteBodyForExport(packContext.registry),
+              renderBody: renderNoteBodyForExport(
+                packContext.registry,
+                this.packContext?.unavailableComponents,
+              ),
               packStylesheets: packContext.stylesheets,
               packCount: packContext.packCount,
             }
@@ -590,9 +596,15 @@ export default class MarkiiPlugin extends Plugin {
         readValues: (path) => readPersistedValues(memento, path),
         fs: this.exportFs(),
         embedImagesFor: (path) => this.exportImageReader(path),
+        ...(this.packContext
+          ? { unavailableComponents: this.packContext.installedComponents }
+          : {}),
         ...(packContext
           ? {
-              renderBody: renderNoteBodyForExport(packContext.registry),
+              renderBody: renderNoteBodyForExport(
+                packContext.registry,
+                this.packContext?.unavailableComponents,
+              ),
               packStylesheets: packContext.stylesheets,
               packCount: packContext.packCount,
             }

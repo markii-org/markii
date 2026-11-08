@@ -86,16 +86,21 @@ import {
   emptyInlineTitle,
   failureToken,
   formMismatchTitle,
+  NO_ENGINE_VIEW_LABEL,
+  noEngineViewTitle,
   invalidAttributeValueLabel,
   invalidAttributeValueTitle,
   unsafeImageSrcLabel,
   unsafeImageSrcTitle,
 } from './failure-presentation.js';
 import {
+  createUnavailableComponentLookup,
   formatValue,
   getContract,
   reportDiagnostic,
   type OnDiagnostic,
+  type UnavailableComponent,
+  type UnavailableComponentLookup,
 } from '@markii/stdlib';
 import {
   resolveImageAttribute,
@@ -229,6 +234,8 @@ interface WalkContext {
   resolveImageSrc: ResolveImageSrc | undefined;
   resolveHref: ResolveHref | undefined;
   onDiagnostic: OnDiagnostic | undefined;
+  /** Components of installed packs this render cannot draw, from the host; `undefined` when none were offered. */
+  unavailable: UnavailableComponentLookup | undefined;
   focusCounter: { current: number };
   /** Populated only by `buildMarkElement`'s counting walk; `undefined` for every other walk (string rendering, the mounted render's own tree), which have no use for it and skip the bookkeeping. */
   focusables: FocusableDescriptor[] | undefined;
@@ -331,9 +338,10 @@ function isRegisteredInline(entry: AnsiRegistryEntry): boolean {
 function fallbackLabel(
   name: string,
   inline: boolean,
-  reason: 'unregistered' | 'form-mismatch',
+  reason: 'unregistered' | 'form-mismatch' | 'no-engine-view',
 ): string {
   const code = `\`${stripControlCharacters(name)}\``;
+  if (reason === 'no-engine-view') return `${NO_ENGINE_VIEW_LABEL} ${code}`;
   if (reason === 'form-mismatch') {
     return inline
       ? `block component ${code} written inline`
@@ -347,7 +355,7 @@ function unknownDirective(
   name: string,
   inline: boolean,
   childrenText: string,
-  reason: 'unregistered' | 'form-mismatch',
+  reason: 'unregistered' | 'form-mismatch' | 'no-engine-view',
   width: number,
   color: ColorLevel,
   glyphs: GlyphSet,
@@ -571,6 +579,23 @@ function renderDirectiveContentString(
   const component = readRegistryComponent(entry);
 
   if (!entry || component == null) {
+    const missingView = wctx.unavailable?.(name);
+    if (missingView !== undefined) {
+      reportDiagnostic(wctx.onDiagnostic, {
+        kind: 'no-engine-view',
+        directive: name,
+        message: noEngineViewTitle(name, missingView.pack, missingView.engines),
+      });
+      return unknownDirective(
+        name,
+        inline,
+        safeChildrenText(childrenText),
+        'no-engine-view',
+        width,
+        wctx.color,
+        wctx.glyphs,
+      );
+    }
     return unknownDirective(
       name || '(unnamed)',
       inline,
@@ -2170,6 +2195,7 @@ function buildWalkContext(
   resolveImageSrc: ResolveImageSrc | undefined,
   resolveHref: ResolveHref | undefined,
   onDiagnostic: OnDiagnostic | undefined,
+  unavailable: UnavailableComponentLookup | undefined,
 ): WalkContext {
   return {
     registry,
@@ -2181,6 +2207,7 @@ function buildWalkContext(
     resolveImageSrc,
     resolveHref,
     onDiagnostic,
+    unavailable,
     focusCounter: { current: 0 },
     focusables: undefined,
   };
@@ -2208,6 +2235,14 @@ export interface RenderMarkOptions {
   readonly resolveImageSrc?: ResolveImageSrc;
   readonly resolveHref?: ResolveHref;
   readonly onDiagnostic?: OnDiagnostic;
+  /**
+   * Components of installed packs that this render cannot draw, as plain
+   * data from the host. A directive named here renders the usual fallback
+   * with the label "no terminal view for" instead of "unknown component",
+   * and `onDiagnostic` gets a `'no-engine-view'` event. Omitted, the render
+   * is unchanged.
+   */
+  readonly unavailableComponents?: readonly UnavailableComponent[];
   readonly store?: AnsiValueStore;
   readonly vault?: AnsiVaultStore;
   /**
@@ -2241,6 +2276,7 @@ function buildRootElement(
   resolveImageSrc: ResolveImageSrc | undefined,
   resolveHref: ResolveHref | undefined,
   onDiagnostic: OnDiagnostic | undefined,
+  unavailable: UnavailableComponentLookup | undefined,
   width: number,
 ): ReactElement {
   const wctx = buildWalkContext(
@@ -2253,6 +2289,7 @@ function buildRootElement(
     resolveImageSrc,
     resolveHref,
     onDiagnostic,
+    unavailable,
   );
   const body = renderBlocksElement(root.children, width, '', wctx);
   return (
@@ -2273,6 +2310,7 @@ async function renderRootToString(
   resolveImageSrc: ResolveImageSrc | undefined,
   resolveHref: ResolveHref | undefined,
   onDiagnostic: OnDiagnostic | undefined,
+  unavailable: UnavailableComponentLookup | undefined,
   width: number,
 ): Promise<string> {
   const element = buildRootElement(
@@ -2286,6 +2324,7 @@ async function renderRootToString(
     resolveImageSrc,
     resolveHref,
     onDiagnostic,
+    unavailable,
     width,
   );
   const raw = await renderInkToString(element, width);
@@ -2330,6 +2369,7 @@ export async function renderMarkToAnsi(
       options?.resolveImageSrc,
       options?.resolveHref,
       options?.onDiagnostic,
+      createUnavailableComponentLookup(options?.unavailableComponents),
       options?.width ?? DEFAULT_WIDTH,
     );
   } catch (error) {
@@ -2363,6 +2403,7 @@ export async function renderMarkNodeToAnsi(
       options?.resolveImageSrc,
       options?.resolveHref,
       options?.onDiagnostic,
+      createUnavailableComponentLookup(options?.unavailableComponents),
       options?.width ?? DEFAULT_WIDTH,
     );
   } catch (error) {
@@ -2438,6 +2479,9 @@ export function buildMarkElement(
     root = { type: 'root', children: [] };
   }
 
+  const unavailable = createUnavailableComponentLookup(
+    options?.unavailableComponents,
+  );
   const content = buildRootElement(
     root,
     registry,
@@ -2449,6 +2493,7 @@ export function buildMarkElement(
     options?.resolveImageSrc,
     options?.resolveHref,
     options?.onDiagnostic,
+    unavailable,
     width,
   );
 
@@ -2478,6 +2523,7 @@ export function buildMarkElement(
     // focus descriptors. Passing the callback here would report each notice
     // twice on every mount and again on every resize.
     undefined,
+    unavailable,
   );
   countingWctx.focusCounter = counter;
   countingWctx.focusables = focusables;

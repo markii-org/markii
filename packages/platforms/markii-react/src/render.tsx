@@ -11,8 +11,16 @@ import {
   isBareAttribute,
 } from '@markii/core';
 import type { MarkNode } from '@markii/core';
-import { getContract, reportDiagnostic } from '@markii/stdlib';
-import type { OnDiagnostic } from '@markii/stdlib';
+import {
+  createUnavailableComponentLookup,
+  getContract,
+  reportDiagnostic,
+} from '@markii/stdlib';
+import type {
+  OnDiagnostic,
+  UnavailableComponent,
+  UnavailableComponentLookup,
+} from '@markii/stdlib';
 import type {
   FailureKind,
   ValueStatus,
@@ -44,6 +52,7 @@ import {
   emptyInlineTitle,
   formMismatchTitle,
   invalidAttributeValueTitle,
+  noEngineViewTitle,
 } from './components/failure-presentation.js';
 import { isEmptyContent } from './components/is-empty-content.js';
 
@@ -353,6 +362,7 @@ function renderDirectiveContent(
   layoutClassName: string | undefined,
   resolveImageSrc: ResolveImageSrc | undefined,
   onDiagnostic: OnDiagnostic | undefined,
+  unavailable: UnavailableComponentLookup | undefined,
 ): ReactElement {
   // `:value[name]` (§8) is a renderer built-in, resolved before any
   // registry lookup — like the unknown-directive fallback, it is not
@@ -403,6 +413,32 @@ function renderDirectiveContent(
   const Component = readRegistryComponent(entry);
 
   if (!entry || Component == null) {
+    // A name the host says belongs to an installed pack with no view for
+    // this engine gets the same box with a different label, and a
+    // diagnostic. Any other name is a real unknown.
+    const missingView = unavailable?.(name);
+    if (missingView !== undefined) {
+      const title = noEngineViewTitle(
+        name,
+        missingView.pack,
+        missingView.engines,
+      );
+      reportDiagnostic(onDiagnostic, {
+        kind: 'no-engine-view',
+        directive: name,
+        message: title,
+      });
+      return (
+        <UnknownDirective
+          name={name}
+          inline={inline}
+          reason="no-engine-view"
+          title={title}
+        >
+          {children}
+        </UnknownDirective>
+      );
+    }
     return (
       <UnknownDirective name={name || '(unnamed)'} inline={inline}>
         {children}
@@ -543,6 +579,7 @@ function createDirectiveElement(
   vault: VaultStore | undefined,
   resolveImageSrc: ResolveImageSrc | undefined,
   onDiagnostic: OnDiagnostic | undefined,
+  unavailable: UnavailableComponentLookup | undefined,
 ): (props: DirectiveElementProps) => ReactElement {
   return function DirectiveElement(props: DirectiveElementProps): ReactElement {
     const written = props['data-mk-name'] ?? '';
@@ -603,6 +640,7 @@ function createDirectiveElement(
       isLayoutScope ? layoutClassName : undefined,
       resolveImageSrc,
       onDiagnostic,
+      unavailable,
     );
 
     // The wrapper `<div>` applies ONLY to block directives (leaf/container),
@@ -806,6 +844,7 @@ function hastToReactTree(
   resolveImageSrc: ResolveImageSrc | undefined,
   resolveHref: ResolveHref | undefined,
   onDiagnostic: OnDiagnostic | undefined,
+  unavailable: UnavailableComponentLookup | undefined,
 ): ReactElement {
   const DirectiveElement = createDirectiveElement(
     registry,
@@ -813,6 +852,7 @@ function hastToReactTree(
     vault,
     resolveImageSrc,
     onDiagnostic,
+    unavailable,
   );
   return toJsxRuntime(hastTree, {
     Fragment,
@@ -933,6 +973,14 @@ export interface RenderMarkOptions {
   readonly resolveHref?: ResolveHref;
   readonly onDiagnostic?: OnDiagnostic;
   /**
+   * Components of installed packs that this render cannot draw, as the host
+   * computed them. A directive named here renders the usual fallback box
+   * labeled "no preview view for" instead of "unknown component", and
+   * `onDiagnostic` gets a `'no-engine-view'` event. Plain data: omitted, the
+   * render is exactly what it was before the option existed.
+   */
+  readonly unavailableComponents?: readonly UnavailableComponent[];
+  /**
    * The note's own last-run values, the same thing the third positional
    * parameter takes. Offered here as well so a caller that already builds
    * an options object does not have to fill positional slots it has no
@@ -960,6 +1008,7 @@ export function renderMark(
       options?.resolveImageSrc,
       options?.resolveHref,
       options?.onDiagnostic,
+      createUnavailableComponentLookup(options?.unavailableComponents),
     );
   } catch (error) {
     return renderFailureFallback(error);
@@ -1017,6 +1066,7 @@ export function renderMarkNode(
       options?.resolveImageSrc,
       options?.resolveHref,
       options?.onDiagnostic,
+      createUnavailableComponentLookup(options?.unavailableComponents),
     );
   } catch (error) {
     return renderFailureFallback(error);

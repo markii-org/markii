@@ -67,6 +67,36 @@ describe('loadPackContext', () => {
     expect(context.registrationCollisions).toEqual([]);
   });
 
+  it('lists components without a react view, including a pack dropped whole, and every installed component separately', async () => {
+    const root = await makeTempDir();
+    for (const [name, components] of [
+      ['mix', { a: './A.tsx', b: { sources: { ansi: './b.ts' } } }],
+      ['term', { t: { sources: { ansi: './t.ts' } } }],
+    ] as const) {
+      const packDir = path.join(root, name);
+      await mkdir(packDir, { recursive: true });
+      await writeFile(
+        path.join(packDir, 'pack.json'),
+        JSON.stringify({ name, engine: 'react', components }),
+      );
+    }
+
+    const context = await loadPackContext(
+      [path.join(root, 'mix'), path.join(root, 'term')],
+      createRegistry(),
+    );
+
+    expect(context.unavailableComponents).toEqual([
+      { directive: 'mix_b', pack: 'mix', engines: ['ansi'] },
+      { directive: 'term_t', pack: 'term', engines: ['ansi'] },
+    ]);
+    expect(context.installedComponents.map((c) => c.directive)).toEqual([
+      'mix_a',
+      'mix_b',
+      'term_t',
+    ]);
+  });
+
   it('skips a discovered pack with no prebuilt webview.js — it is never compiled', async () => {
     const root = await makeTempDir();
     const packDir = path.join(root, 'nopreview');

@@ -30,6 +30,23 @@ describe('renderDocument', () => {
     expect(html).toContain('An unknown directive falls back cleanly.');
   });
 
+  it('forwards unavailableComponents, labeling a pack component with no preview view', () => {
+    const events: string[] = [];
+    const html = renderToStaticMarkup(
+      renderDocument(
+        '::ana_meter{}\n\n::ana_typo{}',
+        undefined,
+        undefined,
+        undefined,
+        (event) => events.push(event.kind),
+        [{ directive: 'ana_meter', pack: 'ana', engines: ['ansi'] }],
+      ),
+    );
+    expect(html).toContain('no preview view for');
+    expect(html).toContain('unknown component');
+    expect(events).toEqual(['no-engine-view']);
+  });
+
   it('forwards resolveImageSrc through to renderMark', () => {
     const html = renderToStaticMarkup(
       renderDocument('![a cat](cat.png)', undefined, undefined, (src) =>

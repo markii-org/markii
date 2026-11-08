@@ -15,6 +15,7 @@
  * `DEFAULT_CASCADE_MAX_NOTES`; nothing here lets a caller override them.
  */
 import type { StoredValue } from '@markii/runtime';
+import type { OnDiagnostic, UnavailableComponent } from '@markii/stdlib';
 import {
   CASCADE_INDEX_FILE_NAME,
   DEFAULT_CASCADE_MAX_DEPTH,
@@ -106,6 +107,10 @@ export interface CascadeArchiveRequest {
   readonly staticReason?: StaticExportReason;
   readonly packStylesheets?: readonly ExportPackStylesheet[];
   readonly packCount?: number;
+  /** Installed pack components the static engine cannot draw, labeled "no HTML view" in every note rendered statically. */
+  readonly unavailableComponents?: readonly UnavailableComponent[];
+  /** Receives the static engine's render diagnostics for every note. */
+  readonly onDiagnostic?: OnDiagnostic;
   /** Builds the image reader for one note, bound to that note's own folder so a relative source resolves against the note that wrote it. Omitted embeds no images. */
   readonly embedImagesFor?: (notePath: string) => ExportImageReader;
   /** Hides the collapsed script marker in every exported note. Defaults to `false`. */
@@ -189,6 +194,12 @@ export async function buildCascadeArchive(
           : {}),
         ...(request.packCount !== undefined
           ? { packCount: request.packCount }
+          : {}),
+        ...(request.unavailableComponents !== undefined
+          ? { unavailableComponents: request.unavailableComponents }
+          : {}),
+        ...(request.onDiagnostic !== undefined
+          ? { onDiagnostic: request.onDiagnostic }
           : {}),
         ...(request.embedImagesFor !== undefined
           ? { embedImages: request.embedImagesFor(note.path) }

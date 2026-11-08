@@ -804,6 +804,16 @@ since packs and later versions of the format use names this one does not
 know, and neither does the unknown-directive box, which already explains
 itself in the page. A callback that throws cannot break the render.
 
+A directive can also name a component that is installed but has no view in
+this renderer: a React-only pack component in the terminal, say. Every
+engine takes an `unavailableComponents` option listing those, each with its
+pack and the engines it does have views for. A listed directive renders the
+same box with a different label (no preview, HTML, or terminal view, per
+engine) and reports the `no-engine-view` kind, so a reader can tell it from
+a typo. The host builds that list from its pack loading, which returns every
+installed component and the ones lacking a view for the host's engine. A
+renderer given no list behaves exactly as before.
+
 ### Marking interactive elements
 
 Everything the standard set renders that is a real control carries

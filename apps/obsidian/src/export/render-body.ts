@@ -18,6 +18,7 @@ import { createValueStore } from '@markii/runtime';
 import type { StoredValue } from '@markii/runtime';
 import type { Registry } from '@markii/react';
 import type { ExportBodyRenderer, ExportBodyResult } from '@markii/host';
+import type { UnavailableComponent } from '@markii/stdlib';
 import { renderDocument } from '../render-document.js';
 
 /**
@@ -39,10 +40,20 @@ export function renderNoteBodyToHtml(
   text: string,
   values: Record<string, StoredValue>,
   registry?: Registry,
+  unavailableComponents?: readonly UnavailableComponent[],
 ): string {
   const store =
     Object.keys(values).length > 0 ? createValueStore(values) : undefined;
-  return renderToStaticMarkup(renderDocument(text, store, registry));
+  return renderToStaticMarkup(
+    renderDocument(
+      text,
+      store,
+      registry,
+      undefined,
+      undefined,
+      unavailableComponents,
+    ),
+  );
 }
 
 /** The verbatim detail behind a thrown value, for the diagnostics surface only. */
@@ -59,10 +70,19 @@ function detailOf(error: unknown): string {
  */
 export function renderNoteBodyForExport(
   registry?: Registry,
+  unavailableComponents?: readonly UnavailableComponent[],
 ): ExportBodyRenderer {
   return (text, values): ExportBodyResult => {
     try {
-      return { ok: true, html: renderNoteBodyToHtml(text, values, registry) };
+      return {
+        ok: true,
+        html: renderNoteBodyToHtml(
+          text,
+          values,
+          registry,
+          unavailableComponents,
+        ),
+      };
     } catch (error) {
       return { ok: false, reason: 'render-failed', detail: detailOf(error) };
     }

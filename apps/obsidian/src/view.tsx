@@ -576,6 +576,7 @@ export class MarkiiPreviewView extends ItemView {
             registry,
             resolveImageSrc,
             this.reportRenderDiagnostic,
+            this.plugin.packContext?.unavailableComponents,
           ),
         ),
         usesResolution.missing.length > 0

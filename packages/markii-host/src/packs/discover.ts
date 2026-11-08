@@ -31,13 +31,55 @@ import { readdir, readFile as nodeReadFile } from 'node:fs/promises';
 import { parsePackManifest } from '@markii/pack';
 import type { PackManifest } from '@markii/pack';
 import { REACT_ENGINE_ID } from '@markii/react';
+import type { UnavailableComponent } from '@markii/stdlib';
 import {
+  composeDirectiveName,
   detectNamespaceCollisions,
   packComponents,
   packComponentsForEngine,
   packDeclaredEngines,
   packSupportsEngine,
 } from '@markii/pack';
+
+/**
+ * What a valid pack that declares nothing for this host's engine carries on
+ * its skipped entry: its namespace, and every component it declares with
+ * the engines each one does ship a view for, so a note that uses one can say
+ * "no view here" rather than "unknown component".
+ */
+export interface EngineUnsupportedPack {
+  readonly packName: string;
+  readonly components: readonly UnavailableComponent[];
+}
+
+/**
+ * Every component a pack declares, as `{ directive, pack, engines }` with
+ * the engine ids sorted. The shape a host hands a renderer's
+ * `unavailableComponents` option after filtering.
+ */
+export function declaredPackComponents(
+  manifest: Pick<PackManifest, 'name' | 'components' | 'engine'>,
+): UnavailableComponent[] {
+  const declared: UnavailableComponent[] = [];
+  for (const listing of packComponents(manifest)) {
+    const composed = composeDirectiveName(manifest.name, listing.localName);
+    if (!composed.ok) continue;
+    declared.push({
+      directive: composed.name,
+      pack: manifest.name,
+      engines: Object.keys(listing.sources).sort(),
+    });
+  }
+  return declared;
+}
+
+/** The components, from `declared`, that ship no view for `engine`. */
+export function componentsWithoutEngineView(
+  declared: readonly UnavailableComponent[],
+  engine: string,
+): UnavailableComponent[] {
+  return declared.filter((component) => !component.engines.includes(engine));
+}
 
 /** Reads a file's UTF-8 text, or resolves `undefined` if it does not exist / cannot be read. Never rejects for an ordinary "not found" — injected so this module needs no real filesystem to test. */
 export type PackFileReader = (
@@ -122,7 +164,7 @@ export interface SkippedPackFolder {
   readonly folder: string;
   readonly reason: string;
   /** Set when the pack is valid but declares nothing for this host's renderer engine (an expected state, not a failure). `packName` is its namespace. */
-  readonly engineUnsupported?: { readonly packName: string };
+  readonly engineUnsupported?: EngineUnsupportedPack;
 }
 
 export interface DiscoverPacksResult {
@@ -157,7 +199,7 @@ type ManifestAttempt =
   | {
       readonly kind: 'invalid';
       readonly reason: string;
-      readonly engineUnsupported?: { readonly packName: string };
+      readonly engineUnsupported?: EngineUnsupportedPack;
     };
 
 async function tryLoadPackAt(
@@ -255,7 +297,7 @@ function checkEngine(
   | {
       readonly kind: 'invalid';
       readonly reason: string;
-      readonly engineUnsupported?: { readonly packName: string };
+      readonly engineUnsupported?: EngineUnsupportedPack;
     } {
   if (
     supportedEngine === undefined ||
@@ -266,7 +308,10 @@ function checkEngine(
   return {
     kind: 'invalid',
     reason: `pack engine "${packDeclaredEngines(pack.manifest)}" is not supported here (expected "${supportedEngine}"); its components fall back to the unknown-component box`,
-    engineUnsupported: { packName: pack.manifest.name },
+    engineUnsupported: {
+      packName: pack.manifest.name,
+      components: declaredPackComponents(pack.manifest),
+    },
   };
 }
 

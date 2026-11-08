@@ -24,6 +24,7 @@ import {
   type ValueStatus,
 } from '@markii/runtime';
 import type { ValuesFailure } from '@markii/host';
+import type { UnavailableComponent } from '@markii/stdlib';
 import { isPreviewWidth, type PreviewWidth } from './preview-width.js';
 
 export type { ValuesFailure } from '@markii/host';
@@ -73,6 +74,13 @@ export interface UpdateMessage {
    * both currently degrade the same way (an empty install set).
    */
   readonly packNamespaces?: readonly string[];
+  /**
+   * Components of installed packs that have no view for the preview's
+   * engine, so the webview can label a directive naming one "no preview
+   * view" instead of "unknown component" (`@markii/react`'s
+   * `unavailableComponents` render option). Omitted when there are none.
+   */
+  readonly unavailableComponents?: readonly UnavailableComponent[];
   /**
    * How many configured `markii.packs` folders failed to produce a usable
    * pack, as of the most recent pack load (`./packs/pack-diagnostics.ts`'s
@@ -271,6 +279,8 @@ export interface ExportRequestMessage {
   readonly requestId: string;
   readonly text: string;
   readonly values: Readonly<Record<string, WireStoredValue>>;
+  /** Same list the `update` messages carry, for the export's own render. Omitted when there are none. */
+  readonly unavailableComponents?: readonly UnavailableComponent[];
 }
 
 /**
@@ -434,6 +444,13 @@ function isUpdateMessage(value: unknown): value is UpdateMessage {
     return false;
   }
   if (
+    hasOwn(value, 'unavailableComponents') &&
+    value.unavailableComponents !== undefined &&
+    !isUnavailableComponentArray(value.unavailableComponents)
+  ) {
+    return false;
+  }
+  if (
     hasOwn(value, 'packSkippedCount') &&
     value.packSkippedCount !== undefined &&
     !isValidSkippedCount(value.packSkippedCount)
@@ -506,6 +523,32 @@ function isValidSkippedCount(value: unknown): value is number {
     Number.isInteger(value) &&
     value >= 0 &&
     value <= MAX_PACK_NAMESPACES
+  );
+}
+
+/** A sane upper bound on how many unavailable components one message may list. */
+const MAX_UNAVAILABLE_COMPONENTS = 4096;
+
+/** Every entry is `{ directive, pack, engines }` with string members, and the array is within `MAX_UNAVAILABLE_COMPONENTS`. */
+function isUnavailableComponentArray(
+  value: unknown,
+): value is readonly UnavailableComponent[] {
+  return (
+    Array.isArray(value) &&
+    value.length <= MAX_UNAVAILABLE_COMPONENTS &&
+    value.every(
+      (entry: unknown) =>
+        isPlainObject(entry) &&
+        hasOwn(entry, 'directive') &&
+        typeof entry.directive === 'string' &&
+        entry.directive.length > 0 &&
+        hasOwn(entry, 'pack') &&
+        typeof entry.pack === 'string' &&
+        hasOwn(entry, 'engines') &&
+        Array.isArray(entry.engines) &&
+        entry.engines.length <= MAX_PACK_NAMESPACES &&
+        entry.engines.every((engine: unknown) => typeof engine === 'string'),
+    )
   );
 }
 
@@ -693,6 +736,13 @@ function isExportRequestMessage(value: unknown): value is ExportRequestMessage {
   }
   if (!hasOwn(value, 'text') || typeof value.text !== 'string') return false;
   if (!hasOwn(value, 'values') || !isWireStoredValueRecord(value.values)) {
+    return false;
+  }
+  if (
+    hasOwn(value, 'unavailableComponents') &&
+    value.unavailableComponents !== undefined &&
+    !isUnavailableComponentArray(value.unavailableComponents)
+  ) {
     return false;
   }
   return true;

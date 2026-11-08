@@ -1,5 +1,8 @@
 import type { ReactElement, ReactNode } from 'react';
-import { INLINE_FALLBACK_SEPARATOR } from './failure-presentation.js';
+import {
+  INLINE_FALLBACK_SEPARATOR,
+  NO_ENGINE_VIEW_LABEL,
+} from './failure-presentation.js';
 import { isEmptyContent } from './is-empty-content.js';
 
 /**
@@ -7,16 +10,22 @@ import { isEmptyContent } from './is-empty-content.js';
  *
  * - `unregistered` — no component is registered under the name (docs/spec.md
  *   requirement 3, the original and by far the common case).
+ * - `no-engine-view` — the name belongs to a component of an installed
+ *   pack that ships no view for this engine; the host said so through
+ *   `unavailableComponents`. Same box, a different label.
  * - `form-mismatch` — a component IS registered, but the directive was
  *   written in a form its kind does not match: a block component written
  *   inline (`:center[x]`). See `render.tsx`'s `isFormMismatch`.
  */
-export type DirectiveFallbackReason = 'unregistered' | 'form-mismatch';
+export type DirectiveFallbackReason =
+  'unregistered' | 'form-mismatch' | 'no-engine-view';
 
 export interface UnknownDirectiveProps {
   name: string;
   inline?: boolean;
   reason?: DirectiveFallbackReason;
+  /** The tooltip text, for a reason whose label alone leaves something to explain. */
+  title?: string;
   children?: ReactNode;
 }
 
@@ -37,6 +46,13 @@ function fallbackLabel(
   inline: boolean,
   reason: DirectiveFallbackReason,
 ): ReactNode {
+  if (reason === 'no-engine-view') {
+    return (
+      <>
+        {NO_ENGINE_VIEW_LABEL} <code>{name}</code>
+      </>
+    );
+  }
   if (reason === 'form-mismatch') {
     return inline ? (
       <>
@@ -78,17 +94,26 @@ export function UnknownDirective({
   name,
   inline = false,
   reason = 'unregistered',
+  title,
   children,
 }: UnknownDirectiveProps): ReactElement {
   // A modifier class, never body text: a stylesheet can tint a mismatch
   // differently from a genuinely missing component, and the two cases stay
   // distinguishable in a DOM snapshot, without the rendered page turning
   // into an error dump (AGENTS.md's cleanliness principle).
-  const reasonClass = reason === 'form-mismatch' ? ' mk-unknown--mismatch' : '';
+  const reasonClass =
+    reason === 'form-mismatch'
+      ? ' mk-unknown--mismatch'
+      : reason === 'no-engine-view'
+        ? ' mk-unknown--no-view'
+        : '';
 
   if (inline) {
     return (
-      <span className={`mk-unknown mk-unknown--inline${reasonClass}`}>
+      <span
+        className={`mk-unknown mk-unknown--inline${reasonClass}`}
+        title={title}
+      >
         <span className="mk-unknown__label">
           {fallbackLabel(name, true, reason)}
           {isEmptyContent(children) ? null : (
@@ -103,7 +128,7 @@ export function UnknownDirective({
   }
 
   return (
-    <div className={`mk-unknown mk-unknown--block${reasonClass}`}>
+    <div className={`mk-unknown mk-unknown--block${reasonClass}`} title={title}>
       <p className="mk-unknown__label">{fallbackLabel(name, false, reason)}</p>
       {children ? <div className="mk-unknown__content">{children}</div> : null}
     </div>

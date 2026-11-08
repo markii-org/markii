@@ -1,0 +1,19 @@
+{
+  "outcomes": [
+    { "kind": "opened" },
+    { "kind": "installed", "namespace": "duo", "replaced": false },
+    {
+      "kind": "loaded",
+      "namespaces": ["duo"],
+      "componentCount": 2,
+      "unavailableCount": 1
+    }
+  ],
+  "diagnostics": [
+    "Install pack from file installed pack \"duo\" from \"files/duo-1.0.0\"",
+    "Loaded pack \"duo\" (namespace: duo, 1 component)"
+  ],
+  "prompts": [
+    "Installing \"duo\" lets its code run inside"
+  ]
+}

@@ -34,6 +34,7 @@ import {
   fileNameOf,
   countedNoun,
 } from '@markii/host';
+import type { UnavailableComponent } from '@markii/stdlib';
 import type {
   EmbeddedImageReport,
   ExportBodyRenderer,
@@ -172,6 +173,8 @@ export interface NoteExportRequest {
   readonly packStylesheets?: readonly ExportPackStylesheet[];
   /** How many loaded packs contributed components to the registry that rendered this file. Diagnostics only. */
   readonly packCount?: number;
+  /** Every installed pack component. The static engine draws no pack views, so each reads "no HTML view" in a statically rendered body. */
+  readonly unavailableComponents?: readonly UnavailableComponent[];
   /**
    * Reads one of the note's local images, so the export embeds it as a
    * `data:` URI instead of a vault-relative path (`./export/export-images.ts`,
@@ -229,6 +232,9 @@ async function buildDocument(request: NoteExportRequest): Promise<{
       : {}),
     ...(request.hideScriptBlocks !== undefined
       ? { hideScriptBlocks: request.hideScriptBlocks }
+      : {}),
+    ...(request.unavailableComponents !== undefined
+      ? { unavailableComponents: request.unavailableComponents }
       : {}),
   });
   return {

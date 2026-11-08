@@ -17,7 +17,7 @@ import {
   type ColorLevel,
   type ColorOption,
 } from '@markii/ansi';
-import type { OnDiagnostic } from '@markii/stdlib';
+import type { OnDiagnostic, UnavailableComponent } from '@markii/stdlib';
 import type { BoxFlag, ColorFlag } from './args.js';
 import type { Terminal } from './terminal.js';
 
@@ -91,6 +91,8 @@ export interface RenderNoteOptions {
   readonly store?: AnsiValueStore;
   /** The component registry, with any loaded packs merged on. Absent, the standard set. */
   readonly registry?: AnsiRegistry;
+  /** Installed pack components with no terminal view: the note says "no terminal view for" instead of "unknown component", and `onDiagnostic` hears why. */
+  readonly unavailableComponents?: readonly UnavailableComponent[];
   /**
    * `@markii/stdlib`'s `OnDiagnostic` — the caller wires this to
    * `@markii/host`'s `createRenderDiagnosticCollector()` (or an equivalent
@@ -120,6 +122,9 @@ export async function renderNote(
     color: colorLevelToOption(color),
     box: resolveBox(options.boxFlag, terminal),
     ...(options.onDiagnostic ? { onDiagnostic: options.onDiagnostic } : {}),
+    ...(options.unavailableComponents
+      ? { unavailableComponents: options.unavailableComponents }
+      : {}),
   });
 }
 
@@ -149,6 +154,9 @@ export function buildViewElement(
     box: resolveBox(options.boxFlag, terminal),
     ...(options.store ? { store: options.store } : {}),
     ...(options.onDiagnostic ? { onDiagnostic: options.onDiagnostic } : {}),
+    ...(options.unavailableComponents
+      ? { unavailableComponents: options.unavailableComponents }
+      : {}),
     ...(options.onExit ? { onExit: options.onExit } : {}),
     ...(options.rows !== undefined ? { viewportRows: options.rows } : {}),
     interactive: true,

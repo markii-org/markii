@@ -40,6 +40,7 @@ import { runNote } from './run-note.js';
 import { createCliHostAdapter } from './host-adapter.js';
 import { resolveViewMode } from './view-mode.js';
 import { resolveCliPackOptions } from './pack-store.js';
+import type { UnavailableComponent } from '@markii/stdlib';
 import { loadCliPackRegistry } from './pack-registry.js';
 import { runLiveViewer } from './live-view.js';
 import { watchNote } from './watch-file.js';
@@ -114,9 +115,9 @@ export flags:
 
 Packs add components to a note. A pack that ships terminal views renders
 them in markii view and markii export --format ansi; a pack without them
-shows its components as unknown components. markii pack install asks before
-it installs, because a pack's code runs with all the permissions of your user
-account. In a session with no terminal, pass --yes to consent without being
+shows its components as "no terminal view" boxes. markii pack install asks
+before it installs, because a pack's code runs with all the permissions of
+your user account. In a session with no terminal, pass --yes to consent without being
 asked. Packs are read only from the per-device install store and from the
 packs shipped with this tool, never from a note or the current directory.
 
@@ -144,7 +145,10 @@ async function loadPackRegistry(
   memento: GrantMemento,
   verbose: boolean,
   emit: (line: string) => void,
-): Promise<AnsiRegistry> {
+): Promise<{
+  readonly registry: AnsiRegistry;
+  readonly unavailable: readonly UnavailableComponent[];
+}> {
   const adapter = createCliHostAdapter({
     terminal,
     memento,
@@ -157,7 +161,28 @@ async function loadPackRegistry(
   if (!verbose) {
     for (const line of loaded.failureLines) emit(`markii: ${line}\n`);
   }
-  return loaded.registry;
+  return { registry: loaded.registry, unavailable: loaded.unavailable };
+}
+
+/**
+ * Every installed pack component, for the static HTML export. That engine
+ * draws no pack views, so each of these reads "no HTML view" in the file
+ * instead of "unknown component". Loads nothing else: no pack code is read.
+ */
+async function loadInstalledComponents(
+  terminal: Terminal,
+  verbose: boolean,
+): Promise<readonly UnavailableComponent[]> {
+  const adapter = createCliHostAdapter({
+    terminal,
+    memento: NOOP_MEMENTO,
+    packs: resolveCliPackOptions(terminal.env, process.platform),
+    diagnostics: (line) => {
+      if (verbose) terminal.writeError(`markii: ${line}\n`);
+    },
+  });
+  const outcome = await createMarkiiHost(adapter).loadPacks();
+  return outcome.kind === 'loaded' ? outcome.components : [];
 }
 
 /**
@@ -182,6 +207,9 @@ const defaultViewDeps: ViewDeps = {
         ...(input.boxFlag !== undefined ? { boxFlag: input.boxFlag } : {}),
         store: input.store,
         ...(input.registry !== undefined ? { registry: input.registry } : {}),
+        ...(input.unavailableComponents !== undefined
+          ? { unavailableComponents: input.unavailableComponents }
+          : {}),
         onDiagnostic: input.onDiagnostic,
         onExit,
         ...(rows !== undefined ? { rows } : {}),
@@ -296,7 +324,7 @@ async function runViewCommand(
 
   const store = createValueStore(values);
   const diagnostics = createRenderDiagnosticCollector();
-  const registry = await loadPackRegistry(
+  const { registry, unavailable } = await loadPackRegistry(
     terminal,
     memento,
     command.verbose,
@@ -336,6 +364,7 @@ async function runViewCommand(
         ...(command.box !== undefined ? { boxFlag: command.box } : {}),
         store,
         registry,
+        unavailableComponents: unavailable,
         onDiagnostic: diagnostics.onDiagnostic,
       });
     if (command.watch) {
@@ -388,6 +417,7 @@ async function runViewCommand(
     ...(command.box !== undefined ? { boxFlag: command.box } : {}),
     store,
     registry,
+    unavailableComponents: unavailable,
     onDiagnostic: diagnostics.onDiagnostic,
     ...(command.watch
       ? {
@@ -437,21 +467,31 @@ async function runExportCommand(
     values = readPersistedValues(memento, documentKey);
   }
 
-  // The render-diagnostics collector only ever fills for 'ansi' (the one
-  // format rendered through this CLI's own `renderNote`); it stays empty,
-  // and this loop a no-op, for 'html' and 'md-plain'.
+  // The render-diagnostics collector fills for 'ansi' (rendered through this
+  // CLI's own `renderNote`) and for 'html' (the static engine, through the
+  // export request); it stays empty for 'md-plain'.
   const renderDiagnostics = createRenderDiagnosticCollector();
   // Only an ansi export renders through the terminal engine, so only it loads
   // packs. An html export keeps rendering a pack directive as the fallback.
-  const registry =
+  const loadedPacks =
     command.format === 'ansi'
       ? await loadPackRegistry(terminal, memento, command.verbose, (line) =>
           terminal.writeError(line),
         )
       : undefined;
+  const registry = loadedPacks?.registry;
+  // The static HTML engine draws no pack views either: each installed
+  // component reads "no HTML view" in the file, and the reason goes to stderr.
+  const htmlUnavailable =
+    command.format === 'html'
+      ? await loadInstalledComponents(terminal, command.verbose)
+      : undefined;
   const renderAnsi = (text: string): Promise<string> =>
     renderNote(text, terminal, {
       ...(registry !== undefined ? { registry } : {}),
+      ...(loadedPacks !== undefined
+        ? { unavailableComponents: loadedPacks.unavailable }
+        : {}),
       colorFlag: command.color ?? 'never',
       // An exported file is read in some other terminal, so like its color
       // it does not follow this one's environment: unicode unless asked.
@@ -475,6 +515,12 @@ async function runExportCommand(
     notePath: absolutePath,
     text: note.text,
     ...(values !== undefined ? { values } : {}),
+    ...(htmlUnavailable !== undefined
+      ? {
+          unavailableComponents: htmlUnavailable,
+          onDiagnostic: renderDiagnostics.onDiagnostic,
+        }
+      : {}),
   });
 
   for (const line of renderDiagnostics.lines()) {
@@ -584,15 +630,15 @@ async function runPackInstallCommand(
         CLI_LABELS,
       )}\n`,
     );
-    // A pack with no terminal views installs fine and shows its components
-    // as unknown components here; say so now rather than at first use.
+    // A pack with no terminal views installs fine and labels its components
+    // "no terminal view" here; say so now rather than at first use.
     const loaded = await host.loadTerminalPacks();
     if (
       loaded.kind === 'loaded' &&
       !loaded.namespaces.includes(outcome.namespace)
     ) {
       terminal.write(
-        `Markii: "${outcome.namespace}" has no terminal views. Its components show as unknown components here.\n`,
+        `Markii: "${outcome.namespace}" has no terminal views. Its components show as "no terminal view" here.\n`,
       );
     }
     flushPackDiagnostics(terminal, lines, command.verbose);

@@ -262,12 +262,15 @@ export {
 export type {
   DiscoveredPack,
   DiscoverPacksResult,
+  EngineUnsupportedPack,
   PackDirectoryLister,
   SkippedPackFolder,
 } from './packs/discover.js';
 export {
+  componentsWithoutEngineView,
   createNodeDirectoryLister,
   createNodeFileReader,
+  declaredPackComponents,
   discoverPacks,
   installedNamespaces,
 } from './packs/discover.js';

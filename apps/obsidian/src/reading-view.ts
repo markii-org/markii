@@ -211,6 +211,7 @@ class ReadingViewSection extends MarkdownRenderChild {
           registry,
           resolveImageSrc,
           this.reportRenderDiagnostic,
+          this.plugin.packContext?.unavailableComponents,
         ),
       ),
     );

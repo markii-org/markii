@@ -11,7 +11,9 @@
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import {
+  componentsWithoutEngineView,
   createNodeFileReader,
+  declaredPackComponents,
   discoverPacks,
   installedNamespaces,
   loadPackModules,
@@ -19,6 +21,8 @@ import {
   resolvePackPaths,
   resolvePrebuiltPack,
 } from '@markii/host';
+import { REACT_ENGINE_ID } from '@markii/react';
+import type { UnavailableComponent } from '@markii/stdlib';
 import type {
   DiscoveredPack,
   PackBuildOutcome,
@@ -47,6 +51,13 @@ export interface PackContext {
   readonly webviewPacks: readonly DiscoveredPack[];
   /** Every discovered pack's namespace — what `resolveUses` (`@markii/pack`) checks a note's `uses:` declaration against. */
   readonly namespaces: readonly string[];
+  /**
+   * Components of the installed packs that ship no view for the preview's
+   * engine (a terminal-only component). The preview and the HTML export
+   * label a directive naming one "no preview view" instead of "unknown
+   * component", and the render reports why.
+   */
+  readonly unavailableComponents: readonly UnavailableComponent[];
   /** Configured folders that produced no usable pack, and why (developer-facing only). Also carries a build-failure reason for a pack whose `.tsx` sources failed to compile (`@markii/host`'s `pack-build.ts`) — it still counts toward `packs`, just not `webviewPacks`. */
   readonly skipped: readonly SkippedPackFolder[];
   /**
@@ -223,6 +234,10 @@ export async function loadPackContext(
     packModules,
     webviewPacks,
     namespaces: installedNamespaces(merged.packs),
+    unavailableComponents: componentsWithoutEngineView(
+      merged.packs.flatMap((pack) => declaredPackComponents(pack.manifest)),
+      REACT_ENGINE_ID,
+    ),
     skipped,
     relativeEntries,
     cssWarnings,

@@ -1,0 +1,9 @@
+{
+  "name": "duo",
+  "engine": "react",
+  "version": "1.0.0",
+  "components": {
+    "rview": { "sources": { "react": "./RView.tsx" } },
+    "tview": { "sources": { "ansi": "./TView.ansi.tsx" } }
+  }
+}

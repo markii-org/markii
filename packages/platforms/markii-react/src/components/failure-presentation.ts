@@ -173,6 +173,32 @@ export function formMismatchTitle(directive: string): string {
 }
 
 /**
+ * The words of a fallback label for a directive that names a component of
+ * an installed pack with no view in this engine. The label reads "no
+ * preview view for" followed by the directive name, which the component
+ * renders in a `<code>` element. "Preview" is what a reader of this
+ * engine's output calls it (the editor preview and the Reading view).
+ */
+export const NO_ENGINE_VIEW_LABEL = 'no preview view for';
+
+/**
+ * The diagnostic text for the same case: the pack, and the engines the
+ * component does ship a view for, so the reader can see it is installed and
+ * why it is not drawn here. Also the fallback box's tooltip.
+ */
+export function noEngineViewTitle(
+  directive: string,
+  pack: string,
+  engines: readonly string[],
+): string {
+  const has =
+    engines.length > 0
+      ? `it has views for: ${engines.join(', ')}`
+      : 'it has no views for any engine';
+  return `The ${pack} pack has no preview view for this component; ${has}`;
+}
+
+/**
  * The visible separator between an inline fallback's label and its content,
  * emitted as real text (`mk-unknown__separator`) so a copy reads the same as
  * `@markii/ansi`'s output. Identical to `@markii/html`'s constant. An inline

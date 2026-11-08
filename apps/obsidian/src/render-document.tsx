@@ -40,6 +40,10 @@ import type { ValueStore } from '@markii/runtime';
  * source refused as unsafe, still renders with a marker in the page, and
  * this is how the reason reaches the plugin's diagnostics surface instead
  * of living only in a tooltip.
+ *
+ * `unavailableComponents` is the host's list of installed pack components
+ * with no view in this engine: a directive naming one reads "no preview
+ * view" instead of "unknown component", and `onDiagnostic` hears why.
  */
 export function renderDocument(
   text: string,
@@ -47,9 +51,11 @@ export function renderDocument(
   registry: Registry = defaultRegistry,
   resolveImageSrc?: RenderMarkOptions['resolveImageSrc'],
   onDiagnostic?: RenderMarkOptions['onDiagnostic'],
+  unavailableComponents?: RenderMarkOptions['unavailableComponents'],
 ): ReactElement {
   return renderMark(text, registry, store, undefined, {
     resolveImageSrc,
     onDiagnostic,
+    unavailableComponents,
   });
 }
