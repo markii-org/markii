@@ -13,6 +13,8 @@ optionally follow one.
 | `:read_at[]{}`    | inline    | A monospace timestamp chip, optionally linked.                     |
 | `:read_mark[]{}`  | inline    | A highlighter-style marker, tinted by kind.                        |
 
+In the terminal (`markii view`, `markii export --format ansi`) every directive listed above has a terminal view with the same attributes. The progress bar, citation line, and timestamp chips are drawn with the terminal engine's glyphs, and a link is printed after its text since a terminal has no clickable title.
+
 ## `read_source`
 
 <img width="981" height="293" alt="image" src="https://github.com/user-attachments/assets/7dd157ba-837e-4013-8314-684b113dfa50" />

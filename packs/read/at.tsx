@@ -1,11 +1,10 @@
 import { isValidElement, type ReactElement, type ReactNode } from 'react';
 import type { MarkComponentProps } from '@markii/react';
-import { safeHttpUrl, strCapped } from './guard';
+import { resolveAt } from './at.logic';
 import './at.css';
 
 const MAX_TEXT_LENGTH = 200;
 const MAX_DEPTH = 6;
-const HREF_CAP = 2000;
 
 /**
  * Walks `node` collecting plain text (strings and numbers), recursing into
@@ -81,55 +80,6 @@ function extractPlainText(node: ReactNode): string {
 }
 
 /**
- * Parses `mm:ss`, `m:ss`, or `hh:mm:ss` into total seconds. Every part
- * must be plain digits (no sign, no decimal); seconds and minutes (when a
- * further unit follows) are range-checked to 0..59. Anything else,
- * including an out-of-range part or a huge digit string that overflows to
- * a non-integer `Number`, yields `undefined`.
- */
-function parseTimestamp(text: string): number | undefined {
-  if (!/^\d+(:\d+){1,2}$/.test(text)) return undefined;
-  const parts = text.split(':').map(Number);
-  if (parts.some((part) => !Number.isInteger(part) || part < 0))
-    return undefined;
-
-  // The regex above fixes the part count at two or three, so each default
-  // below is unreachable. They are defaults rather than assertions so the
-  // guarantee stays checkable.
-  if (parts.length === 2) {
-    const [minutes = 0, seconds = 0] = parts;
-    if (seconds > 59) return undefined;
-    return minutes * 60 + seconds;
-  }
-
-  const [hours = 0, minutes = 0, seconds = 0] = parts;
-  if (minutes > 59 || seconds > 59) return undefined;
-  return hours * 3600 + minutes * 60 + seconds;
-}
-
-/**
- * A page reference: `42`, `p.42`, `p. 42`, `page 42`, and the capitalized
- * spellings of those. The digits are capped at six, since a longer run is
- * an identifier or a typo rather than a page in a book, and the whole
- * string has to match, so `chapter 4` and `42ff` are not page references.
- */
-const PAGE_PATTERN = /^(?:(?:p\.?|page)\s*)?(\d{1,6})$/i;
-
-/**
- * Parses a page reference into its page number, or `undefined` when the
- * text is not one. A timestamp is tried first by the caller, so this never
- * sees text with a colon in it. Page zero is rejected along with the
- * unparseable: there is no such page, and a `#page=0` fragment points a
- * viewer at nothing.
- */
-function parsePageRef(text: string): number | undefined {
-  const match = PAGE_PATTERN.exec(text);
-  if (match === null) return undefined;
-  const page = Number(match[1]);
-  return Number.isInteger(page) && page >= 1 ? page : undefined;
-}
-
-/**
  * `:read_at[12:34]{href="https://..."}`, a monospace timestamp chip. The
  * bracket text is read back with `extractPlainText`, which rejoins the
  * nested directive the parser makes of a colon (see that function), so a
@@ -156,23 +106,11 @@ function parsePageRef(text: string): number | undefined {
  */
 export function At({ attributes, children }: MarkComponentProps): ReactElement {
   const text = extractPlainText(children).trim();
-  const display = text !== '' ? text : '--:--';
-  const seconds = parseTimestamp(text);
-  const page = seconds === undefined ? parsePageRef(text) : undefined;
+  const { display, href } = resolveAt(text, attributes);
 
-  const hrefRaw = strCapped(attributes.href, '', HREF_CAP);
-  const safeUrl = hrefRaw !== '' ? safeHttpUrl(hrefRaw) : undefined;
-
-  if (safeUrl !== undefined) {
-    if (seconds !== undefined) {
-      safeUrl.searchParams.set('t', String(seconds));
-    } else if (page !== undefined) {
-      // Assigning `hash` replaces whatever fragment the href already had,
-      // which is what we want: two page anchors on one URL address nothing.
-      safeUrl.hash = `page=${String(page)}`;
-    }
+  if (href !== undefined) {
     return (
-      <a className="mk-read_at" href={safeUrl.toString()}>
+      <a className="mk-read_at" href={href}>
         {display}
       </a>
     );

@@ -4,7 +4,10 @@
   "engine": "react",
   "components": {
     "sparkline": {
-      "source": "./sparkline.tsx",
+      "sources": {
+        "react": "./sparkline.tsx",
+        "ansi": "./sparkline.ansi.tsx"
+      },
       "description": "Inline SVG trend line for a bound series of numbers, auto-scaled with an optional last-value label.",
       "kind": "leaf",
       "attributes": [
@@ -20,7 +23,10 @@
       ]
     },
     "gauge": {
-      "source": "./gauge.tsx",
+      "sources": {
+        "react": "./gauge.tsx",
+        "ansi": "./gauge.ansi.tsx"
+      },
       "description": "Semi-circular arc gauge for a single value against a min/max range.",
       "kind": "leaf",
       "attributes": [
@@ -53,7 +59,10 @@
       ]
     },
     "status": {
-      "source": "./status.tsx",
+      "sources": {
+        "react": "./status.tsx",
+        "ansi": "./status.ansi.tsx"
+      },
       "description": "A colored status dot next to a label: ok, warn, or down.",
       "kind": "inline",
       "attributes": [
@@ -69,7 +78,10 @@
       ]
     },
     "uptime": {
-      "source": "./uptime.tsx",
+      "sources": {
+        "react": "./uptime.tsx",
+        "ansi": "./uptime.ansi.tsx"
+      },
       "description": "Segmented bar showing a history of ok/warn/down states, oldest first.",
       "kind": "leaf",
       "attributes": [
@@ -85,7 +97,10 @@
       ]
     },
     "delta": {
-      "source": "./delta.tsx",
+      "sources": {
+        "react": "./delta.tsx",
+        "ansi": "./delta.ansi.tsx"
+      },
       "description": "An up or down triangle with a formatted change value.",
       "kind": "inline",
       "attributes": [

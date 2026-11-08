@@ -610,3 +610,42 @@ describe('block separation', () => {
     expect(text).toBe('│ quoted line\n');
   });
 });
+
+describe('ctx.dataSuffix (the engine wording a component without the engine module appends)', () => {
+  const show: AnsiComponent = ({ ctx }) =>
+    `[${ctx.dataSuffix === undefined ? 'unset' : ctx.dataSuffix}]`;
+  const registry = createAnsiRegistry({ show: { component: show } });
+
+  it('carries the failure phrase for an error binding, " (stale)" for a stale one, and nothing for fresh', async () => {
+    const store = createValueStore({
+      bad: {
+        value: undefined,
+        status: 'error',
+        error: 'boom',
+        failureKind: 'script-error',
+      },
+      old: { value: 1, status: 'stale' },
+      ok: { value: 1, status: 'fresh' },
+    });
+    const render = (name: string): Promise<string> =>
+      renderMarkToAnsi(`::show{data=${name}}\n`, registry, store, undefined, {
+        color: 'never',
+      });
+    expect(await render('bad')).toContain('[ (script error)]');
+    expect(await render('old')).toContain('[ (stale)]');
+    expect(await render('ok')).toContain('[]');
+  });
+
+  it('is unset when the directive has no data binding', async () => {
+    const text = await renderMarkToAnsi(
+      '::show\n',
+      registry,
+      undefined,
+      undefined,
+      {
+        color: 'never',
+      },
+    );
+    expect(text).toContain('[unset]');
+  });
+});

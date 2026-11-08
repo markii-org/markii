@@ -12,6 +12,8 @@ questions the note already contains.
 | `:::prep_pitfall{}` | container | A common-mistake block, styled apart from the standard callout.          |
 | `::prep_quiz{}`     | leaf      | The note's own questions as one worked-through list, from a bound value. |
 
+In the terminal (`markii view`, `markii export --format ansi`) every directive listed above has a terminal view with the same attributes. A terminal note cannot be clicked, so each answer is printed under an "Answer" line instead of being collapsed.
+
 ## `prep_q`
 
 <img width="975" height="314" alt="image" src="https://github.com/user-attachments/assets/90e74ce1-870d-480d-ba82-a07a2c4a7aa5" />

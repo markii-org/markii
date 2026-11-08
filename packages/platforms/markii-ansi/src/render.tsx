@@ -522,6 +522,10 @@ function buildComponentContext(
     ctx.dataStatus = binding.dataStatus;
     ctx.dataError = binding.dataError;
     ctx.dataFailureKind = binding.dataFailureKind;
+    ctx.dataSuffix = dataStateSuffix(
+      binding.dataStatus,
+      binding.dataFailureKind,
+    );
   }
   if (layout) ctx.layout = layout;
   return ctx;

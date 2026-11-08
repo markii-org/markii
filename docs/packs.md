@@ -158,6 +158,13 @@ composes itself, `ctx.text()` applies the same cleaning. Take glyphs from
 color properties, so the reader's color and box settings apply to your
 component too.
 
+A data-bound view reads its value from `ctx.data`; the `data=` attribute
+itself is not passed in `attributes`. When the binding failed or is stale,
+`ctx.dataSuffix` holds the engine's own quiet marker, such as
+` (script error)` or ` (stale)`, and an empty string otherwise. Append it
+rather than writing your own wording, so a failure reads the same in a pack
+as in a standard component.
+
 ## Names and namespaces
 
 An author references a pack component by typing the prefixed name
@@ -242,7 +249,10 @@ instead of by rejecting both.
 
 Bundling changes nothing about how a pack is written. These three are
 maintained as plain sources in the Markii repository under `packs/`, and a
-pack you write yourself has the same shape.
+pack you write yourself has the same shape. Every component in them has a terminal view
+beside its React view, both built on one shared logic module, so they are
+also the worked example of the pattern under "One component, several
+engines".
 
 ## Loading a pack in a host
 

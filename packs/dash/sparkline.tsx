@@ -1,57 +1,12 @@
 import type { ReactElement } from 'react';
 import type { MarkComponentProps } from '@markii/react';
-import {
-  failureTitle,
-  isUnreadable,
-  safeExtract,
-  stateClassName,
-  str,
-} from './guard';
+import { stateClassName } from './guard';
+import { formatValue, resolveSparkline } from './sparkline.logic';
 import './sparkline.css';
 
 const WIDTH = 160;
 const HEIGHT = 36;
 const PAD = 3;
-const MAX_POINTS = 120;
-
-/** Extracts one point from an array entry: a finite number as-is, or a plain object's finite `.value`. Anything else is dropped. */
-function coercePoint(entry: unknown): number | undefined {
-  if (typeof entry === 'number')
-    return Number.isFinite(entry) ? entry : undefined;
-  if (
-    entry !== null &&
-    typeof entry === 'object' &&
-    !Array.isArray(entry) &&
-    typeof (entry as Record<string, unknown>).value === 'number'
-  ) {
-    const value = (entry as Record<string, unknown>).value as number;
-    return Number.isFinite(value) ? value : undefined;
-  }
-  return undefined;
-}
-
-/**
- * Reads the numeric series off a bound value: a plain array of numbers (or
- * `{value}` objects), or an object shaped `{values: [...]}`. Anything else
- * yields an empty series, the same quiet state as no binding at all.
- */
-function extractSeries(data: unknown): number[] {
-  const source = Array.isArray(data)
-    ? data
-    : data !== null &&
-        typeof data === 'object' &&
-        Array.isArray((data as Record<string, unknown>).values)
-      ? ((data as Record<string, unknown>).values as unknown[])
-      : undefined;
-  if (source === undefined) return [];
-  const points: number[] = [];
-  for (const entry of source) {
-    const point = coercePoint(entry);
-    if (point !== undefined) points.push(point);
-    if (points.length >= MAX_POINTS) break;
-  }
-  return points;
-}
 
 function safeCoord(value: number, fallback: number): number {
   return Number.isFinite(value) ? value : fallback;
@@ -77,11 +32,6 @@ function scalePoints(
   });
 }
 
-/** Formats the trailing value shown next to the label: integers plain, everything else to one decimal place. */
-function formatValue(value: number): string {
-  return Number.isInteger(value) ? String(value) : value.toFixed(1);
-}
-
 /**
  * `::dash_sparkline{data=metric label="CPU"}` — a compact trend line for a
  * bound numeric series, hand-rolled as an SVG polyline (no charting
@@ -100,13 +50,9 @@ export function Sparkline({
   dataStatus,
   dataError,
 }: MarkComponentProps): ReactElement {
-  const bound = safeExtract<number[]>(
-    () => (isUnreadable(dataStatus) ? [] : extractSeries(data)),
-    () => [],
-  );
-  const points = bound.fields;
-  const label = str(attributes.label, '');
-  const title = failureTitle(dataError, bound.fault);
+  const model = resolveSparkline({ attributes, data, dataStatus, dataError });
+  const { points, label, last } = model;
+  const title = model.failureText;
   const rootClass = stateClassName('mk-dash_sparkline', dataStatus);
 
   if (points.length === 0) {
@@ -120,9 +66,6 @@ export function Sparkline({
   }
 
   const scaled = scalePoints(points);
-  // The `points.length === 0` early return above guarantees a last point.
-  // The fallback keeps that promise checkable rather than asserted.
-  const last = points[points.length - 1] ?? 0;
   const polyline = scaled
     .map((p) => `${String(safeCoord(p.x, 0))},${String(safeCoord(p.y, 0))}`)
     .join(' ');

@@ -1,0 +1,122 @@
+Systems interview, revision sheet
+
+Three sessions left. The plan is to read the topic rows first, find the weakest
+one, and only then open any answers.
+
+Where I stand
+
+Graph traversal                                                            ★★★★☆
+
+Consistent hashing                                                         ★★☆☆☆
+
+Consensus protocols                                                        ★☆☆☆☆
+
+Rate limiting                                                              ★★★★★
+
+SQL window functions
+
+The last row was written with confidence=hazy, which is not a number, so the
+dots are left off rather than guessed at. A row with no label at all still
+renders:
+
+Untitled topic
+
+Data structures
+
+What can a bloom filter get wrong?  [easy] data structures
+▾ Answer
+It can report a false positive: an element it has never seen may hash onto bits
+that other elements already set. It can never report a false negative, because
+every inserted element sets its bits and they are never cleared.
+
+Why is a skip list a reasonable alternative to a balanced tree?  [medium] data
+structures
+▾ Answer
+Expected O(log n) search with far simpler insertion code, because the balancing
+is probabilistic rather than structural. Nothing has to be rotated.
+
+▲ Expected is not guaranteed
+The bound is expected, not worst case. An adversary who can see the coin flips
+can force linear behavior, which rules skip lists out where the key stream is
+attacker controlled.
+
+Distributed systems
+
+What does consistent hashing actually buy you?  [hard] distributed
+▾ Answer
+Adding or removing one node moves roughly 1/n of the keys instead of almost all
+of them. Plain modulo hashing remaps nearly every key when the node count
+changes, which turns a single node addition into a full cache miss storm.
+
+Where does a leader election stall in a partition?  [hard]
+▾ Answer
+A minority partition cannot elect a leader, because it cannot reach a quorum, so
+it stops accepting writes. The majority side keeps going. That is the
+availability half of the tradeoff being paid on purpose.
+
+▲ Common mistake
+Saying "eventually consistent" as though it were one guarantee. Ask which one:
+read your writes, monotonic reads, or bounded staleness. They are not the same
+promise and they do not fail the same way.
+
+Still drafting
+
+[medium] sql
+This card has no question written yet, so it shows its notes directly instead of
+hiding them behind an "Answer" toggle that would reveal the only thing on the
+card.
+
+What is a covering index?  [easy] sql
+▾ Answer
+An index that holds every column the query reads, so the engine answers from the
+index alone and never visits the table rows.
+
+Self-test
+
+The cards above are the source. Rather than typing the same questions out a
+second time, one script reads them back off the note itself and returns a quiz,
+and the component below renders it.
+
+doc.directives{ name = "prep_q" } hands back every prep_q block in document
+order, each with the attributes it was written with and its plain inner text.
+The answer is that text. A card with no q attribute is skipped here, because a
+card still being drafted has no question to test yourself against yet.
+
+⚙ quiz · lua
+
+1. What can a bloom filter get wrong?
+   [easy] data structures
+   ▾ Answer
+     It can report a false positive: an element it has never seen may hash onto
+     bits that other elements already set. It can never report a false negative,
+     because every inserted element sets its bits and they are never cleared.
+2. Why is a skip list a reasonable alternative to a balanced tree?
+   [medium] data structures
+   ▾ Answer
+     Expected O(log n) search with far simpler insertion code, because the
+     balancing is probabilistic rather than structural. Nothing has to be
+     rotated. The bound is expected, not worst case. An adversary who can see
+     the coin flips can force linear behavior, which rules skip lists out where
+     the key stream is attacker controlled.
+3. What does consistent hashing actually buy you?
+   [hard] distributed
+   ▾ Answer
+     Adding or removing one node moves roughly 1/n of the keys instead of almost
+     all of them. Plain modulo hashing remaps nearly every key when the node
+     count changes, which turns a single node addition into a full cache miss
+     storm.
+4. Where does a leader election stall in a partition?
+   [hard]
+   ▾ Answer
+     A minority partition cannot elect a leader, because it cannot reach a
+     quorum, so it stops accepting writes. The majority side keeps going. That
+     is the availability half of the tradeoff being paid on purpose.
+5. What is a covering index?
+   [easy] sql
+   ▾ Answer
+     An index that holds every column the query reads, so the engine answers
+     from the index alone and never visits the table rows.
+
+Run the note to fill it in. Before the first run there is nothing bound yet, so
+the component says so quietly and the page stays readable.
+

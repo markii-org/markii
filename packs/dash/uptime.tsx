@@ -1,35 +1,8 @@
 import type { ReactElement } from 'react';
 import type { MarkComponentProps } from '@markii/react';
-import {
-  failureTitle,
-  isUnreadable,
-  safeExtract,
-  stateClassName,
-  str,
-} from './guard';
+import { stateClassName } from './guard';
+import { resolveUptime } from './uptime.logic';
 import './uptime.css';
-
-const MAX_SEGMENTS = 90;
-
-type Segment = 'ok' | 'warn' | 'down' | 'unknown';
-
-function normalizeSegment(raw: unknown): Segment {
-  return raw === 'ok' || raw === 'warn' || raw === 'down' ? raw : 'unknown';
-}
-
-/**
- * Reads a segment history off a bound array of strings, oldest first. Any
- * entry that is not `ok`/`warn`/`down` becomes `unknown` rather than being
- * dropped, so the bar's segment count still matches the source history.
- * Longer than `MAX_SEGMENTS` keeps only the most recent entries, still in
- * oldest-first order.
- */
-function extractSegments(data: unknown): Segment[] {
-  if (!Array.isArray(data)) return [];
-  const trimmed =
-    data.length > MAX_SEGMENTS ? data.slice(data.length - MAX_SEGMENTS) : data;
-  return trimmed.map(normalizeSegment);
-}
 
 /**
  * `::dash_uptime{data=history label="API"}` — a segmented horizontal bar,
@@ -46,13 +19,9 @@ export function Uptime({
   dataStatus,
   dataError,
 }: MarkComponentProps): ReactElement {
-  const bound = safeExtract<Segment[]>(
-    () => (isUnreadable(dataStatus) ? [] : extractSegments(data)),
-    () => [],
-  );
-  const segments = bound.fields;
-  const label = str(attributes.label, '');
-  const title = failureTitle(dataError, bound.fault);
+  const model = resolveUptime({ attributes, data, dataStatus, dataError });
+  const { segments, label } = model;
+  const title = model.failureText;
 
   return (
     <div className={stateClassName('mk-dash_uptime', dataStatus)} title={title}>

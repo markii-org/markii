@@ -1,61 +1,8 @@
 import type { ReactElement } from 'react';
 import type { MarkComponentProps } from '@markii/react';
-import {
-  failureTitle,
-  isUnreadable,
-  oneOf,
-  optionalStr,
-  safeExtract,
-  stateClassName,
-  str,
-} from './guard';
+import { stateClassName } from './guard';
+import { resolveQuiz } from './quiz.logic';
 import './quiz.css';
-
-const LEVELS = ['easy', 'medium', 'hard'] as const;
-
-const MAX_QUESTIONS = 200;
-
-interface QuizItem {
-  q: string;
-  topic: string;
-  levelText: string;
-  levelModifier: string;
-  answer: string;
-}
-
-/**
- * Reads `{questions: [{q, topic, level, answer}]}` off a bound value. An
- * entry that is not a plain object is skipped; an entry missing a field
- * degrades to an empty one rather than being dropped, because a question
- * with no topic is still a question worth revising.
- */
-function extractQuiz(data: unknown): QuizItem[] {
-  if (data === null || typeof data !== 'object' || Array.isArray(data)) {
-    return [];
-  }
-  const record = data as Record<string, unknown>;
-  const raw = Array.isArray(record.questions) ? record.questions : [];
-
-  const items: QuizItem[] = [];
-  for (const entry of raw) {
-    if (items.length >= MAX_QUESTIONS) break;
-    if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) {
-      continue;
-    }
-    const row = entry as Record<string, unknown>;
-    const rawLevel = optionalStr(row.level);
-    const level = oneOf(rawLevel, LEVELS);
-    items.push({
-      q: str(row.q),
-      topic: str(row.topic),
-      levelText:
-        level ?? (rawLevel !== undefined && rawLevel !== '' ? rawLevel : ''),
-      levelModifier: level ?? 'other',
-      answer: str(row.answer),
-    });
-  }
-  return items;
-}
 
 /**
  * `::prep_quiz{data=quiz}` — the questions a note already contains, drawn
@@ -81,16 +28,12 @@ export function PrepQuiz({
   dataStatus,
   dataError,
 }: MarkComponentProps): ReactElement {
-  const bound = safeExtract<QuizItem[]>(
-    () => (isUnreadable(dataStatus) ? [] : extractQuiz(data)),
-    () => [],
-  );
-  const items = bound.fields;
+  const { items, failureText } = resolveQuiz({ data, dataStatus, dataError });
 
   return (
     <div
       className={stateClassName('mk-prep_quiz', dataStatus)}
-      title={failureTitle(dataError, bound.fault)}
+      title={failureText}
     >
       {items.length === 0 ? (
         <p className="mk-prep_quiz__empty">No questions collected yet</p>
@@ -102,13 +45,13 @@ export function PrepQuiz({
                 <span className="mk-prep_quiz__question">
                   {item.q !== '' ? item.q : 'Untitled question'}
                 </span>
-                {(item.levelText !== '' || item.topic !== '') && (
+                {(item.level.text !== '' || item.topic !== '') && (
                   <span className="mk-prep_quiz__tags">
-                    {item.levelText !== '' && (
+                    {item.level.text !== '' && (
                       <span
-                        className={`mk-prep_quiz__level mk-prep_quiz__level--${item.levelModifier}`}
+                        className={`mk-prep_quiz__level mk-prep_quiz__level--${item.level.modifier}`}
                       >
-                        {item.levelText}
+                        {item.level.text}
                       </span>
                     )}
                     {item.topic !== '' && (

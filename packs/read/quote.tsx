@@ -1,9 +1,7 @@
 import type { ReactElement } from 'react';
 import type { MarkComponentProps } from '@markii/react';
-import { strCapped } from './guard';
+import { resolveQuote } from './quote.logic';
 import './quote.css';
-
-const ATTR_CAP = 300;
 
 /**
  * `:::read_quote{page="152" source="Gödel, Escher, Bach" note="..."}` ...
@@ -20,19 +18,7 @@ export function Quote({
   attributes,
   children,
 }: MarkComponentProps): ReactElement {
-  const page = strCapped(attributes.page, '', ATTR_CAP);
-  const loc = strCapped(attributes.loc, '', ATTR_CAP);
-  const at = strCapped(attributes.at, '', ATTR_CAP);
-  const source = strCapped(attributes.source, '', ATTR_CAP);
-  const note = strCapped(attributes.note, '', ATTR_CAP);
-
-  const citationParts = [
-    source,
-    page !== '' ? `p. ${page}` : '',
-    loc !== '' ? `loc. ${loc}` : '',
-    at,
-  ].filter((part) => part !== '');
-  const citation = citationParts.join(', ');
+  const { citation, note } = resolveQuote(attributes);
 
   return (
     <figure className="mk-read_quote">

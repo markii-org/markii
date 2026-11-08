@@ -1,24 +1,8 @@
 import type { ReactElement, ReactNode } from 'react';
 import type { MarkComponentProps } from '@markii/react';
-import {
-  failureTitle,
-  isUnreadable,
-  safeExtract,
-  stateClassName,
-  str,
-} from './guard';
+import { stateClassName } from './guard';
+import { resolveStatus } from './status.logic';
 import './status.css';
-
-type State = 'ok' | 'warn' | 'down' | 'unknown';
-
-function normalizeState(raw: string): State {
-  return raw === 'ok' || raw === 'warn' || raw === 'down' ? raw : 'unknown';
-}
-
-/** A bound string overrides the `state` attribute; anything else (missing, non-string, unreadable) leaves the attribute in charge. */
-function extractState(data: unknown): string | undefined {
-  return typeof data === 'string' ? data : undefined;
-}
 
 /**
  * `:dash_status[api server]{state=ok}` — a colored dot next to a label.
@@ -37,13 +21,9 @@ export function Status({
   dataStatus,
   dataError,
 }: MarkComponentProps): ReactElement {
-  const bound = safeExtract<string | undefined>(
-    () => (isUnreadable(dataStatus) ? undefined : extractState(data)),
-    () => undefined,
-  );
-  const raw = bound.fields ?? str(attributes.state, '');
-  const state = normalizeState(raw);
-  const title = failureTitle(dataError, bound.fault);
+  const model = resolveStatus({ attributes, data, dataStatus, dataError });
+  const { state } = model;
+  const title = model.failureText;
   const label: ReactNode = children ?? state;
 
   return (

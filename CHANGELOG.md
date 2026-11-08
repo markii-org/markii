@@ -82,6 +82,16 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 - **`@markii/ansi` exports `defaultAnsiRegistry`**, so a host can merge
   installed packs onto the standard set.
 
+- **The bundled packs render in the terminal.** Every component of `read`,
+  `dash` and `prep` has a terminal view built on a logic module it shares
+  with its React view, so `markii view` and `markii export --format ansi`
+  draw them instead of the fallback box. The React views' output is
+  unchanged.
+- **`AnsiRenderContext.dataSuffix`.** The engine's quiet marker for a
+  failed or stale `data=` binding (` (script error)`, ` (stale)`, and the
+  rest, or an empty string), so a terminal pack shows the engine's own
+  wording rather than a copy of it.
+
 ### Fixed
 
 - **The terminal status line names the active tab**, not the first one,

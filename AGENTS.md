@@ -371,7 +371,12 @@ packages/markii-lua     Lua sandbox runtime (docs/security.md, L3) — no React,
                      json-decode's prelude and marshal's walk, never a second copy
   src/executor.ts    createLuaExecutor(): adapts runScript to @markii/runtime's ScriptExecutor
 packs/                  the bundled packs (read, dash, prep): plain component
-                        sources, NOT an npm workspace. Both hosts build them
+                        sources, NOT an npm workspace. Each component has a
+                        React view and a *.ansi.tsx terminal view over one
+                        shared *.logic.ts; apps/cli's
+                        bundled-packs-terminal.test.ts renders each
+                        example.mk.md against apps/cli/test-fixtures/
+                        bundled-packs/ (UPDATE_PACK_FIXTURES=1 rewrites). Both hosts build them
                         into their own output and load them ahead of user
                         packs (a user pack with the same namespace is skipped
                         with a diagnostics line). Root ESLint and Prettier

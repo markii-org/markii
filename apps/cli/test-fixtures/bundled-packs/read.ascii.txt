@@ -1,0 +1,68 @@
+Reading notes, August
+
+Gödel, Escher, Bach
+
+[Book] Gödel, Escher, Bach
+Douglas Hofstadter, 1979
+https://us.macmillan.com/books/9780465026562
+########............ 40%
+
+Hofstadter keeps circling back to the idea of a strange loop, a hierarchy that,
+followed far enough, lands back where it started. I still need to work out
+whether that is the same idea as a fixed point (A value that a function maps to
+itself: f(x) = x.), or just a cousin of it.
+
+A strange loop arises when, by moving only upwards or downwards through the
+levels of a hierarchical system, we unexpectedly find ourselves right back where
+we started.
+                                                  -- Gödel, Escher, Bach, p. 152
+Worth rereading before the chapter on Gödel's theorem.
+
+The Making of the Atomic Bomb
+
+[Book] The Making of the Atomic Bomb
+Richard Rhodes, 1986
+Reading  #######............. 35%  120 of 340 pages
+
+No script feeds that card. The bar comes from the two page counts written on it,
+and hovering the bar says "120 of 340 pages", which is the number I actually
+keep track of while reading.
+
+The chapter on Los Alamos starts at [p. 449]
+<https://example.com/atomic-bomb.pdf#page=449>, and the link carries the page
+with it.
+
+A talk on the halting problem
+
+[talk] Computability and the Limits of Computation
+Ana Reyes
+Done
+
+The type attribute above is not one of the recognized values, so the badge shows
+the raw text instead of falling back to the "Book" styling. That is by design: a
+typo in type should not quietly relabel a talk as a book.
+
+[8:42] <https://example.com/talks/halting-problem?t=522> is where the speaker
+walks through Turing's diagonal argument, which is the part I still need to redo
+by hand.
+
+A podcast episode
+
+[Podcast] Distributed systems, one failure at a time
+Grace Oduya
+Reading  #############....... 65%
+
+At [1:02:03] <https://example.com/ep/12?t=3723&x=season2> the host makes a claim
+I want to push back on: that consensus algorithms are "basically all the same
+shape." I disagree, or at least the failure modes are different enough that the
+shape stops mattering.
+
+Unfiled
+
+[Book] Untitled source
+
+An empty citation card, like the one above, still renders as a labeled
+placeholder instead of leaving a gap or breaking the page.
+
+# books - lua
+

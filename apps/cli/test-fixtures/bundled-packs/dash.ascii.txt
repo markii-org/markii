@@ -1,0 +1,27 @@
+Service Dashboard
+
+CPU  #############.......  63%
+
+Memory  ################....  81%
+
+_..=#+-=:*  Latency (ms) 20
+
+Services
+
+[ok] API server
+
+[warn] Database
+
+[down] Cache
+
+API uptime, last 24h
+
+API uptime
+###:##_####:#####_##
+20 entries: 16 ok, 2 warn, 2 down
+
+Requests are up +128 on yesterday, while the error rate moved -0.4% over the
+same day.
+
+# metrics - lua
+

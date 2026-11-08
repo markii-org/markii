@@ -1,10 +1,9 @@
 import { Children, type ReactElement, type ReactNode } from 'react';
 import type { MarkComponentProps } from '@markii/react';
-import { intInRange, str } from './guard';
+import { CONFIDENCE_SCALE, resolveTopic } from './topic.logic';
 import './topic.css';
 
-/** How many dots a confidence rating is drawn with. */
-const SCALE = 5;
+const SCALE = CONFIDENCE_SCALE;
 
 /**
  * Whether `node` carries anything worth showing: a non-blank string, or
@@ -54,9 +53,8 @@ export function PrepTopic({
   attributes,
   children,
 }: MarkComponentProps): ReactElement {
-  const name = str(attributes?.name);
+  const { name, confidence } = resolveTopic(attributes);
   const written = hasContent(children);
-  const confidence = intInRange(attributes?.confidence, 1, SCALE);
 
   const label: ReactNode = written
     ? children

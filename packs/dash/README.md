@@ -17,6 +17,8 @@ name, the written attribute wins. That matches `@markii/react`'s own
 `progress` and `stat`, and it lets you pin a value while a script is still
 being written.
 
+In the terminal (`markii view`, `markii export --format ansi`) every directive listed above has a terminal view with the same attributes. Trends and bars use the engine's block glyphs, and states are spelled out (`[ok]`, `[warn]`, `[down]`) so they survive without color.
+
 ## `dash_sparkline`
 
 <img width="1088" height="403" alt="image" src="https://github.com/user-attachments/assets/2151346a-804c-4642-99e2-55704c8a7987" />

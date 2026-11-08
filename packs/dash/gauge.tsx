@@ -1,13 +1,7 @@
 import type { ReactElement } from 'react';
 import type { MarkComponentProps } from '@markii/react';
-import {
-  failureTitle,
-  isUnreadable,
-  num,
-  safeExtract,
-  stateClassName,
-  str,
-} from './guard';
+import { stateClassName } from './guard';
+import { formatGaugeValue, resolveGauge } from './gauge.logic';
 import './gauge.css';
 
 const WIDTH = 120;
@@ -17,25 +11,6 @@ const CENTER_Y = 60;
 const RADIUS = 50;
 const CIRCUMFERENCE = Math.PI * RADIUS;
 const TRACK_PATH = `M ${String(CENTER_X - RADIUS)} ${String(CENTER_Y)} A ${String(RADIUS)} ${String(RADIUS)} 0 0 1 ${String(CENTER_X + RADIUS)} ${String(CENTER_Y)}`;
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max);
-}
-
-/** Reads a value off a bound value: a bare finite number, or a plain object's finite `.value` field. Anything else yields `undefined`. */
-function extractValue(data: unknown): number | undefined {
-  if (typeof data === 'number') return Number.isFinite(data) ? data : undefined;
-  if (data !== null && typeof data === 'object' && !Array.isArray(data)) {
-    const raw = (data as Record<string, unknown>).value;
-    if (typeof raw === 'number' && Number.isFinite(raw)) return raw;
-  }
-  return undefined;
-}
-
-/** Formats the displayed number: integers plain, everything else to one decimal place. */
-function formatValue(value: number): string {
-  return Number.isInteger(value) ? String(value) : value.toFixed(1);
-}
 
 /**
  * `::dash_gauge{data=cpu min=0 max=100 label="CPU" unit="%"}` — a
@@ -54,31 +29,22 @@ export function Gauge({
   dataStatus,
   dataError,
 }: MarkComponentProps): ReactElement {
-  const min = num(attributes.min, 0);
-  const rawMax = num(attributes.max, 100);
-  const max = rawMax > min ? rawMax : min + 1;
-
-  const bound = safeExtract<number | undefined>(
-    () => (isUnreadable(dataStatus) ? undefined : extractValue(data)),
-    () => undefined,
-  );
-  const fromData = bound.fields;
-  const rawValue = num(attributes.value, fromData ?? min);
-  const value = clamp(rawValue, min, max);
-
-  // `max - min` overflows to Infinity for a legal-but-absurd range such as
-  // `min=-1e308 max=1e308`, and `Infinity / Infinity` is `NaN`. A `NaN` in
-  // `stroke-dasharray` is not a quiet empty state: the browser drops the
-  // whole attribute and paints the arc FULL, so an unreadable range would
-  // read as 100%. An unusable span draws an empty arc instead.
-  const span = max - min;
-  const fraction =
-    Number.isFinite(span) && span > 0 ? clamp((value - min) / span, 0, 1) : 0;
+  // An unusable range yields a fraction of 0 (see `resolveGauge`): a `NaN`
+  // in `stroke-dasharray` would make the browser drop the attribute and
+  // paint the arc FULL, so an unreadable range would read as 100%.
+  const {
+    value,
+    fraction,
+    label,
+    unit,
+    failureText: title,
+  } = resolveGauge({
+    attributes,
+    data,
+    dataStatus,
+    dataError,
+  });
   const dashArray = `${String(fraction * CIRCUMFERENCE)} ${String(CIRCUMFERENCE)}`;
-
-  const label = str(attributes.label, '');
-  const unit = str(attributes.unit, '');
-  const title = failureTitle(dataError, bound.fault);
 
   return (
     <div className={stateClassName('mk-dash_gauge', dataStatus)} title={title}>
@@ -88,7 +54,7 @@ export function Gauge({
         width={WIDTH}
         height={HEIGHT}
         role="img"
-        aria-label={`${label !== '' ? `${label}: ` : ''}${formatValue(value)}${unit}`}
+        aria-label={`${label !== '' ? `${label}: ` : ''}${formatGaugeValue(value)}${unit}`}
       >
         <path className="mk-dash_gauge__track" d={TRACK_PATH} />
         <path
@@ -102,7 +68,7 @@ export function Gauge({
           y={CENTER_Y - 8}
           textAnchor="middle"
         >
-          {formatValue(value)}
+          {formatGaugeValue(value)}
           {unit}
         </text>
       </svg>

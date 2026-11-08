@@ -1,9 +1,7 @@
 import type { ReactElement } from 'react';
 import type { MarkComponentProps } from '@markii/react';
-import { oneOf, optionalStr, str } from './guard';
+import { resolveQuestion } from './q.logic';
 import './q.css';
-
-const LEVELS = ['easy', 'medium', 'hard'] as const;
 
 /**
  * `:::prep_q{q="..." level=hard topic="graphs"}` ... `:::`, one question
@@ -29,16 +27,10 @@ export function PrepQuestion({
   attributes,
   children,
 }: MarkComponentProps): ReactElement {
-  const question = str(attributes?.q);
-  const topic = str(attributes?.topic);
-  const rawLevel = optionalStr(attributes?.level);
-  const level = oneOf(rawLevel, LEVELS);
-  const levelText =
-    level ?? (rawLevel !== undefined && rawLevel !== '' ? rawLevel : '');
-  const levelModifier = level ?? 'other';
-
-  const hasTags = levelText !== '' || topic !== '';
-  const hasHead = question !== '' || hasTags;
+  const { question, topic, level, hasTags, hasHead } =
+    resolveQuestion(attributes);
+  const levelText = level.text;
+  const levelModifier = level.modifier;
 
   const tags = hasTags ? (
     <span className="mk-prep_q__tags">

@@ -1,34 +1,8 @@
 import type { ReactElement } from 'react';
 import type { MarkComponentProps } from '@markii/react';
-import {
-  failureTitle,
-  isUnreadable,
-  num,
-  safeExtract,
-  stateClassName,
-  str,
-} from './guard';
+import { stateClassName } from './guard';
+import { resolveDelta } from './delta.logic';
 import './delta.css';
-
-/** Reads a value off a bound value: a bare finite number, or a plain object's finite `.value` field. */
-function extractValue(data: unknown): number | undefined {
-  if (typeof data === 'number') return Number.isFinite(data) ? data : undefined;
-  if (data !== null && typeof data === 'object' && !Array.isArray(data)) {
-    const raw = (data as Record<string, unknown>).value;
-    if (typeof raw === 'number' && Number.isFinite(raw)) return raw;
-  }
-  return undefined;
-}
-
-/** Formats a signed change value: an explicit `+`/`-` sign, integers plain, everything else to one decimal place. */
-function formatDelta(value: number): string {
-  const magnitude = Number.isInteger(value)
-    ? String(Math.abs(value))
-    : Math.abs(value).toFixed(1);
-  if (value > 0) return `+${magnitude}`;
-  if (value < 0) return `-${magnitude}`;
-  return magnitude;
-}
 
 /**
  * `:dash_delta[requests]{value=-3.2 unit="%"}` — an inline up/down triangle
@@ -54,15 +28,9 @@ export function Delta({
   dataStatus,
   dataError,
 }: MarkComponentProps): ReactElement {
-  const bound = safeExtract<number | undefined>(
-    () => (isUnreadable(dataStatus) ? undefined : extractValue(data)),
-    () => undefined,
-  );
-  const value = num(attributes.value, bound.fields ?? 0);
-  const unit = str(attributes.unit, '');
-  const title = failureTitle(dataError, bound.fault);
-
-  const direction = value > 0 ? 'up' : value < 0 ? 'down' : 'flat';
+  const model = resolveDelta({ attributes, data, dataStatus, dataError });
+  const { direction } = model;
+  const title = model.failureText;
 
   return (
     <span className={stateClassName('mk-dash_delta', dataStatus)} title={title}>
@@ -73,8 +41,7 @@ export function Delta({
       <span
         className={`mk-dash_delta__value mk-dash_delta__value--${direction}`}
       >
-        {formatDelta(value)}
-        {unit}
+        {model.text}
       </span>
       {children !== undefined && children !== null && (
         <span className="mk-dash_delta__label">{children}</span>

@@ -121,6 +121,14 @@ export interface AnsiRenderContext {
   dataError?: string;
   dataFailureKind?: FailureKind;
   /**
+   * The engine's quiet trailing marker for this binding's state, e.g.
+   * ` (script error)` or ` (stale)`, and `''` for a fresh or missing one.
+   * Present with `data`. A component that cannot import the engine's
+   * failure-presentation module (a terminal pack, which only sees this
+   * context) appends it so the wording stays in one place.
+   */
+  dataSuffix?: string;
+  /**
    * The resolved width/align presets for the axis a layout-scope entry does
    * not already own — this engine's counterpart to `@markii/html`'s
    * `layoutClassName`, carried as data instead of a class name since there

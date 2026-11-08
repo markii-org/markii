@@ -4,7 +4,10 @@
   "engine": "react",
   "components": {
     "q": {
-      "source": "./q.tsx",
+      "sources": {
+        "react": "./q.tsx",
+        "ansi": "./q.ansi.tsx"
+      },
       "description": "A question card whose answer stays hidden behind a collapsed \"Answer\" region, with an optional difficulty level and topic tag.",
       "kind": "container",
       "attributes": [
@@ -24,7 +27,10 @@
       ]
     },
     "topic": {
-      "source": "./topic.tsx",
+      "sources": {
+        "react": "./topic.tsx",
+        "ansi": "./topic.ansi.tsx"
+      },
       "description": "A topic header row with a one-to-five confidence rating drawn as filled and empty dots.",
       "kind": "leaf",
       "attributes": [
@@ -39,7 +45,10 @@
       ]
     },
     "quiz": {
-      "source": "./quiz.tsx",
+      "sources": {
+        "react": "./quiz.tsx",
+        "ansi": "./quiz.ansi.tsx"
+      },
       "description": "The questions a note already contains, collected by a script into one worked-through list with each answer behind a click-to-reveal region.",
       "kind": "leaf",
       "attributes": [
@@ -51,7 +60,10 @@
       ]
     },
     "pitfall": {
-      "source": "./pitfall.tsx",
+      "sources": {
+        "react": "./pitfall.tsx",
+        "ansi": "./pitfall.ansi.tsx"
+      },
       "description": "A common-mistake callout with its own marker and accent, separate from the standard callout styling.",
       "kind": "container",
       "attributes": [
