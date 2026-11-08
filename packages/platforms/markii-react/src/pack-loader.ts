@@ -2,7 +2,9 @@ import type { PackManifest } from '@markii/pack';
 import {
   composeDirectiveName,
   detectNamespaceCollisions,
-  resolvePackComponent,
+  packComponentsForEngine,
+  packDeclaredEngines,
+  packSupportsEngine,
 } from '@markii/pack';
 import type { Registry, RegistryEntry } from './registry.js';
 import { createRegistry, mergeRegistries } from './registry.js';
@@ -31,10 +33,11 @@ export type PackComponentModules = Record<string, RegistryEntry>;
  * pack's name via `composeDirectiveName` (docs/packs.md: an author opts in
  * to a pack component by typing the prefixed name, e.g. `:::ana_timeline`).
  *
- * Engine gating: `manifest.engine` names the renderer framework the pack's
- * components are WRITTEN for (docs/packs.md). If it is not `"react"`
- * (`REACT_ENGINE_ID`), this renderer cannot run the pack's components at
- * all, so `loadPack` returns an EMPTY registry rather than registering
+ * Engine gating is per component (docs/packs.md): a component carries a
+ * source for `"react"` (`REACT_ENGINE_ID`) through the string shorthand,
+ * `source` (both keyed under the manifest's `engine`) or a `sources` map.
+ * If the pack has components but none has a react source, this renderer
+ * cannot run any of them, so `loadPack` returns an EMPTY registry rather than registering
  * anything. That is deliberate: with nothing registered under the pack's
  * namespace, a note's `:::ana_timeline` falls through to `@markii/react`'s
  * existing unknown-component fallback (dashed box, inner markdown still
@@ -82,17 +85,22 @@ export function loadPack(
   manifest: PackManifest,
   componentModules: PackComponentModules,
 ): LoadPackResult {
-  if (manifest.engine !== REACT_ENGINE_ID) {
+  if (!packSupportsEngine(manifest, REACT_ENGINE_ID)) {
     return {
       registry: createRegistry(),
-      dropped: { name: manifest.name, engine: manifest.engine },
+      dropped: { name: manifest.name, engine: packDeclaredEngines(manifest) },
     };
   }
 
   const entries: Registry = {};
 
-  for (const localName of Object.keys(manifest.components)) {
-    if (!Object.hasOwn(manifest.components, localName)) continue;
+  // Gating is per component: only components with a react source are
+  // considered, so a component that ships only another engine's view is
+  // simply absent and renders as the unknown-component fallback.
+  for (const { localName, kind } of packComponentsForEngine(
+    manifest,
+    REACT_ENGINE_ID,
+  )) {
     if (!Object.hasOwn(componentModules, localName)) continue;
 
     const module = componentModules[localName];
@@ -111,7 +119,6 @@ export function loadPack(
     // render as spec §4 rule 8's form-mismatch fallback). A manifest entry
     // with no `kind` keeps the module's own flag, preserving "a
     // registration that carries no kind information renders unchanged".
-    const kind = resolvePackComponent(manifest.components[localName])?.kind;
     entries[composed.name] =
       kind === undefined ? module : { ...module, inline: kind === 'inline' };
   }

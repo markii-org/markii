@@ -594,11 +594,16 @@ The responsibilities below are what conformance is measured against.
     carried by a sync service, does not load until that device says so.
     Installing, removing, and enabling take effect at once: reload packs and
     re-render what is open rather than asking the reader to reopen it.
-    Gate on the pack's declared engine in every place a pack's components
-    are offered, not only where they render. A pack built for another
-    renderer is reported as skipped, with its declared engine named, so it
-    never reaches a completion list or an insert picker that promises
-    something the renderer would answer with the unknown-component box.
+    Gate on engines in every place a pack's components are offered, not
+    only where they render, and gate per component: offer exactly the
+    components that have a source for your engine. A pack with components
+    but none for your engine is reported as skipped, with the engines it
+    declares named, so nothing reaches a completion list or an insert
+    picker that the renderer would answer with the unknown-component box.
+    A host that loads terminal pack code runs it in its own process, so it
+    loads that code only from its own device-local store and its shipped
+    packs; see [security.md](security.md). A host that renders with React
+    ignores a pack's `terminal.js`.
 11. **Pack compilation, if you compile packs from source.** A pack ships
     component sources and no build step of its own, so a host that offers
     source packs compiles them at load time with `esbuild-wasm`, and it

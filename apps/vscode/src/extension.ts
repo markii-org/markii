@@ -619,7 +619,7 @@ async function insertComponentCommand(
     packs = [];
   }
 
-  const catalog = buildComponentCatalog(packs);
+  const catalog = buildComponentCatalog(packs, 'react');
   const entries = insertComponentQuickPickItems(catalog);
   const items = entries.map(quickPickItemFromEntry);
   const picked = await vscode.window.showQuickPick(items, {

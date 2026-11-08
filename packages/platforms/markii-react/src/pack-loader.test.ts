@@ -46,6 +46,31 @@ describe('loadPack', () => {
     expect(dropped).toEqual({ name: 'ana', engine: 'vue' });
   });
 
+  it('gates per component: a component with no react source is absent, the pack still installs', () => {
+    const manifest = anaManifest({
+      components: {
+        timeline: { sources: { react: './T.tsx', ansi: './T.ansi.tsx' } },
+        meter: { sources: { ansi: './M.ansi.tsx' } },
+      },
+    });
+    const { registry, dropped } = loadPack(manifest, {
+      timeline: entry(),
+      meter: entry(),
+    });
+    expect(dropped).toBeUndefined();
+    expect(Object.hasOwn(registry, 'ana_timeline')).toBe(true);
+    expect(Object.hasOwn(registry, 'ana_meter')).toBe(false);
+  });
+
+  it('drops a pack whose components all lack a react source, naming the declared engines', () => {
+    const manifest = anaManifest({
+      components: { meter: { sources: { ansi: './M.ansi.tsx' } } },
+    });
+    const { registry, dropped } = loadPack(manifest, { meter: entry() });
+    expect(Object.keys(registry)).toHaveLength(0);
+    expect(dropped).toEqual({ name: 'ana', engine: 'ansi' });
+  });
+
   it('does not set `dropped` for a supported (react) engine', () => {
     const { dropped } = loadPack(anaManifest(), { timeline: entry() });
     expect(dropped).toBeUndefined();

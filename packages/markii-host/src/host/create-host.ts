@@ -244,10 +244,10 @@ export function createMarkiiHost(
   async function currentCatalog(): Promise<readonly InsertableComponent[]> {
     if (!adapter.packs) return buildComponentCatalog([]);
     const { packs } = await loadPacksViaAdapter(adapter.packs);
-    return buildComponentCatalog([
-      ...(adapter.packs.bundledPacks?.() ?? []),
-      ...packs,
-    ]);
+    return buildComponentCatalog(
+      [...(adapter.packs.bundledPacks?.() ?? []), ...packs],
+      adapter.packs.engine ?? 'react',
+    );
   }
 
   /** Completion and hover fire per keystroke, so they read a cached catalog. `insertComponent` stays uncached: it runs once per command. */

@@ -1,25 +1,49 @@
 import { describe, expect, it } from 'vitest';
 import {
+  componentSourceForEngine,
   isPackAttributeName,
   packComponents,
+  packComponentsForEngine,
+  packSupportsEngine,
   resolvePackComponent,
 } from './components.js';
+import type { ResolvedPackComponent } from './components.js';
 import type { PackManifest } from './manifest.js';
+
+// Most cases below are about metadata, not engines: flatten the react
+// source back to a plain `source` so those assertions stay readable.
+function flat(
+  r: ResolvedPackComponent,
+): Omit<ResolvedPackComponent, 'sources'> & { source?: string } {
+  const { sources, ...rest } = r;
+  const source = sources['react'];
+  return source === undefined ? rest : { source, ...rest };
+}
+function resolveReact(entry: unknown) {
+  const r = resolvePackComponent(entry, 'react');
+  return r === undefined ? undefined : flat(r);
+}
+function listReact(manifest: Pick<PackManifest, 'components'>) {
+  return packComponents({ ...manifest, engine: 'react' }).map((l) => {
+    const { localName, ...rest } = l;
+    return { localName, ...flat(rest) };
+  });
+}
 
 describe('resolvePackComponent', () => {
   it('resolves the string shorthand', () => {
-    expect(resolvePackComponent('./Timeline.tsx')).toEqual({
+    expect(resolveReact('./Timeline.tsx')).toEqual({
       source: './Timeline.tsx',
     });
   });
 
   it('rejects an empty string', () => {
-    expect(resolvePackComponent('')).toBeUndefined();
+    expect(resolveReact('')).toBeUndefined();
   });
 
   it('resolves the object form with all fields', () => {
     expect(
-      resolvePackComponent({
+      resolveReact({
         source: './profile.tsx',
         description: 'A cat profile card.',
         kind: 'container',
@@ -32,7 +56,7 @@ describe('resolvePackComponent', () => {
   });
 
   it('resolves the object form with only source', () => {
-    expect(resolvePackComponent({ source: './profile.tsx' })).toEqual({
+    expect(resolveReact({ source: './profile.tsx' })).toEqual({
       source: './profile.tsx',
     });
   });
@@ -54,27 +78,27 @@ describe('resolvePackComponent', () => {
       new Map([['source', './x.tsx']]),
     ];
     for (const input of hostileInputs) {
-      expect(() => resolvePackComponent(input)).not.toThrow();
-      expect(resolvePackComponent(input)).toBeUndefined();
+      expect(() => resolveReact(input)).not.toThrow();
+      expect(resolveReact(input)).toBeUndefined();
     }
   });
 
   it('drops an invalid kind rather than throwing or fabricating one', () => {
-    expect(resolvePackComponent({ source: './x.tsx', kind: 'widget' })).toEqual(
-      { source: './x.tsx' },
-    );
+    expect(resolveReact({ source: './x.tsx', kind: 'widget' })).toEqual({
+      source: './x.tsx',
+    });
   });
 
   it('drops a non-string description rather than throwing', () => {
-    expect(
-      resolvePackComponent({ source: './x.tsx', description: 42 }),
-    ).toEqual({ source: './x.tsx' });
+    expect(resolveReact({ source: './x.tsx', description: 42 })).toEqual({
+      source: './x.tsx',
+    });
   });
 
   it('does not read source through the prototype chain', () => {
     const evilProto = { source: './injected.tsx' };
     const entry = Object.create(evilProto) as Record<string, unknown>;
-    expect(resolvePackComponent(entry)).toBeUndefined();
+    expect(resolveReact(entry)).toBeUndefined();
   });
 });
 
@@ -86,7 +110,7 @@ describe('packComponents', () => {
         a: { source: './A.tsx', kind: 'leaf', description: 'A component.' },
       },
     };
-    expect(packComponents(manifest)).toEqual([
+    expect(listReact(manifest)).toEqual([
       { localName: 'b', source: './B.tsx' },
       {
         localName: 'a',
@@ -98,7 +122,7 @@ describe('packComponents', () => {
   });
 
   it('returns [] for a missing components field', () => {
-    expect(packComponents({} as Pick<PackManifest, 'components'>)).toEqual([]);
+    expect(listReact({} as Pick<PackManifest, 'components'>)).toEqual([]);
   });
 
   it('returns [] rather than throwing when components is not a plain object', () => {
@@ -111,11 +135,11 @@ describe('packComponents', () => {
     ];
     for (const manifest of hostileManifests) {
       expect(() =>
-        packComponents(manifest as Pick<PackManifest, 'components'>),
+        listReact(manifest as Pick<PackManifest, 'components'>),
       ).not.toThrow();
-      expect(
-        packComponents(manifest as Pick<PackManifest, 'components'>),
-      ).toEqual([]);
+      expect(listReact(manifest as Pick<PackManifest, 'components'>)).toEqual(
+        [],
+      );
     }
   });
 
@@ -127,7 +151,7 @@ describe('packComponents', () => {
         empty: '',
       },
     } as unknown as Pick<PackManifest, 'components'>;
-    expect(packComponents(manifest)).toEqual([
+    expect(listReact(manifest)).toEqual([
       { localName: 'good', source: './Good.tsx' },
     ]);
   });
@@ -139,7 +163,7 @@ describe('packComponents', () => {
       PackManifest,
       'components'
     >;
-    expect(packComponents(manifest)).toEqual([
+    expect(listReact(manifest)).toEqual([
       { localName: 'a', source: './A.tsx' },
     ]);
   });
@@ -152,7 +176,7 @@ describe('packComponents', () => {
       PackManifest,
       'components'
     >;
-    expect(packComponents(manifest)).toEqual([
+    expect(listReact(manifest)).toEqual([
       { localName: 'real', source: './Real.tsx' },
     ]);
   });
@@ -161,7 +185,7 @@ describe('packComponents', () => {
 describe('resolvePackComponent: declared attributes', () => {
   it('normalizes a declared attribute list', () => {
     expect(
-      resolvePackComponent({
+      resolveReact({
         source: './x.tsx',
         attributes: [
           { name: 'name', description: 'The name.', required: true },
@@ -179,14 +203,14 @@ describe('resolvePackComponent: declared attributes', () => {
 
   it('omits attributes entirely when the list is missing, empty, or not an array', () => {
     for (const attributes of [undefined, [], 'mood', {}, null]) {
-      const resolved = resolvePackComponent({ source: './x.tsx', attributes });
+      const resolved = resolveReact({ source: './x.tsx', attributes });
       expect(resolved).toEqual({ source: './x.tsx' });
     }
   });
 
   it('drops a malformed entry instead of throwing', () => {
     expect(
-      resolvePackComponent({
+      resolveReact({
         source: './x.tsx',
         attributes: [
           'mood',
@@ -201,7 +225,7 @@ describe('resolvePackComponent: declared attributes', () => {
 
   it('keeps the first of a duplicated attribute name', () => {
     expect(
-      resolvePackComponent({
+      resolveReact({
         source: './x.tsx',
         attributes: [
           { name: 'mood', description: 'first' },
@@ -216,7 +240,7 @@ describe('resolvePackComponent: declared attributes', () => {
 
   it('drops a default that is not one of the declared values', () => {
     expect(
-      resolvePackComponent({
+      resolveReact({
         source: './x.tsx',
         attributes: [{ name: 'mood', values: ['happy'], default: 'grumpy' }],
       }),
@@ -228,7 +252,7 @@ describe('resolvePackComponent: declared attributes', () => {
 
   it('drops non-string members of values and the field when none survive', () => {
     expect(
-      resolvePackComponent({
+      resolveReact({
         source: './x.tsx',
         attributes: [{ name: 'mood', values: ['happy', 3, ''] }],
       }),
@@ -237,7 +261,7 @@ describe('resolvePackComponent: declared attributes', () => {
       attributes: [{ name: 'mood', values: ['happy'] }],
     });
     expect(
-      resolvePackComponent({
+      resolveReact({
         source: './x.tsx',
         attributes: [{ name: 'mood', values: [3, ''] }],
       }),
@@ -246,14 +270,14 @@ describe('resolvePackComponent: declared attributes', () => {
 
   it('reads attribute fields only as own properties', () => {
     const hostile = Object.create({ name: 'inherited' }) as object;
-    expect(
-      resolvePackComponent({ source: './x.tsx', attributes: [hostile] }),
-    ).toEqual({ source: './x.tsx' });
+    expect(resolveReact({ source: './x.tsx', attributes: [hostile] })).toEqual({
+      source: './x.tsx',
+    });
   });
 
   it('ignores a non-true required rather than rejecting the attribute', () => {
     expect(
-      resolvePackComponent({
+      resolveReact({
         source: './x.tsx',
         attributes: [{ name: 'mood', required: 'yes' }],
       }),
@@ -282,5 +306,73 @@ describe('isPackAttributeName', () => {
     ]) {
       expect(isPackAttributeName(name)).toBe(false);
     }
+  });
+});
+
+describe('sources (per-engine implementations)', () => {
+  const manifest: Pick<PackManifest, 'components' | 'engine'> = {
+    engine: 'react',
+    components: {
+      both: { sources: { react: './b.react.tsx', ansi: './b.ansi.tsx' } },
+      only: './o.tsx',
+      term: { sources: { ansi: './t.ansi.tsx' } },
+    },
+  };
+
+  it('normalizes every form into a sources map', () => {
+    const listings = packComponents(manifest);
+    expect(listings.map((l) => ({ ...l.sources }))).toEqual([
+      { react: './b.react.tsx', ansi: './b.ansi.tsx' },
+      { react: './o.tsx' },
+      { ansi: './t.ansi.tsx' },
+    ]);
+  });
+
+  it('answers the source for an engine, or none', () => {
+    const [both, , term] = packComponents(manifest);
+    expect(componentSourceForEngine(both!, 'ansi')).toBe('./b.ansi.tsx');
+    expect(componentSourceForEngine(term!, 'react')).toBeUndefined();
+    expect(componentSourceForEngine(term!, 'constructor')).toBeUndefined();
+  });
+
+  it('filters listings per engine', () => {
+    expect(
+      packComponentsForEngine(manifest, 'react').map((l) => [
+        l.localName,
+        l.source,
+      ]),
+    ).toEqual([
+      ['both', './b.react.tsx'],
+      ['only', './o.tsx'],
+    ]);
+    expect(
+      packComponentsForEngine(manifest, 'ansi').map((l) => l.localName),
+    ).toEqual(['both', 'term']);
+    expect(packComponentsForEngine(manifest, 'future')).toEqual([]);
+  });
+
+  it('supports an engine when any component has a source or there are none', () => {
+    expect(packSupportsEngine(manifest, 'ansi')).toBe(true);
+    expect(packSupportsEngine(manifest, 'future')).toBe(false);
+    expect(
+      packSupportsEngine({ engine: 'react', components: {} }, 'ansi'),
+    ).toBe(true);
+  });
+
+  it('rejects an entry carrying both source and sources', () => {
+    expect(
+      resolvePackComponent(
+        { source: './a.tsx', sources: { ansi: './a.ansi.tsx' } },
+        'react',
+      ),
+    ).toBeUndefined();
+  });
+
+  it('drops malformed engine ids and paths', () => {
+    const r = resolvePackComponent(
+      { sources: { Bad: './x', ansi: '', ok: './ok.tsx' } },
+      'react',
+    );
+    expect({ ...r?.sources }).toEqual({ ok: './ok.tsx' });
   });
 });

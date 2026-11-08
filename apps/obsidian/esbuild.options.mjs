@@ -287,7 +287,7 @@ const bundledPacksCacheDir = path.join(here, 'dist', '.bundled-packs-cache');
 const bundledPacksEntrySource = `
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import * as path from 'node:path';
-import { parsePackManifest, packComponents } from '@markii/pack';
+import { parsePackManifest, packComponentsForEngine } from '@markii/pack';
 import { buildPackRegistrationScript } from '@markii/host';
 
 function collectLuaModules(scriptsDir) {
@@ -322,7 +322,7 @@ export async function buildBundledPackAssets(packFolders, cacheDir) {
     }
     const manifest = parsed.manifest;
     const componentPaths = {};
-    for (const listing of packComponents(manifest)) {
+    for (const listing of packComponentsForEngine(manifest, 'react')) {
       componentPaths[listing.localName] = path.join(folder, listing.source);
     }
     const outcome = await buildPackRegistrationScript(

@@ -30,7 +30,14 @@ import * as path from 'node:path';
 import { readdir, readFile as nodeReadFile } from 'node:fs/promises';
 import { parsePackManifest } from '@markii/pack';
 import type { PackManifest } from '@markii/pack';
-import { detectNamespaceCollisions, packComponents } from '@markii/pack';
+import { REACT_ENGINE_ID } from '@markii/react';
+import {
+  detectNamespaceCollisions,
+  packComponents,
+  packComponentsForEngine,
+  packDeclaredEngines,
+  packSupportsEngine,
+} from '@markii/pack';
 
 /** Reads a file's UTF-8 text, or resolves `undefined` if it does not exist / cannot be read. Never rejects for an ordinary "not found" — injected so this module needs no real filesystem to test. */
 export type PackFileReader = (
@@ -67,6 +74,10 @@ export interface DiscoveredPack {
   readonly manifest: PackManifest;
   /** Local component name -> absolute path to its declared source file (`manifest.components[name]`, resolved against `folder`). Informational: what a host consumes them for (bundling, `import()`, or locating the pack's prebuilt registration script) is that host's own concern. */
   readonly componentPaths: Readonly<Record<string, string>>;
+  /** Engine id -> (local component name -> absolute source path), for every engine any component declares a source for. `componentPaths` is the `react` slice of this. A terminal build (`ansi`) reads its slice here. */
+  readonly componentPathsByEngine?: Readonly<
+    Record<string, Readonly<Record<string, string>>>
+  >;
   /** Absolute path to this pack's `scripts/` directory (docs/packs.md: shared Lua modules travel here). The directory need not actually exist — a pack with no shared Lua simply has nothing under it. */
   readonly scriptsDir: string;
   /**
@@ -171,8 +182,18 @@ async function tryLoadPackAt(
   // shorthand and the object form (source/description/kind), so this
   // module never re-implements that walk or its Object.hasOwn guarding.
   const componentPaths: Record<string, string> = {};
-  for (const listing of packComponents(result.manifest)) {
+  for (const listing of packComponentsForEngine(
+    result.manifest,
+    REACT_ENGINE_ID,
+  )) {
     componentPaths[listing.localName] = path.join(folder, listing.source);
+  }
+  const componentPathsByEngine: Record<string, Record<string, string>> = {};
+  for (const listing of packComponents(result.manifest)) {
+    for (const [engine, source] of Object.entries(listing.sources)) {
+      const slice = (componentPathsByEngine[engine] ??= {});
+      slice[listing.localName] = path.join(folder, source);
+    }
   }
 
   return {
@@ -181,6 +202,7 @@ async function tryLoadPackAt(
       folder,
       manifest: result.manifest,
       componentPaths,
+      componentPathsByEngine,
       scriptsDir: path.join(folder, 'scripts'),
       scriptPath: path.join(folder, 'webview.js'),
     },
@@ -227,13 +249,13 @@ function checkEngine(
   | { readonly kind: 'invalid'; readonly reason: string } {
   if (
     supportedEngine === undefined ||
-    pack.manifest.engine === supportedEngine
+    packSupportsEngine(pack.manifest, supportedEngine)
   ) {
     return { kind: 'found', pack };
   }
   return {
     kind: 'invalid',
-    reason: `pack engine "${pack.manifest.engine}" is not supported here (expected "${supportedEngine}"); its components fall back to the unknown-component box`,
+    reason: `pack engine "${packDeclaredEngines(pack.manifest)}" is not supported here (expected "${supportedEngine}"); its components fall back to the unknown-component box`,
   };
 }
 

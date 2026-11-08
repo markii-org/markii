@@ -52,6 +52,7 @@
   },
   "dependencies": {
     "@markii/core": "^0.16.0",
+    "@markii/pack": "^0.16.0",
     "@markii/stdlib": "^0.16.0",
     "ink": "^7.1.1",
     "react": "^19.2.0"

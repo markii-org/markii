@@ -51,6 +51,22 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
   render-once output is unchanged. `markii view` passes the terminal's
   height and re-fits on resize.
 
+- **A pack component can name one source per engine.** A `pack.json`
+  component entry may carry `sources`, a map from an engine id to a path
+  (`{ "react": "./x.tsx", "ansi": "./x.ansi.tsx" }`), instead of `source`.
+  `@markii/pack` adds `componentSourceForEngine`, `packComponentsForEngine`,
+  `packSupportsEngine`, `packDeclaredEngines`, `isPackEngineId` and
+  `PACK_ENGINE_ID_PATTERN`.
+- **Terminal packs.** `@markii/ansi` gains `loadAnsiPack`,
+  `installAnsiPacks`, `ANSI_ENGINE_ID`, `sanitizeValueForPack`, and the
+  prebuilt `terminal.js` contract: `loadTerminalPackScript` evaluates one
+  script that registers through `globalThis.__markiiRegisterTerminalPack`,
+  and `installTerminalPackGlobals` publishes the engine's React and Ink as
+  `__markiiReactInk` and `__markiiInk`. A pack component's attributes and
+  stored values are cleaned of control characters before it sees them. A
+  registry component may return an Ink element, drawn once as a static
+  snapshot. `@markii/ansi` now depends on `@markii/pack`.
+
 ### Fixed
 
 - **The terminal status line names the active tab**, not the first one,
@@ -80,6 +96,13 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Engine gating is per component.** `@markii/react`'s `loadPack` installs
+  the components that have a React source and drops a pack only when none
+  does; `dropped.engine` lists the engines the pack declares. A pack with
+  no components loads under any engine. Breaking for direct
+  `@markii/pack` callers: `resolvePackComponent(entry, engine)` takes the
+  manifest's engine as a second argument and returns `sources` in place of
+  `source`, and `packComponents` reads `engine` from its manifest argument.
 - **The two editor hosts export a linked set the same way.** VS Code's
   archive gains the `index.html` entry page Obsidian's already had, and
   Obsidian gains VS Code's notice when some linked notes were left out.

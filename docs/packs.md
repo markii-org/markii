@@ -24,9 +24,10 @@ because component code is compiled into the host. Installing a pack merges
 its components into the registry under its namespace.
 
 The `engine` field names the renderer framework the pack's components are
-written for. A host that cannot run that engine shows the standard
-unknown-component fallback for the pack's directives, so a note using an
-unavailable pack stays fully readable.
+written for. A component can also name one source per engine, described
+under "One component, several engines" below. A component with no source
+for a host's engine renders as the standard unknown-component fallback, so
+a note using an unavailable pack stays fully readable.
 
 `version` is optional: a plain semver string such as `1.0.0`, three numeric
 parts and nothing else. It carries no prerelease or build suffix, because
@@ -98,6 +99,64 @@ list that is not a non-empty list of non-empty strings, or a `default`
 outside its own `values`. An unrecognized key inside a component object or
 an attribute entry is only a warning, so a field added in a future version
 cannot break the pack on an older host.
+
+### One component, several engines
+
+A component written only for React renders in the editor previews and
+nowhere else. To make it render in the terminal too, give its entry
+`sources` instead of `source`: a map from an engine id to a pack-relative
+path.
+
+```json
+"components": {
+  "meter": {
+    "sources": { "react": "./meter.react.tsx", "ansi": "./meter.ansi.tsx" },
+    "kind": "leaf"
+  }
+}
+```
+
+`react` is the engine of the VS Code and Obsidian previews, and `ansi` is
+the terminal engine behind `markii view`. An engine id is a lowercase word,
+and an id no host knows yet is accepted, so a pack can target a future
+engine without failing validation today. An entry carries `source` or
+`sources`, never both and never neither. The string shorthand and `source`
+both belong to the manifest's top-level `engine`, so a pack written before
+`sources` existed keeps meaning exactly what it meant.
+
+A host loads a pack when at least one of its components has a source for
+the host's engine, or when the pack has no components at all and only
+carries Lua. Within a loaded pack, a component with no source for that
+engine is simply absent, and its directives render as the fallback. A pack
+with components but none for the host's engine is reported as skipped, with
+the engines it does declare.
+
+The two views cannot share markup. A React component draws with `div` and
+`span`; an Ink component draws with `Box` and `Text`. Everything above the
+markup can be shared, and should be: reading and defaulting attributes,
+shaping data, formatting numbers. Put that in one plain module and keep
+both view files thin, so the two engines cannot disagree about what the
+component shows.
+
+```ts
+// meter.logic.ts, imported by both views
+export function meterModel(attrs: Record<string, string>) {
+  const max = Number(attrs.max) || 10;
+  const value = Math.min(Math.max(Number(attrs.value) || 0, 0), max);
+  return { label: attrs.label ?? '', ratio: value / max, text: `${value}/${max}` };
+}
+```
+
+A terminal view is a function that receives `{ attributes, children, ctx }`
+and returns a string or an Ink element. The engine calls it as a plain
+function and draws what it returns once, as a static snapshot, so the
+function itself must not use hooks; components it renders inside the
+returned element may. The engine cleans every attribute and stored value of
+control characters before the view sees them. For a string the view
+composes itself, `ctx.text()` applies the same cleaning. Take glyphs from
+`ctx.glyphs` and colors from `ctx.style` and the theme, never from Ink's
+color properties, so the reader's color and box settings apply to your
+component too.
 
 ## Names and namespaces
 
@@ -196,10 +255,11 @@ which namespaces each component and rejects two packs that claim the same
 namespace. You pass the merged registry to `renderMark`. Nothing loads at
 runtime: the pack is part of your bundle like any other import.
 
-A pack built for a different renderer is not installed, and the result says
-so: it names each dropped pack and the engine that pack declared, so a host
-can report it rather than leaving the author to wonder why their components
-render as unknown ones. Hosts apply the same gate wherever they offer a
+A pack with no component for your renderer is not installed, and the result
+says so: it names each dropped pack and the engines that pack declares, so a
+host can report it rather than leaving the author to wonder why their
+components render as unknown ones. A pack with some components for your
+renderer installs those and leaves the rest to the fallback. Hosts apply the same gate wherever they offer a
 pack's components, including completion and insert lists, so nothing is
 offered that could not render.
 
@@ -355,6 +415,28 @@ prebuilt script has to pass.
 The host collects the queued registrations and folds them into its registry.
 Registration order decides a namespace tie, so a host that ships packs of its
 own registers them first.
+
+### What a prebuilt `terminal.js` must do
+
+The terminal views ship as `terminal.js`, beside `webview.js`. Like
+`webview.js`, the file name is a host convention, not a manifest field. It
+is an ECMAScript module, self-contained, with no imports of its own. On
+evaluation it makes exactly one call:
+
+```js
+globalThis.__markiiRegisterTerminalPack(manifestJson, componentModules);
+```
+
+Both arguments follow the `webview.js` rules: the raw `pack.json` text as a
+string, and an own-property map from each local component name to an object
+with a `component` function and an optional boolean `inline`.
+
+React and Ink are not bundled. The host publishes the instances its engine
+uses as `globalThis.__markiiReactInk` and `globalThis.__markiiInk`, and a
+pack reads them only inside functions that run at render time. Evaluating
+the module with both globals undefined must not throw. A script that throws,
+registers nothing, registers twice, or passes a malformed manifest or
+component map is rejected with a reason the host reports.
 
 ## Styling a pack
 

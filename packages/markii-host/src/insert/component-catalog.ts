@@ -21,7 +21,11 @@
  * `@markii/pack`'s `packComponents` has already dropped anything malformed
  * in it, so this module never re-validates it.
  */
-import { composeDirectiveName, packComponents } from '@markii/pack';
+import {
+  composeDirectiveName,
+  packComponents,
+  packComponentsForEngine,
+} from '@markii/pack';
 import {
   LAYOUT_WRAPPER_NAMES,
   standardComponentCatalog,
@@ -46,8 +50,13 @@ export type { InsertableComponent };
 function packCatalogEntries(
   pack: DiscoveredPack,
   taken: Set<string>,
+  engine: string | undefined,
 ): InsertableComponent[] {
-  const listings = [...packComponents(pack.manifest)].sort((a, b) =>
+  const all =
+    engine === undefined
+      ? packComponents(pack.manifest)
+      : packComponentsForEngine(pack.manifest, engine);
+  const listings = [...all].sort((a, b) =>
     a.localName < b.localName ? -1 : a.localName > b.localName ? 1 : 0,
   );
   const entries: InsertableComponent[] = [];
@@ -94,16 +103,22 @@ function packCatalogEntries(
  * A pack component whose composed directive name collides with the
  * standard set or with an earlier pack's entry is skipped, so the returned
  * list never has two entries with the same `directiveName`.
+ *
+ * `engine`, when given, keeps only the pack components that have a source
+ * for that engine (the host's renderer): a component without one renders
+ * as the unknown fallback there, so it is not offered. Omitted, every
+ * declared component is listed.
  */
 export function buildComponentCatalog(
   packs: readonly DiscoveredPack[],
+  engine?: string,
 ): readonly InsertableComponent[] {
   const standard = standardComponentCatalog();
   const taken = new Set(standard.map((entry) => entry.directiveName));
 
   const packEntries: InsertableComponent[] = [];
   for (const pack of packs) {
-    packEntries.push(...packCatalogEntries(pack, taken));
+    packEntries.push(...packCatalogEntries(pack, taken, engine));
   }
 
   return [...standard, ...packEntries];

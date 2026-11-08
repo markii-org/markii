@@ -152,14 +152,25 @@ packages/platforms/markii-ansi   the terminal renderer, a third platform
   src/value-types.ts the local structural ValueStatus/FailureKind/store
                      shapes, so nothing imports @markii/runtime at runtime;
                      value-types.drift.test.ts pins them to the real ones
-  src/registry.ts    AnsiRegistry: a React component taking
-                     {attributes, children, ctx}
+  src/registry.ts    AnsiRegistry: a function taking
+                     {attributes, children, ctx} and returning a string or
+                     an Ink element (drawn as a static snapshot)
+  src/pack-loader.ts loadAnsiPack/installAnsiPacks (per-component 'ansi'
+                     gating, namespace collision refusal) and the wrapper
+                     that cleans attributes and stored values before a
+                     pack component sees them
+  src/pack-script.ts SECURITY CRITICAL: loadTerminalPackScript evaluates a
+                     prebuilt terminal.js IN-PROCESS (register global,
+                     React/Ink published as __markiiReactInk/__markiiInk).
+                     Only a host's own store and shipped packs may reach
+                     it; pack-loader.probe.test.ts is the executed probe
   src/components/    the standard set as Ink components + defaultAnsiRegistry;
                      card and figure frame with Ink Box borders (so tabs/
-                     details inside them take focus); callout keeps its
-                     string-drawn colored type bar on purpose, since a
-                     border glyph cannot carry the type color under the
-                     no-Ink-color rule; contract-drift.test.ts fails closed
+                     details inside them take focus); callout draws its
+                     colored type bar as a one-column left border whose
+                     glyph is pre-styled by the engine's own SGR (no Ink
+                     color prop), so its body takes focus too;
+                     contract-drift.test.ts fails closed
                      like @markii/react's
   src/conformance.test.ts + src/nesting.test.ts  the L1 corpus, the
                      committed conformance/render/*.txt (width 80, color

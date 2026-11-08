@@ -98,3 +98,21 @@ export type {
   StoredValue,
   ValueStatus,
 } from './value-types.js';
+export {
+  ANSI_ENGINE_ID,
+  loadAnsiPack,
+  installAnsiPacks,
+  sanitizeValueForPack,
+  type AnsiPackComponentModules,
+  type AnsiPackToInstall,
+  type LoadAnsiPackResult,
+  type InstallAnsiPacksResult,
+} from './pack-loader.js';
+export {
+  loadTerminalPackScript,
+  installTerminalPackGlobals,
+  TERMINAL_REGISTER_GLOBAL,
+  TERMINAL_REACT_GLOBAL,
+  TERMINAL_INK_GLOBAL,
+  type LoadTerminalPackScriptResult,
+} from './pack-script.js';

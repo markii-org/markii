@@ -22,14 +22,21 @@ export type {
   PackComponentDefinition,
   PackComponentEntry,
   PackComponentKind,
+  EnginePackComponentListing,
   PackComponentListing,
   ResolvedPackComponent,
 } from './components.js';
 export {
   PACK_ATTRIBUTE_NAME_PATTERN,
   PACK_COMPONENT_KINDS,
+  PACK_ENGINE_ID_PATTERN,
+  componentSourceForEngine,
   isPackAttributeName,
+  isPackEngineId,
   packComponents,
+  packComponentsForEngine,
+  packDeclaredEngines,
+  packSupportsEngine,
   resolvePackComponent,
 } from './components.js';
 

@@ -198,6 +198,7 @@ export function resolveBundledPacks(
         folder,
         manifest: parsed.manifest,
         componentPaths: {},
+        componentPathsByEngine: {},
         scriptsDir: `${folder}/scripts`,
         scriptPath: `${folder}/webview.js`,
         ...(asset.cssText !== undefined

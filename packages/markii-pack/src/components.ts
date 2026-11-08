@@ -87,7 +87,14 @@ export interface PackComponentAttribute {
  * hover documentation.
  */
 export interface PackComponentDefinition {
-  source: string;
+  /** The source for the pack's top-level `engine`. Mutually exclusive with `sources`. */
+  source?: string;
+  /**
+   * Engine id -> pack-relative source path, for a component that ships
+   * more than one implementation (for example `react` and `ansi`).
+   * Mutually exclusive with `source`.
+   */
+  sources?: Readonly<Record<string, string>>;
   description?: string;
   kind?: PackComponentKind;
   /**
@@ -111,7 +118,13 @@ export type PackComponentEntry = string | PackComponentDefinition;
  * the manifest declared them (the string shorthand never has any of them).
  */
 export interface ResolvedPackComponent {
-  readonly source: string;
+  /**
+   * Engine id -> pack-relative source path, normalized from all three
+   * declared forms (string shorthand and `source` are keyed under the
+   * manifest's `engine`). Read it through `componentSourceForEngine`.
+   * Never empty. A null-prototype object.
+   */
+  readonly sources: Readonly<Record<string, string>>;
   readonly description?: string;
   readonly kind?: PackComponentKind;
   readonly attributes?: readonly PackComponentAttribute[];
@@ -120,6 +133,116 @@ export interface ResolvedPackComponent {
 /** Same as `ResolvedPackComponent`, plus the local name it was declared under. */
 export interface PackComponentListing extends ResolvedPackComponent {
   readonly localName: string;
+}
+
+/** A listing narrowed to one engine: `source` is that engine's source path. */
+export interface EnginePackComponentListing extends PackComponentListing {
+  readonly source: string;
+}
+
+/**
+ * The pack-relative source this component has for `engine`, or `undefined`
+ * when it ships none. The one answer to "does this component run here".
+ */
+export function componentSourceForEngine(
+  component: Pick<ResolvedPackComponent, 'sources'>,
+  engine: string,
+): string | undefined {
+  return Object.hasOwn(component.sources, engine)
+    ? component.sources[engine]
+    : undefined;
+}
+
+/**
+ * Whether a host for `engine` should install the pack: true when the pack
+ * declares no components (Lua-only) or at least one component has a source
+ * for `engine`. A pack with components but none for this engine is not
+ * installable here and a host reports it as dropped.
+ */
+export function packSupportsEngine(
+  manifest: Pick<PackManifest, 'components' | 'engine'>,
+  engine: string,
+): boolean {
+  const all = packComponents(manifest);
+  if (all.length === 0) return true;
+  return all.some((c) => componentSourceForEngine(c, engine) !== undefined);
+}
+
+/**
+ * The pack's components that have a source for `engine`, in declaration
+ * order, each carrying that engine's `source`. Components without one are
+ * absent (they fall back to the unknown-component box in that engine).
+ */
+export function packComponentsForEngine(
+  manifest: Pick<PackManifest, 'components' | 'engine'>,
+  engine: string,
+): EnginePackComponentListing[] {
+  const result: EnginePackComponentListing[] = [];
+  for (const listing of packComponents(manifest)) {
+    const source = componentSourceForEngine(listing, engine);
+    if (source !== undefined) result.push({ ...listing, source });
+  }
+  return result;
+}
+
+/**
+ * Every engine id any component of the pack ships a source for, sorted,
+ * comma-joined for a "dropped pack" report. Falls back to the manifest's
+ * top-level `engine` when the pack declares no components.
+ */
+export function packDeclaredEngines(
+  manifest: Pick<PackManifest, 'components' | 'engine'>,
+): string {
+  const ids = new Set<string>();
+  for (const listing of packComponents(manifest)) {
+    for (const id of Object.keys(listing.sources)) ids.add(id);
+  }
+  if (ids.size === 0) ids.add(manifest.engine);
+  return [...ids].sort().join(', ');
+}
+
+/** Engine ids are lowercase words: a leading letter, then lowercase letters, digits and hyphens. */
+export const PACK_ENGINE_ID_PATTERN = /^[a-z][a-z0-9-]*$/;
+
+/** Whether `id` is a usable engine id (a `sources` key). */
+export function isPackEngineId(id: unknown): id is string {
+  return typeof id === 'string' && PACK_ENGINE_ID_PATTERN.test(id);
+}
+
+function nullProto(entries: [string, string][]): Record<string, string> {
+  const out: Record<string, string> = Object.create(null) as Record<
+    string,
+    string
+  >;
+  for (const [k, v] of entries) out[k] = v;
+  return out;
+}
+
+/** Reads the engine-to-source map of an object entry, leniently: bad pairs are dropped. */
+function resolveSources(
+  entry: object,
+  defaultEngine: string,
+): Record<string, string> | undefined {
+  const source = ownProperty(entry, 'source');
+  const sources = ownProperty(entry, 'sources');
+  if (typeof source === 'string' && source.length > 0) {
+    if (sources !== undefined) return undefined;
+    return nullProto([[defaultEngine, source]]);
+  }
+  if (
+    sources === null ||
+    typeof sources !== 'object' ||
+    Array.isArray(sources)
+  ) {
+    return undefined;
+  }
+  const pairs: [string, string][] = [];
+  for (const key of Object.keys(sources)) {
+    if (!Object.hasOwn(sources, key) || !isPackEngineId(key)) continue;
+    const value = (sources as Record<string, unknown>)[key];
+    if (typeof value === 'string' && value.length > 0) pairs.push([key, value]);
+  }
+  return pairs.length > 0 ? nullProto(pairs) : undefined;
 }
 
 /**
@@ -224,30 +347,34 @@ function resolveAttributes(
  * a value. This matters because a consumer may call this directly on
  * attacker-controlled JSON that never went through `parsePackManifest` at
  * all (for example a pack loaded from an untrusted bundle).
+ *
+ * `defaultEngine` is the manifest's top-level `engine`: the engine the
+ * string shorthand and an object entry's `source` are written for.
  */
 export function resolvePackComponent(
   entry: unknown,
+  defaultEngine: string,
 ): ResolvedPackComponent | undefined {
   if (typeof entry === 'string') {
-    return entry.length > 0 ? { source: entry } : undefined;
+    return entry.length > 0
+      ? { sources: nullProto([[defaultEngine, entry]]) }
+      : undefined;
   }
 
   if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) {
     return undefined;
   }
 
-  const source = ownProperty(entry, 'source');
-  if (typeof source !== 'string' || source.length === 0) {
-    return undefined;
-  }
+  const sources = resolveSources(entry, defaultEngine);
+  if (sources === undefined) return undefined;
 
   const result: {
-    source: string;
+    sources: Readonly<Record<string, string>>;
     description?: string;
     kind?: PackComponentKind;
     attributes?: readonly PackComponentAttribute[];
   } = {
-    source,
+    sources,
   };
 
   const description = ownProperty(entry, 'description');
@@ -282,9 +409,10 @@ export function resolvePackComponent(
  * caller never needs to guard the call site itself.
  */
 export function packComponents(
-  manifest: Pick<PackManifest, 'components'>,
+  manifest: Pick<PackManifest, 'components' | 'engine'>,
 ): PackComponentListing[] {
   const components = manifest?.components;
+  const engine = manifest?.engine;
   if (
     components === null ||
     typeof components !== 'object' ||
@@ -298,6 +426,7 @@ export function packComponents(
     if (!Object.hasOwn(components, localName)) continue;
     const resolved = resolvePackComponent(
       (components as Record<string, unknown>)[localName],
+      typeof engine === 'string' ? engine : '',
     );
     if (resolved === undefined) continue;
     listings.push({ localName, ...resolved });

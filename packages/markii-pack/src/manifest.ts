@@ -2,7 +2,9 @@ import { validateLocalComponentName, validatePackName } from './namespace.js';
 import {
   PACK_ATTRIBUTE_NAME_PATTERN,
   PACK_COMPONENT_KINDS,
+  PACK_ENGINE_ID_PATTERN,
   isPackAttributeName,
+  isPackEngineId,
 } from './components.js';
 import type {
   PackComponentAttribute,
@@ -95,6 +97,7 @@ const SEMVER_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 // an unrecognized key here is a forward-compatible warning, not an error.
 const KNOWN_COMPONENT_KEYS = new Set([
   'source',
+  'sources',
   'description',
   'kind',
   'attributes',
@@ -386,12 +389,65 @@ export function parsePackManifest(json: string): PackManifestParseResult {
       // and as the top-level Object.hasOwn guarding throughout this file.
       let entryValid = true;
 
-      const source = Object.hasOwn(value, 'source') ? value.source : undefined;
-      if (typeof source !== 'string' || source.length === 0) {
+      const hasSource = Object.hasOwn(value, 'source');
+      const hasSources = Object.hasOwn(value, 'sources');
+      const source = hasSource ? value.source : undefined;
+      let sourcesMap: Record<string, string> | undefined;
+      if (hasSource && hasSources) {
         errors.push(
-          `"components.${key}.source" must be a non-empty string (a pack-relative source path)`,
+          `"components.${key}" must carry "source" or "sources", not both`,
         );
         entryValid = false;
+      } else if (!hasSource && !hasSources) {
+        errors.push(
+          `"components.${key}.source" is required (a pack-relative source path), or give a "sources" map instead`,
+        );
+        entryValid = false;
+      } else if (hasSource) {
+        if (typeof source !== 'string' || source.length === 0) {
+          errors.push(
+            `"components.${key}.source" must be a non-empty string (a pack-relative source path)`,
+          );
+          entryValid = false;
+        }
+      } else {
+        const rawSources = value.sources;
+        if (!isPlainObject(rawSources)) {
+          errors.push(
+            `"components.${key}.sources" must be an object mapping engine ids to pack-relative source paths`,
+          );
+          entryValid = false;
+        } else {
+          const parsedSources: Record<string, string> = Object.create(
+            null,
+          ) as Record<string, string>;
+          let count = 0;
+          for (const engineId of Object.keys(rawSources)) {
+            if (!Object.hasOwn(rawSources, engineId)) continue;
+            count += 1;
+            const path = rawSources[engineId];
+            if (!isPackEngineId(engineId)) {
+              errors.push(
+                `"components.${key}.sources" key "${engineId}" must be a lowercase engine id matching ${PACK_ENGINE_ID_PATTERN.source}`,
+              );
+              entryValid = false;
+            } else if (typeof path !== 'string' || path.length === 0) {
+              errors.push(
+                `"components.${key}.sources.${engineId}" must be a non-empty string (a pack-relative source path)`,
+              );
+              entryValid = false;
+            } else {
+              parsedSources[engineId] = path;
+            }
+          }
+          if (count === 0) {
+            errors.push(
+              `"components.${key}.sources" must name at least one engine`,
+            );
+            entryValid = false;
+          }
+          sourcesMap = parsedSources;
+        }
       }
 
       let description: string | undefined;
@@ -467,11 +523,12 @@ export function parsePackManifest(json: string): PackManifestParseResult {
       // string. This preserves the author's declared form rather than
       // silently normalizing `{ "source": "./x.tsx" }` into `"./x.tsx"`.
       const sanitized: {
-        source: string;
+        source?: string;
+        sources?: Readonly<Record<string, string>>;
         description?: string;
         kind?: PackComponentKind;
         attributes?: readonly PackComponentAttribute[];
-      } = { source: source as string };
+      } = hasSource ? { source: source as string } : { sources: sourcesMap };
       if (description !== undefined) sanitized.description = description;
       if (kind !== undefined) sanitized.kind = kind;
       if (attributes !== undefined) sanitized.attributes = attributes;

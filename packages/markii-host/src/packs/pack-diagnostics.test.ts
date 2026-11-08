@@ -14,7 +14,7 @@ function pack(name: string, componentCount: number): PackDiagnosticsPack {
   const components: Record<string, string> = {};
   for (let i = 0; i < componentCount; i++)
     components[`c${i}`] = `src/c${i}.tsx`;
-  return { manifest: { name, components } };
+  return { manifest: { name, engine: 'react', components } };
 }
 
 function context(

@@ -37,13 +37,24 @@ describe('discoverConfiguredPacks', () => {
     const folder = await makePackFolder('other-engine', {
       name: 'other-engine',
       engine: 'some-other-engine',
-      components: {},
+      components: { widget: './Widget.x' },
     });
     const result = await discoverConfiguredPacks([folder]);
     expect(result.packs).toEqual([]);
     expect(result.namespaces).toEqual([]);
     expect(result.skipped).toHaveLength(1);
     expect(result.skipped[0]?.reason).toContain('not supported here');
+  });
+
+  it('loads a Lua-only pack whatever engine it declares, since it renders nothing', async () => {
+    const folder = await makePackFolder('lua-only', {
+      name: 'lua-only',
+      engine: 'some-other-engine',
+      components: {},
+    });
+    const result = await discoverConfiguredPacks([folder]);
+    expect(result.namespaces).toEqual(['lua-only']);
+    expect(result.skipped).toEqual([]);
   });
 
   it('a missing folder is skipped quietly, never thrown', async () => {

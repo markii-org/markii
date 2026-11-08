@@ -46,12 +46,13 @@ export interface LoadPacksResult {
  */
 export async function discoverConfiguredPacks(
   folders: readonly string[],
+  engine: string = REACT_ENGINE_ID,
 ): Promise<LoadPacksResult> {
   const result = await discoverPacks(
     folders,
     createNodeFileReader(),
     undefined,
-    REACT_ENGINE_ID,
+    engine,
   );
   return {
     packs: result.packs,
@@ -70,5 +71,5 @@ export async function loadPacksViaAdapter(
   source: HostPackSource,
 ): Promise<LoadPacksResult> {
   const folders = await source.authorizedFolders();
-  return discoverConfiguredPacks(folders);
+  return discoverConfiguredPacks(folders, source.engine);
 }

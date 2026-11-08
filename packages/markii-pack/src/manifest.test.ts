@@ -693,4 +693,42 @@ describe('parsePackManifest: declared component attributes', () => {
     expect(result.ok).toBe(true);
     expect(({} as Record<string, unknown>).polluted).toBeUndefined();
   });
+
+  describe('sources form', () => {
+    const base = (component: unknown) =>
+      JSON.stringify({
+        name: 'ana',
+        engine: 'react',
+        components: { meter: component },
+      });
+
+    it('accepts a sources map and unknown engine ids', () => {
+      const result = parsePackManifest(
+        base({
+          sources: { react: './m.tsx', ansi: './m.ansi.tsx', future: './f' },
+        }),
+      );
+      expect(result.ok).toBe(true);
+    });
+
+    it('rejects source together with sources', () => {
+      const result = parsePackManifest(
+        base({ source: './m.tsx', sources: { ansi: './a.tsx' } }),
+      );
+      expect(result.ok).toBe(false);
+    });
+
+    it('rejects an entry with neither', () => {
+      expect(parsePackManifest(base({ kind: 'leaf' })).ok).toBe(false);
+    });
+
+    it('rejects an empty map, a bad engine id and a bad path', () => {
+      expect(parsePackManifest(base({ sources: {} })).ok).toBe(false);
+      expect(parsePackManifest(base({ sources: { React: './a' } })).ok).toBe(
+        false,
+      );
+      expect(parsePackManifest(base({ sources: { ansi: '' } })).ok).toBe(false);
+      expect(parsePackManifest(base({ sources: ['./a'] })).ok).toBe(false);
+    });
+  });
 });

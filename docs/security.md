@@ -478,6 +478,43 @@ belt and braces. A separate check renders at a fixed requested color level
 across every combination of `NO_COLOR`, `FORCE_COLOR`, `TERM` and `CI`, in
 separate processes, and asserts the bytes are identical each time.
 
+### Terminal packs
+
+A pack's terminal views run where the terminal engine runs. In a command
+line host that is the host's own process, with no isolate around it, so a
+terminal pack has every privilege that process has. It can read files,
+reach the network, and write raw bytes to the terminal. That is the same
+position as a desktop application plugin, and the protection is the same
+too: provenance. A host loads terminal pack code only from its own
+device-local pack store and from the packs it ships, never from a note, a
+bundle, the working directory, or an environment variable, and a pack
+enters that store only through an install step that asks for consent.
+
+What the engine does bound is the path from untrusted text through a pack.
+Attribute values and their names, stored values and their keys, the data a
+data-bound view receives, and its error text are all cleaned of control
+characters before the pack's function is called. A pack that prints those
+values without thinking about escapes still cannot carry an author's escape
+sequence onto the reader's screen.
+
+Two things are not bounded and are stated here so nobody relies on them. A
+pack's own code can emit any bytes it likes, since nothing stands between it
+and the output stream. A pack's render function also runs with no
+wall-clock or memory limit, so a pack that loops forever hangs the viewer.
+
+The boundary is checked by an executed probe,
+`packages/platforms/markii-ansi/src/pack-loader.probe.test.ts`. It loads a
+real terminal pack script that registers through the global, reads React and
+Ink from the host's globals at render time, and deliberately prints raw
+attribute and stored-value strings. The payloads are a CSI sequence, an
+OSC 8 hyperlink, a C1 control introducer, a bell, a carriage return, and a
+delete byte, placed in attribute values, nested stored values, and their
+keys. With color off, any control byte in the output fails the probe; with
+color on, only the engine's own sequences may remain. Removing the engine's
+cleaning step makes eight of its cases fail, which shows the check is
+load-bearing. One case asserts the unbounded half on purpose: a pack that
+writes an escape itself gets it through.
+
 ## Verification status of the reference sandbox
 
 The `@markii/lua` sandbox was audited adversarially in August 2026 (commit

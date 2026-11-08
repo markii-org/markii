@@ -1,5 +1,6 @@
 import { Writable } from 'node:stream';
 import type { ReactElement } from 'react';
+import { render as inkRender } from 'ink';
 
 /**
  * The ONE place Ink's `render()` is called for the render-ONCE (string)
@@ -82,4 +83,31 @@ export async function renderInkToString(
   });
   instance.unmount();
   return getOutput();
+}
+
+/**
+ * The same capture as `renderInkToString`, synchronously. Valid only once
+ * Ink's module has finished evaluating, which is always true inside a walk
+ * (`render.tsx` imports Ink statically). Used for a registry component that
+ * returns an Ink element instead of a string (a terminal pack's view): the
+ * element is laid out at the width the directive was given and captured as
+ * text, so it composes with the string-built blocks around it. The result
+ * is a snapshot, so a component rendered this way has no live state.
+ * Trailing newlines Ink adds are removed.
+ */
+export function renderInkToStringSync(
+  element: ReactElement,
+  columns: number,
+): string {
+  const { stream, getOutput } = makeCollectingStream(columns);
+  const instance = inkRender(element, {
+    stdout: stream as unknown as NodeJS.WriteStream,
+    stdin: process.stdin,
+    exitOnCtrlC: false,
+    patchConsole: false,
+    debug: false,
+    interactive: false,
+  });
+  instance.unmount();
+  return getOutput().replace(/\n+$/, '');
 }

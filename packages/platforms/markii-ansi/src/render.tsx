@@ -1,4 +1,4 @@
-import { Fragment } from 'react';
+import { Fragment, isValidElement } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { Box, Text } from 'ink';
 import {
@@ -104,7 +104,7 @@ import {
 import { resolveHrefAttribute, type ResolveHref } from './href-resolve.js';
 import type { AnsiValueStore, AnsiVaultStore } from './value-types.js';
 import { defaultAnsiRegistry } from './components/index.js';
-import { renderInkToString } from './ink-string.js';
+import { renderInkToString, renderInkToStringSync } from './ink-string.js';
 import { InteractiveRoot } from './interactive.js';
 import { glyphsFor, type BoxStyle, type GlyphSet } from './glyphs.js';
 import type { FocusableDescriptor } from './interactive.js';
@@ -610,7 +610,12 @@ function renderDirectiveContentString(
       children: childrenText,
       ctx,
     });
-    rendered = typeof result === 'string' ? result : String(result ?? '');
+    rendered =
+      typeof result === 'string'
+        ? result
+        : isValidElement(result)
+          ? renderInkToStringSync(result, width)
+          : String(result ?? '');
   } catch {
     return componentError(
       name || '(unnamed)',

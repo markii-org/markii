@@ -25,7 +25,7 @@ import type { PackManifest } from '@markii/pack';
 
 /** The minimal shape of one loaded pack this module needs — a structural subset of `./discover.ts`'s `DiscoveredPack`. */
 export interface PackDiagnosticsPack {
-  readonly manifest: Pick<PackManifest, 'name' | 'components'>;
+  readonly manifest: Pick<PackManifest, 'name' | 'engine' | 'components'>;
 }
 
 /** The minimal shape of one skipped folder this module needs — a structural subset of `./discover.ts`'s `SkippedPackFolder`. */

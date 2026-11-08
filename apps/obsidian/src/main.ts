@@ -922,10 +922,10 @@ export default class MarkiiPlugin extends Plugin {
     } catch {
       packs = [];
     }
-    this.completionCatalog = buildComponentCatalog([
-      ...bundledDiscoveredPacks(),
-      ...packs,
-    ]);
+    this.completionCatalog = buildComponentCatalog(
+      [...bundledDiscoveredPacks(), ...packs],
+      'react',
+    );
     this.completionHostInstance?.invalidateCatalog();
   }
 

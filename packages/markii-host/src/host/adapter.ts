@@ -124,6 +124,13 @@ export interface HostEditor {
  */
 export interface HostPackSource {
   /**
+   * The renderer engine this host runs packs for (`@markii/pack`'s
+   * per-component `sources` keys). Absent means `react`. The terminal host
+   * declares `ansi`. Discovery, completion and insert keep only packs and
+   * components that have a source for it.
+   */
+  readonly engine?: string;
+  /**
    * Folders this host currently AUTHORIZES: VS Code's resolved
    * `markii.packs` setting plus bundled packs; Obsidian's trust-filtered
    * installed folders plus bundled packs.
