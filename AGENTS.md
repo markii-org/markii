@@ -348,9 +348,12 @@ packages/markii-host    PRIVATE, never published (no npm presence, absent from
                      @markii/host/browser too, since the React render runs in
                      the VS Code webview
   src/export/        note export (issue #28): buildNoteHtmlExport renders a
-                     note through @markii/html into a self-contained HTML
-                     document (doc.css embedded, last-run values baked in,
-                     pack directives as the unknown-component fallback) plus
+                     note into a self-contained HTML document (doc.css
+                     embedded, last-run values baked in). A host with a
+                     React renderer passes renderBody, so pack components
+                     render as in the preview with their stylesheets;
+                     without one (the CLI) @markii/html renders and pack
+                     directives export as the unknown fallback. Plus
                      the shared file-naming rules, the data-URI image
                      embedder behind an injected reader seam, and the
                      cascade walk/link-rewrite/zip logic both hosts can
