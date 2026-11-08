@@ -240,6 +240,7 @@ export type {
 } from './packs/pack-build.js';
 export {
   buildPackRegistrationScript,
+  buildPackTerminalScript,
   computeCacheKey,
 } from './packs/pack-build.js';
 
@@ -298,8 +299,11 @@ export type {
 export {
   PREBUILT_SCRIPT_FILENAME,
   PREBUILT_STYLESHEET_FILENAME,
+  PREBUILT_TERMINAL_SCRIPT_FILENAME,
+  emptyWebviewScript,
   prebuiltScriptPathFor,
   prebuiltStylesheetPathFor,
+  prebuiltTerminalScriptPathFor,
   resolvePrebuiltPack,
 } from './packs/prebuilt.js';
 
@@ -460,6 +464,24 @@ export {
   loadPacksViaAdapter,
 } from './host/pack-load.js';
 export { prebuiltShadowLine } from './packs/pack-diagnostics.js';
+export type {
+  ReadTerminalScriptsResult,
+  TerminalPackScript,
+} from './host/terminal-packs.js';
+export {
+  packHasTerminalViews,
+  readTerminalPackScripts,
+  terminalScriptMissingLine,
+  terminalScriptNamespaceMismatchLine,
+  terminalScriptRejectedLine,
+  terminalScriptUnreadableLine,
+} from './host/terminal-packs.js';
+export type { RemovePackOutcome } from './host/pack-remove.js';
+export {
+  removePackDiagnosticLine,
+  removePackMessage,
+  removePackViaAdapter,
+} from './host/pack-remove.js';
 export { mdPlainFromSource } from './host/export/md-plain.js';
 export type {
   ExportHtmlDocumentRequest,
@@ -506,10 +528,12 @@ export type {
   InstallPackOutcome,
   InstallPackRequest,
   LoadPacksOutcome,
+  LoadTerminalPacksOutcome,
   MarkiiHost,
   MarkiiHostOptions,
   OpenOutcome,
   OpenRequest,
+  RemovePackResult,
   RunOutcome,
   RunRequest,
   Unsupported,

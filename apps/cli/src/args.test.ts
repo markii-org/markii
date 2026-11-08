@@ -271,11 +271,66 @@ const cases: Case[] = [
     },
   },
   {
+    name: 'pack install parses the file and --yes',
+    argv: ['pack', 'install', 'ana.mkp', '--yes'],
+    expected: {
+      kind: 'pack-install',
+      file: 'ana.mkp',
+      yes: true,
+      verbose: false,
+    },
+  },
+  {
+    name: 'pack install defaults --yes off',
+    argv: ['pack', 'install', 'ana.mkp'],
+    expected: {
+      kind: 'pack-install',
+      file: 'ana.mkp',
+      yes: false,
+      verbose: false,
+    },
+  },
+  {
+    name: 'pack list',
+    argv: ['pack', 'list'],
+    expected: { kind: 'pack-list', verbose: false },
+  },
+  {
+    name: 'pack remove takes a namespace',
+    argv: ['pack', 'remove', 'ana'],
+    expected: { kind: 'pack-remove', namespace: 'ana', verbose: false },
+  },
+  {
+    name: 'pack install without a file is a usage error',
+    argv: ['pack', 'install'],
+    expected: {
+      kind: 'usage-error',
+      message: 'markii pack install requires a .mkp file argument',
+    },
+  },
+  {
+    name: 'pack with no action is a usage error',
+    argv: ['pack'],
+    expected: {
+      kind: 'usage-error',
+      message: 'markii pack requires install, list, or remove',
+    },
+  },
+  {
+    name: 'unknown pack action is a usage error',
+    argv: ['pack', 'frob'],
+    expected: {
+      kind: 'usage-error',
+      message: 'unknown pack command "frob"; expected install, list, or remove',
+    },
+  },
+  {
     name: 'unknown subcommand is a usage error',
     argv: ['bogus', 'note.mk.md'],
     expected: {
       kind: 'usage-error',
-      message: 'unknown subcommand "bogus"; expected view, export, or run',
+      message:
+        'unknown subcommand "bogus"; expected view, export, run, or pack',
     },
   },
   {

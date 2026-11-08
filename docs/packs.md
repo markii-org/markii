@@ -438,6 +438,12 @@ the module with both globals undefined must not throw. A script that throws,
 registers nothing, registers twice, or passes a malformed manifest or
 component map is rejected with a reason the host reports.
 
+VS Code's Export Pack builds both forms when the manifest names `ansi`
+sources and puts `terminal.js` into the same `.mkp`. A pack with terminal
+views only gets an empty `webview.js` registration, since the archive
+requires one. Obsidian installs that archive like any other and ignores
+`terminal.js`; the command line tool loads it.
+
 ## Styling a pack
 
 A pack styles itself with an ordinary CSS import from a component:

@@ -110,6 +110,7 @@ export type HostScenarioAction =
       readonly answers?: readonly string[];
     }
   | { readonly type: 'loadPacks' }
+  | { readonly type: 'removePack'; readonly namespace: string }
   | {
       readonly type: 'completeAt';
       readonly line: number;
@@ -195,6 +196,7 @@ export const ACTION_CAPABILITY: Readonly<
   exportAnsi: 'export-format',
   installPack: 'packs',
   loadPacks: 'packs',
+  removePack: 'packs',
   completeAt: 'editor',
   hoverAt: 'editor',
   insertComponent: 'editor',
@@ -217,6 +219,12 @@ export function hostDeclaresCapability(
     if (adapter.packs === undefined) return false;
     if (action.type === 'installPack') {
       return adapter.packs.installRoot !== undefined;
+    }
+    if (action.type === 'removePack') {
+      return (
+        adapter.packs.installRoot !== undefined &&
+        adapter.packs.removeFolder !== undefined
+      );
     }
     return true;
   }
@@ -466,6 +474,9 @@ async function runOneAction(
     case 'loadPacks':
       return host.loadPacks();
 
+    case 'removePack':
+      return host.removePack(action.namespace);
+
     case 'completeAt':
       return host.completeAt({ line: action.line, column: action.column });
 
@@ -637,6 +648,17 @@ export function outcomeMismatches(
       ) {
         mismatches.push(
           `reason: expected to contain "${String(expected['reasonContains'])}", got "${String(actualRecord['reason'])}"`,
+        );
+      }
+      break;
+    }
+    case 'removed': {
+      if (
+        expected['namespace'] !== undefined &&
+        actualRecord['namespace'] !== expected['namespace']
+      ) {
+        mismatches.push(
+          `namespace: expected "${String(expected['namespace'])}", got "${String(actualRecord['namespace'])}"`,
         );
       }
       break;

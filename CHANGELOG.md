@@ -67,6 +67,21 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
   registry component may return an Ink element, drawn once as a static
   snapshot. `@markii/ansi` now depends on `@markii/pack`.
 
+- **The command line tool loads packs.** `markii pack install <file.mkp>`
+  (with `--yes` for a session without a terminal), `markii pack list` and
+  `markii pack remove <namespace>` manage a device-local pack store beside
+  `state.json`. `markii view` and `markii export --format ansi` draw the
+  terminal views of the installed packs and of the packs shipped with the
+  CLI; a component without one renders as the unknown-component box. Pack
+  code is never loaded from a note, a bundle, the working directory or an
+  environment variable.
+- **Packs carry their terminal views in the same archive.** VS Code's
+  Export Pack builds `terminal.js` beside `webview.js` when a manifest names
+  `ansi` sources. `@markii/pack`'s `openPackArchive` reads it as
+  `terminalScriptBytes`. Obsidian keeps it on disk and never runs it.
+- **`@markii/ansi` exports `defaultAnsiRegistry`**, so a host can merge
+  installed packs onto the standard set.
+
 ### Fixed
 
 - **The terminal status line names the active tab**, not the first one,

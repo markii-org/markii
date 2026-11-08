@@ -19,8 +19,14 @@
  *      `worker_threads` rather than resolved as a module, so it does not
  *      care about `package.json`'s (absent) `"type"` field.
  *
- * No `esbuild-wasm` copy here: the CLI loads no packs and carries no pack
- * compiler (see AGENTS.md's Host positioning and this app's own README).
+ * No `esbuild-wasm` copy here: the CLI carries no pack compiler. It loads
+ * prebuilt packs only (an installed `.mkp`, plus the bundled packs built
+ * below), see AGENTS.md's Host positioning and this app's own README.
+ *
+ * 3. `dist/packs/<name>/` — the bundled packs' terminal views, compiled at
+ *    build time by `src/packs/build-bundled-packs.ts` (bundled here to a
+ *    throwaway CJS file, like `apps/vscode/esbuild.config.mjs` does). The
+ *    compiler runs in this build script only; none of it ships.
  *
  * `@markii/*` resolves to each package's `src/`, exactly like
  * `scripts/workspace-aliases.config.ts` does for Vite/Vitest and like
@@ -31,6 +37,8 @@
  */
 import { build } from 'esbuild';
 import { chmodSync, copyFileSync, mkdirSync, readFileSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -224,6 +232,42 @@ function makeExecutable() {
   chmodSync(path.join(here, 'dist', 'markii.mjs'), 0o755);
 }
 
+/**
+ * Compiles the bundled packs' terminal views into `dist/packs`. The
+ * builder is TypeScript, so it is bundled to a throwaway CJS file and
+ * required once. `esbuild-wasm` stays external: `pack-build.ts` requires
+ * it at runtime from the repo's own `node_modules`.
+ */
+async function buildBundledPacks() {
+  const builderOutfile = path.join(here, 'dist', '.bundled-packs-builder.cjs');
+  const builderCacheDir = path.join(here, 'dist', '.bundled-packs-cache');
+  await build({
+    bundle: true,
+    alias: markiiSrcRoots,
+    entryPoints: [path.join(here, 'src', 'packs', 'build-bundled-packs.ts')],
+    outfile: builderOutfile,
+    platform: 'node',
+    format: 'cjs',
+    target: 'node18',
+    external: ['esbuild-wasm'],
+    logLevel: 'silent',
+    logOverride: { 'empty-import-meta': 'silent' },
+  });
+  const req = createRequire(import.meta.url);
+  const { buildBundledPacks: runBuilder } = req(builderOutfile);
+  try {
+    await runBuilder({
+      repoRoot,
+      outDir: path.join(here, 'dist', 'packs'),
+      cacheDir: builderCacheDir,
+    });
+  } finally {
+    await rm(builderOutfile, { force: true });
+    await rm(builderCacheDir, { recursive: true, force: true });
+  }
+}
+
 await Promise.all([build(cliBuild), build(workerBuild)]);
 copyWasmGlue();
+await buildBundledPacks();
 makeExecutable();

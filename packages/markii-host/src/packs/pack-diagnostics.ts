@@ -20,7 +20,7 @@
  * `apps/obsidian/src/packs/pack-diagnostics.ts` for each host's own wording
  * and thin wrapper around this function.
  */
-import { packComponents } from '@markii/pack';
+import { packComponents, packComponentsForEngine } from '@markii/pack';
 import type { PackManifest } from '@markii/pack';
 
 /** The minimal shape of one loaded pack this module needs — a structural subset of `./discover.ts`'s `DiscoveredPack`. */
@@ -37,6 +37,8 @@ export interface PackDiagnosticsSkippedFolder {
 export interface PackDiagnosticsContext {
   /** Every validated, non-colliding discovered pack. */
   readonly packs: readonly PackDiagnosticsPack[];
+  /** The renderer engine whose components the "Loaded pack" line counts. Absent counts every declared component. */
+  readonly engine?: string;
   /** Configured folders that produced no usable pack, and why. */
   readonly skipped: readonly PackDiagnosticsSkippedFolder[];
   /** Already-formatted lines, one per relative pack-folder-setting entry (host-specific wording — see this module's top doc comment). Defaults to none. */
@@ -65,17 +67,25 @@ export interface PackDiagnosticsContext {
   readonly droppedEngines?: readonly { name: string; engine: string }[];
 }
 
+/** The one line for a folder `discoverPacks` could not turn into a usable pack. */
+export function skippedPackFolderLine(
+  entry: PackDiagnosticsSkippedFolder,
+): string {
+  return `Skipped pack folder "${entry.folder}": ${entry.reason}`;
+}
+
 /** One line for each folder `discoverPacks`/a host's `loadPackContext` could not turn into a usable pack. */
 function skippedLines(context: PackDiagnosticsContext): string[] {
-  return context.skipped.map(
-    (entry) => `Skipped pack folder "${entry.folder}": ${entry.reason}`,
-  );
+  return context.skipped.map(skippedPackFolderLine);
 }
 
 /** One line for each pack that loaded successfully, naming what a user would want to confirm: its name, namespace, and how many components it registered. */
 function loadedLines(context: PackDiagnosticsContext): string[] {
   return context.packs.map((pack) => {
-    const componentCount = packComponents(pack.manifest).length;
+    const componentCount =
+      context.engine === undefined
+        ? packComponents(pack.manifest).length
+        : packComponentsForEngine(pack.manifest, context.engine).length;
     const plural = componentCount === 1 ? 'component' : 'components';
     return `Loaded pack "${pack.manifest.name}" (namespace: ${pack.manifest.name}, ${String(componentCount)} ${plural})`;
   });

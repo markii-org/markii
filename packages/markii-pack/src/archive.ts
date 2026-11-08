@@ -1,7 +1,7 @@
 /**
  * `.mkp` pack archives (docs/packs.md, issue #16): a zip of a pack's
  * PREBUILT form, files at the zip root — `pack.json`, `webview.js`,
- * `webview.css` when the pack has styles, `scripts/` when the pack ships
+ * `webview.css` when the pack has styles, `terminal.js` when it ships terminal views, `scripts/` when the pack ships
  * shared Lua. This is the reader half: given the raw bytes of a `.mkp`
  * file, validate it and expose its contents for read-only loading.
  *
@@ -44,6 +44,8 @@ import type { PackManifest } from './manifest.js';
 const MANIFEST_ENTRY = 'pack.json';
 const SCRIPT_ENTRY = 'webview.js';
 const STYLESHEET_ENTRY = 'webview.css';
+/** The optional terminal registration module (docs/packs.md). A pack with no terminal views has none. */
+const TERMINAL_ENTRY = 'terminal.js';
 const SCRIPTS_DIR_PREFIX = 'scripts/';
 
 /** Options bounding how much a single `.mkp` open is willing to materialize. Defaults match `@markii/bundle`'s own zip-bomb guard, since a pack archive is bounded the same way a bundle is. */
@@ -80,6 +82,8 @@ export interface PackArchiveContents {
   readonly scriptBytes: Uint8Array;
   /** The prebuilt stylesheet's bytes (`webview.css`), present only when the pack ships one. */
   readonly stylesheetBytes?: Uint8Array;
+  /** The prebuilt terminal registration module (`terminal.js`), present only when the pack ships terminal views. Hosts that run no terminal engine ignore it. */
+  readonly terminalScriptBytes?: Uint8Array;
   /** Shared Lua modules under `scripts/`, keyed by their path relative to that folder (e.g. `"http.lua"` for `scripts/http.lua`). Empty when the pack ships none. */
   readonly scriptModules: Readonly<Record<string, Uint8Array>>;
   /**
@@ -273,6 +277,11 @@ export async function openPackArchive(
     stylesheetBytes = await storage.read(STYLESHEET_ENTRY);
   }
 
+  let terminalScriptBytes: Uint8Array | undefined;
+  if (paths.includes(TERMINAL_ENTRY)) {
+    terminalScriptBytes = await storage.read(TERMINAL_ENTRY);
+  }
+
   const scriptModules: Record<string, Uint8Array> = Object.create(
     null,
   ) as Record<string, Uint8Array>;
@@ -282,7 +291,8 @@ export async function openPackArchive(
     if (
       path === MANIFEST_ENTRY ||
       path === SCRIPT_ENTRY ||
-      path === STYLESHEET_ENTRY
+      path === STYLESHEET_ENTRY ||
+      path === TERMINAL_ENTRY
     ) {
       continue;
     }
@@ -303,6 +313,7 @@ export async function openPackArchive(
       manifestWarnings: parsed.warnings,
       scriptBytes,
       ...(stylesheetBytes !== undefined ? { stylesheetBytes } : {}),
+      ...(terminalScriptBytes !== undefined ? { terminalScriptBytes } : {}),
       scriptModules,
       ignoredEntries,
     },

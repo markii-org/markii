@@ -137,4 +137,92 @@ describe('exportPackArchive', () => {
     });
     expect(outcome.kind).toBe('failed');
   });
+
+  describe('terminal script', () => {
+    const terminalPack = (): DiscoveredPack => ({
+      ...packAt('/src/ana', '1.2.0'),
+      componentPathsByEngine: {
+        react: { timeline: '/src/ana/Timeline.tsx' },
+        ansi: { timeline: '/src/ana/Timeline.ansi.tsx' },
+      },
+    });
+
+    it('carries terminal.js when buildTerminal is given and the pack names ansi sources', async () => {
+      const pack = terminalPack();
+      const fs = readOnlyFs({
+        '/src/ana/pack.json': JSON.stringify(pack.manifest),
+        '/cache/webview.js': 'web',
+        '/cache/terminal.js': 'term',
+      });
+      const outcome = await exportPackArchive({
+        pack,
+        cacheDir: '/cache',
+        build: async () => builtOutcome('/cache/webview.js'),
+        buildTerminal: async () => builtOutcome('/cache/terminal.js'),
+        fs,
+      });
+      if (outcome.kind !== 'built') throw new Error('expected built');
+      expect(outcome.terminalScriptBytes).toBe(4);
+      const unzipped = unzipSync(outcome.bytes);
+      expect(strFromU8(unzipped['terminal.js']!)).toBe('term');
+    });
+
+    it('does not build a terminal script for a pack with no ansi sources', async () => {
+      const pack = packAt('/src/ana');
+      let called = false;
+      const outcome = await exportPackArchive({
+        pack,
+        cacheDir: '/cache',
+        build: async () => builtOutcome('/cache/webview.js'),
+        buildTerminal: async () => {
+          called = true;
+          return builtOutcome('/cache/terminal.js');
+        },
+        fs: readOnlyFs({
+          '/src/ana/pack.json': '{}',
+          '/cache/webview.js': 'web',
+        }),
+      });
+      expect(outcome.kind).toBe('built');
+      expect(called).toBe(false);
+    });
+
+    it('writes an empty webview registration when only terminal views exist', async () => {
+      const pack = terminalPack();
+      const outcome = await exportPackArchive({
+        pack,
+        cacheDir: '/cache',
+        build: async () => ({ kind: 'skipped' }),
+        buildTerminal: async () => builtOutcome('/cache/terminal.js'),
+        fs: readOnlyFs({
+          '/src/ana/pack.json': JSON.stringify(pack.manifest),
+          '/cache/terminal.js': 'term',
+        }),
+      });
+      if (outcome.kind !== 'built') throw new Error('expected built');
+      const unzipped = unzipSync(outcome.bytes);
+      expect(strFromU8(unzipped['webview.js']!)).toContain(
+        '__markiiRegisterPack',
+      );
+      expect(strFromU8(unzipped['terminal.js']!)).toBe('term');
+    });
+
+    it('fails the export, naming the terminal build, when it fails', async () => {
+      const pack = terminalPack();
+      const outcome = await exportPackArchive({
+        pack,
+        cacheDir: '/cache',
+        build: async () => builtOutcome('/cache/webview.js'),
+        buildTerminal: async () => ({ kind: 'failed', reason: 'boom' }),
+        fs: readOnlyFs({
+          '/src/ana/pack.json': '{}',
+          '/cache/webview.js': 'web',
+        }),
+      });
+      expect(outcome).toMatchObject({
+        kind: 'failed',
+        reason: 'terminal build: boom',
+      });
+    });
+  });
 });

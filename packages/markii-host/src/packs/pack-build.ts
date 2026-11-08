@@ -185,6 +185,10 @@ export interface PackBuildSource {
   readonly manifest: PackManifest;
   /** Local component name -> absolute path to its declared source file (`manifest.components[name]`, resolved against `folder`). */
   readonly componentPaths: Readonly<Record<string, string>>;
+  /** Engine id -> (local component name -> absolute source path). A terminal build reads its `ansi` slice here; `componentPaths` stays the `react` slice. Absent means the pack names no sources for any other engine. */
+  readonly componentPathsByEngine?: Readonly<
+    Record<string, Readonly<Record<string, string>>>
+  >;
 }
 
 /** Reads a file's UTF-8 text, or resolves `undefined` if it does not exist / cannot be read. Never rejects for an ordinary "not found" — injected so this module needs no real filesystem to test. Structurally identical to `apps/vscode`'s own `PackFileReader` (`./discover.ts`), deliberately not shared by import: a host's discovery module and this builder are independent seams. */
@@ -403,9 +407,14 @@ const LAZY_GLOBAL_MODULES: ReadonlyMap<
 function lazyGlobalModuleSource(
   globalName: string,
   keys: readonly string[],
+  globalRoot: 'window' | 'globalThis' = 'window',
 ): string {
+  const rootRead =
+    globalRoot === 'window'
+      ? `(typeof window !== 'undefined' && window[${JSON.stringify(globalName)}])`
+      : `globalThis[${JSON.stringify(globalName)}]`;
   return [
-    `function __markiiTarget() { return (typeof window !== 'undefined' && window[${JSON.stringify(globalName)}]) || {}; }`,
+    `function __markiiTarget() { return ${rootRead} || {}; }`,
     `var __markiiKeys = ${JSON.stringify(keys)};`,
     'module.exports = new Proxy({}, {',
     '  get(_t, prop) {',
@@ -422,16 +431,56 @@ function lazyGlobalModuleSource(
   ].join('\n');
 }
 
+/** Every named export `ink` ships (the version this repo pins), the fixed key list the terminal build's lazy `ink` module reports. */
+const INK_KEYS = [
+  'Box',
+  'Newline',
+  'Spacer',
+  'Static',
+  'Text',
+  'Transform',
+  'measureElement',
+  'render',
+  'renderToString',
+  'useAnimation',
+  'useApp',
+  'useBoxMetrics',
+  'useCursor',
+  'useFocus',
+  'useFocusManager',
+  'useInput',
+  'useIsScreenReaderEnabled',
+  'usePaste',
+  'useStderr',
+  'useStdin',
+  'useStdout',
+  'useWindowSize',
+];
+
+type LazyGlobalModules = ReadonlyMap<
+  string,
+  { readonly globalName: string; readonly keys: readonly string[] }
+>;
+
+/** The terminal build's redirected imports: `react` and `ink` read the instances the CLI's engine publishes on `globalThis` (`@markii/ansi`'s `installTerminalPackGlobals`). */
+const TERMINAL_LAZY_GLOBAL_MODULES: LazyGlobalModules = new Map([
+  ['react', { globalName: '__markiiReactInk', keys: REACT_KEYS }],
+  ['ink', { globalName: '__markiiInk', keys: INK_KEYS }],
+]);
+
 const LAZY_GLOBAL_NAMESPACE = 'markii-lazy-global';
 
-/** An esbuild plugin that intercepts `import ... from 'react'` (and the other `LAZY_GLOBAL_MODULES` specifiers) and serves `lazyGlobalModuleSource` instead — so the compiled script never bundles its own copy of React, and never reads `window.__markiiReact` outside a getter/proxy trap. */
-function lazyGlobalModulePlugin(): Plugin {
-  const specifiers = new Set(LAZY_GLOBAL_MODULES.keys());
+/** An esbuild plugin that intercepts `import ... from 'react'` (and the other specifiers in `modules`) and serves `lazyGlobalModuleSource` instead — so the compiled script never bundles its own copy of React, and never reads the global outside a getter/proxy trap. */
+function lazyGlobalModulePlugin(
+  modules: LazyGlobalModules = LAZY_GLOBAL_MODULES,
+  globalRoot: 'window' | 'globalThis' = 'window',
+): Plugin {
+  const specifiers = new Set(modules.keys());
   return {
     name: 'markii-lazy-global',
     setup(build) {
       build.onResolve(
-        { filter: /^react(-dom)?(\/.*)?$/ },
+        { filter: /^(react|react-dom|ink)(\/.*)?$/ },
         (args: OnResolveArgs): OnResolveResult | undefined => {
           if (!specifiers.has(args.path)) return undefined;
           return { path: args.path, namespace: LAZY_GLOBAL_NAMESPACE };
@@ -440,7 +489,7 @@ function lazyGlobalModulePlugin(): Plugin {
       build.onLoad(
         { filter: /.*/, namespace: LAZY_GLOBAL_NAMESPACE },
         (args: OnLoadArgs): OnLoadResult => {
-          const entry = LAZY_GLOBAL_MODULES.get(args.path);
+          const entry = modules.get(args.path);
           const resolved = entry ?? {
             globalName: '__markiiReact',
             keys: REACT_KEYS,
@@ -449,6 +498,7 @@ function lazyGlobalModulePlugin(): Plugin {
             contents: lazyGlobalModuleSource(
               resolved.globalName,
               resolved.keys,
+              globalRoot,
             ),
             loader: 'js',
           };
@@ -685,13 +735,26 @@ const JSX_SHIM_SOURCE = [
   '',
 ].join('\n');
 
+/** The engine id whose sources the webview build compiles (`@markii/react`'s `REACT_ENGINE_ID`, kept local so this module imports no renderer). */
+const WEBVIEW_ENGINE = 'react';
+
+/** The engine id whose sources the terminal build compiles (`@markii/ansi`'s `ANSI_ENGINE_ID`). */
+const TERMINAL_ENGINE = 'ansi';
+
 /** One component's declared local name and the absolute path to its source, in `manifest.components` declaration order. Reads the manifest through `@markii/pack`'s `packComponents()` (the one accessor that normalizes both the string shorthand and the object form) rather than walking `pack.manifest.components` directly. */
 function orderedComponents(
   pack: PackBuildSource,
+  engine: string = WEBVIEW_ENGINE,
 ): Array<{ localName: string; sourcePath: string }> {
+  const paths =
+    engine === WEBVIEW_ENGINE
+      ? pack.componentPaths
+      : (pack.componentPathsByEngine?.[engine] ?? {});
   const result: Array<{ localName: string; sourcePath: string }> = [];
   for (const listing of packComponents(pack.manifest)) {
-    const sourcePath = pack.componentPaths[listing.localName];
+    const sourcePath = Object.hasOwn(paths, listing.localName)
+      ? paths[listing.localName]
+      : undefined;
     if (sourcePath === undefined) continue;
     result.push({ localName: listing.localName, sourcePath });
   }
@@ -761,6 +824,82 @@ function entrySource(
     '    __markiiEntries[__markiiLocalName] = { component: __markiiComponents[__markiiLocalName], inline: __markiiInline[__markiiLocalName] === true };',
     '  }',
     `  window.__markiiRegisterPack(${manifestJsonLiteral}, __markiiEntries);`,
+    '}',
+    '',
+  ].join('\n');
+}
+
+/**
+ * The terminal build's JSX shim: the same lazy-getter shape as
+ * `JSX_SHIM_SOURCE`, over `globalThis.__markiiReactInk` (the React instance
+ * Ink uses). Read only when a JSX expression evaluates inside a render-time
+ * function, so evaluating `terminal.js` with the global undefined never throws.
+ */
+const TERMINAL_JSX_SHIM_SOURCE = [
+  'export var __markiiJSX = {',
+  '  get createElement() {',
+  '    return (globalThis.__markiiReactInk || {}).createElement;',
+  '  },',
+  '  get Fragment() {',
+  '    return (globalThis.__markiiReactInk || {}).Fragment;',
+  '  },',
+  '};',
+  '',
+].join('\n');
+
+/**
+ * The synthetic entry of a terminal build: the same component picking as
+ * `entrySource`, ending in `globalThis.__markiiRegisterTerminalPack(
+ * manifestJson, modules)` instead of the webview's `window` call. Calls the
+ * hook when it is a function; a bare evaluation outside a host does nothing.
+ */
+function terminalEntrySource(
+  pack: PackBuildSource,
+  components: ReadonlyArray<{ localName: string; sourcePath: string }>,
+): string {
+  const imports = components
+    .map(
+      (c, i) =>
+        `import * as __markiiMod${i} from ${JSON.stringify(c.sourcePath)};`,
+    )
+    .join('\n');
+  const picks = components
+    .map(
+      (c, i) =>
+        `  ${JSON.stringify(c.localName)}: __markiiPick(__markiiMod${i}),`,
+    )
+    .join('\n');
+  const manifestJsonLiteral = JSON.stringify(JSON.stringify(pack.manifest));
+  const inlineNames = packComponents(pack.manifest)
+    .filter((listing) => listing.kind === 'inline')
+    .map((listing) => listing.localName);
+  const inlineMapLiteral = JSON.stringify(
+    Object.fromEntries(inlineNames.map((name) => [name, true])),
+  );
+  return [
+    imports,
+    '',
+    'function __markiiPick(mod) {',
+    "  if (mod && typeof mod['default'] === 'function') return mod['default'];",
+    '  for (var key in mod) {',
+    "    if (Object.prototype.hasOwnProperty.call(mod, key) && typeof mod[key] === 'function') return mod[key];",
+    '  }',
+    '  return undefined;',
+    '}',
+    '',
+    'var __markiiComponents = {',
+    picks,
+    '};',
+    '',
+    "if (typeof globalThis.__markiiRegisterTerminalPack === 'function') {",
+    '  var __markiiEntries = {};',
+    `  var __markiiInline = ${inlineMapLiteral};`,
+    '  for (var __markiiLocalName in __markiiComponents) {',
+    '    if (!Object.prototype.hasOwnProperty.call(__markiiComponents, __markiiLocalName)) continue;',
+    "    if (typeof __markiiComponents[__markiiLocalName] !== 'function') continue;",
+    '    __markiiEntries[__markiiLocalName] = { component: __markiiComponents[__markiiLocalName], inline: __markiiInline[__markiiLocalName] === true };',
+    '  }',
+    `  globalThis.__markiiRegisterTerminalPack(${manifestJsonLiteral}, __markiiEntries);`,
     '}',
     '',
   ].join('\n');
@@ -1030,14 +1169,47 @@ const defaultReadComponentSource: PackFileReader = async (absolutePath) => {
  * figures), and a warm preview open must not pay that cost on every panel
  * (re)creation.
  */
-export async function buildPackRegistrationScript(
+export function buildPackRegistrationScript(
   pack: PackBuildSource,
   cacheDir: string,
   options: PackBuildOptions = {},
 ): Promise<PackBuildOutcome> {
+  return buildPackScript(pack, cacheDir, options, 'webview');
+}
+
+/**
+ * Builds (or reuses a cached build of) one pack's TERMINAL script
+ * (`terminal.js`): the `ansi` sources of every component that names one,
+ * compiled through the same esbuild-wasm in-process path, as one
+ * self-contained ESM module (no imports: the loader evaluates it from a
+ * `data:` URL). `react` and `ink` imports and JSX read the instances the
+ * CLI publishes on `globalThis` (`__markiiReactInk`, `__markiiInk`), only
+ * inside render-time functions. The output ends by calling
+ * `globalThis.__markiiRegisterTerminalPack(manifestJson, components)`.
+ * Returns `'skipped'` when no component names an `ansi` source. A CSS
+ * import in a terminal source is compiled away and ignored. Never throws.
+ */
+export function buildPackTerminalScript(
+  pack: PackBuildSource,
+  cacheDir: string,
+  options: PackBuildOptions = {},
+): Promise<PackBuildOutcome> {
+  return buildPackScript(pack, cacheDir, options, 'terminal');
+}
+
+async function buildPackScript(
+  pack: PackBuildSource,
+  cacheDir: string,
+  options: PackBuildOptions,
+  kind: 'webview' | 'terminal',
+): Promise<PackBuildOutcome> {
+  const terminal = kind === 'terminal';
   const readComponentSource =
     options.readComponentSource ?? defaultReadComponentSource;
-  const components = orderedComponents(pack);
+  const components = orderedComponents(
+    pack,
+    terminal ? TERMINAL_ENGINE : WEBVIEW_ENGINE,
+  );
 
   // A pack whose manifest declares no components at all (`"components":
   // {}`) is a shared-Lua-only pack module: it has nothing for esbuild-wasm
@@ -1085,7 +1257,7 @@ export async function buildPackRegistrationScript(
   // source genuinely needs it, `virtualSourcePlugin` below will fail the
   // build on it with a proper reason.
   const cssSources = new Map<string, string>();
-  for (const [sourcePath, source] of sources) {
+  for (const [sourcePath, source] of terminal ? [] : sources) {
     for (const cssPath of staticCssImportPaths(
       source,
       path.dirname(sourcePath),
@@ -1108,7 +1280,7 @@ export async function buildPackRegistrationScript(
     return { kind: 'failed', reason: describeThrown(err) };
   }
 
-  const cacheBaseName = `${safeCacheBaseName(pack)}-${cacheKey}`;
+  const cacheBaseName = `${safeCacheBaseName(pack)}${terminal ? '-terminal' : ''}-${cacheKey}`;
   const cachePath = path.join(cacheDir, `${cacheBaseName}.js`);
   const cssCachePath = path.join(cacheDir, `${cacheBaseName}.css`);
   const sidecarPath = path.join(cacheDir, `${cacheBaseName}.sources.json`);
@@ -1151,7 +1323,7 @@ export async function buildPackRegistrationScript(
   const fileContents = new Map<string, string>([
     ...sources,
     ...cssSources,
-    [jsxShimPath, JSX_SHIM_SOURCE],
+    [jsxShimPath, terminal ? TERMINAL_JSX_SHIM_SOURCE : JSX_SHIM_SOURCE],
   ]);
   const virtualOnlyPaths = new Set<string>([jsxShimPath]);
 
@@ -1175,7 +1347,9 @@ export async function buildPackRegistrationScript(
   try {
     const result = await build({
       stdin: {
-        contents: entrySource(pack, components),
+        contents: terminal
+          ? terminalEntrySource(pack, components)
+          : entrySource(pack, components),
         resolveDir: pack.folder,
         sourcefile: `${pack.manifest.name}-pack-entry.js`,
         loader: 'js',
@@ -1208,12 +1382,12 @@ export async function buildPackRegistrationScript(
       // is never reached at all; this option is kept anyway as a second,
       // independent guard against the same failure mode.
       absWorkingDir: pack.folder,
-      format: 'iife',
-      platform: 'browser',
+      format: terminal ? 'esm' : 'iife',
+      platform: terminal ? 'neutral' : 'browser',
       // VS Code 1.90 ships Electron 29 / Chromium 122 (matches
       // esbuild.config.mjs's webviewBuild target); the same target is a
       // safe floor for any other browser-embedded host too.
-      target: 'chrome122',
+      target: terminal ? 'node22' : 'chrome122',
       jsx: 'transform',
       jsxFactory: '__markiiJSX.createElement',
       jsxFragment: '__markiiJSX.Fragment',
@@ -1240,7 +1414,9 @@ export async function buildPackRegistrationScript(
       // entry or not — that references it as a free variable.
       inject: [jsxShimPath],
       plugins: [
-        lazyGlobalModulePlugin(),
+        terminal
+          ? lazyGlobalModulePlugin(TERMINAL_LAZY_GLOBAL_MODULES, 'globalThis')
+          : lazyGlobalModulePlugin(),
         virtualSourcePlugin(
           pack.manifest.name,
           fileContents,
@@ -1267,9 +1443,9 @@ export async function buildPackRegistrationScript(
       };
     }
     scriptText = output.text;
-    stylesheetText = outputFiles
-      .slice(1)
-      .find((file) => file.path.endsWith('.css'))?.text;
+    stylesheetText = terminal
+      ? undefined
+      : outputFiles.slice(1).find((file) => file.path.endsWith('.css'))?.text;
   } catch (err) {
     return { kind: 'failed', reason: describeThrown(err) };
   }

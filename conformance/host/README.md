@@ -51,6 +51,7 @@ needs, is the runner's own `ACTION_CAPABILITY` map:
 | `exportAnsi` | `export-format` (`ansi`) |
 | `installPack` | `packs` (and an `installRoot`) |
 | `loadPacks` | `packs` |
+| `removePack` | `packs` (and an `installRoot` plus `removeFolder`) |
 | `completeAt` | `editor` |
 | `hoverAt` | `editor` |
 | `insertComponent` | `editor` |
@@ -173,12 +174,12 @@ whose capability this adapter declares, the outcome equals
 `expected.json`'s; for every other action, the outcome is exactly the
 `unsupported` record.
 
-This is what lets the CLI — which declares no `editor` and no `packs` —
+This is what lets the CLI, which declares no `editor`,
 run the whole corpus honestly: its result records say `unsupported`
 where it genuinely offers nothing, which is the truth and is visible,
 rather than a skipped test or a faked empty answer.
 
-## The twelve scenarios
+## The fourteen scenarios
 
 | id | what it proves |
 |---|---|
@@ -194,6 +195,8 @@ rather than a skipped test or a faked empty answer.
 | `10-scripts-disabled` | the device switch blocks the run before the isolate, and says so on both surfaces |
 | `11-complete-closing-fence` | a bare colon run that closes an open container offers nothing, as `none` rather than a failure |
 | `12-complete-nested-container` | completing a container inside an equal-length container carries the fence edits that keep the pair legal |
+| `13-install-pack-declined` | declining the install consent writes nothing, and removing the never-installed pack reports it |
+| `14-remove-pack` | removing an installed pack deletes it; removing it again reports it is not installed |
 
 See `tmp/W11-phase3.md` for which capabilities each of the three real
 adapters currently declares, and which scenarios are consequently

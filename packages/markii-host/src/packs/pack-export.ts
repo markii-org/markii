@@ -28,6 +28,8 @@ import type { PackBuildOutcome } from './pack-build.js';
 import {
   PREBUILT_SCRIPT_FILENAME,
   PREBUILT_STYLESHEET_FILENAME,
+  PREBUILT_TERMINAL_SCRIPT_FILENAME,
+  emptyWebviewScript,
 } from './prebuilt.js';
 
 const MANIFEST_FILENAME = 'pack.json';
@@ -72,6 +74,8 @@ export interface ExportPackOptions {
   /** The folder name to create inside `destinationDir` — a host defaults this to the pack's own name, but it is user-editable, so it is validated exactly like every other path segment (see `resolveExportTarget`). */
   readonly exportName: string;
   readonly build: PackExportBuilder;
+  /** Builds the terminal script; when given and the pack names `ansi` sources, `terminal.js` is written beside `webview.js`. */
+  readonly buildTerminal?: PackExportBuilder;
   readonly fs: PackExportFs;
   readonly confirmOverwrite: ConfirmPackOverwrite;
 }
@@ -86,6 +90,8 @@ export type PackExportOutcome =
       readonly manifestBytes: number;
       readonly scriptPath: string;
       readonly scriptBytes: number;
+      readonly terminalScriptPath?: string;
+      readonly terminalScriptBytes?: number;
       readonly stylesheetPath?: string;
       readonly stylesheetBytes?: number;
       /** Set when a stale webview.css from an earlier export was removed because this build emitted no stylesheet. */
@@ -165,6 +171,7 @@ export async function exportPack(
     destinationDir,
     exportName,
     build,
+    buildTerminal,
     fs,
     confirmOverwrite,
   } = options;
@@ -191,6 +198,10 @@ export async function exportPack(
     destinationFolder,
     PREBUILT_STYLESHEET_FILENAME,
   );
+  const terminalTarget = resolveExportTarget(
+    destinationFolder,
+    PREBUILT_TERMINAL_SCRIPT_FILENAME,
+  );
   const scriptsDirTarget = resolveExportTarget(
     destinationFolder,
     SCRIPTS_DIRNAME,
@@ -199,6 +210,7 @@ export async function exportPack(
     manifestTarget === undefined ||
     scriptTarget === undefined ||
     stylesheetTarget === undefined ||
+    terminalTarget === undefined ||
     scriptsDirTarget === undefined
   ) {
     return {
@@ -235,30 +247,67 @@ export async function exportPack(
     // reworded on this path.
     return { kind: 'failed', packName, reason: outcome.reason };
   }
-  if (outcome.kind === 'skipped') {
-    return {
-      kind: 'failed',
-      packName,
-      reason: `pack "${packName}" was not built`,
-    };
+
+  let terminalText: string | undefined;
+  const hasTerminalSources =
+    Object.keys(pack.componentPathsByEngine?.['ansi'] ?? {}).length > 0;
+  if (buildTerminal !== undefined && hasTerminalSources) {
+    let terminalOutcome: PackBuildOutcome;
+    try {
+      terminalOutcome = await buildTerminal(pack, cacheDir);
+    } catch (err) {
+      return { kind: 'failed', packName, reason: describeThrown(err) };
+    }
+    if (terminalOutcome.kind === 'failed') {
+      return {
+        kind: 'failed',
+        packName,
+        reason: `terminal build: ${terminalOutcome.reason}`,
+      };
+    }
+    if (terminalOutcome.kind === 'built') {
+      try {
+        terminalText = await fs.readFile(terminalOutcome.scriptPath);
+      } catch {
+        terminalText = undefined;
+      }
+      if (terminalText === undefined) {
+        return {
+          kind: 'failed',
+          packName,
+          reason: `built terminal script for pack "${packName}" could not be read back`,
+        };
+      }
+    }
   }
 
   let scriptText: string | undefined;
-  try {
-    scriptText = await fs.readFile(outcome.scriptPath);
-  } catch (err) {
-    return { kind: 'failed', packName, reason: describeThrown(err) };
-  }
-  if (scriptText === undefined) {
-    return {
-      kind: 'failed',
-      packName,
-      reason: `built script for pack "${packName}" could not be read back`,
-    };
+  if (outcome.kind === 'skipped') {
+    if (terminalText === undefined) {
+      return {
+        kind: 'failed',
+        packName,
+        reason: `pack "${packName}" was not built`,
+      };
+    }
+    scriptText = emptyWebviewScript(JSON.stringify(pack.manifest));
+  } else {
+    try {
+      scriptText = await fs.readFile(outcome.scriptPath);
+    } catch (err) {
+      return { kind: 'failed', packName, reason: describeThrown(err) };
+    }
+    if (scriptText === undefined) {
+      return {
+        kind: 'failed',
+        packName,
+        reason: `built script for pack "${packName}" could not be read back`,
+      };
+    }
   }
 
   let stylesheetText: string | undefined;
-  if (outcome.stylesheetPath !== undefined) {
+  if (outcome.kind === 'built' && outcome.stylesheetPath !== undefined) {
     try {
       stylesheetText = await fs.readFile(outcome.stylesheetPath);
     } catch {
@@ -305,6 +354,7 @@ export async function exportPack(
     const candidates = [
       manifestTarget,
       scriptTarget,
+      ...(terminalText !== undefined ? [terminalTarget] : []),
       ...(stylesheetText !== undefined ? [stylesheetTarget] : []),
       ...luaFiles.map((file) => file.target),
     ];
@@ -318,6 +368,9 @@ export async function exportPack(
       // counts as "a file this export would replace".
       if (stylesheetText === undefined && (await fs.exists(stylesheetTarget))) {
         existingPaths.push(stylesheetTarget);
+      }
+      if (terminalText === undefined && (await fs.exists(terminalTarget))) {
+        existingPaths.push(terminalTarget);
       }
     } catch (err) {
       return { kind: 'failed', packName, reason: describeThrown(err) };
@@ -341,6 +394,13 @@ export async function exportPack(
 
     await fs.writeFile(manifestTarget, manifestText);
     await fs.writeFile(scriptTarget, scriptText);
+    if (terminalText !== undefined) {
+      await fs.writeFile(terminalTarget, terminalText);
+    } else if (await fs.exists(terminalTarget)) {
+      // A stale terminal.js from an earlier export would otherwise keep
+      // rendering views this build no longer has.
+      await fs.deleteFile(terminalTarget);
+    }
 
     let stylesheetBytes: number | undefined;
     let removedStylesheetPath: string | undefined;
@@ -369,12 +429,18 @@ export async function exportPack(
       manifestBytes: Buffer.byteLength(manifestText, 'utf8'),
       scriptPath: scriptTarget,
       scriptBytes: Buffer.byteLength(scriptText, 'utf8'),
+      ...(terminalText !== undefined
+        ? {
+            terminalScriptPath: terminalTarget,
+            terminalScriptBytes: Buffer.byteLength(terminalText, 'utf8'),
+          }
+        : {}),
       ...(stylesheetText !== undefined
         ? { stylesheetPath: stylesheetTarget, stylesheetBytes }
         : {}),
       ...(removedStylesheetPath !== undefined ? { removedStylesheetPath } : {}),
       scriptFilesCopied: luaFiles.length,
-      warnings: outcome.warnings,
+      warnings: outcome.kind === 'built' ? outcome.warnings : [],
     };
   } catch (err) {
     return { kind: 'failed', packName, reason: describeThrown(err) };

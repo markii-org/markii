@@ -4,7 +4,7 @@
  * `main.ts` owns the real implementation (it is the only module allowed to
  * read `process`); this module only declares the shape.
  */
-import type { AnsiValueStore } from '@markii/ansi';
+import type { AnsiRegistry, AnsiValueStore } from '@markii/ansi';
 import type { OnDiagnostic } from '@markii/stdlib';
 import type { BoxFlag, ColorFlag } from './args.js';
 import type { Terminal } from './terminal.js';
@@ -16,6 +16,8 @@ export interface MountLiveViewerInput {
   readonly colorFlag?: ColorFlag;
   readonly boxFlag?: BoxFlag;
   readonly store: AnsiValueStore;
+  /** The standard set plus any loaded terminal packs. Absent, the standard set. */
+  readonly registry?: AnsiRegistry;
   readonly onDiagnostic: OnDiagnostic;
   /**
    * `--watch`: registers a listener the caller calls with the note's new

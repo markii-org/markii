@@ -38,7 +38,20 @@ import {
 } from './pack-install.js';
 import { loadPacksViaAdapter } from './pack-load.js';
 import { buildComponentCatalog } from '../insert/component-catalog.js';
-import { formatPackDiagnosticLines } from '../packs/pack-diagnostics.js';
+import {
+  formatPackDiagnosticLines,
+  skippedPackFolderLine,
+} from '../packs/pack-diagnostics.js';
+import type { DiscoveredPack, SkippedPackFolder } from '../packs/discover.js';
+import {
+  readTerminalPackScripts,
+  type TerminalPackScript,
+} from './terminal-packs.js';
+import {
+  removePackDiagnosticLine,
+  removePackViaAdapter,
+  type RemovePackOutcome,
+} from './pack-remove.js';
 import { formatComponentDocumentation } from '@markii/stdlib/editor';
 import {
   exportDiagnosticLines,
@@ -128,8 +141,36 @@ export type InstallPackOutcome =
   | Unsupported;
 
 export type LoadPacksOutcome =
-  | { readonly kind: 'loaded'; readonly namespaces: readonly string[] }
+  | {
+      readonly kind: 'loaded';
+      readonly namespaces: readonly string[];
+      /** The discovered, engine-gated packs themselves, for a host that loads their code. */
+      readonly packs: readonly DiscoveredPack[];
+      /** Folders that produced no usable pack, each with its reason. */
+      readonly skipped: readonly SkippedPackFolder[];
+    }
   | Unsupported;
+
+export type LoadTerminalPacksOutcome =
+  | {
+      readonly kind: 'loaded';
+      readonly namespaces: readonly string[];
+      readonly packs: readonly DiscoveredPack[];
+      readonly skipped: readonly SkippedPackFolder[];
+      /** Each terminal-capable pack's `terminal.js` text, for the engine's own loader. */
+      readonly scripts: readonly TerminalPackScript[];
+      /**
+       * The diagnostics lines that report a real failure (an unusable pack
+       * folder, a missing or unreadable `terminal.js`), as opposed to the
+       * informational ones. Every line is also written to the diagnostics
+       * surface; a host that gates informational lines behind a flag still
+       * shows these.
+       */
+      readonly failureLines: readonly string[];
+    }
+  | Unsupported;
+
+export type RemovePackResult = RemovePackOutcome | Unsupported;
 
 // --- editor seam -----------------------------------------------------
 
@@ -206,6 +247,14 @@ export interface MarkiiHost {
   exportNote(request: ExportRequest): Promise<ExportOutcome>;
   installPack(request: InstallPackRequest): Promise<InstallPackOutcome>;
   loadPacks(): Promise<LoadPacksOutcome>;
+  /**
+   * `loadPacks` for a host running the terminal engine: also reads each
+   * pack's `terminal.js`. Unsupported unless the adapter's pack source
+   * declares the `ansi` engine.
+   */
+  loadTerminalPacks(): Promise<LoadTerminalPacksOutcome>;
+  /** Removes one installed pack by namespace, through the install root. Writes its outcome to the diagnostics surface. */
+  removePack(namespace: string): Promise<RemovePackResult>;
   completeAt(request: EditorPositionRequest): Promise<CompleteOutcome>;
   /**
    * `completeAt` for a caller that must answer synchronously (Obsidian's
@@ -405,11 +454,81 @@ export function createMarkiiHost(
       for (const line of formatPackDiagnosticLines({
         packs: result.packs,
         skipped: result.skipped,
+        engine: adapter.packs.engine ?? 'react',
         cssWarnings: [],
       })) {
         adapter.diagnostics(line);
       }
-      return { kind: 'loaded', namespaces: result.namespaces };
+      return {
+        kind: 'loaded',
+        namespaces: result.namespaces,
+        packs: result.packs,
+        skipped: result.skipped,
+      };
+    },
+
+    async loadTerminalPacks(): Promise<LoadTerminalPacksOutcome> {
+      if (!adapter.packs) {
+        return unsupported(
+          adapter,
+          'packs',
+          'this host has no pack folders configured.',
+        );
+      }
+      if (adapter.packs.engine !== 'ansi') {
+        return unsupported(
+          adapter,
+          'packs',
+          'this host does not run the terminal engine, so it has no terminal packs.',
+        );
+      }
+      catalogCache.invalidate();
+      const result = await loadPacksViaAdapter(adapter.packs);
+      const read = await readTerminalPackScripts(adapter, result.packs);
+      for (const line of formatPackDiagnosticLines({
+        packs: result.packs,
+        skipped: result.skipped,
+        engine: 'ansi',
+        cssWarnings: [],
+      })) {
+        adapter.diagnostics(line);
+      }
+      for (const line of read.problems) adapter.diagnostics(line);
+      const failureLines = [
+        ...result.skipped
+          .filter((entry) => entry.engineUnsupported === undefined)
+          .map(skippedPackFolderLine),
+        ...read.problems,
+      ];
+      return {
+        kind: 'loaded',
+        namespaces: result.namespaces,
+        packs: result.packs,
+        skipped: result.skipped,
+        scripts: read.scripts,
+        failureLines,
+      };
+    },
+
+    async removePack(namespace: string): Promise<RemovePackResult> {
+      const packs = adapter.packs;
+      if (!packs?.installRoot || !packs.removeFolder) {
+        return unsupported(
+          adapter,
+          'packs',
+          'this host has no pack-install destination configured.',
+        );
+      }
+      const outcome = await removePackViaAdapter(
+        adapter,
+        namespace,
+        packs.installRoot(),
+        packs.removeFolder.bind(packs),
+        packs.reservedNamespaces(),
+      );
+      catalogCache.invalidate();
+      adapter.diagnostics(removePackDiagnosticLine(outcome));
+      return outcome;
     },
 
     async completeAt(request: EditorPositionRequest): Promise<CompleteOutcome> {

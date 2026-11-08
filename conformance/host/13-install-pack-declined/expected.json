@@ -1,0 +1,12 @@
+{
+  "outcomes": [
+    { "kind": "opened" },
+    { "kind": "declined", "step": "consent" },
+    { "kind": "not-installed", "namespace": "ana" }
+  ],
+  "diagnostics": [
+    "Install pack from file cancelled for",
+    "Remove pack found no installed pack \"ana\""
+  ],
+  "prompts": ["Installing \"ana\" lets its code run inside"]
+}

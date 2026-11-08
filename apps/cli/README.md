@@ -120,6 +120,29 @@ Exports a note to a file. Both `--format` and `-o`/`--output` are required.
 whatever values the note last produced, exactly like `markii view`
 without running.
 
+### `markii pack install <file.mkp>`, `markii pack list`, `markii pack remove <namespace>`
+
+Component packs add directives of their own. A pack can carry terminal
+views next to its React ones, and `markii view` and `markii export --format
+ansi` draw those. A pack component with no terminal view renders as the
+unknown-component box, and so does every pack directive in an HTML export.
+The packs `read`, `dash` and `prep` ship with the CLI; their names cannot
+be installed over or removed.
+
+`markii pack install` installs a `.mkp` archive. It checks the archive
+first, then asks:
+
+```
+Installing "ana" lets its code run inside the rendered note. Only install a pack from someone you trust. In the terminal this code runs with all the permissions of your user account. [y/N]
+```
+
+Installing over a pack that is already there asks again. When stdin is not
+a terminal, the install is refused unless you pass `--yes`. `--yes` answers
+only these two questions; it never grants network access to a note.
+
+`markii pack list` shows what is installed, and `markii pack remove`
+deletes one pack.
+
 ### `markii run <file>`
 
 Runs a note's scripts once, at the manual tier, and exits. For each
@@ -148,6 +171,11 @@ in a per-platform, per-device directory:
 | macOS    | `~/Library/Application Support/markii`                         |
 | Windows  | `%APPDATA%/markii`                                             |
 
+Installed packs live beside it, in a `packs` folder with one folder per
+namespace. Those folders and the packs that ship with the CLI are the only
+places pack code is loaded from: never a note, a bundle, the current
+directory, or an environment variable.
+
 That file holds the network grants you gave by hand, each note's last-run
 values, its bundle cache snapshot, and the outcome of its last run. It is
 created with restrictive permissions and is never synced or shared by the
@@ -159,9 +187,10 @@ empty states until you run it again.
 
 Everything that is not the rendered note or the exported file goes to
 stderr: a run's failures, a note's declared-vs-actual network mismatches,
-and render-time notices. `markii run` always prints these. `markii view`
-prints only a one-line marker per script failure by default; pass
-`--verbose` for the full detail.
+render-time notices, and packs that could not load. `markii run` always
+prints these. `markii view` prints only a one-line marker per script
+failure by default, plus one line for each pack that failed to load; pass
+`--verbose` for the full detail and for the list of packs that loaded.
 
 ## Exit codes
 
@@ -174,9 +203,8 @@ prints only a one-line marker per script failure by default; pass
 
 ## Ceilings
 
-- **No packs.** The CLI loads no component packs. A pack directive renders
-  as the unknown-component fallback, which is the same ceiling the editor
-  hosts' static HTML export has, and the note stays readable either way.
+- **Pack views are static.** A pack's terminal view is drawn once, as a
+  snapshot: it cannot take focus or react to keys in the live viewer.
 - **`md-plain` is a downgrade, not a render.** It rewrites the note's own
   source text: a container directive loses its opening and closing fence
   lines but keeps its inner markdown, a leaf directive is removed, a text

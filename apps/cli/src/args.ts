@@ -42,6 +42,19 @@ export type ParsedCommand =
       readonly file: string;
       readonly verbose: boolean;
     }
+  | {
+      readonly kind: 'pack-install';
+      readonly file: string;
+      /** `--yes`: consent to the install without being asked. */
+      readonly yes: boolean;
+      readonly verbose: boolean;
+    }
+  | { readonly kind: 'pack-list'; readonly verbose: boolean }
+  | {
+      readonly kind: 'pack-remove';
+      readonly namespace: string;
+      readonly verbose: boolean;
+    }
   | { readonly kind: 'help' }
   | { readonly kind: 'version' }
   | { readonly kind: 'usage-error'; readonly message: string };
@@ -92,6 +105,7 @@ interface Flags {
   noRun: boolean;
   static: boolean;
   watch: boolean;
+  yes: boolean;
   format?: ExportFormat;
   output?: string;
 }
@@ -105,8 +119,15 @@ interface Flags {
  * collected as positional/flag tokens in original order so flags may appear
  * before or after the subcommand.
  */
-function isKnownSubcommand(token: string): token is 'view' | 'export' | 'run' {
-  return token === 'view' || token === 'export' || token === 'run';
+function isKnownSubcommand(
+  token: string,
+): token is 'view' | 'export' | 'run' | 'pack' {
+  return (
+    token === 'view' ||
+    token === 'export' ||
+    token === 'run' ||
+    token === 'pack'
+  );
 }
 
 /**
@@ -127,6 +148,7 @@ function parseTokens(
     noRun: false,
     static: false,
     watch: false,
+    yes: false,
   };
   const positionals: string[] = [];
   let onlyPositionals = false;
@@ -164,6 +186,10 @@ function parseTokens(
         continue;
       case '--watch':
         flags.watch = true;
+        continue;
+      case '--yes':
+      case '-y':
+        flags.yes = true;
         continue;
       case '--width': {
         const value = tokens[++i];
@@ -261,10 +287,42 @@ export function parseArgs(argv: readonly string[]): ParsedCommand {
     // usage error.
     if (positionals.length > 0 || argv.length > 0) {
       return usageError(
-        `unknown subcommand ${JSON.stringify(first)}; expected view, export, or run`,
+        `unknown subcommand ${JSON.stringify(first)}; expected view, export, run, or pack`,
       );
     }
     return { kind: 'help' };
+  }
+
+  if (subcommand === 'pack') {
+    const action = positionals[0];
+    const rest = positionals.slice(1);
+    if (action === 'install') {
+      const file = rest[0];
+      if (file === undefined) {
+        return usageError('markii pack install requires a .mkp file argument');
+      }
+      return {
+        kind: 'pack-install',
+        file,
+        yes: flags.yes,
+        verbose: flags.verbose,
+      };
+    }
+    if (action === 'list') {
+      return { kind: 'pack-list', verbose: flags.verbose };
+    }
+    if (action === 'remove') {
+      const namespace = rest[0];
+      if (namespace === undefined) {
+        return usageError('markii pack remove requires a pack namespace');
+      }
+      return { kind: 'pack-remove', namespace, verbose: flags.verbose };
+    }
+    return usageError(
+      action === undefined
+        ? 'markii pack requires install, list, or remove'
+        : `unknown pack command ${JSON.stringify(action)}; expected install, list, or remove`,
+    );
   }
 
   if (subcommand === 'view') {

@@ -11,6 +11,7 @@ import {
   detectColorLevel,
   renderMarkToAnsi,
   resolveColorOption,
+  type AnsiRegistry,
   type AnsiValueStore,
   type BoxStyle,
   type ColorLevel,
@@ -88,6 +89,8 @@ export interface RenderNoteOptions {
   /** `--box`; when absent, `resolveBox` detects it from the environment. */
   readonly boxFlag?: BoxFlag;
   readonly store?: AnsiValueStore;
+  /** The component registry, with any loaded packs merged on. Absent, the standard set. */
+  readonly registry?: AnsiRegistry;
   /**
    * `@markii/stdlib`'s `OnDiagnostic` — the caller wires this to
    * `@markii/host`'s `createRenderDiagnosticCollector()` (or an equivalent
@@ -112,7 +115,7 @@ export async function renderNote(
 ): Promise<string> {
   const width = resolveWidth(options.widthFlag, terminal);
   const color = resolveColor(options.colorFlag, terminal);
-  return renderMarkToAnsi(text, undefined, options.store, undefined, {
+  return renderMarkToAnsi(text, options.registry, options.store, undefined, {
     width,
     color: colorLevelToOption(color),
     box: resolveBox(options.boxFlag, terminal),
@@ -140,7 +143,7 @@ export function buildViewElement(
   } = {},
 ): ReactElement {
   const color = resolveColor(options.colorFlag, terminal);
-  return buildMarkElement(text, undefined, {
+  return buildMarkElement(text, options.registry, {
     width,
     color: colorLevelToOption(color),
     box: resolveBox(options.boxFlag, terminal),

@@ -1,0 +1,11 @@
+{
+  "id": "remove-pack",
+  "invariant": "removing an installed pack deletes its folder; removing it again reports that it is not installed",
+  "clock": 1700000000000,
+  "actions": [
+    { "type": "open" },
+    { "type": "installPack", "archive": "files/ana-1.0.0", "answers": ["allow"] },
+    { "type": "removePack", "namespace": "ana" },
+    { "type": "removePack", "namespace": "ana" }
+  ]
+}

@@ -515,6 +515,13 @@ cleaning step makes eight of its cases fail, which shows the check is
 load-bearing. One case asserts the unbounded half on purpose: a pack that
 writes an escape itself gets it through.
 
+The provenance rule has its own executed probe in the command line tool,
+`apps/cli/src/pack-commands.test.ts`. A pack folder placed beside the note,
+in the working directory, under `.markii/packs`, or named by an environment
+variable, and a pack named in a note's `uses:` frontmatter, is never loaded,
+and its script never runs. The same suite shows an install without a
+terminal and without the explicit flag writes nothing.
+
 ## Verification status of the reference sandbox
 
 The `@markii/lua` sandbox was audited adversarially in August 2026 (commit

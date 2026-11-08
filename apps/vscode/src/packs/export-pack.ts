@@ -165,7 +165,7 @@ export function packArchiveExportDiagnosticLines(
     return [`Export failed for pack "${outcome.packName}": ${outcome.reason}`];
   }
   const lines = [
-    `Exported pack "${outcome.packName}" to ${destinationPath}: wrote ${String(outcome.bytes.byteLength)} bytes (webview.js ${String(outcome.scriptBytes)} bytes${outcome.stylesheetBytes !== undefined ? `, webview.css ${String(outcome.stylesheetBytes)} bytes` : ''})`,
+    `Exported pack "${outcome.packName}" to ${destinationPath}: wrote ${String(outcome.bytes.byteLength)} bytes (webview.js ${String(outcome.scriptBytes)} bytes${outcome.terminalScriptBytes !== undefined ? `, terminal.js ${String(outcome.terminalScriptBytes)} bytes` : ''}${outcome.stylesheetBytes !== undefined ? `, webview.css ${String(outcome.stylesheetBytes)} bytes` : ''})`,
   ];
   if (outcome.scriptFilesCopied > 0) {
     lines.push(

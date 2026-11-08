@@ -121,6 +121,8 @@ export interface DiscoveredPack {
 export interface SkippedPackFolder {
   readonly folder: string;
   readonly reason: string;
+  /** Set when the pack is valid but declares nothing for this host's renderer engine (an expected state, not a failure). `packName` is its namespace. */
+  readonly engineUnsupported?: { readonly packName: string };
 }
 
 export interface DiscoverPacksResult {
@@ -152,7 +154,11 @@ function manifestPathFor(folder: string): string {
 type ManifestAttempt =
   | { readonly kind: 'found'; readonly pack: DiscoveredPack }
   | { readonly kind: 'missing' }
-  | { readonly kind: 'invalid'; readonly reason: string };
+  | {
+      readonly kind: 'invalid';
+      readonly reason: string;
+      readonly engineUnsupported?: { readonly packName: string };
+    };
 
 async function tryLoadPackAt(
   folder: string,
@@ -246,7 +252,11 @@ function checkEngine(
   supportedEngine: string | undefined,
 ):
   | { readonly kind: 'found'; readonly pack: DiscoveredPack }
-  | { readonly kind: 'invalid'; readonly reason: string } {
+  | {
+      readonly kind: 'invalid';
+      readonly reason: string;
+      readonly engineUnsupported?: { readonly packName: string };
+    } {
   if (
     supportedEngine === undefined ||
     packSupportsEngine(pack.manifest, supportedEngine)
@@ -256,6 +266,7 @@ function checkEngine(
   return {
     kind: 'invalid',
     reason: `pack engine "${packDeclaredEngines(pack.manifest)}" is not supported here (expected "${supportedEngine}"); its components fall back to the unknown-component box`,
+    engineUnsupported: { packName: pack.manifest.name },
   };
 }
 
@@ -308,7 +319,13 @@ export async function discoverPacks(
       continue;
     }
     if (attempt.kind === 'invalid') {
-      skipped.push({ folder, reason: attempt.reason });
+      skipped.push({
+        folder,
+        reason: attempt.reason,
+        ...(attempt.engineUnsupported
+          ? { engineUnsupported: attempt.engineUnsupported }
+          : {}),
+      });
       continue;
     }
 
@@ -334,7 +351,13 @@ export async function discoverPacks(
         found.push(childAttempt.pack);
         anyChildManifest = true;
       } else if (childAttempt.kind === 'invalid') {
-        skipped.push({ folder: childFolder, reason: childAttempt.reason });
+        skipped.push({
+          folder: childFolder,
+          reason: childAttempt.reason,
+          ...(childAttempt.engineUnsupported
+            ? { engineUnsupported: childAttempt.engineUnsupported }
+            : {}),
+        });
         anyChildManifest = true;
       }
       // 'missing' for a child: an ordinary non-pack subfolder, not worth

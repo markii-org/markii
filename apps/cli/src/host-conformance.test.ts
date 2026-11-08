@@ -5,11 +5,10 @@
  * TTY and a real state file. The adapter's own logic is real: the TTY
  * check, the `y`/`n` parsing, the worker-path resolution fallback.
  *
- * This CLI declares no `editor` and no `packs` (AGENTS.md: "Loads no packs
- * by design"), so every completion/hover/insert/pack action in the corpus
- * is expected to come back as the shared `unsupported` record — see
- * `tmp/W11-phase3.md` for why that is the honest, correct answer here, not
- * a gap in this test.
+ * This CLI declares no `editor`, so every completion/hover/insert action in
+ * the corpus is expected to come back as the shared `unsupported` record.
+ * It declares `packs` (engine `ansi`) over a per-test install root, so the
+ * install, load, and remove scenarios run for real.
  */
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -17,6 +16,7 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { Terminal } from './terminal.js';
 import { createCliHostAdapter } from './host-adapter.js';
+import { BUNDLED_PACK_NAMESPACES } from './pack-store.js';
 import { renderMarkToAnsi } from '@markii/ansi';
 import {
   assertHostScenario,
@@ -87,6 +87,10 @@ describe('conformance/host/ corpus via the real CLI HostAdapter', () => {
         diagnostics: (line) => diagnosticsLines.push(line),
         now: () => scenario.clock,
         exportTarget: path.join(exportDir, 'export-output'),
+        packs: {
+          installRoot: path.join(exportDir, 'packs'),
+          reservedNamespaces: BUNDLED_PACK_NAMESPACES,
+        },
       });
 
       const result = await runHostScenario(adapter, scenario, noteText, dir, {

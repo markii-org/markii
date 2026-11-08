@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import {
+  access,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { zipSync } from 'fflate';
@@ -63,6 +70,19 @@ function createMemoryMemento(): GrantMemento {
     },
   };
 }
+
+/** Real-filesystem `exists`/`readFile`, for a test whose adapter must see real pack folders. */
+const realFs: Partial<HostAdapter> = {
+  exists: async (p) => {
+    try {
+      await access(p);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+  readFile: async (p) => new Uint8Array(await readFile(p)),
+};
 
 function fakeAdapter(overrides: Partial<HostAdapter> = {}): HostAdapter {
   return {
@@ -309,7 +329,144 @@ describe('createMarkiiHost.loadPacks', () => {
       },
     });
     const outcome = await createMarkiiHost(adapter).loadPacks();
-    expect(outcome).toEqual({ kind: 'loaded', namespaces: ['cat'] });
+    expect(outcome).toMatchObject({ kind: 'loaded', namespaces: ['cat'] });
+  });
+});
+
+describe('createMarkiiHost.loadTerminalPacks', () => {
+  async function terminalPack(
+    name: string,
+    withScript: boolean,
+  ): Promise<string> {
+    const folder = await makePackFolder(name, {
+      name,
+      engine: 'react',
+      components: {
+        meter: { sources: { react: './M.tsx', ansi: './M.ansi.tsx' } },
+      },
+    });
+    if (withScript) await writeFile(path.join(folder, 'terminal.js'), '/*t*/');
+    return folder;
+  }
+
+  it('is unsupported unless the pack source declares the ansi engine', async () => {
+    const lines: string[] = [];
+    const adapter = fakeAdapter({
+      diagnostics: (line) => lines.push(line),
+      packs: {
+        authorizedFolders: async () => [],
+        reservedNamespaces: () => new Set(),
+      },
+    });
+    const outcome = await createMarkiiHost(adapter).loadTerminalPacks();
+    expect(outcome.kind).toBe('unsupported');
+    expect(lines.length).toBe(1);
+  });
+
+  it('reads terminal.js, and reports a missing one as a failure line and a diagnostics line', async () => {
+    const ok = await terminalPack('ana', true);
+    const missing = await terminalPack('bob', false);
+    const lines: string[] = [];
+    const adapter = fakeAdapter({
+      ...realFs,
+      diagnostics: (line) => lines.push(line),
+      packs: {
+        engine: 'ansi',
+        authorizedFolders: async () => [ok, missing],
+        reservedNamespaces: () => new Set(),
+      },
+    });
+    const outcome = await createMarkiiHost(adapter).loadTerminalPacks();
+    if (outcome.kind !== 'loaded') throw new Error('expected loaded');
+    expect(outcome.scripts.map((script) => script.namespace)).toEqual(['ana']);
+    expect(outcome.scripts[0]?.text).toBe('/*t*/');
+    expect(outcome.failureLines).toEqual([
+      expect.stringContaining(
+        'Pack "bob" names terminal views but ships no terminal.js',
+      ),
+    ]);
+    expect(
+      lines.some((line) => line.includes('Pack "bob" names terminal')),
+    ).toBe(true);
+    expect(lines.some((line) => line.includes('Loaded pack "ana"'))).toBe(true);
+  });
+
+  it('treats a react-only pack as an expected engine skip, not a failure', async () => {
+    const folder = await makePackFolder('rx', {
+      name: 'rx',
+      engine: 'react',
+      components: { a: './A.tsx' },
+    });
+    const adapter = fakeAdapter({
+      packs: {
+        engine: 'ansi',
+        authorizedFolders: async () => [folder],
+        reservedNamespaces: () => new Set(),
+      },
+    });
+    const outcome = await createMarkiiHost(adapter).loadTerminalPacks();
+    if (outcome.kind !== 'loaded') throw new Error('expected loaded');
+    expect(outcome.packs).toEqual([]);
+    expect(outcome.failureLines).toEqual([]);
+    expect(outcome.skipped[0]?.engineUnsupported).toEqual({ packName: 'rx' });
+  });
+});
+
+describe('createMarkiiHost.removePack', () => {
+  it('removes the namespace folder under the install root and nothing else', async () => {
+    const installRoot = await makeTempDir();
+    await mkdir(path.join(installRoot, 'ana'));
+    await mkdir(path.join(installRoot, 'bob'));
+    const removed: string[] = [];
+    const adapter = fakeAdapter({
+      ...realFs,
+      packs: {
+        authorizedFolders: async () => [],
+        reservedNamespaces: () => new Set(['read']),
+        installRoot: () => installRoot,
+        removeFolder: async (folder) => {
+          removed.push(folder);
+        },
+      },
+    });
+    const host = createMarkiiHost(adapter);
+    expect(await host.removePack('ana')).toEqual({
+      kind: 'removed',
+      namespace: 'ana',
+    });
+    expect(removed).toEqual([path.join(installRoot, 'ana')]);
+    expect((await host.removePack('zed')).kind).toBe('not-installed');
+    expect((await host.removePack('read')).kind).toBe('reserved');
+  });
+
+  it('refuses a namespace that is not a plain pack name, before building any path', async () => {
+    const adapter = fakeAdapter({
+      packs: {
+        authorizedFolders: async () => [],
+        reservedNamespaces: () => new Set(),
+        installRoot: () => '/store',
+        removeFolder: async () => {
+          throw new Error('must not be called');
+        },
+      },
+    });
+    const host = createMarkiiHost(adapter);
+    for (const bad of ['../x', 'a/b', '', '.', 'A b']) {
+      expect((await host.removePack(bad)).kind).toBe('invalid');
+    }
+  });
+
+  it('is unsupported without removeFolder', async () => {
+    const adapter = fakeAdapter({
+      packs: {
+        authorizedFolders: async () => [],
+        reservedNamespaces: () => new Set(),
+        installRoot: () => '/store',
+      },
+    });
+    expect((await createMarkiiHost(adapter).removePack('ana')).kind).toBe(
+      'unsupported',
+    );
   });
 });
 

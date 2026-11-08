@@ -1,0 +1,10 @@
+{
+  "id": "install-pack-declined",
+  "invariant": "declining the install consent writes nothing: the pack stays uninstalled and removing it reports that it was never installed",
+  "clock": 1700000000000,
+  "actions": [
+    { "type": "open" },
+    { "type": "installPack", "archive": "files/ana-1.0.0", "answers": ["deny"] },
+    { "type": "removePack", "namespace": "ana" }
+  ]
+}

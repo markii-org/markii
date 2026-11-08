@@ -87,6 +87,46 @@ describe('createCliHostAdapter: prompt', () => {
   });
 });
 
+describe('createCliHostAdapter: pack consent and --yes', () => {
+  const consent = {
+    kind: 'pack-install-consent' as const,
+    message: 'Installing "ana" lets its code run.',
+    allowLabel: 'Install',
+    denyLabel: 'Cancel',
+    consequential: true,
+  };
+
+  it('with no TTY and no --yes, denies a pack consent and names --yes', async () => {
+    const lines: string[] = [];
+    const adapter = createCliHostAdapter({
+      terminal: createFakeTerminal({ stdinIsTty: false }),
+      memento: fakeMemento(),
+      diagnostics: (line) => lines.push(line),
+    });
+    expect(await adapter.prompt(consent)).toBe(false);
+    expect(lines[0]).toContain('--yes');
+  });
+
+  it('--yes answers the install and replace consent without asking, but never a network grant', async () => {
+    const terminal = createFakeTerminal({ stdinIsTty: false });
+    const lines: string[] = [];
+    const adapter = createCliHostAdapter({
+      terminal,
+      memento: fakeMemento(),
+      assumeYes: true,
+      diagnostics: (line) => lines.push(line),
+    });
+    expect(await adapter.prompt(consent)).toBe(true);
+    expect(await adapter.prompt({ ...consent, kind: 'pack-replace' })).toBe(
+      true,
+    );
+    expect(await adapter.prompt({ ...consent, kind: 'grant-host' })).toBe(
+      false,
+    );
+    expect(terminal.askedQuestions).toEqual([]);
+  });
+});
+
 describe('createCliHostAdapter: capabilities declared', () => {
   it('declares isolate and exports, but not editor or packs', () => {
     const adapter = createCliHostAdapter({
@@ -100,6 +140,17 @@ describe('createCliHostAdapter: capabilities declared', () => {
     );
     expect(adapter.editor).toBeUndefined();
     expect(adapter.packs).toBeUndefined();
+  });
+
+  it('declares the ansi packs capability when given a pack root', () => {
+    const adapter = createCliHostAdapter({
+      terminal: createFakeTerminal(),
+      memento: fakeMemento(),
+      packs: { installRoot: '/x', reservedNamespaces: new Set(['read']) },
+    });
+    expect(adapter.packs?.engine).toBe('ansi');
+    expect(adapter.packs?.installRoot?.()).toBe('/x');
+    expect(adapter.packs?.removeFolder).toBeDefined();
   });
 });
 

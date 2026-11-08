@@ -39,6 +39,7 @@ import { createVSCodeHostAdapter } from './host-adapter.js';
 import {
   buildComponentCatalog,
   buildPackRegistrationScript,
+  buildPackTerminalScript,
   createMarkiiHost,
   createNodeArchiveExtractFs,
   isContainerCompletionItem,
@@ -490,6 +491,13 @@ async function exportPackCommand(
       esbuildBrowserModulePath: browserModulePath,
       esbuildWasmBinaryPath: wasmBinaryPath,
     });
+  // Export Pack also carries the pack's terminal views (`terminal.js`) when
+  // its manifest names `ansi` sources. The preview itself never builds them.
+  const buildTerminal = (pack: DiscoveredPack, dir: string) =>
+    buildPackTerminalScript(pack, dir, {
+      esbuildBrowserModulePath: browserModulePath,
+      esbuildWasmBinaryPath: wasmBinaryPath,
+    });
 
   // Build first, so a build failure never makes the user pick a
   // destination they would only have to pick again.
@@ -498,6 +506,7 @@ async function exportPackCommand(
     pack: chosen,
     cacheDir,
     build,
+    buildTerminal,
     fs: fsReads,
   });
   if (archiveOutcome.kind === 'failed') {

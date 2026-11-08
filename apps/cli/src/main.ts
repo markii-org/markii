@@ -12,15 +12,20 @@
  * script failure, 3 a usage error.
  */
 import { readFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
+  CLI_LABELS,
   createMarkiiHost,
   createRenderDiagnosticCollector,
+  installPackMessage,
   noteHasScripts,
   readPersistedValues,
+  removePackMessage,
   type GrantMemento,
 } from '@markii/host';
+import type { AnsiRegistry } from '@markii/ansi';
 import { createValueStore, type StoredValue } from '@markii/runtime';
 import { parseArgs, type ParsedCommand } from './args.js';
 import { createNodeTerminal, type Terminal } from './terminal.js';
@@ -34,6 +39,8 @@ import { buildViewElement, renderNote, resolveWidth } from './render-note.js';
 import { runNote } from './run-note.js';
 import { createCliHostAdapter } from './host-adapter.js';
 import { resolveViewMode } from './view-mode.js';
+import { resolveCliPackOptions } from './pack-store.js';
+import { loadCliPackRegistry } from './pack-registry.js';
 import { runLiveViewer } from './live-view.js';
 import { watchNote } from './watch-file.js';
 import type { MountLiveViewerInput, ViewDeps } from './view-deps.js';
@@ -70,6 +77,9 @@ Usage:
               [--box <unicode|ascii>] [--no-run] [--static] [--watch]
   markii export <file> --format <html|ansi|md-plain> -o <file> [--box <unicode|ascii>]
   markii run <file>
+  markii pack install <file.mkp> [--yes]
+  markii pack list
+  markii pack remove <namespace>
 
 Global flags:
   --help, -h       Show this help text and exit.
@@ -102,6 +112,14 @@ export flags:
   -o, --output <file>   Where to write the exported file. Required.
   --box <style>    For --format ansi: unicode (default) or ascii.
 
+Packs add components to a note. A pack that ships terminal views renders
+them in markii view and markii export --format ansi; a pack without them
+shows its components as unknown components. markii pack install asks before
+it installs, because a pack's code runs with all the permissions of your user
+account. In a session with no terminal, pass --yes to consent without being
+asked. Packs are read only from the per-device install store and from the
+packs shipped with this tool, never from a note or the current directory.
+
 Grants for a note's scripts are stored per device; see README.md for the
 exact location on each platform. A grant cannot be given non-interactively.
 
@@ -112,6 +130,34 @@ usage error.
 function buildGrantMemento(terminal: Terminal) {
   const dir = grantStoreDirectory(terminal.env, process.platform);
   return createFileGrantMemento(path.join(dir, CLI_STATE_FILE_NAME));
+}
+
+/**
+ * Loads the bundled and installed packs for a render (`view`, or `export
+ * --format ansi`), through the shared host. A pack that cannot be used leaves
+ * its directives as the unknown-component fallback; the reason is a line on
+ * stderr. Failures always reach stderr (`emit`); the informational lines
+ * (which packs loaded) only under `--verbose`.
+ */
+async function loadPackRegistry(
+  terminal: Terminal,
+  memento: GrantMemento,
+  verbose: boolean,
+  emit: (line: string) => void,
+): Promise<AnsiRegistry> {
+  const adapter = createCliHostAdapter({
+    terminal,
+    memento,
+    packs: resolveCliPackOptions(terminal.env, process.platform),
+    diagnostics: (line) => {
+      if (verbose) emit(`markii: ${line}\n`);
+    },
+  });
+  const loaded = await loadCliPackRegistry(createMarkiiHost(adapter));
+  if (!verbose) {
+    for (const line of loaded.failureLines) emit(`markii: ${line}\n`);
+  }
+  return loaded.registry;
 }
 
 /**
@@ -135,6 +181,7 @@ const defaultViewDeps: ViewDeps = {
           : {}),
         ...(input.boxFlag !== undefined ? { boxFlag: input.boxFlag } : {}),
         store: input.store,
+        ...(input.registry !== undefined ? { registry: input.registry } : {}),
         onDiagnostic: input.onDiagnostic,
         onExit,
         ...(rows !== undefined ? { rows } : {}),
@@ -249,6 +296,12 @@ async function runViewCommand(
 
   const store = createValueStore(values);
   const diagnostics = createRenderDiagnosticCollector();
+  const registry = await loadPackRegistry(
+    terminal,
+    memento,
+    command.verbose,
+    writeError,
+  );
 
   // `--watch`: every change re-reads the note and hands the new text to
   // `onText`. A note that cannot be read mid-watch (deleted, or caught
@@ -282,6 +335,7 @@ async function runViewCommand(
         ...(command.color !== undefined ? { colorFlag: command.color } : {}),
         ...(command.box !== undefined ? { boxFlag: command.box } : {}),
         store,
+        registry,
         onDiagnostic: diagnostics.onDiagnostic,
       });
     if (command.watch) {
@@ -333,6 +387,7 @@ async function runViewCommand(
     ...(command.color !== undefined ? { colorFlag: command.color } : {}),
     ...(command.box !== undefined ? { boxFlag: command.box } : {}),
     store,
+    registry,
     onDiagnostic: diagnostics.onDiagnostic,
     ...(command.watch
       ? {
@@ -386,8 +441,17 @@ async function runExportCommand(
   // format rendered through this CLI's own `renderNote`); it stays empty,
   // and this loop a no-op, for 'html' and 'md-plain'.
   const renderDiagnostics = createRenderDiagnosticCollector();
+  // Only an ansi export renders through the terminal engine, so only it loads
+  // packs. An html export keeps rendering a pack directive as the fallback.
+  const registry =
+    command.format === 'ansi'
+      ? await loadPackRegistry(terminal, memento, command.verbose, (line) =>
+          terminal.writeError(line),
+        )
+      : undefined;
   const renderAnsi = (text: string): Promise<string> =>
     renderNote(text, terminal, {
+      ...(registry !== undefined ? { registry } : {}),
       colorFlag: command.color ?? 'never',
       // An exported file is read in some other terminal, so like its color
       // it does not follow this one's environment: unicode unless asked.
@@ -458,6 +522,188 @@ async function runRunCommand(
   return result.failures.length > 0 ? 2 : 0;
 }
 
+/** An adapter for the three `markii pack` commands: pack capability on, run-grant state untouched. */
+function packCommandHost(
+  terminal: Terminal,
+  options: { assumeYes: boolean; verbose: boolean },
+): { host: ReturnType<typeof createMarkiiHost>; lines: string[] } {
+  const lines: string[] = [];
+  const adapter = createCliHostAdapter({
+    terminal,
+    memento: NOOP_MEMENTO,
+    packs: resolveCliPackOptions(terminal.env, process.platform),
+    assumeYes: options.assumeYes,
+    diagnostics: (line) => lines.push(line),
+  });
+  return { host: createMarkiiHost(adapter), lines };
+}
+
+/** The diagnostics lines of a command whose outcome is the whole point: always on failure, only under `--verbose` on success. */
+function flushPackDiagnostics(
+  terminal: Terminal,
+  lines: readonly string[],
+  show: boolean,
+): void {
+  if (!show) return;
+  for (const line of lines) terminal.writeError(`markii: ${line}\n`);
+}
+
+async function runPackInstallCommand(
+  command: Extract<ParsedCommand, { kind: 'pack-install' }>,
+  terminal: Terminal,
+): Promise<number> {
+  const archivePath = path.resolve(command.file);
+  let bytes: Uint8Array;
+  try {
+    bytes = new Uint8Array(await readFile(archivePath));
+  } catch (error) {
+    terminal.writeError(
+      `markii: could not read ${command.file}: ${error instanceof Error ? error.message : String(error)}\n`,
+    );
+    return 1;
+  }
+  const { host, lines } = packCommandHost(terminal, {
+    assumeYes: command.yes,
+    verbose: command.verbose,
+  });
+  const outcome = await host.installPack({
+    archiveBytes: bytes,
+    archivePath: command.file,
+  });
+
+  if (outcome.kind === 'installed') {
+    terminal.write(
+      `${installPackMessage(
+        {
+          kind: 'installed',
+          packName: outcome.namespace,
+          installedDir: '',
+          replaced: outcome.replaced,
+        },
+        command.file,
+        CLI_LABELS,
+      )}\n`,
+    );
+    // A pack with no terminal views installs fine and shows its components
+    // as unknown components here; say so now rather than at first use.
+    const loaded = await host.loadTerminalPacks();
+    if (
+      loaded.kind === 'loaded' &&
+      !loaded.namespaces.includes(outcome.namespace)
+    ) {
+      terminal.write(
+        `Markii: "${outcome.namespace}" has no terminal views. Its components show as unknown components here.\n`,
+      );
+    }
+    flushPackDiagnostics(terminal, lines, command.verbose);
+    return 0;
+  }
+
+  if (outcome.kind === 'declined') {
+    terminal.writeError(
+      `${installPackMessage(
+        {
+          kind: 'declined',
+          step: outcome.step,
+          packName: outcome.namespace,
+        },
+        command.file,
+        CLI_LABELS,
+      )}\n`,
+    );
+  } else if (outcome.kind === 'reserved') {
+    terminal.writeError(
+      `${installPackMessage({ kind: 'reserved', packName: outcome.namespace }, command.file, CLI_LABELS)}\n`,
+    );
+  } else if (outcome.kind === 'rejected') {
+    terminal.writeError(
+      `${installPackMessage({ kind: 'rejected', reason: outcome.reason }, command.file, CLI_LABELS)}\n`,
+    );
+  } else {
+    terminal.writeError('Markii: this tool cannot install packs here.\n');
+  }
+  flushPackDiagnostics(terminal, lines, true);
+  return 1;
+}
+
+async function runPackListCommand(
+  command: Extract<ParsedCommand, { kind: 'pack-list' }>,
+  terminal: Terminal,
+): Promise<number> {
+  const { host, lines } = packCommandHost(terminal, {
+    assumeYes: false,
+    verbose: command.verbose,
+  });
+  const outcome = await host.loadTerminalPacks();
+  if (outcome.kind !== 'loaded') {
+    flushPackDiagnostics(terminal, lines, true);
+    return 1;
+  }
+  const bundledRoot = resolveCliPackOptions(
+    terminal.env,
+    process.platform,
+  ).bundledRoot;
+  const rows: string[] = [];
+  for (const pack of outcome.packs) {
+    const total = Object.keys(
+      pack.componentPathsByEngine?.['ansi'] ?? {},
+    ).length;
+    const version =
+      pack.manifest.version !== undefined ? ` ${pack.manifest.version}` : '';
+    const origin =
+      bundledRoot !== undefined && pack.folder.startsWith(bundledRoot)
+        ? 'built in'
+        : 'installed';
+    rows.push(
+      `${pack.manifest.name}${version}: ${String(total)} terminal component${total === 1 ? '' : 's'} (${origin})`,
+    );
+  }
+  for (const skipped of outcome.skipped) {
+    if (skipped.engineUnsupported !== undefined) {
+      rows.push(
+        `${skipped.engineUnsupported.packName}: no terminal views (installed)`,
+      );
+    }
+  }
+  terminal.write(
+    rows.length > 0 ? `${rows.join('\n')}\n` : 'No packs are installed.\n',
+  );
+  // Anything that stopped a pack from loading is the reason it is missing
+  // from the list above, so it always reaches stderr.
+  for (const line of outcome.failureLines)
+    terminal.writeError(`markii: ${line}\n`);
+  flushPackDiagnostics(
+    terminal,
+    lines.filter((line) => !outcome.failureLines.includes(line)),
+    command.verbose,
+  );
+  return 0;
+}
+
+async function runPackRemoveCommand(
+  command: Extract<ParsedCommand, { kind: 'pack-remove' }>,
+  terminal: Terminal,
+): Promise<number> {
+  const { host, lines } = packCommandHost(terminal, {
+    assumeYes: false,
+    verbose: command.verbose,
+  });
+  const outcome = await host.removePack(command.namespace);
+  if (outcome.kind === 'unsupported') {
+    terminal.writeError('Markii: this tool cannot remove packs here.\n');
+    flushPackDiagnostics(terminal, lines, true);
+    return 1;
+  }
+  if (outcome.kind === 'removed') {
+    terminal.write(`${removePackMessage(outcome)}\n`);
+    flushPackDiagnostics(terminal, lines, command.verbose);
+    return 0;
+  }
+  terminal.writeError(`${removePackMessage(outcome)}\n`);
+  flushPackDiagnostics(terminal, lines, true);
+  return 1;
+}
+
 /**
  * `deps` is an internal seam, not part of the CLI's real usage: it lets
  * tests replace `markii view`'s live-viewer mount with a fake so a test run
@@ -488,6 +734,12 @@ export async function run(
       return runExportCommand(command, terminal);
     case 'run':
       return runRunCommand(command, terminal);
+    case 'pack-install':
+      return runPackInstallCommand(command, terminal);
+    case 'pack-list':
+      return runPackListCommand(command, terminal);
+    case 'pack-remove':
+      return runPackRemoveCommand(command, terminal);
   }
 }
 

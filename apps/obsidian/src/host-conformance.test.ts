@@ -16,6 +16,7 @@
  * exercises the real run/export/pack path.
  */
 import { mkdtempSync, rmSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -106,6 +107,7 @@ describe('conformance/host/ corpus via the real Obsidian HostAdapter', () => {
           authorizedFolders: async () => [installRoot],
           reservedNamespaces: () => new Set(['read', 'dash', 'prep']),
           installRoot: () => installRoot,
+          removeFolder: (p) => rm(p, { recursive: true, force: true }),
         },
         exports: {
           formats: new Set(['html']),

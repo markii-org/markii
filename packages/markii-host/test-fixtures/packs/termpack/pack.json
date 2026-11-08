@@ -1,0 +1,13 @@
+{
+  "name": "termpack",
+  "engine": "react",
+  "components": {
+    "meter": {
+      "sources": {
+        "react": "./Meter.tsx",
+        "ansi": "./Meter.ansi.tsx"
+      }
+    },
+    "reactonly": "./ReactOnly.tsx"
+  }
+}

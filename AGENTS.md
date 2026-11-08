@@ -287,6 +287,9 @@ packages/markii-host    PRIVATE, never published (no npm presence, absent from
                      behavior modules beside them (script-execution,
                      refresh-interval, run-behavior, run-diagnostics,
                      pack-archive, pack-install, pack-load,
+                     pack-remove, terminal-packs (reads each pack's
+                     terminal.js for an 'ansi' host, one home of its
+                     failure wording),
                      export-behavior, cascade-export-behavior (the
                      linked-set walk, archive, index page, outcome and
                      wording), export/md-plain, editor-behavior)
@@ -465,8 +468,20 @@ apps/cli             the "markii" command line tool, a third host and a
   src/render-note.ts the one call into @markii/ansi: width, color, and the
                      box style (--box, else detectBoxStyle on the env the
                      Terminal seam hands over)
-  Loads no packs by design: a pack directive renders as the unknown
-  component fallback, like the static HTML export
+  src/pack-store.ts  the device-local pack store (<config dir>/packs/
+                     <namespace>/, beside state.json) and the bundled
+                     dist/packs root; the ONLY folders terminal pack code
+                     is loaded from (never a note, bundle, cwd or env var;
+                     pack-commands.test.ts probes it)
+  src/pack-registry.ts host.loadTerminalPacks() -> @markii/ansi's
+                     loadTerminalPackScript -> installAnsiPacks over
+                     defaultAnsiRegistry; the discovered pack.json is the
+                     authority, a terminal.js naming another namespace is
+                     refused. `markii pack install/list/remove` (--yes
+                     answers only the pack consent, never a network grant)
+  src/packs/build-bundled-packs.ts  builds the packs/ that name ansi
+                     sources into dist/packs at CLI build time
+  An HTML export still renders pack directives as the unknown fallback
 apps/obsidian        the "Markii" Obsidian plugin (desktop only) — an
                      app/consumer of @markii/react, never a renderer. A full
                      second host: preview, Run, packs, and in-place

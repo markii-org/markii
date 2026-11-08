@@ -14,7 +14,7 @@
  * exercises the real run/export/pack path.
  */
 import { mkdtempSync, readFile, rmSync, writeFile } from 'node:fs';
-import { access } from 'node:fs/promises';
+import { access, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { promisify } from 'node:util';
@@ -119,6 +119,7 @@ describe('conformance/host/ corpus via the real VS Code HostAdapter', () => {
         writeFile: (p, bytes) => writeFileAsync(p, bytes),
         authorizedFolders: async () => [installRoot],
         installRoot: () => installRoot,
+        removeFolder: (p) => rm(p, { recursive: true, force: true }),
         exportFormats: new Set(['html']),
         resolveExportTarget: async (suggestedFileName) =>
           path.join(exportDir, suggestedFileName),

@@ -3,6 +3,11 @@
   "engine": "react",
   "version": "1.0.0",
   "components": {
-    "timeline": "./Timeline.tsx"
+    "timeline": {
+      "sources": {
+        "react": "./Timeline.tsx",
+        "ansi": "./Timeline.ansi.tsx"
+      }
+    }
   }
 }

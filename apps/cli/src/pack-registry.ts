@@ -1,0 +1,81 @@
+/**
+ * Turns the host's loaded terminal packs into one `AnsiRegistry` for
+ * `markii view` and `markii export --format ansi`. The host
+ * (`createMarkiiHost(...).loadTerminalPacks`) discovers the authorized
+ * packs and reads each `terminal.js`; this module hands that text to
+ * `@markii/ansi`'s loader and installs the result on top of the standard
+ * set. A pack that cannot be used contributes nothing: its directives
+ * render as the unknown-component fallback and the reason is one line on
+ * the diagnostics surface, never a crash and never silent.
+ *
+ * The pack's own `pack.json` is the authority on what it declares: the
+ * manifest the loader sees is the discovered one, and a `terminal.js` that
+ * registers a different namespace is refused.
+ */
+import {
+  defaultAnsiRegistry,
+  installAnsiPacks,
+  loadTerminalPackScript,
+  type AnsiPackToInstall,
+  type AnsiRegistry,
+} from '@markii/ansi';
+import {
+  terminalScriptNamespaceMismatchLine,
+  terminalScriptRejectedLine,
+  type MarkiiHost,
+} from '@markii/host';
+
+export interface CliPackRegistry {
+  readonly registry: AnsiRegistry;
+  /** Lines that report a real failure; also written to the host's diagnostics. A caller shows these even without `--verbose`. */
+  readonly failureLines: readonly string[];
+}
+
+export async function loadCliPackRegistry(
+  host: MarkiiHost,
+): Promise<CliPackRegistry> {
+  const outcome = await host.loadTerminalPacks();
+  if (outcome.kind !== 'loaded') {
+    return { registry: defaultAnsiRegistry, failureLines: [] };
+  }
+
+  const failureLines = [...outcome.failureLines];
+  const toInstall: AnsiPackToInstall[] = [];
+  for (const script of outcome.scripts) {
+    const discovered = outcome.packs.find(
+      (pack) => pack.manifest.name === script.namespace,
+    );
+    if (discovered === undefined) continue;
+    const loaded = await loadTerminalPackScript(script.text);
+    if (!loaded.ok) {
+      const line = terminalScriptRejectedLine(script.namespace, loaded.reason);
+      host.diagnostics(line);
+      failureLines.push(line);
+      continue;
+    }
+    if (loaded.pack.manifest.name !== script.namespace) {
+      const line = terminalScriptNamespaceMismatchLine(
+        script.namespace,
+        loaded.pack.manifest.name,
+      );
+      host.diagnostics(line);
+      failureLines.push(line);
+      continue;
+    }
+    toInstall.push({
+      manifest: discovered.manifest,
+      componentModules: loaded.pack.componentModules,
+    });
+  }
+
+  const installed = installAnsiPacks(toInstall, defaultAnsiRegistry);
+  if (!installed.ok) {
+    const line = `Packs share a namespace (${installed.collisions.join(', ')}); none of them were loaded.`;
+    host.diagnostics(line);
+    return {
+      registry: defaultAnsiRegistry,
+      failureLines: [...failureLines, line],
+    };
+  }
+  return { registry: installed.registry, failureLines };
+}

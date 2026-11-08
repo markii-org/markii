@@ -98,6 +98,7 @@ export type {
   StoredValue,
   ValueStatus,
 } from './value-types.js';
+export { defaultAnsiRegistry } from './components/index.js';
 export {
   ANSI_ENGINE_ID,
   loadAnsiPack,

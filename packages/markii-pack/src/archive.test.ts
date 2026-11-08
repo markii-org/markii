@@ -79,6 +79,27 @@ describe('openPackArchive: happy path', () => {
     expect(result.archive.scriptModules).toEqual({});
   });
 
+  it('reads an optional terminal.js and does not report it as an ignored entry', async () => {
+    const bytes = buildZip(
+      wellFormedFiles({ 'terminal.js': enc.encode('/* terminal views */') }),
+    );
+    const result = await openPackArchive(bytes);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(new TextDecoder().decode(result.archive.terminalScriptBytes)).toBe(
+      '/* terminal views */',
+    );
+    expect(result.archive.ignoredEntries).toEqual([]);
+  });
+
+  it('has no terminalScriptBytes when the archive ships no terminal.js', async () => {
+    const result = await openPackArchive(buildZip(wellFormedFiles()));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.archive.terminalScriptBytes).toBeUndefined();
+  });
+
   it('accepts a manifest with no version and reads it through', async () => {
     const manifest = JSON.stringify({
       name: 'ana',

@@ -528,3 +528,88 @@ describe('exportPack', () => {
     }
   });
 });
+
+describe('exportPack: terminal script', () => {
+  const build: PackExportBuilder = async () => ({
+    kind: 'built',
+    scriptPath: '/cache/ana.js',
+    warnings: [],
+  });
+  const terminalPack = (): DiscoveredPack => ({
+    ...packAt('/packs/ana'),
+    componentPathsByEngine: {
+      react: { timeline: '/packs/ana/Timeline.tsx' },
+      ansi: { timeline: '/packs/ana/Timeline.ansi.tsx' },
+    },
+  });
+
+  it('writes terminal.js beside webview.js when buildTerminal is given', async () => {
+    const fs = fakeFs({
+      '/packs/ana/pack.json': '{}',
+      '/cache/ana.js': '(web)',
+      '/cache/term.js': '(term)',
+    });
+    const outcome = await exportPack({
+      pack: terminalPack(),
+      cacheDir: '/cache',
+      destinationDir: '/dest',
+      exportName: 'ana',
+      build,
+      buildTerminal: async () => ({
+        kind: 'built',
+        scriptPath: '/cache/term.js',
+        warnings: [],
+      }),
+      fs,
+      confirmOverwrite: alwaysConfirm,
+    });
+    if (outcome.kind !== 'written') throw new Error('expected written');
+    expect(fs.written.get('/dest/ana/terminal.js')).toBe('(term)');
+    expect(outcome.terminalScriptBytes).toBe(6);
+  });
+
+  it('writes an empty webview registration when only terminal views exist', async () => {
+    const fs = fakeFs({
+      '/packs/ana/pack.json': '{}',
+      '/cache/term.js': '(term)',
+    });
+    const outcome = await exportPack({
+      pack: terminalPack(),
+      cacheDir: '/cache',
+      destinationDir: '/dest',
+      exportName: 'ana',
+      build: async () => ({ kind: 'skipped' }),
+      buildTerminal: async () => ({
+        kind: 'built',
+        scriptPath: '/cache/term.js',
+        warnings: [],
+      }),
+      fs,
+      confirmOverwrite: alwaysConfirm,
+    });
+    expect(outcome.kind).toBe('written');
+    expect(fs.written.get('/dest/ana/webview.js')).toContain(
+      '__markiiRegisterPack',
+    );
+  });
+
+  it('removes a stale terminal.js when this build has none', async () => {
+    const fs = fakeFs({
+      '/packs/ana/pack.json': '{}',
+      '/cache/ana.js': '(web)',
+      '/dest/ana': '',
+      '/dest/ana/terminal.js': '(old)',
+    });
+    const outcome = await exportPack({
+      pack: packAt('/packs/ana'),
+      cacheDir: '/cache',
+      destinationDir: '/dest',
+      exportName: 'ana',
+      build,
+      fs,
+      confirmOverwrite: alwaysConfirm,
+    });
+    expect(outcome.kind).toBe('written');
+    expect(fs.deleted).toContain('/dest/ana/terminal.js');
+  });
+});

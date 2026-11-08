@@ -24,6 +24,10 @@
 import * as path from 'node:path';
 import { zipSync } from 'fflate';
 import { packArchiveFileName } from '@markii/pack';
+import {
+  PREBUILT_TERMINAL_SCRIPT_FILENAME,
+  emptyWebviewScript,
+} from './prebuilt.js';
 import type { DiscoveredPack } from './discover.js';
 import type { PackBuildOutcome } from './pack-build.js';
 import type { PackExportBuilder, PackExportFs } from './pack-export.js';
@@ -40,6 +44,8 @@ export type PackExportArchiveOutcome =
       readonly fileName: string;
       readonly bytes: Uint8Array;
       readonly scriptBytes: number;
+      /** Set when the archive carries a `terminal.js`. */
+      readonly terminalScriptBytes?: number;
       readonly stylesheetBytes?: number;
       /** How many `*.lua` files from the pack's `scripts/` directory were included. 0 when it has none. */
       readonly scriptFilesCopied: number;
@@ -57,6 +63,13 @@ export interface ExportPackArchiveOptions {
   /** The host-owned build cache directory: the build still runs through the normal cache, only its output is zipped. */
   readonly cacheDir: string;
   readonly build: PackExportBuilder;
+  /**
+   * Builds the pack's terminal script (`buildPackTerminalScript` through the
+   * host's cache). When given and the pack names `ansi` sources, the archive
+   * carries the result as `terminal.js`. A host that compiles only for its
+   * own preview omits it; the archive then holds React views only.
+   */
+  readonly buildTerminal?: PackExportBuilder;
   /** Only the read half of `PackExportFs`: an archive export never writes anywhere on its own. */
   readonly fs: Pick<PackExportFs, 'readFile' | 'listDirectory'>;
 }
@@ -80,7 +93,7 @@ function packNameOf(pack: DiscoveredPack): string {
 export async function exportPackArchive(
   options: ExportPackArchiveOptions,
 ): Promise<PackExportArchiveOutcome> {
-  const { pack, cacheDir, build, fs } = options;
+  const { pack, cacheDir, build, buildTerminal, fs } = options;
   const packName = packNameOf(pack);
 
   let manifestText: string | undefined;
@@ -108,30 +121,67 @@ export async function exportPackArchive(
     // module, matching `exportPack`'s identical posture.
     return { kind: 'failed', packName, reason: outcome.reason };
   }
-  if (outcome.kind === 'skipped') {
-    return {
-      kind: 'failed',
-      packName,
-      reason: `pack "${packName}" was not built`,
-    };
+
+  let terminalText: string | undefined;
+  const hasTerminalSources =
+    Object.keys(pack.componentPathsByEngine?.['ansi'] ?? {}).length > 0;
+  if (buildTerminal !== undefined && hasTerminalSources) {
+    let terminalOutcome: PackBuildOutcome;
+    try {
+      terminalOutcome = await buildTerminal(pack, cacheDir);
+    } catch (err) {
+      return { kind: 'failed', packName, reason: describeThrown(err) };
+    }
+    if (terminalOutcome.kind === 'failed') {
+      return {
+        kind: 'failed',
+        packName,
+        reason: `terminal build: ${terminalOutcome.reason}`,
+      };
+    }
+    if (terminalOutcome.kind === 'built') {
+      try {
+        terminalText = await fs.readFile(terminalOutcome.scriptPath);
+      } catch {
+        terminalText = undefined;
+      }
+      if (terminalText === undefined) {
+        return {
+          kind: 'failed',
+          packName,
+          reason: `built terminal script for pack "${packName}" could not be read back`,
+        };
+      }
+    }
   }
 
   let scriptText: string | undefined;
-  try {
-    scriptText = await fs.readFile(outcome.scriptPath);
-  } catch (err) {
-    return { kind: 'failed', packName, reason: describeThrown(err) };
-  }
-  if (scriptText === undefined) {
-    return {
-      kind: 'failed',
-      packName,
-      reason: `built script for pack "${packName}" could not be read back`,
-    };
+  if (outcome.kind === 'skipped') {
+    if (terminalText === undefined) {
+      return {
+        kind: 'failed',
+        packName,
+        reason: `pack "${packName}" was not built`,
+      };
+    }
+    scriptText = emptyWebviewScript(JSON.stringify(pack.manifest));
+  } else {
+    try {
+      scriptText = await fs.readFile(outcome.scriptPath);
+    } catch (err) {
+      return { kind: 'failed', packName, reason: describeThrown(err) };
+    }
+    if (scriptText === undefined) {
+      return {
+        kind: 'failed',
+        packName,
+        reason: `built script for pack "${packName}" could not be read back`,
+      };
+    }
   }
 
   let stylesheetText: string | undefined;
-  if (outcome.stylesheetPath !== undefined) {
+  if (outcome.kind === 'built' && outcome.stylesheetPath !== undefined) {
     try {
       stylesheetText = await fs.readFile(outcome.stylesheetPath);
     } catch {
@@ -166,6 +216,12 @@ export async function exportPackArchive(
     [SCRIPT_FILENAME]: encoder.encode(scriptText),
   };
   const scriptBytes = zipInput[SCRIPT_FILENAME]!.byteLength;
+  let terminalScriptBytes: number | undefined;
+  if (terminalText !== undefined) {
+    const encoded = encoder.encode(terminalText);
+    zipInput[PREBUILT_TERMINAL_SCRIPT_FILENAME] = encoded;
+    terminalScriptBytes = encoded.byteLength;
+  }
   let stylesheetBytes: number | undefined;
   if (stylesheetText !== undefined) {
     const encoded = encoder.encode(stylesheetText);
@@ -184,8 +240,9 @@ export async function exportPackArchive(
     fileName: packArchiveFileName(pack.manifest),
     bytes,
     scriptBytes,
+    ...(terminalScriptBytes !== undefined ? { terminalScriptBytes } : {}),
     ...(stylesheetBytes !== undefined ? { stylesheetBytes } : {}),
     scriptFilesCopied: luaFiles.length,
-    warnings: outcome.warnings,
+    warnings: outcome.kind === 'built' ? outcome.warnings : [],
   };
 }

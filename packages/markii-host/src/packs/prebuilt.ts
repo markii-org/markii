@@ -26,6 +26,28 @@ import type { DiscoveredPack } from './discover.js';
 
 export const PREBUILT_SCRIPT_FILENAME = 'webview.js';
 export const PREBUILT_STYLESHEET_FILENAME = 'webview.css';
+/** The terminal engine's prebuilt registration module, beside `webview.js` (docs/packs.md). Optional: a pack with no terminal views never has one. */
+export const PREBUILT_TERMINAL_SCRIPT_FILENAME = 'terminal.js';
+
+/** Absolute path of a pack folder's prebuilt terminal script. No existence check. */
+export function prebuiltTerminalScriptPathFor(folder: string): string {
+  return path.join(folder, PREBUILT_TERMINAL_SCRIPT_FILENAME);
+}
+
+/**
+ * The `webview.js` an export writes for a pack that has terminal views but
+ * no React ones: a registration with no components, so the archive keeps
+ * its required `webview.js` and a React host loads the pack as having
+ * nothing for it (every directive falls back).
+ */
+export function emptyWebviewScript(manifestJson: string): string {
+  return [
+    "if (typeof window !== 'undefined' && typeof window.__markiiRegisterPack === 'function') {",
+    `  window.__markiiRegisterPack(${JSON.stringify(manifestJson)}, {});`,
+    '}',
+    '',
+  ].join('\n');
+}
 
 /** Absolute path of a pack folder's prebuilt registration script. No existence check. */
 export function prebuiltScriptPathFor(folder: string): string {

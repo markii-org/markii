@@ -213,3 +213,29 @@ describe('prebuiltShadowLine', () => {
     expect(line.toLowerCase()).not.toContain('fail');
   });
 });
+
+describe('formatPackDiagnosticLines: engine-aware component count', () => {
+  it('counts only the components that have a source for the given engine', () => {
+    const mixed: PackDiagnosticsPack = {
+      manifest: {
+        name: 'ana',
+        engine: 'react',
+        components: {
+          a: { sources: { react: './a.tsx', ansi: './a.ansi.tsx' } },
+          b: './b.tsx',
+          c: { sources: { react: './c.tsx' } },
+        },
+      },
+    };
+    const lines = (engine?: string): string[] =>
+      formatPackDiagnosticLines({
+        packs: [mixed],
+        skipped: [],
+        cssWarnings: [],
+        ...(engine !== undefined ? { engine } : {}),
+      });
+    expect(lines('ansi')[0]).toContain('1 component)');
+    expect(lines('react')[0]).toContain('3 components)');
+    expect(lines()[0]).toContain('3 components)');
+  });
+});

@@ -15,20 +15,26 @@
  *   `BrowserWindow` in a terminal process to print through.
  * - `editor`: NOT declared. A one-shot terminal command has no cursor and
  *   no live edit surface to complete, hover, or insert into.
- * - `packs`: NOT declared. AGENTS.md is explicit: "Loads no packs by
- *   design: a pack directive renders as the unknown component fallback."
- *   Declaring an empty pack source only to satisfy the type would be
- *   exactly the fake-capability pattern the batch 11 design warns
- *   against; omitting it lets `createMarkiiHost`'s pack behaviors report
- *   the honest `Unsupported` outcome instead.
+ * - `packs`: declared only when the caller passes `packs` (a pack root
+ *   and the bundled-pack namespaces), engine `ansi`. A pack here runs
+ *   INSIDE the CLI process with its full privileges, so the only folders
+ *   ever authorized are the bundled packs next to the CLI and the
+ *   device-local install store (one folder per namespace). Never a note, a
+ *   bundle, the working directory, or an environment variable. A caller
+ *   that does not pass `packs` (a run-only or export-only adapter) gets the
+ *   honest `Unsupported` outcome from the pack behaviors.
  *
- * The prompt policy: with no TTY on stdin, `prompt` DENIES without asking
- * — a grant cannot be given non-interactively, and there is no `--yes`
- * flag to bypass that. The reason reaches `diagnostics` at most once per
- * adapter instance, so a scripted invocation is not left silently
- * wondering why nothing was granted (AGENTS.md's "clean is not silent").
+ * The prompt policy: with no TTY on stdin, `prompt` DENIES without asking,
+ * since a grant cannot be given non-interactively. The one exception is
+ * the pack install and replace consent when the caller passed `assumeYes`
+ * (the explicit `--yes` flag): that answers yes to those two questions
+ * only, never to a network grant. The denial reason reaches `diagnostics`
+ * at most once per adapter instance, so a scripted invocation is not left
+ * silently wondering why nothing was granted (AGENTS.md's "clean is not
+ * silent").
  */
-import { access, readFile, readdir, writeFile } from 'node:fs/promises';
+import { access, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import * as path from 'node:path';
 import {
   CLI_LABELS,
   defaultWorkerPath,
@@ -52,6 +58,19 @@ function isAffirmative(answer: string): boolean {
 const NON_INTERACTIVE_REASON =
   'A grant cannot be given non-interactively; run markii in a terminal to allow network access.';
 
+const NON_INTERACTIVE_PACK_REASON =
+  'A pack install needs your consent; run markii in a terminal, or pass --yes to consent without being asked.';
+
+/** Shown after the shared consent text: in a terminal a pack's code is not confined to a preview. */
+const PACK_CONSENT_NOTE =
+  ' In the terminal this code runs with all the permissions of your user account.';
+
+function isPackConsent(request: HostPromptRequest): boolean {
+  return (
+    request.kind === 'pack-install-consent' || request.kind === 'pack-replace'
+  );
+}
+
 /**
  * One `HostAdapter.prompt` for every grant/consent question this app can
  * ever ask. Today that is only the three grant prompts `runViaAdapter`
@@ -63,19 +82,39 @@ const NON_INTERACTIVE_REASON =
 function createCliPrompt(
   terminal: Terminal,
   onNonInteractiveDenial: (reason: string) => void,
+  assumeYes: boolean,
 ): (request: HostPromptRequest) => Promise<boolean> {
   let warned = false;
   return async (request: HostPromptRequest): Promise<boolean> => {
+    if (assumeYes && isPackConsent(request)) return true;
     if (!terminal.stdinIsTty) {
       if (!warned) {
         warned = true;
-        onNonInteractiveDenial(NON_INTERACTIVE_REASON);
+        onNonInteractiveDenial(
+          isPackConsent(request)
+            ? NON_INTERACTIVE_PACK_REASON
+            : NON_INTERACTIVE_REASON,
+        );
       }
       return false;
     }
-    const answer = await terminal.ask(`${request.message}${PROMPT_SUFFIX} `);
+    const message =
+      request.kind === 'pack-install-consent'
+        ? `${request.message}${PACK_CONSENT_NOTE}`
+        : request.message;
+    const answer = await terminal.ask(`${message}${PROMPT_SUFFIX} `);
     return isAffirmative(answer);
   };
+}
+
+/** Where this CLI's packs live. Passed by `main.ts`, never read from the environment here. */
+export interface CliPackOptions {
+  /** The device-local install store: one folder per namespace. */
+  readonly installRoot: string;
+  /** The packs shipped with the CLI (`dist/packs`, one folder each), when the build has any. */
+  readonly bundledRoot?: string;
+  /** Namespaces an install may never claim: the bundled packs' names. */
+  readonly reservedNamespaces: ReadonlySet<string>;
 }
 
 export interface CliHostAdapterOptions {
@@ -91,6 +130,22 @@ export interface CliHostAdapterOptions {
    * given" (`tmp/W11-adapter-design.md`, `HostExportCapabilities`).
    */
   readonly exportTarget?: string;
+  /** Declares the `packs` capability (engine `ansi`) when given. */
+  readonly packs?: CliPackOptions;
+  /** The explicit `--yes` flag: answers yes to the pack install and replace consent only. */
+  readonly assumeYes?: boolean;
+}
+
+async function listSubfolders(folder: string): Promise<string[]> {
+  try {
+    const entries = await readdir(folder, { withFileTypes: true });
+    return entries
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort();
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -130,7 +185,11 @@ export function createCliHostAdapter(
       }
     },
 
-    prompt: createCliPrompt(options.terminal, diagnostics),
+    prompt: createCliPrompt(
+      options.terminal,
+      diagnostics,
+      options.assumeYes === true,
+    ),
 
     memento: options.memento,
 
@@ -150,6 +209,44 @@ export function createCliHostAdapter(
     },
 
     // No `editor`: no cursor, no live edit surface.
-    // No `packs`: this CLI loads no packs by design (AGENTS.md).
+    ...(options.packs !== undefined
+      ? { packs: cliPackSource(options.packs, diagnostics) }
+      : {}),
+  };
+}
+
+function cliPackSource(
+  packs: CliPackOptions,
+  diagnostics: (line: string) => void,
+): NonNullable<HostAdapter['packs']> {
+  return {
+    engine: 'ansi',
+    reservedNamespaces: () => packs.reservedNamespaces,
+    installRoot: () => packs.installRoot,
+    removeFolder: (folder: string): Promise<void> =>
+      rm(folder, { recursive: true, force: true }),
+    /**
+     * The bundled packs first, then each installed one. Bundled namespaces
+     * win: an installed folder carrying a reserved name (put there by hand,
+     * since an install refuses it) is left out and reported.
+     */
+    authorizedFolders: async (): Promise<readonly string[]> => {
+      const folders: string[] = [];
+      if (packs.bundledRoot !== undefined) {
+        for (const name of await listSubfolders(packs.bundledRoot)) {
+          folders.push(path.join(packs.bundledRoot, name));
+        }
+      }
+      for (const name of await listSubfolders(packs.installRoot)) {
+        if (packs.reservedNamespaces.has(name)) {
+          diagnostics(
+            `Skipped installed pack folder "${name}": "${name}" is a built-in pack, and the built-in one is used.`,
+          );
+          continue;
+        }
+        folders.push(path.join(packs.installRoot, name));
+      }
+      return folders;
+    },
   };
 }

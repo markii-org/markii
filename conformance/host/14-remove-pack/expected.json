@@ -1,0 +1,14 @@
+{
+  "outcomes": [
+    { "kind": "opened" },
+    { "kind": "installed", "namespace": "ana", "replaced": false },
+    { "kind": "removed", "namespace": "ana" },
+    { "kind": "not-installed", "namespace": "ana" }
+  ],
+  "diagnostics": [
+    "Install pack from file installed pack \"ana\"",
+    "Remove pack removed \"ana\"",
+    "Remove pack found no installed pack \"ana\""
+  ],
+  "prompts": ["Installing \"ana\" lets its code run inside"]
+}

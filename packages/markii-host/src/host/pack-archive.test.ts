@@ -49,6 +49,7 @@ describe('writeArchiveContents + createNodeArchiveExtractFs', () => {
         manifestWarnings: [],
         scriptBytes: new TextEncoder().encode('script'),
         stylesheetBytes: new TextEncoder().encode('style'),
+        terminalScriptBytes: new TextEncoder().encode('terminal'),
         scriptModules: {
           'http.lua': new TextEncoder().encode('return {}'),
           'nested/sub.lua': new TextEncoder().encode('return 1'),
@@ -67,6 +68,9 @@ describe('writeArchiveContents + createNodeArchiveExtractFs', () => {
     );
     expect(await readFile(path.join(target, 'webview.css'), 'utf8')).toBe(
       'style',
+    );
+    expect(await readFile(path.join(target, 'terminal.js'), 'utf8')).toBe(
+      'terminal',
     );
     expect(
       await readFile(path.join(target, 'scripts', 'http.lua'), 'utf8'),

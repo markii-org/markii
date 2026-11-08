@@ -602,8 +602,16 @@ The responsibilities below are what conformance is measured against.
     picker that the renderer would answer with the unknown-component box.
     A host that loads terminal pack code runs it in its own process, so it
     loads that code only from its own device-local store and its shipped
-    packs; see [security.md](security.md). A host that renders with React
-    ignores a pack's `terminal.js`.
+    packs; see [security.md](security.md). The reference command line tool
+    keeps that store in a `packs` folder beside its state file, one folder
+    per namespace. Its install consent adds that the code runs with all of
+    the user's permissions, and with no terminal to ask in it refuses
+    unless the user passed an explicit flag; that flag answers the pack
+    questions only, never a network grant. A pack that only lacks views for
+    the host's engine is informational, while a missing or throwing
+    `terminal.js`, or one registering another namespace, is a failure line.
+    A host that renders with React keeps a pack's `terminal.js` on disk and
+    never evaluates it.
 11. **Pack compilation, if you compile packs from source.** A pack ships
     component sources and no build step of its own, so a host that offers
     source packs compiles them at load time with `esbuild-wasm`, and it
@@ -624,7 +632,9 @@ The responsibilities below are what conformance is measured against.
     load no packs whatsoever, which is a third supported position rather
     than an unfinished one: every pack directive then renders as the
     unknown-component box, the note stays readable, and the host says so
-    where its users will look. The reference command line tool sits here.
+    where its users will look. The reference command line tool compiles
+    nothing either: it loads the prebuilt `terminal.js` of its shipped
+    packs and of the packs installed into its own store.
 12. **Storage that does not travel.** Anything that authorizes execution or
     network access, meaning grants, auto-run, any scheduled interval, the
     list of packs a device loads, and any switch that decides whether

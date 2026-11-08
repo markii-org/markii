@@ -71,7 +71,7 @@ export function createNodeArchiveExtractFs(): ArchiveExtractFs {
  * (the parsed manifest, re-serialized: `openPackArchive` keeps only the
  * validated manifest fields, not the original bytes, so the written file
  * is a normalized round-trip of the same fields, not a byte-for-byte
- * copy), `webview.js`, `webview.css` when the archive has one, and
+ * copy), `webview.js`, `webview.css` and `terminal.js` when the archive has them, and
  * `scripts/*` when it ships any. Does NOT clear `destinationDir` first;
  * a caller that needs a clean re-extract (a reinstall replacing an
  * existing pack) calls `fs.removeDirectory` itself before this.
@@ -103,6 +103,12 @@ export async function writeArchiveContents(
     await fs.writeFile(
       path.join(destinationDir, 'webview.css'),
       archive.stylesheetBytes,
+    );
+  }
+  if (archive.terminalScriptBytes !== undefined) {
+    await fs.writeFile(
+      path.join(destinationDir, 'terminal.js'),
+      archive.terminalScriptBytes,
     );
   }
   const moduleNames = Object.keys(archive.scriptModules);
