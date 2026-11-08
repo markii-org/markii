@@ -105,7 +105,8 @@ const UNICODE: GlyphSet = {
   starFilled: '★',
   starEmpty: '☆',
   emptyValue: '—',
-  keyLegend: '↑↓/jk focus  ←→/tab switch  enter open/close  q quit',
+  keyLegend:
+    'q quit  ↑↓/jk focus  ←→/tab switch  enter open/close  space/pgdn scroll  g/G top/end',
 };
 
 const ASCII: GlyphSet = {
@@ -138,7 +139,7 @@ const ASCII: GlyphSet = {
   starEmpty: '.',
   emptyValue: '-',
   keyLegend:
-    'up/down/jk focus  left/right/tab switch  enter open/close  q quit',
+    'q quit  up/down/jk focus  left/right/tab switch  enter open/close  space/pgdn scroll  g/G top/end',
 };
 
 const GLYPHS: Readonly<Record<BoxStyle, GlyphSet>> = {

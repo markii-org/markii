@@ -4,7 +4,11 @@ import type { ReactNode } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { bold, dim } from '../ansi.js';
 import type { ColorLevel } from '../ansi.js';
-import { useFocusMarker, useIsFocused } from '../interactive.js';
+import {
+  useFocusAnchor,
+  useFocusMarker,
+  useIsFocused,
+} from '../interactive.js';
 
 /**
  * `:::details{title="..." open} ... :::` — a collapsible disclosure, built
@@ -48,6 +52,7 @@ export function InteractiveDetails({
 }: InteractiveDetailsProps): ReactNode {
   const [open, setOpen] = useState(defaultOpen);
   const focused = useIsFocused(focusId);
+  const anchor = useFocusAnchor(focusId);
 
   useInput(
     (_input, key) => {
@@ -84,7 +89,7 @@ export function InteractiveDetails({
   }
 
   return (
-    <Box flexDirection="column">
+    <Box ref={anchor} flexDirection="column">
       <Text>{headingLine}</Text>
       {open && (
         <Box marginLeft={2} flexDirection="column">

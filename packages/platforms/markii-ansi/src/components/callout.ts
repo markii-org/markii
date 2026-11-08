@@ -19,13 +19,13 @@ const CALLOUT_LABELS: Record<CalloutType, string> = {
   danger: 'Danger',
 };
 
-const CALLOUT_TOKENS: Record<CalloutType, Tier1Token> = {
+export const CALLOUT_TOKENS: Record<CalloutType, Tier1Token> = {
   info: '--mk-info',
   warning: '--mk-warning',
   danger: '--mk-danger',
 };
 
-function isCalloutType(value: string): value is CalloutType {
+export function isCalloutType(value: string): value is CalloutType {
   return (CALLOUT_TYPES as readonly string[]).includes(value);
 }
 
@@ -36,8 +36,38 @@ function isTextAlign(value: string): value is TextAlign {
 }
 
 /** `headerText` for `type`, e.g. `ℹ Info` — needed by both `resolveCalloutInnerWidth` (before there is a component instance) and `Callout` itself. */
-function headerTextFor(type: CalloutType, glyphs: GlyphSet): string {
+export function headerTextFor(type: CalloutType, glyphs: GlyphSet): string {
   return `${glyphs.calloutIcons[type]} ${CALLOUT_LABELS[type]}`;
+}
+
+/** The resolved `type` of a callout: an unknown or missing value is `info`. */
+export function resolveCalloutType(
+  attributes: DirectiveAttributes,
+): CalloutType {
+  const raw = attributes.type ?? 'info';
+  return isCalloutType(raw) ? raw : 'info';
+}
+
+/**
+ * The callout's own OUTER (bar-including) width: what `Callout` draws at
+ * and what the Ink element form in `render.tsx` sizes its `Box` to.
+ * `title` is expected already sanitized, as `Callout` passes it.
+ */
+export function resolveCalloutBoxWidth(
+  type: CalloutType,
+  title: string | null,
+  layout: ResolvedLayoutPresets | undefined,
+  outerWidth: number,
+  glyphs: GlyphSet,
+): number {
+  const barWidth = measureWidth(glyphs.calloutBar);
+  const naturalWidth =
+    barWidth +
+    Math.max(
+      measureWidth(headerTextFor(type, glyphs)),
+      measureWidth(title ?? ''),
+    );
+  return selfLayoutWidth(layout, outerWidth, naturalWidth);
 }
 
 /**

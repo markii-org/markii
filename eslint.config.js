@@ -8,6 +8,8 @@ export default tseslint.config(
       '**/dist/**',
       '**/coverage/**',
       '**/.vite/**',
+      // Local, gitignored scratch (briefs, test builds); never linted.
+      'tmp/**',
       // Pack fixtures (GitHub issue #3 slice 5): plain, un-tsconfig'd
       // source/build artifacts a pack ships (a .tsx component source, a
       // hand-written prebuilt webview.js) — never compiled by this repo's

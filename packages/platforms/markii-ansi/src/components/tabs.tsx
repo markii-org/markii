@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { GlyphSet } from '../glyphs.js';
 import type { ReactNode } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { bold, dim } from '../ansi.js';
 import type { ColorLevel } from '../ansi.js';
 import {
+  useFocusAnchor,
   useFocusMarker,
   useIsFocused,
   useReportActiveLabel,
@@ -52,6 +53,7 @@ export function InteractiveTabs({
   const [active, setActive] = useState(0);
   const focused = useIsFocused(focusId);
   const reportActiveLabel = useReportActiveLabel();
+  const anchor = useFocusAnchor(focusId);
 
   useInput(
     (_input, key) => {
@@ -64,13 +66,6 @@ export function InteractiveTabs({
       }
       if (nextIndex === undefined) return;
       setActive(nextIndex);
-      // Reported from THIS key handler, never during render — see
-      // `FocusApi.reportActiveLabel`'s doc comment for why that carries no
-      // render-loop risk, unlike the render-time report channel batch 10.1
-      // deliberately avoided.
-      if (focusId !== undefined) {
-        reportActiveLabel(focusId, panels[nextIndex]?.label ?? '');
-      }
     },
     { isActive: interactive && focused },
   );
@@ -81,6 +76,16 @@ export function InteractiveTabs({
   // waste is the price of never making a hook call conditional.
   const activeIndex = Math.min(active, Math.max(0, panels.length - 1));
   const activePanel = panels[activeIndex];
+  const activeLabel = activePanel?.label ?? '';
+  // Tells the status line which panel is showing. Reported from an effect
+  // on the active label itself, so it also follows a re-parse (`--watch`)
+  // that changes the panels under a mounted block. The root ignores a
+  // report that repeats what it already has, so this cannot loop.
+  useEffect(() => {
+    if (interactive && focusId !== undefined) {
+      reportActiveLabel(focusId, activeLabel);
+    }
+  }, [interactive, focusId, activeLabel, reportActiveLabel]);
   const strip = panels
     .map((panel, index) => {
       const rendered =
@@ -109,7 +114,7 @@ export function InteractiveTabs({
   }
 
   return (
-    <Box flexDirection="column">
+    <Box ref={anchor} flexDirection="column">
       <Text>{headingLine}</Text>
       {activePanel?.body}
     </Box>

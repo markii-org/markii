@@ -114,30 +114,6 @@ function buildGrantMemento(terminal: Terminal) {
   return createFileGrantMemento(path.join(dir, CLI_STATE_FILE_NAME));
 }
 
-function writeFailureLines(
-  terminal: Terminal,
-  failures: readonly { name: string; kind: string }[],
-): void {
-  for (const failure of failures) {
-    terminal.writeError(
-      `markii: script "${failure.name}" failed (${failure.kind})\n`,
-    );
-  }
-}
-
-function writeFailureDetails(
-  terminal: Terminal,
-  details: readonly { name: string; message: string }[],
-  netDiagnostics: readonly string[],
-): void {
-  for (const detail of details) {
-    terminal.writeError(`markii: ${detail.name}: ${detail.message}\n`);
-  }
-  for (const line of netDiagnostics) {
-    terminal.writeError(`markii: ${line}\n`);
-  }
-}
-
 /**
  * The real live-viewer mount, wired to the actual process streams. Defined
  * here (not in `view-deps.ts` or `live-view.ts`) because `main.ts` is the
@@ -148,7 +124,11 @@ const defaultViewDeps: ViewDeps = {
   mountLiveViewer: async (input: MountLiveViewerInput): Promise<void> => {
     const initialWidth = resolveWidth(input.widthFlag, input.terminal);
     let text = input.text;
-    const buildElement = (width: number, onExit: () => void) =>
+    const buildElement = (
+      width: number,
+      onExit: () => void,
+      rows: number | undefined,
+    ) =>
       buildViewElement(text, input.terminal, width, {
         ...(input.colorFlag !== undefined
           ? { colorFlag: input.colorFlag }
@@ -157,6 +137,7 @@ const defaultViewDeps: ViewDeps = {
         store: input.store,
         onDiagnostic: input.onDiagnostic,
         onExit,
+        ...(rows !== undefined ? { rows } : {}),
       });
     const onTextChange = input.onTextChange;
     await runLiveViewer({
@@ -248,14 +229,9 @@ async function runViewCommand(
     for (const failure of result.failures) {
       writeError(`markii: script "${failure.name}" failed (${failure.kind})\n`);
     }
-    if (command.verbose) {
-      for (const detail of result.failureDetails) {
-        writeError(`markii: ${detail.name}: ${detail.message}\n`);
-      }
-      for (const line of result.netDeclarationDiagnostics) {
-        writeError(`markii: ${line}\n`);
-      }
-    }
+    // The detail lines (each failure's message, net-declaration mismatches)
+    // come from the shared run path through onDiagnosticLine, so --verbose
+    // shows them once; only this one-line summary is written here.
     if (result.failures.length > 0) exitCode = 2;
   } else {
     values = readPersistedValues(memento, documentKey);
@@ -476,12 +452,8 @@ async function runRunCommand(
     onDiagnosticLine: (line) => terminal.writeError(`markii: ${line}\n`),
   });
 
-  writeFailureLines(terminal, result.failures);
-  writeFailureDetails(
-    terminal,
-    result.failureDetails,
-    result.netDeclarationDiagnostics,
-  );
+  // The shared run path already wrote every failure and net-declaration
+  // line through onDiagnosticLine; writing them here again would repeat them.
 
   return result.failures.length > 0 ? 2 : 0;
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createFakeTerminal } from './test-terminal.js';
 import {
+  buildViewElement,
   detectBoxStyle,
   renderNote,
   resolveBox,
@@ -116,5 +117,22 @@ describe('renderNote box style', () => {
     );
     expect(out.split('\n')[0]).toBe('+- T --------------+');
     expect([...out].every((ch) => ch.charCodeAt(0) < 0x80)).toBe(true);
+  });
+});
+
+describe('buildViewElement rows', () => {
+  const terminal = createFakeTerminal();
+
+  it('hands the terminal rows to the engine as the viewport', () => {
+    const element = buildViewElement('hello\n', terminal, 80, { rows: 24 });
+    expect(element.props).toMatchObject({ viewportRows: 24, width: 80 });
+  });
+
+  it('leaves the view unbounded when no rows are known', () => {
+    const element = buildViewElement('hello\n', terminal, 80);
+    expect(element.props).not.toHaveProperty('viewportRows', 24);
+    expect((element.props as { viewportRows?: number }).viewportRows).toBe(
+      undefined,
+    );
   });
 });

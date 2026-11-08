@@ -133,7 +133,11 @@ export function buildViewElement(
   text: string,
   terminal: Pick<Terminal, 'env' | 'stdoutIsTty'>,
   width: number,
-  options: RenderNoteOptions & { readonly onExit?: () => void } = {},
+  options: RenderNoteOptions & {
+    readonly onExit?: () => void;
+    /** The terminal's row count; gives the view a viewport with a pinned status line. Absent, the view is laid out at full height. */
+    readonly rows?: number;
+  } = {},
 ): ReactElement {
   const color = resolveColor(options.colorFlag, terminal);
   return buildMarkElement(text, undefined, {
@@ -143,6 +147,7 @@ export function buildViewElement(
     ...(options.store ? { store: options.store } : {}),
     ...(options.onDiagnostic ? { onDiagnostic: options.onDiagnostic } : {}),
     ...(options.onExit ? { onExit: options.onExit } : {}),
+    ...(options.rows !== undefined ? { viewportRows: options.rows } : {}),
     interactive: true,
   });
 }

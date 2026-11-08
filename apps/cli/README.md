@@ -78,6 +78,10 @@ starts folded unless it was written with `open`.
 | left, right, tab | Switch to the previous or next tab                |
 | enter            | Fold a details block open or closed               |
 | up, down, j, k   | Move focus to the previous or next foldable block |
+| space, pgdn      | Scroll down one screen                            |
+| b, pgup          | Scroll up one screen                              |
+| g, G             | Jump to the top or the bottom of the note         |
+| ctrl-e, ctrl-y   | Scroll down or up one line                        |
 | q                | Quit                                              |
 
 The focused block is marked in the accent color and with a `›` glyph (`>`
@@ -87,9 +91,12 @@ hint next to its summary (`enter to close` once it is open). A status line
 at the bottom of the view names the focused block and repeats the key
 legend.
 
-A tabs or details block nested inside a callout is read-only: it renders
-as it does in the static view and is not part of the focus cycle. Nested
-inside a card or a figure, it takes focus like any other.
+A note longer than the terminal scrolls inside the window, and the status
+line stays pinned at the bottom. Moving focus to a block scrolls it into
+view. With nothing to focus, j and k scroll one line.
+
+A tabs or details block nested inside a callout, a card, or a figure takes
+focus like any other.
 
 The viewer needs both stdin and stdout to be terminals. Piping the output,
 redirecting it to a file, or passing `--static` renders the note once and

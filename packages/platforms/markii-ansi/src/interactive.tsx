@@ -2,15 +2,19 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import type { ReactNode } from 'react';
-import { Box, Text, useInput } from 'ink';
+import { Box, Text, measureElement, useInput } from 'ink';
+import type { DOMElement } from 'ink';
 import { dim } from './ansi.js';
 import type { AnsiTheme } from './theme.js';
 import type { ColorLevel } from './ansi.js';
 import { style } from './style.js';
+import { cutToWidth } from './text-grid.js';
 
 /**
  * The interactive-mode focus manager (batch 10's live-viewer support): a
@@ -36,19 +40,19 @@ interface FocusApi {
   /** The accent-colored focus ring text a focused component draws around its own heading, styled at the render's resolved color level. */
   focusMarker(text: string): string;
   /**
-   * Lets a `tabs` instance tell `InteractiveRoot` which panel is active NOW,
-   * so the status line can name it. Called from a KEY HANDLER (`tabs.tsx`'s
-   * `useInput` callback) when the reader switches panels, never during
-   * render — this is an ordinary React "child calls a parent callback on an
-   * event" pattern, not a render-time report channel. The distinction
-   * matters: batch 10.1 deliberately avoided a report channel invoked DURING
-   * render (that shape can trigger a render loop, since it would call
-   * `setState` while React is still computing the current render). A
-   * callback invoked from a keypress handler carries no such risk — it runs
-   * strictly BETWEEN renders, exactly like any other event handler calling
-   * `setState`.
+   * Lets a `tabs` instance tell `InteractiveRoot` which panel is showing,
+   * so the status line can name it. Called from an effect in `tabs.tsx`
+   * keyed on the active label (so it also follows a re-parse that changes
+   * the panels), never during render. The root ignores a report that
+   * repeats the label it holds, so the effect cannot loop.
    */
   reportActiveLabel(focusId: number, label: string): void;
+  /**
+   * Hands a focusable component's outermost `Box` to the root, so the
+   * viewport can measure where it sits and scroll it into view. Called from
+   * a ref callback (commit time), never during render. `undefined` detaches.
+   */
+  registerAnchor(focusId: number, node: DOMElement | undefined): void;
 }
 
 const FocusContext = createContext<FocusApi>({
@@ -56,6 +60,7 @@ const FocusContext = createContext<FocusApi>({
   focusedId: undefined,
   focusMarker: (text) => text,
   reportActiveLabel: () => {},
+  registerAnchor: () => {},
 });
 
 /** Whether the component identified by `focusId` is the currently focused one. `undefined` (a non-interactive render, or a component that never got a `focusId`) is never focused. */
@@ -77,9 +82,9 @@ export function useFocusMarker(
 
 /**
  * Lets a `tabs` instance report its currently active panel's label to
- * `InteractiveRoot`, so the status line can name it. Call this from a KEY
- * HANDLER only (see `FocusApi.reportActiveLabel`'s doc comment for why that
- * is not the render-time report channel batch 10.1 avoided).
+ * `InteractiveRoot`, so the status line names the panel showing rather than
+ * the block's first one. Call it from an effect, never during render (see
+ * `FocusApi.reportActiveLabel`).
  */
 export function useReportActiveLabel(): (
   focusId: number,
@@ -87,6 +92,24 @@ export function useReportActiveLabel(): (
 ) => void {
   const api = useContext(FocusContext);
   return api.reportActiveLabel;
+}
+
+/**
+ * The ref callback a focusable component puts on its outermost `Box`, so
+ * the live viewer can scroll the focused block into view. A no-op without a
+ * `focusId` or outside an interactive render.
+ */
+export function useFocusAnchor(
+  focusId: number | undefined,
+): (node: DOMElement | null) => void {
+  const { registerAnchor } = useContext(FocusContext);
+  return useCallback(
+    (node: DOMElement | null) => {
+      if (focusId === undefined) return;
+      registerAnchor(focusId, node ?? undefined);
+    },
+    [focusId, registerAnchor],
+  );
 }
 
 /**
@@ -112,6 +135,15 @@ export interface InteractiveRootProps {
   theme: AnsiTheme;
   /** The key legend on the status line, identical regardless of what is focused: the render's `GlyphSet.keyLegend`, so it follows the box style. */
   keyLegend: string;
+  /**
+   * The terminal's row count. When given, the document gets a viewport of
+   * this many rows minus the one-row status line, scrolled with the keys in
+   * the legend, and the status line stays pinned at the bottom. Absent, the
+   * document is laid out at its full height with the status line after it.
+   */
+  viewportRows?: number;
+  /** The columns the status line is cut to, so it stays one row. */
+  width: number;
   children: ReactNode;
 }
 
@@ -132,6 +164,8 @@ export function InteractiveRoot({
   color,
   theme,
   keyLegend,
+  viewportRows,
+  width,
   children,
 }: InteractiveRootProps): ReactNode {
   const focusableCount = focusables.length;
@@ -143,16 +177,77 @@ export function InteractiveRoot({
   // and fall back to the descriptor's own stable `label` below.
   const [activeLabels, setActiveLabels] = useState<Record<number, string>>({});
 
+  const viewport =
+    viewportRows !== undefined ? Math.max(1, viewportRows - 1) : undefined;
+  const [offset, setOffset] = useState(0);
+  const contentRef = useRef<DOMElement | null>(null);
+  const anchors = useRef(new Map<number, DOMElement>());
+  // What the last reveal pass saw, so a reveal runs when focus MOVES or the
+  // focused block changes height (a details opening), and not on every
+  // render: a reader who scrolled away on purpose is left where they are.
+  const lastRevealed = useRef<{ id: number | undefined; height: number }>({
+    id: undefined,
+    height: -1,
+  });
+
+  const contentHeight = (): number =>
+    contentRef.current ? measureElement(contentRef.current).height : 0;
+  const maxOffset = (): number =>
+    viewport === undefined ? 0 : Math.max(0, contentHeight() - viewport);
+  const scrollBy = (delta: number): void => {
+    if (viewport === undefined) return;
+    const limit = maxOffset();
+    setOffset((current) => Math.min(limit, Math.max(0, current + delta)));
+  };
+  const scrollTo = (target: 'top' | 'end'): void => {
+    if (viewport === undefined) return;
+    setOffset(target === 'top' ? 0 : maxOffset());
+  };
+
   useInput(
     (input, key) => {
       if (input === 'q') {
         onExit?.();
         return;
       }
-      if (focusableCount === 0) return;
-      if (key.downArrow || input === 'j') {
+      if (viewport !== undefined) {
+        const page = Math.max(1, viewport - 1);
+        if (key.pageDown || input === ' ' || (key.ctrl && input === 'f')) {
+          scrollBy(page);
+          return;
+        }
+        if (key.pageUp || input === 'b' || (key.ctrl && input === 'b')) {
+          scrollBy(-page);
+          return;
+        }
+        if (key.home || input === 'g') {
+          scrollTo('top');
+          return;
+        }
+        if (key.end || input === 'G') {
+          scrollTo('end');
+          return;
+        }
+        if (key.ctrl && input === 'e') {
+          scrollBy(1);
+          return;
+        }
+        if (key.ctrl && input === 'y') {
+          scrollBy(-1);
+          return;
+        }
+      }
+      const down = key.downArrow || input === 'j';
+      const up = key.upArrow || input === 'k';
+      if (focusableCount === 0) {
+        // Nothing to focus: the same keys scroll a line at a time.
+        if (down) scrollBy(1);
+        else if (up) scrollBy(-1);
+        return;
+      }
+      if (down) {
         setFocusIndex((current) => (current + 1) % focusableCount);
-      } else if (key.upArrow || input === 'k') {
+      } else if (up) {
         setFocusIndex(
           (current) => (current - 1 + focusableCount) % focusableCount,
         );
@@ -175,15 +270,51 @@ export function InteractiveRoot({
     );
   }, []);
 
+  const registerAnchor = useCallback(
+    (focusId: number, node: DOMElement | undefined) => {
+      if (node) anchors.current.set(focusId, node);
+      else anchors.current.delete(focusId);
+    },
+    [],
+  );
+
   const api = useMemo<FocusApi>(
     () => ({
       interactive: true,
       focusedId,
       focusMarker: (text: string) => style(text, '--mk-accent', theme, color),
       reportActiveLabel,
+      registerAnchor,
     }),
-    [focusedId, color, theme, reportActiveLabel],
+    [focusedId, color, theme, reportActiveLabel, registerAnchor],
   );
+
+  // After every commit Ink has laid the tree out, so this is where the
+  // viewport is kept honest: the offset never exceeds the document (a
+  // resize or a closing details can shrink it), and a focus move, or a
+  // focused block growing, scrolls that block into view.
+  useEffect(() => {
+    if (viewport === undefined || !contentRef.current) return;
+    const content = measureElement(contentRef.current);
+    const limit = Math.max(0, content.height - viewport);
+    let next = Math.min(offset, limit);
+    const anchor =
+      focusedId !== undefined ? anchors.current.get(focusedId) : undefined;
+    if (anchor) {
+      const box = measureElement(anchor);
+      const seen = lastRevealed.current;
+      if (seen.id !== focusedId || seen.height !== box.height) {
+        lastRevealed.current = { id: focusedId, height: box.height };
+        const top = box.y - content.y;
+        const bottom = top + box.height;
+        if (top < next) next = top;
+        else if (bottom > next + viewport)
+          next = Math.min(top, bottom - viewport);
+        next = Math.min(limit, Math.max(0, next));
+      }
+    }
+    if (next !== offset) setOffset(next);
+  });
 
   const focused = focusedId !== undefined ? focusables[focusedId] : undefined;
   const focusedLabel =
@@ -193,13 +324,46 @@ export function InteractiveRoot({
   const statusLabel = focused
     ? `${focused.kind} "${focusedLabel}"`
     : 'nothing focusable';
-  const statusLine = dim(`${statusLabel}  ${keyLegend}`, color);
+  // Cut to the width on plain text: the status line must stay one row (the
+  // viewport math counts it as one), and a label or legend that wrapped
+  // would push the document up.
+  const statusLine = dim(
+    cutToWidth(`${statusLabel}  ${keyLegend}`, width),
+    color,
+  );
+
+  const status = <Text>{statusLine}</Text>;
+
+  if (viewport === undefined) {
+    return (
+      <FocusContext.Provider value={api}>
+        <Box flexDirection="column">
+          {children}
+          {status}
+        </Box>
+      </FocusContext.Provider>
+    );
+  }
 
   return (
     <FocusContext.Provider value={api}>
-      <Box flexDirection="column">
-        {children}
-        <Text>{statusLine}</Text>
+      <Box flexDirection="column" height={viewport + 1}>
+        <Box
+          flexDirection="column"
+          height={viewport}
+          flexShrink={0}
+          overflow="hidden"
+        >
+          <Box
+            ref={contentRef}
+            flexDirection="column"
+            flexShrink={0}
+            marginTop={-offset}
+          >
+            {children}
+          </Box>
+        </Box>
+        {status}
       </Box>
     </FocusContext.Provider>
   );

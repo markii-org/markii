@@ -15,6 +15,9 @@ function isTextAlign(value: string): value is RowTextAlign {
 /** Below this width, cells stack vertically instead of sitting side by side — a named constant per the batch brief, not a magic number. */
 export const ROW_COLUMN_THRESHOLD = 60;
 
+/** The blank columns between two cells of a grid row. Shared by both emitters (the Ink flex `Box` and the flattened string). */
+export const ROW_GUTTER = 1;
+
 export interface RowLayout {
   align: RowTextAlign;
   columnCount: number;
@@ -54,7 +57,7 @@ export function resolveRowLayout(
     Math.min(requestedCols, Math.max(1, cellCount)),
   );
 
-  const gutter = 1;
+  const gutter = ROW_GUTTER;
   const stacked = width < ROW_COLUMN_THRESHOLD || columnCount <= 1;
   const colWidth = stacked
     ? width

@@ -306,6 +306,19 @@ export function isTextAlign(value: string): value is TextAlign {
   return (TEXT_ALIGNS as readonly string[]).includes(value);
 }
 
+/** `text` cut to at most `width` terminal columns, with no ellipsis (so no glyph outside the engine's own table). Plain text only: an escape sequence would be measured and cut like prose. */
+export function cutToWidth(text: string, width: number): string {
+  let out = '';
+  let used = 0;
+  for (const char of text) {
+    const next = measureWidth(char);
+    if (used + next > width) break;
+    out += char;
+    used += next;
+  }
+  return out;
+}
+
 /** A full-width horizontal rule, `char` repeated to `width` columns. */
 export function ruleLine(width: number, char: string): string {
   return char.repeat(Math.max(0, width));
@@ -321,10 +334,11 @@ export function indentBlock(block: string, prefix: string): string {
 
 /**
  * Places `blocks` side by side, each padded (left-aligned) to its entry in
- * `widths`, joined by `gutter` spaces, top-aligned. Used only by the plain
- * GFM markdown table (`render.tsx`'s `renderGfmTable`) and
- * `table-grid.ts`'s own row-drawing; `row`'s OWN columns are placed by a
- * real Ink flex `Box` instead (`components/row.tsx`), not by this helper.
+ * `widths`, joined by `gutter` spaces, top-aligned. The string emitter of
+ * `row` (`render.tsx`'s `renderRowString`, reached when a `row` sits inside
+ * a body drawn as a string) places its cells with this. The Ink element
+ * emitter (`renderRowElement`) uses a flex `Box` with the same cell widths
+ * and gutter, both read from `components/row.ts`'s `resolveRowLayout`.
  */
 export function columnsBlock(
   blocks: readonly string[],

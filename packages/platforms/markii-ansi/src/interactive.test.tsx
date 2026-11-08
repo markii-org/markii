@@ -85,6 +85,7 @@ async function mountInteractive(
   width = 40,
   color: ColorOption = 'never',
   box: BoxStyle = 'unicode',
+  viewportRows?: number,
 ) {
   const { render } = await import('ink');
   const stdin = makeFakeStdin();
@@ -94,6 +95,7 @@ async function mountInteractive(
     color,
     box,
     interactive: true,
+    ...(viewportRows !== undefined ? { viewportRows } : {}),
   });
   const instance = render(element, {
     stdout: stdout as unknown as NodeJS.WriteStream,
@@ -170,7 +172,7 @@ describe("box: 'ascii' in the live viewer", () => {
   it('draws the focus marker, fold markers, and status line in 7-bit characters', async () => {
     const view = await mountInteractive(
       `${TABS_DOC}\n${DETAILS_DOC}`,
-      60,
+      110,
       'never',
       'ascii',
     );
@@ -332,10 +334,12 @@ describe('live wording: the enter hint on a focused details block', () => {
 
 describe('the status line', () => {
   it('names the focused tabs block by its first panel label, and shows the key legend', async () => {
-    const view = await mountInteractive(TABS_AND_DETAILS_DOC, 60);
+    const view = await mountInteractive(TABS_AND_DETAILS_DOC, 110);
     const frame = view.lastFrame();
     expect(frame).toContain('tabs "One"');
     expect(frame).toContain('↑↓/jk focus');
+    expect(frame).toContain('space/pgdn scroll');
+    expect(frame).toContain('g/G top/end');
     expect(frame).toContain('←→/tab switch');
     expect(frame).toContain('enter open/close');
     expect(frame).toContain('quit');
@@ -380,8 +384,8 @@ describe('the status line', () => {
   });
 });
 
-describe('a tabs/details nested inside a card is focusable; nested inside a callout it is not', () => {
-  it('the focus cycle over test-fixtures/tabs-details.mk.md visits the card-nested Alpha tabs and More details, never the callout-nested Gamma tabs or Buried details', async () => {
+describe('a tabs/details nested inside a card is focusable; so is one nested inside a callout', () => {
+  it('the focus cycle over test-fixtures/tabs-details.mk.md visits every tabs and details, including the ones nested in a card and in a callout', async () => {
     const { readFileSync } = await import('node:fs');
     const { join } = await import('node:path');
     const { fileURLToPath } = await import('node:url');
@@ -392,23 +396,14 @@ describe('a tabs/details nested inside a card is focusable; nested inside a call
     );
     const view = await mountInteractive(source, 80);
     const labels = new Set<string>();
-    // Batch 11 (Ink frames): `card` moved onto a real Ink `Box` border, so a
-    // `tabs`/`details` nested in a card's body IS now a real focusable —
-    // this fixture has four in document order: the top-level tabs, the
-    // top-level details, `Holder`'s nested Alpha/Beta tabs, and `Folded`'s
-    // nested More details. `callout` did NOT move (its per-line colored bar
-    // has no Ink-native equivalent under the never-`borderColor` styling
-    // rule — see `render.tsx`'s `CARD_NAME`/`FIGURE_NAME` doc comment), so
-    // the fixture's trailing callout's nested Gamma tabs and Buried details
-    // stay excluded from the cycle, the same boundary this test used to
-    // assert for card before this batch.
-    for (let i = 0; i < 8; i += 1) {
+    // Six focusables in document order: the top-level tabs and details,
+    // Holder's Alpha/Beta tabs, Folded's More details, and the callout's
+    // Gamma/Delta tabs and Buried details.
+    for (let i = 0; i < 12; i += 1) {
       const frame = view.lastFrame();
       const match = frame.match(/(tabs|details) "([^"]*)"/);
       expect(match).not.toBeNull();
       labels.add(`${match?.[1]} "${match?.[2]}"`);
-      expect(frame).not.toMatch(/tabs "Gamma"/);
-      expect(frame).not.toMatch(/details "Buried"/);
       await view.press('j');
     }
     expect(labels).toEqual(
@@ -417,6 +412,8 @@ describe('a tabs/details nested inside a card is focusable; nested inside a call
         'details "Summary here"',
         'tabs "Alpha"',
         'details "More"',
+        'tabs "Gamma"',
+        'details "Buried"',
       ]),
     );
     view.unmount();
@@ -452,21 +449,65 @@ describe('card moved onto an Ink Box border (batch 11): its body keeps real focu
   });
 });
 
-describe('callout stayed STRING-mode (batch 11): its body has no real focus', () => {
-  it('a details block nested inside a callout never becomes focusable (STRING mode always shows its body; no status line names it, and Enter does nothing)', async () => {
+describe('callout is an Ink subtree: its body keeps real focus and its bar', () => {
+  const stripEscapes = (text: string): string =>
+    text.replace(/\x1b\[[0-9?;]*[a-zA-Z]/g, '');
+
+  it('enter toggles a details block nested inside a callout, and every body line keeps the bar', async () => {
     const doc =
-      ':::::callout{type=info}\n::::details{title="Nested"}\nhidden body\n::::\n:::::\n';
+      ':::::callout{type=info title="Aside"}\n::::details{title="Nested"}\nhidden body\n::::\n:::::\n';
     const view = await mountInteractive(doc, 60);
-    // The STRING-mode `Details` fallback (details-string.ts) has no
-    // open/closed state at all — it always shows its body, exactly like
-    // the pre-Ink engine's non-interactive render. The point under test is
-    // that it never joins the focus cycle: no status line names it, and it
-    // is unaffected by a keypress.
-    expect(view.lastFrame()).toContain('nothing focusable');
-    expect(view.lastFrame()).not.toContain('details "Nested"');
-    const before = view.lastFrame();
+    expect(view.lastFrame()).toContain('details "Nested"');
+    expect(view.lastFrame()).not.toContain('hidden body');
     await view.press('\r');
-    expect(view.lastFrame()).toBe(before);
+    const frame = stripEscapes(view.lastFrame());
+    expect(frame).toContain('hidden body');
+    const lines = frame
+      .split('\n')
+      .filter((line) => line.trim() !== '')
+      .slice(0, -1); // the status line
+    const body = lines.filter((line) => /Info|Aside|Nested|hidden/.test(line));
+    expect(body.length).toBeGreaterThanOrEqual(4);
+    for (const line of body) expect(line.startsWith('▌')).toBe(true);
+    view.unmount();
+  });
+
+  it('switches a tabs block nested inside a callout', async () => {
+    const doc =
+      ':::::callout{type=warning}\n::::tabs\n:::tab{label="A"}\nbody a\n:::\n:::tab{label="B"}\nbody b\n:::\n::::\n:::::\n';
+    const view = await mountInteractive(doc, 60);
+    expect(view.lastFrame()).toContain('body a');
+    await view.press('\t');
+    expect(view.lastFrame()).toContain('body b');
+    expect(view.lastFrame()).toContain('tabs "B"');
+    view.unmount();
+  });
+
+  it('draws the bar in the type color through the border glyph at truecolor', async () => {
+    const view = await mountInteractive(
+      ':::callout{type=danger}\nbody\n:::\n',
+      40,
+      'truecolor',
+    );
+    expect(view.lastFrame()).toMatch(/\x1b\[38;2;\d+;\d+;\d+m▌/);
+    view.unmount();
+  });
+
+  it('a centered callout keeps a nested details focusable', async () => {
+    const doc =
+      ':::::callout{text=center}\n::::details{title="Nested"}\nhidden body\n::::\n:::::\n';
+    const view = await mountInteractive(doc, 60);
+    await view.press('\r');
+    expect(view.lastFrame()).toContain('hidden body');
+    view.unmount();
+  });
+
+  it('a centered card keeps a nested details focusable', async () => {
+    const doc =
+      ':::::card{text=center}\n::::details{title="Nested"}\nhidden body\n::::\n:::::\n';
+    const view = await mountInteractive(doc, 60);
+    await view.press('\r');
+    expect(view.lastFrame()).toContain('hidden body');
     view.unmount();
   });
 });
@@ -506,5 +547,103 @@ describe('the static path never leaks live-mode wording', () => {
     expect(rendered).not.toContain('›');
     expect(rendered).not.toContain('enter to open');
     expect(rendered).not.toContain('enter to close');
+  });
+});
+
+function manyLines(count: number): string {
+  return Array.from({ length: count }, (_, i) => `line ${i + 1}`).join('\n\n');
+}
+
+function visibleLines(frame: string): string[] {
+  return frame
+    .replace(/\x1b\[[0-9?;]*[a-zA-Z]/g, '')
+    .split('\n')
+    .filter((line) => line.trim() !== '');
+}
+
+describe('the viewport (viewportRows)', () => {
+  it('shows only the first rows-1 rows of a long document, with the status line last', async () => {
+    const view = await mountInteractive(
+      manyLines(30),
+      60,
+      'never',
+      'unicode',
+      10,
+    );
+    const lines = visibleLines(view.lastFrame());
+    expect(lines[0]).toBe('line 1');
+    expect(lines).not.toContain('line 30');
+    expect(lines[lines.length - 1]).toContain('nothing focusable');
+    view.unmount();
+  });
+
+  it('space pages down, b pages up, G goes to the end, g to the top, with the status line pinned', async () => {
+    const view = await mountInteractive(
+      manyLines(30),
+      60,
+      'never',
+      'unicode',
+      10,
+    );
+    await view.press(' ');
+    let lines = visibleLines(view.lastFrame());
+    expect(lines[0]).not.toBe('line 1');
+    expect(lines[lines.length - 1]).toContain('nothing focusable');
+    await view.press('G');
+    lines = visibleLines(view.lastFrame());
+    expect(lines).toContain('line 30');
+    expect(lines[lines.length - 1]).toContain('nothing focusable');
+    await view.press('b');
+    expect(visibleLines(view.lastFrame())).not.toContain('line 30');
+    await view.press('g');
+    expect(visibleLines(view.lastFrame())[0]).toBe('line 1');
+    view.unmount();
+  });
+
+  it('j and k scroll a line at a time when nothing is focusable, and never past either end', async () => {
+    const view = await mountInteractive(
+      manyLines(30),
+      60,
+      'never',
+      'unicode',
+      10,
+    );
+    await view.press('k');
+    expect(visibleLines(view.lastFrame())[0]).toBe('line 1');
+    await view.press('j');
+    await view.press('j');
+    expect(visibleLines(view.lastFrame())[0]).not.toBe('line 1');
+    await view.press('G');
+    await view.press('G');
+    await view.press('j');
+    expect(visibleLines(view.lastFrame())).toContain('line 30');
+    view.unmount();
+  });
+
+  it('scrolls a newly focused block into view', async () => {
+    const doc = `:::details{title="Near"}\nbody\n:::\n\n${manyLines(20)}\n\n:::details{title="Far away"}\nbody\n:::\n`;
+    const view = await mountInteractive(doc, 60, 'never', 'unicode', 10);
+    expect(view.lastFrame()).not.toContain('Far away');
+    // Focus starts on the first block; moving to the second scrolls to it.
+    await view.press('j');
+    expect(view.lastFrame()).toContain('Far away');
+    view.unmount();
+  });
+
+  it('keeps a details block visible after it opens below the fold', async () => {
+    const doc = `${manyLines(8)}\n\n:::details{title="Open me"}\n${manyLines(6)}\n:::\n`;
+    const view = await mountInteractive(doc, 60, 'never', 'unicode', 10);
+    await view.press('\r');
+    expect(view.lastFrame()).toContain('Open me');
+    view.unmount();
+  });
+
+  it('a document shorter than the viewport leaves the status line at the bottom', async () => {
+    const view = await mountInteractive('short\n', 60, 'never', 'unicode', 10);
+    const raw = view.lastFrame().replace(/\x1b\[[0-9?;]*[a-zA-Z]/g, '');
+    const rows = raw.split('\n');
+    expect(rows[0]).toBe('short');
+    expect(rows.findIndex((row) => row.includes('nothing focusable'))).toBe(9);
+    view.unmount();
   });
 });

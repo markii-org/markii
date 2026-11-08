@@ -26,6 +26,7 @@ import {
 import { style } from './style.js';
 import { defaultAnsiTheme, type AnsiTheme } from './theme.js';
 import {
+  columnsBlock,
   frameBlock,
   frameTopLine,
   inkBorderStyle,
@@ -37,13 +38,24 @@ import {
   type TextAlign,
 } from './text-grid.js';
 import { drawTableGrid } from './components/table-grid.js';
-import { resolveRowLayout, type RowTextAlign } from './components/row.js';
+import {
+  ROW_GUTTER,
+  resolveRowLayout,
+  type RowTextAlign,
+} from './components/row.js';
 import {
   CARD_FRAME_OVERHEAD,
   resolveCardBoxWidth,
   resolveCardInnerWidth,
 } from './components/card.js';
-import { resolveCalloutInnerWidth } from './components/callout.js';
+import {
+  Callout,
+  CALLOUT_TOKENS,
+  headerTextFor,
+  resolveCalloutBoxWidth,
+  resolveCalloutInnerWidth,
+  resolveCalloutType,
+} from './components/callout.js';
 import { resolveDetailsInnerWidth } from './components/details-string.js';
 import {
   sanitizeBlockText,
@@ -115,30 +127,26 @@ import { InteractiveDetails } from './components/details.js';
  *
  * - STRING mode (`render*String` functions below): the pre-Ink algorithm,
  *   almost verbatim, still building one flattened, pre-wrapped, pre-aligned
- *   string. This is what every standard component's OWN body still uses —
- *   `card` frames a string, `callout` bars a string, `details` indents a
- *   string — because these components draw FIXED-WIDTH GLYPHS that must be
- *   correct the moment the string is built; Ink lays a tree out AFTER it is
- *   built, so it cannot reflow a box-drawing frame or re-justify per-line
- *   text alignment the way `text=center` needs (Ink has no per-line
- *   paragraph-justify primitive). String mode is also the ONLY mode inline
+ *   string. This is what a self-drawing component's body uses when it sits
+ *   inside a string-drawn ancestor (a standalone `cell`, a GFM table cell),
+ *   and what a non-left `text=` body uses in the render-once path, because
+ *   Ink has no per-line paragraph-justify primitive. String mode is also the ONLY mode inline
  *   content ever uses, at any nesting depth: an inline directive's body is
  *   phrasing content by definition (docs/spec.md), never a layout the reader
  *   would want Ink to lay out as boxes.
  * - ELEMENT mode (`render*Element` functions below): real Ink elements,
  *   used for the document's own block sequencing (so ordinary prose wraps
  *   through Ink's own layout instead of this engine's manual `wrap()`) and
- *   for the three block directives that genuinely need Ink's real layout or
- *   real component state: `row` (a flex `Box` row instead of the deleted
- *   `columns()` string helper), `tabs` and `details` (real React state, for
- *   `ctx.interactive`'s keyboard-driven switching/toggling). A `row`/`tabs`/
- *   `details` reached through a STRING-mode ancestor (nested inside `card`,
- *   `callout`, `figure`, a standalone `cell`, or a GFM table cell) falls
- *   back to a flattened STRING rendering of itself with no interactivity —
- *   an accepted, documented boundary: a self-drawing container's body is, by
- *   its own nature, a fixed string, so nothing nested inside one can be
- *   live. See this file's `renderRowString`/`renderTabsString` for that
- *   fallback.
+ *   for the block directives that genuinely need Ink's real layout or
+ *   real component state: `row` (a flex `Box` row), `tabs` and `details`
+ *   (real React state, for `ctx.interactive`'s keyboard-driven switching/
+ *   toggling), and the containers `card`, `callout` and `figure`, whose
+ *   bodies are Ink subtrees so those can sit inside them. A `row`/`tabs`/
+ *   `details` reached through a STRING-mode ancestor (a standalone `cell`,
+ *   or a GFM table cell) falls back to a flattened STRING rendering of
+ *   itself with no interactivity, an accepted boundary: a body drawn as a
+ *   string cannot hold live state. See `renderRowString` and
+ *   `renderDirectiveString` for that fallback.
  *
  * Interactive components have no meaning for a NON-interactive render at
  * all: `@markii/stdlib`'s `INTERACTIVE_ATTRIBUTE` marks an element a HOST
@@ -168,20 +176,14 @@ const DETAILS_NAME = 'details';
  * never drew a frame at all (it is a caption + optional image line), so it
  * gains no border, only ELEMENT-mode children.
  *
- * `callout` is deliberately NOT in this list: its per-line colored bar
- * (`▌ `) has no Ink-native equivalent under this engine's binding styling
- * rule (`AGENTS.md`/batch 10's brief: never set `borderColor`, never style
- * through an Ink color prop). Ink's `Box` border draws a straight, uncolored
- * edge; there is no way to tint just the border glyph without a color prop.
- * Coloring a bar next to CONTENT OF UNKNOWN HEIGHT (an Ink element tree,
- * not a string) would require rendering the body once to learn its line
- * count and building that many bar rows — a second render pass this engine
- * does not otherwise need. `callout` stays STRING-mode-only; a `tabs`/
- * `details` nested inside one remains non-interactive, the same documented
- * boundary a nested-in-`cell`/GFM-table-cell block already has. See this
- * worker's report (tmp/W11-phase4.md) for the full reasoning.
+ * `callout` joins them too. Its colored bar is a one-column left border
+ * on an Ink `Box` whose border glyph is the already-styled bar string: Ink
+ * repeats that glyph down the body's whole height, whatever the height turns
+ * out to be, and the color still comes from this engine's own SGR helpers,
+ * never an Ink color prop.
  */
 const CARD_NAME = 'card';
+const CALLOUT_NAME = 'callout';
 const FIGURE_NAME = 'figure';
 
 /** Block-level hast tags this engine recognizes; anything else inside a directive's children is treated as inline content. */
@@ -701,20 +703,13 @@ function renderRowString(
   const gridRows: string[] = [];
   for (let index = 0; index < placedCells.length; index += layout.columnCount) {
     const rowCells = placedCells.slice(index, index + layout.columnCount);
-    const lineArrays = rowCells.map((cell) => cell.split('\n'));
-    const rowHeight = Math.max(0, ...lineArrays.map((lines) => lines.length));
-    const lines: string[] = [];
-    for (let line = 0; line < rowHeight; line += 1) {
-      lines.push(
-        lineArrays
-          .map((cellLines) =>
-            padText(cellLines[line] ?? '', layout.colWidth, 'left'),
-          )
-          .join(' ')
-          .replace(/[ ]+$/, ''),
-      );
-    }
-    gridRows.push(lines.join('\n'));
+    gridRows.push(
+      columnsBlock(
+        rowCells,
+        rowCells.map(() => layout.colWidth),
+        ROW_GUTTER,
+      ),
+    );
   }
   return gridRows.join('\n\n');
 }
@@ -1262,10 +1257,14 @@ function renderDirectiveString(
 }
 
 function hasRealComponent(registry: AnsiRegistry, name: string): boolean {
-  return (
-    Object.hasOwn(registry, name) &&
-    readRegistryComponent(registry[name]) != null
-  );
+  if (!Object.hasOwn(registry, name)) return false;
+  const component = readRegistryComponent(registry[name]);
+  if (component == null) return false;
+  // The element form of a callout replaces the standard component's string
+  // drawing. A host that registered its own `callout` keeps its own output,
+  // so only the standard one takes the element path.
+  if (name === CALLOUT_NAME) return component === Callout;
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -1321,6 +1320,92 @@ function invalidEnumMarkerElement(
 }
 
 /**
+ * Whether `node` is a block directive whose element form can hold real
+ * state or focus (`row`, `tabs`, `details`, `card`, `callout`, `figure`).
+ * Used only to decide which children of a justified body stay Ink subtrees.
+ */
+function isInteractiveCapableBlock(node: AnyBlockNode, wctx: WalkContext) {
+  if (node.type !== 'element' || node.tagName !== DIRECTIVE_TAG) return false;
+  if (stringProperty(node, 'data-mk-kind') === TEXT_DIRECTIVE_KIND) {
+    return false;
+  }
+  const { name } = resolveDirectiveAlias(
+    wctx.registry,
+    stringProperty(node, 'data-mk-name') ?? '',
+    parseAttributes(stringProperty(node, 'data-mk-attrs')),
+  );
+  return (
+    (name === ROW_NAME ||
+      name === TABS_NAME ||
+      name === DETAILS_NAME ||
+      name === CARD_NAME ||
+      name === CALLOUT_NAME ||
+      name === FIGURE_NAME) &&
+    hasRealComponent(wctx.registry, name)
+  );
+}
+
+/**
+ * The body of a self-drawing container (`card`, `callout`, a `row` cell)
+ * as one Ink element, honoring its `text=` alignment.
+ *
+ * `left` keeps the whole body a real Ink subtree. `center`/`right` justify
+ * each block with `text-grid.ts`'s `padText`, the one justification
+ * implementation, which needs a string. In the render-once path that means
+ * the whole body is one flattened, justified string, exactly as the
+ * pre-Ink engine drew it (the committed fixtures depend on it). In the
+ * live viewer a block that can hold focus (a `tabs`, a `details`, a nested
+ * container) stays an Ink subtree and is placed at the left of the body,
+ * because a subtree cannot be justified line by line; every other block is
+ * still justified. So the live view trades alignment of those blocks'
+ * headings for being usable.
+ */
+function renderAlignedBodyElement(
+  nodes: readonly AnyBlockNode[],
+  width: number,
+  indent: string,
+  wctx: WalkContext,
+  align: TextAlign,
+): ReactElement | null {
+  if (align === 'left') return renderBlocksElement(nodes, width, indent, wctx);
+  const justify = (text: string): string =>
+    text
+      .split('\n')
+      .map((line) => padText(line, width, align))
+      .join('\n');
+  if (!wctx.interactive) {
+    const text = renderDirectiveChildrenString(
+      nodes as ElementContent[],
+      width,
+      indent,
+      wctx,
+    );
+    return text === '' ? null : styledText(justify(text));
+  }
+  const elements: ReactElement[] = [];
+  for (const node of nodes) {
+    let el: ReactElement | null;
+    if (isInteractiveCapableBlock(node, wctx)) {
+      el = renderBlockElement(node, width, indent, wctx);
+    } else {
+      const text = renderBlockString(node as RootContent, width, indent, wctx);
+      el = text.trim() === '' ? null : styledText(justify(text));
+    }
+    if (el === null) continue;
+    elements.push(
+      <Box
+        key={elements.length}
+        marginTop={elements.length > 0 ? 1 : 0}
+        flexDirection="column"
+      >
+        {el}
+      </Box>,
+    );
+  }
+  return elements.length === 0 ? null : <>{elements}</>;
+}
+
+/**
  * Renders one `row` cell at `cellWidth`. `text=left` (the default) keeps
  * the cell a real Ink element tree (`renderBlockElement`), so anything
  * focusable inside it stays focusable. `text=center`/`text=right` instead
@@ -1341,6 +1426,9 @@ function renderRowCellElement(
 ): ReactElement | null {
   if (align === 'left')
     return renderBlockElement(node, cellWidth, indent, wctx);
+  if (wctx.interactive) {
+    return renderAlignedBodyElement([node], cellWidth, indent, wctx, align);
+  }
   const text = renderBlockString(node, cellWidth, indent, wctx);
   if (text.trim() === '') return null;
   const justified = text
@@ -1380,7 +1468,6 @@ function renderRowElement(
     return <Box flexDirection="column">{items}</Box>;
   }
 
-  const gutter = 1;
   const rows: ReactElement[] = [];
   for (let index = 0; index < cellNodes.length; index += layout.columnCount) {
     const rowCells = cellNodes.slice(index, index + layout.columnCount);
@@ -1390,7 +1477,7 @@ function renderRowElement(
           <Box
             key={cellIndex}
             width={layout.colWidth}
-            marginRight={cellIndex < rowCells.length - 1 ? gutter : 0}
+            marginRight={cellIndex < rowCells.length - 1 ? ROW_GUTTER : 0}
             flexDirection="column"
           >
             {renderRowCellElement(
@@ -1579,27 +1666,13 @@ function renderCardElement(
   );
   const innerWidth = Math.max(1, boxWidth - CARD_FRAME_OVERHEAD);
 
-  let bodyElement: ReactElement | null;
-  if (align === 'left') {
-    bodyElement = renderBlocksElement(
-      element.children,
-      innerWidth,
-      indent,
-      wctx,
-    );
-  } else {
-    const bodyText = renderDirectiveChildrenString(
-      element.children,
-      innerWidth,
-      indent,
-      wctx,
-    );
-    const justified = bodyText
-      .split('\n')
-      .map((line) => padText(line, innerWidth, align))
-      .join('\n');
-    bodyElement = justified === '' ? null : styledText(justified);
-  }
+  const bodyElement = renderAlignedBodyElement(
+    element.children,
+    innerWidth,
+    indent,
+    wctx,
+    align,
+  );
 
   const bordered = (
     <Box
@@ -1636,6 +1709,99 @@ function renderCardElement(
   // framed) — see `invalidEnumMarkerElement`'s call sites elsewhere in this
   // file for the same shape.
   const marker = invalidEnumMarkerElement(CARD_NAME, attributes, wctx);
+  if (!marker) return positioned;
+  return (
+    <Box flexDirection="column">
+      {positioned}
+      {marker}
+    </Box>
+  );
+}
+
+/**
+ * `:::callout{type=info|warning|danger title="..." text=left|center|right}`
+ * as a real Ink element, so a `tabs`/`details` in its body can be focused.
+ *
+ * The colored bar is the left border of an Ink `Box`, one column wide, whose
+ * border glyph is the bar already styled by this engine's own SGR helpers
+ * (never an Ink color prop). Ink repeats that glyph down the full height of
+ * the body, so the bar needs no knowledge of the body's line count. The
+ * bar glyph's trailing space becomes the box's left padding, so the layout
+ * matches the string form column for column.
+ *
+ * The icon/label line and the title line are justified per `text=` with
+ * `padText`; the body goes through `renderAlignedBodyElement`.
+ */
+function renderCalloutElement(
+  element: Element,
+  attributes: DirectiveAttributes,
+  width: number,
+  indent: string,
+  wctx: WalkContext,
+  layout: ResolvedLayoutPresets | undefined,
+): ReactElement {
+  const type = resolveCalloutType(attributes);
+  const token = CALLOUT_TOKENS[type];
+  const titleText = attributes.title
+    ? stripControlCharacters(attributes.title)
+    : undefined;
+  const rawTextAlign = attributes.text;
+  const align: TextAlign =
+    rawTextAlign && isTextAlign(rawTextAlign) ? rawTextAlign : 'left';
+
+  const { glyphs, color, theme } = wctx;
+  const barWidth = measureWidth(glyphs.calloutBar);
+  const boxWidth = resolveCalloutBoxWidth(
+    type,
+    titleText ?? null,
+    layout,
+    width,
+    glyphs,
+  );
+  const innerWidth = Math.max(1, boxWidth - barWidth);
+  const placeLine = (line: string): string =>
+    align === 'left' ? line : padText(line, innerWidth, align);
+
+  const barGlyph = glyphs.calloutBar.trimEnd();
+  const border = {
+    topLeft: '',
+    top: '',
+    topRight: '',
+    right: '',
+    bottomRight: '',
+    bottom: '',
+    bottomLeft: '',
+    left: style(barGlyph, token, theme, color),
+  };
+
+  const body = renderAlignedBodyElement(
+    element.children,
+    innerWidth,
+    indent,
+    wctx,
+    align,
+  );
+
+  const box = (
+    <Box
+      width={boxWidth}
+      flexDirection="column"
+      borderStyle={border}
+      borderTop={false}
+      borderRight={false}
+      borderBottom={false}
+      paddingLeft={barWidth - measureWidth(barGlyph)}
+    >
+      {styledText(
+        placeLine(style(headerTextFor(type, glyphs), token, theme, color)),
+      )}
+      {titleText ? styledText(placeLine(bold(titleText, color))) : null}
+      {body}
+    </Box>
+  );
+
+  const positioned = selfLayoutAlignElement(box, boxWidth, layout, width);
+  const marker = invalidEnumMarkerElement(CALLOUT_NAME, attributes, wctx);
   if (!marker) return positioned;
   return (
     <Box flexDirection="column">
@@ -1746,6 +1912,7 @@ function renderDirectiveElement(
       name === TABS_NAME ||
       name === DETAILS_NAME ||
       name === CARD_NAME ||
+      name === CALLOUT_NAME ||
       name === FIGURE_NAME) &&
     hasRealComponent(wctx.registry, name)
   ) {
@@ -1764,6 +1931,25 @@ function renderDirectiveElement(
         // with `selfLayoutAlignElement` — see `renderCardElement`'s doc
         // comment. It never goes through the generic post-render wrap.
         return renderCardElement(
+          element,
+          attributes,
+          width,
+          indent,
+          wctx,
+          layoutResolved,
+        );
+      }
+
+      if (name === CALLOUT_NAME && !wctx.interactive && layoutResolved?.align) {
+        // The string form places each line of a callout on its own, so
+        // `align=` leaves the bars ragged; the element form places the block
+        // as a unit. The render-once output stays the string form's, byte for
+        // byte, and only the live viewer places the callout as a unit.
+        return styledText(renderDirectiveString(element, width, indent, wctx));
+      }
+      if (name === CALLOUT_NAME) {
+        // Self-sized and self-aligned like `card`: see `renderCalloutElement`.
+        return renderCalloutElement(
           element,
           attributes,
           width,
@@ -2025,6 +2211,13 @@ export interface RenderMarkOptions {
    * every panel/always-open exactly as the pre-Ink engine did.
    */
   readonly interactive?: boolean;
+  /**
+   * `buildMarkElement` only: the terminal's row count. Gives the live view
+   * a viewport of this many rows minus its one-row status line, scrolled
+   * with the keys in the legend. Omitted, the live view is laid out at its
+   * full height. The render-once string path never reads it.
+   */
+  readonly viewportRows?: number;
 }
 
 /** Builds the root Ink element for `root`, given every resolved render input. Exported for `buildMarkElement` (the live-viewer entry point, phase 3) as well as this module's own three string-producing entry points. */
@@ -2288,6 +2481,8 @@ export function buildMarkElement(
       color={color}
       theme={theme}
       keyLegend={glyphs.keyLegend}
+      viewportRows={options?.viewportRows}
+      width={width}
     >
       {content}
     </InteractiveRoot>
