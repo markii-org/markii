@@ -2,15 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { Buffer } from 'node:buffer';
 import { inflateRawSync } from 'node:zlib';
 import type { CascadeLinkResolver, CascadeNoteReader } from '@markii/host';
-import {
-  exportCascadeDiagnosticLines,
-  exportCascadeNoticeText,
-  exportNoteCascade,
-} from './cascade-export.js';
-import type {
-  CascadeExportOutcome,
-  CascadeExportRequest,
-} from './cascade-export.js';
+import { exportNoteCascade } from './cascade-export.js';
+import type { CascadeExportRequest } from './cascade-export.js';
 import type { NoteExportFs } from '../export-note.js';
 
 /** An in-memory `NoteExportFs` that records every binary write. */
@@ -143,14 +136,14 @@ describe('exportNoteCascade', () => {
       baseRequest(vault, fs, 'root.mk.md'),
     );
 
-    expect(outcome.kind).toBe('cascade');
-    if (outcome.kind !== 'cascade') throw new Error('unreachable');
+    expect(outcome.kind).toBe('written');
+    if (outcome.kind !== 'written') throw new Error('unreachable');
     expect(outcome.notes.map((note) => note.path)).toEqual([
       'root.mk.md',
       'b.mk.md',
       'c.mk.md',
     ]);
-    expect(outcome.archivePath).toBe('root.zip');
+    expect(outcome.path).toBe('root.zip');
     expect(outcome.truncated).toBeUndefined();
     expect(outcome.unreadable).toEqual([]);
 
@@ -191,7 +184,7 @@ describe('exportNoteCascade', () => {
     const outcome = await exportNoteCascade(
       baseRequest(vault, fs, 'root.mk.md'),
     );
-    if (outcome.kind !== 'cascade') throw new Error('unreachable');
+    if (outcome.kind !== 'written') throw new Error('unreachable');
 
     const noteEntry = outcome.notes.find((n) => n.path === 'index.mk.md');
     expect(noteEntry?.entryName).not.toBe('index.html');
@@ -214,8 +207,8 @@ describe('exportNoteCascade', () => {
     const { fs } = createFs();
     const outcome = await exportNoteCascade(baseRequest(vault, fs, 'a.mk.md'));
 
-    expect(outcome.kind).toBe('cascade');
-    if (outcome.kind !== 'cascade') throw new Error('unreachable');
+    expect(outcome.kind).toBe('written');
+    if (outcome.kind !== 'written') throw new Error('unreachable');
     expect(outcome.notes.map((note) => note.path)).toEqual([
       'a.mk.md',
       'b.mk.md',
@@ -237,8 +230,8 @@ describe('exportNoteCascade', () => {
       baseRequest(vault, fs, 'root.mk.md'),
     );
 
-    expect(outcome.kind).toBe('cascade');
-    if (outcome.kind !== 'cascade') throw new Error('unreachable');
+    expect(outcome.kind).toBe('written');
+    if (outcome.kind !== 'written') throw new Error('unreachable');
     // root through n4 is depth 0..4, five notes; n5 is one hop past the
     // default max depth of 4 and is never reached.
     expect(outcome.notes.map((note) => note.path)).toEqual([
@@ -261,8 +254,8 @@ describe('exportNoteCascade', () => {
       baseRequest(vault, fs, 'root.mk.md'),
     );
 
-    expect(outcome.kind).toBe('cascade');
-    if (outcome.kind !== 'cascade') throw new Error('unreachable');
+    expect(outcome.kind).toBe('written');
+    if (outcome.kind !== 'written') throw new Error('unreachable');
     expect(outcome.notes.map((note) => note.path)).toEqual([
       'root.mk.md',
       'b.mk.md',
@@ -289,8 +282,8 @@ describe('exportNoteCascade', () => {
       baseRequest(vault, fs, 'root.mk.md'),
     );
 
-    expect(outcome.kind).toBe('cascade');
-    if (outcome.kind !== 'cascade') throw new Error('unreachable');
+    expect(outcome.kind).toBe('written');
+    if (outcome.kind !== 'written') throw new Error('unreachable');
     const entryNames = outcome.notes.map((note) => note.entryName);
     expect(new Set(entryNames).size).toBe(entryNames.length);
     expect(entryNames).toContain('dup.html');
@@ -319,8 +312,8 @@ describe('exportNoteCascade', () => {
       baseRequest(vault, fs, 'root.mk.md'),
     );
 
-    expect(outcome.kind).toBe('cascade');
-    if (outcome.kind !== 'cascade') throw new Error('unreachable');
+    expect(outcome.kind).toBe('written');
+    if (outcome.kind !== 'written') throw new Error('unreachable');
     expect(outcome.notes.map((note) => note.path)).toEqual(['root.mk.md']);
     expect(outcome.unreadable).toEqual([
       { path: 'missing.mk.md', from: 'root.mk.md' },
@@ -338,7 +331,7 @@ describe('exportNoteCascade', () => {
     const outcome = await exportNoteCascade(
       baseRequest(vault, fs, 'root.mk.md'),
     );
-    if (outcome.kind !== 'cascade') throw new Error('unreachable');
+    if (outcome.kind !== 'written') throw new Error('unreachable');
 
     const entries = archiveEntryNames(binary.get('root.zip')!);
     expect(entries.length).toBe(outcome.notes.length + 1);
@@ -392,139 +385,5 @@ describe('exportNoteCascade', () => {
     expect(outcome.kind).toBe('failed');
     if (outcome.kind !== 'failed') throw new Error('unreachable');
     expect(outcome.reason).toContain('disk is full');
-  });
-});
-
-const NOTICE_OUTCOMES: CascadeExportOutcome[] = [
-  {
-    kind: 'cascade',
-    archivePath: 'reports/week.zip',
-    notes: [
-      {
-        path: 'reports/week.mk.md',
-        entryName: 'week.html',
-        valueCount: 0,
-        render: { engine: 'static', reason: 'no-packs' },
-        images: { embedded: [], embeddedBytes: 0, skipped: [], remote: 0 },
-      },
-    ],
-    unreadable: [],
-  },
-  { kind: 'failed', reason: 'disk is full' },
-];
-
-describe('exportCascadeNoticeText', () => {
-  it('names the archive and how many notes it holds', () => {
-    const text = exportCascadeNoticeText(NOTICE_OUTCOMES[0]!);
-    expect(text).toContain('week.zip');
-    expect(text).toContain('1 note');
-  });
-
-  it('points a failure at the diagnostics surface without the reason', () => {
-    const text = exportCascadeNoticeText({
-      kind: 'failed',
-      reason: 'disk is full',
-    });
-    expect(text).toContain('Markii diagnostics');
-    expect(text).not.toContain('disk is full');
-  });
-
-  it('contains no em dash, no parentheses, and at most two short sentences', () => {
-    for (const outcome of NOTICE_OUTCOMES) {
-      const text = exportCascadeNoticeText(outcome);
-      expect(text).not.toContain('—');
-      expect(text).not.toMatch(/[()]/);
-      const sentences = text.split('. ').filter((part) => part.length > 0);
-      expect(sentences.length).toBeLessThanOrEqual(2);
-      expect(text.startsWith('Markii: ')).toBe(true);
-    }
-  });
-});
-
-describe('exportCascadeDiagnosticLines', () => {
-  it('lists one line per exported note and the archive summary last', () => {
-    const outcome: CascadeExportOutcome = {
-      kind: 'cascade',
-      archivePath: 'reports/week.zip',
-      notes: [
-        {
-          path: 'reports/week.mk.md',
-          entryName: 'week.html',
-          valueCount: 2,
-          render: { engine: 'static', reason: 'no-packs' },
-          images: { embedded: [], embeddedBytes: 0, skipped: [], remote: 0 },
-        },
-        {
-          path: 'reports/detail.mk.md',
-          entryName: 'detail.html',
-          valueCount: 0,
-          render: { engine: 'static', reason: 'no-packs' },
-          images: { embedded: [], embeddedBytes: 0, skipped: [], remote: 0 },
-        },
-      ],
-      unreadable: [{ path: 'reports/gone.mk.md', from: 'reports/week.mk.md' }],
-    };
-    const lines = exportCascadeDiagnosticLines(outcome);
-    expect(lines[0]).toContain('reports/week.mk.md');
-    expect(lines[0]).toContain('week.html');
-    expect(lines.join('\n')).toContain('reports/detail.mk.md');
-    expect(lines.join('\n')).toContain('Could not read reports/gone.mk.md');
-    expect(lines.join('\n')).toContain('linked from reports/week.mk.md');
-    expect(lines[lines.length - 1]).toContain('reports/week.zip');
-    expect(lines[lines.length - 1]).toContain('2 notes');
-  });
-
-  it('names the bound that stopped the walk', () => {
-    const depthOutcome: CascadeExportOutcome = {
-      kind: 'cascade',
-      archivePath: 'reports/week.zip',
-      notes: [],
-      unreadable: [],
-      truncated: 'depth',
-    };
-    expect(exportCascadeDiagnosticLines(depthOutcome).join('\n')).toContain(
-      'maximum depth',
-    );
-
-    const countOutcome: CascadeExportOutcome = {
-      kind: 'cascade',
-      archivePath: 'reports/week.zip',
-      notes: [],
-      unreadable: [],
-      truncated: 'count',
-    };
-    expect(exportCascadeDiagnosticLines(countOutcome).join('\n')).toContain(
-      'maximum note count',
-    );
-  });
-
-  it('reports a failure with the verbatim reason', () => {
-    const lines = exportCascadeDiagnosticLines({
-      kind: 'failed',
-      reason: 'disk is full',
-    });
-    expect(lines.join('\n')).toContain('disk is full');
-  });
-
-  it('every diagnostics line contains no em dash and no parentheses', () => {
-    const outcome: CascadeExportOutcome = {
-      kind: 'cascade',
-      archivePath: 'reports/week.zip',
-      notes: [
-        {
-          path: 'reports/week.mk.md',
-          entryName: 'week.html',
-          valueCount: 1,
-          render: { engine: 'static', reason: 'no-packs' },
-          images: { embedded: [], embeddedBytes: 0, skipped: [], remote: 0 },
-        },
-      ],
-      unreadable: [{ path: 'reports/gone.mk.md', from: 'reports/week.mk.md' }],
-      truncated: 'count',
-    };
-    for (const line of exportCascadeDiagnosticLines(outcome)) {
-      expect(line).not.toContain('—');
-      expect(line).not.toMatch(/[()]/);
-    }
   });
 });

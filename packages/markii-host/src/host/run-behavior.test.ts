@@ -230,6 +230,70 @@ describe('runViaAdapter', () => {
     expect(trace?.reason).toBe('1 script failed');
   });
 
+  it('writes the failure lines to adapter.diagnostics and returns the recorded trace', async () => {
+    const lines: string[] = [];
+    const adapter = fakeAdapter({
+      now: () => 9,
+      diagnostics: (line) => lines.push(line),
+    });
+    const result = await runViaAdapter(
+      adapter,
+      { documentKey: 'doc-4', text: 'text', trigger: 'manual' },
+      async () => ({
+        values: {},
+        failures: [{ name: 's1', message: 'boom', kind: 'script-error' }],
+        cacheSnapshot: {},
+      }),
+    );
+    expect(lines).toEqual([
+      'manual run finished with 1 script failure(s):',
+      '  s1 (script-error): boom',
+    ]);
+    expect(result.trace).toEqual({
+      trigger: 'manual',
+      ranAt: 9,
+      ok: false,
+      reason: '1 script failed',
+    });
+  });
+
+  it('writes nothing to diagnostics for a clean run', async () => {
+    const lines: string[] = [];
+    const adapter = fakeAdapter({ diagnostics: (line) => lines.push(line) });
+    await runViaAdapter(
+      adapter,
+      { documentKey: 'doc-5', text: 'text', trigger: 'manual' },
+      async () => ({ values: {}, failures: [], cacheSnapshot: {} }),
+    );
+    expect(lines).toEqual([]);
+  });
+
+  it('a run that throws writes a diagnostics line and a failed trace, then rethrows', async () => {
+    const lines: string[] = [];
+    const adapter = fakeAdapter({
+      now: () => 3,
+      diagnostics: (line) => lines.push(line),
+    });
+    await expect(
+      runViaAdapter(
+        adapter,
+        { documentKey: 'doc-6', text: 'text', trigger: 'scheduled' },
+        async () => {
+          throw new Error('worker exploded');
+        },
+      ),
+    ).rejects.toThrow('worker exploded');
+    expect(lines).toEqual([
+      'scheduled run failed before it could report: worker exploded',
+    ]);
+    expect(readLastRunTrace(adapter.memento, 'doc-6')).toEqual({
+      trigger: 'scheduled',
+      ranAt: 3,
+      ok: false,
+      reason: 'worker exploded',
+    });
+  });
+
   it('never prompts for an auto/scheduled trigger, since runOnce resolves grants non-interactively for those', async () => {
     let prompted = false;
     const adapter = fakeAdapter({

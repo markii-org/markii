@@ -577,6 +577,14 @@ export function outcomeMismatches(
           `failure kinds: expected ${JSON.stringify(wantKinds)}, got ${JSON.stringify(gotKinds)}`,
         );
       }
+      if (expected['traceOk'] !== undefined) {
+        const trace = actualRecord['trace'] as { ok?: unknown } | undefined;
+        if (trace?.ok !== expected['traceOk']) {
+          mismatches.push(
+            `trace.ok: expected ${String(expected['traceOk'])}, got ${String(trace?.ok)}`,
+          );
+        }
+      }
       break;
     }
     case 'exported': {
@@ -650,6 +658,26 @@ export function outcomeMismatches(
           mismatches.push(`completions should include "${label}"`);
         }
       }
+      for (const key of ['replaceStart', 'replaceEnd', 'tokenStart'] as const) {
+        if (
+          expected[key] !== undefined &&
+          actualRecord[key] !== expected[key]
+        ) {
+          mismatches.push(
+            `${key}: expected ${String(expected[key])}, got ${String(actualRecord[key])}`,
+          );
+        }
+      }
+      if (expected['fenceEditCount'] !== undefined) {
+        const got = Array.isArray(actualRecord['fenceEdits'])
+          ? actualRecord['fenceEdits'].length
+          : 0;
+        if (got !== expected['fenceEditCount']) {
+          mismatches.push(
+            `fenceEditCount: expected ${String(expected['fenceEditCount'])}, got ${String(got)}`,
+          );
+        }
+      }
       break;
     }
     case 'hover': {
@@ -659,6 +687,16 @@ export function outcomeMismatches(
         !String(actualRecord['text'] ?? '').includes(contains)
       ) {
         mismatches.push(`hover text should contain "${contains}"`);
+      }
+      for (const key of ['start', 'end'] as const) {
+        if (
+          expected[key] !== undefined &&
+          actualRecord[key] !== expected[key]
+        ) {
+          mismatches.push(
+            `${key}: expected ${String(expected[key])}, got ${String(actualRecord[key])}`,
+          );
+        }
       }
       break;
     }

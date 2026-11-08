@@ -48,6 +48,10 @@ import {
   type RunOnceResult,
 } from '../run/run-flow.js';
 import { writeLastRunTrace, type RunTrace } from '../run/run-trace.js';
+import {
+  runCrashDiagnosticLine,
+  runDiagnosticLines,
+} from './run-diagnostics.js';
 import { BROWSER_ISOLATE_ENTRY } from './adapter.js';
 import type { HostAdapter, HostIsolate } from './adapter.js';
 
@@ -175,6 +179,9 @@ export interface RunViaAdapterRequest {
   readonly timeoutMs?: number;
 }
 
+/** A run's result plus the `RunTrace` it just recorded, so a host can show its in-note marker from the same value the shared path persisted. */
+export type RunViaAdapterResult = RunOnceResult & { readonly trace: RunTrace };
+
 /**
  * Runs one manual, auto, or scheduled pass of `request.text`'s scripts,
  * exactly as `runOnce` already does (the grant flow prompts only on a
@@ -189,30 +196,53 @@ export async function runViaAdapter(
   adapter: HostAdapter,
   request: RunViaAdapterRequest,
   overrideSpawnRun?: (options: SpawnRunOptions) => Promise<RunResult>,
-): Promise<RunOnceResult> {
+): Promise<RunViaAdapterResult> {
   const prompts = promptsFromAdapter(adapter);
   const spawn =
     overrideSpawnRun ??
     ((options: SpawnRunOptions): Promise<RunResult> =>
       spawnRunViaAdapter(adapter.isolate, options));
 
-  const result = await runOnce({
-    documentKey: request.documentKey,
-    text: request.text,
-    trigger: request.trigger,
-    memento: adapter.memento,
-    ...prompts,
-    spawnRun: spawn,
-    timeoutMs: request.timeoutMs ?? RUN_TIMEOUT_MS,
-    ...(request.netPolicy !== undefined
-      ? { netPolicy: request.netPolicy }
-      : {}),
-    ...(request.bundle !== undefined ? { bundle: request.bundle } : {}),
-    ...(request.packModules !== undefined
-      ? { packModules: request.packModules }
-      : {}),
-    ...(request.onValue !== undefined ? { onValue: request.onValue } : {}),
-  });
+  let result: RunOnceResult;
+  try {
+    result = await runOnce({
+      documentKey: request.documentKey,
+      text: request.text,
+      trigger: request.trigger,
+      memento: adapter.memento,
+      ...prompts,
+      spawnRun: spawn,
+      timeoutMs: request.timeoutMs ?? RUN_TIMEOUT_MS,
+      ...(request.netPolicy !== undefined
+        ? { netPolicy: request.netPolicy }
+        : {}),
+      ...(request.bundle !== undefined ? { bundle: request.bundle } : {}),
+      ...(request.packModules !== undefined
+        ? { packModules: request.packModules }
+        : {}),
+      ...(request.onValue !== undefined ? { onValue: request.onValue } : {}),
+    });
+  } catch (err) {
+    // A run that threw is still a failure with two homes: the diagnostics
+    // line and a failed trace for the in-note marker. The caller keeps its
+    // own visible surface (a notice), so the error is rethrown.
+    const detail = err instanceof Error ? err.message : String(err);
+    adapter.diagnostics(runCrashDiagnosticLine(request.trigger, detail));
+    await writeLastRunTrace(adapter.memento, request.documentKey, {
+      trigger: request.trigger,
+      ranAt: adapter.now(),
+      ok: false,
+      reason: detail,
+    }).then(undefined, () => {});
+    throw err;
+  }
+
+  // The failure's second home (AGENTS.md, "clean is not silent"): one line
+  // per failed script and per declaration mismatch, written here once so no
+  // host can forget it.
+  for (const line of runDiagnosticLines(request.trigger, result)) {
+    adapter.diagnostics(line);
+  }
 
   const trace: RunTrace = {
     trigger: request.trigger,
@@ -232,5 +262,5 @@ export async function runViaAdapter(
     () => {},
   );
 
-  return result;
+  return { ...result, trace };
 }

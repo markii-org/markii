@@ -1,0 +1,12 @@
+{
+  "id": "complete-closing-fence",
+  "invariant": "a bare colon run that closes an open container offers no completions, and says so without failing",
+  "clock": 1700000000000,
+  "actions": [
+    {
+      "type": "completeAt",
+      "line": 4,
+      "column": 3
+    }
+  ]
+}

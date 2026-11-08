@@ -7,19 +7,15 @@ import type {
   EditorSuggestTriggerInfo,
   TFile,
 } from 'obsidian';
-import type { InsertableComponent } from '@markii/stdlib/editor';
-import {
-  closesOpenContainerFence,
-  completionAt,
-  offsetToLineColumn,
-} from '@markii/stdlib/editor';
+import { offsetToLineColumn } from '@markii/stdlib/editor';
+import { isContainerCompletionItem } from '@markii/host';
+import type { HostTextEdit, MarkiiHost } from '@markii/host';
 import {
   completionQuery,
   completionSuggestions,
   filterCompletionSuggestions,
 } from './complete-component.js';
 import type { CompletionSuggestion } from './complete-component.js';
-import { fenceEditorChanges } from './fence-edits.js';
 
 /**
  * Imports `obsidian` — added deliberately to
@@ -35,25 +31,28 @@ import { fenceEditorChanges } from './fence-edits.js';
 /** The current context's replacement range plus the query it was built with, stashed by `onTrigger` for `getSuggestions`/`selectSuggestion`. */
 interface StashedContext {
   readonly rows: readonly CompletionSuggestion[];
+  /** Fence rewrites that travel with an accepted container item, computed by the host for the document as it stood at trigger time. */
+  readonly fenceEdits: readonly HostTextEdit[];
 }
 
 /**
  * Directive autocompletion (GitHub issue #27, slice 3): offers directive
  * names, attribute names, and enum attribute values as the author types,
- * built on `@markii/host`'s `completionAt` (issue #27 slice 1) exactly the
- * way `./insert-modals.ts`'s picker is built on `buildComponentCatalog`.
+ * built on `@markii/host`'s `completeAtSync` (the shared host decides what
+ * completes, the replace span, and the fence edits; this class only maps
+ * the outcome onto Obsidian's popup).
  *
- * The catalog is a GETTER, not a snapshot, so `main.ts` can refresh it
- * after pack settings change (a folder added or removed) without tearing
- * down and re-registering the suggester.
+ * The host is a GETTER, not a snapshot, so `main.ts` can swap or refresh
+ * it after pack settings change without tearing down and re-registering
+ * the suggester.
  */
 export class MarkiiCompletionSuggest extends EditorSuggest<CompletionSuggestion> {
-  private readonly catalog: () => readonly InsertableComponent[];
+  private readonly host: () => MarkiiHost;
   private stashed: StashedContext | undefined;
 
-  constructor(app: App, catalog: () => readonly InsertableComponent[]) {
+  constructor(app: App, host: () => MarkiiHost) {
     super(app);
-    this.catalog = catalog;
+    this.host = host;
   }
 
   onTrigger(
@@ -65,24 +64,26 @@ export class MarkiiCompletionSuggest extends EditorSuggest<CompletionSuggestion>
 
     const line = editor.getLine(cursor.line);
 
-    // GitHub issue #57: a bare colon run that CLOSES a container already
-    // open above it (typed, or arriving via a paste) must not pop the
-    // catalog open — `completionAt` has no document context to tell a
-    // closer from a just-typed opener, so this trigger boundary does,
-    // reusing the same fence scan `./fence-edits.ts` builds on.
-    if (closesOpenContainerFence(editor.getValue(), cursor.line, line)) {
-      return null;
-    }
+    // The host answers `none` for a bare colon run that CLOSES a container
+    // already open above it (GitHub issue #57), and for any context with
+    // nothing to offer, so this trigger boundary has no fence scan of its
+    // own.
+    const outcome = this.host().completeAtSync({
+      line: cursor.line,
+      column: cursor.ch,
+      documentText: editor.getValue(),
+    });
+    if (outcome.kind !== 'completions') return null;
 
-    const context = completionAt(line, cursor.ch, this.catalog());
-    if (context.kind === 'none' || context.items.length === 0) return null;
-
-    this.stashed = { rows: completionSuggestions(context) };
+    this.stashed = {
+      rows: completionSuggestions(outcome.items),
+      fenceEdits: outcome.fenceEdits,
+    };
 
     return {
-      start: { line: cursor.line, ch: context.replaceStart },
-      end: { line: cursor.line, ch: context.replaceEnd },
-      query: completionQuery(line, context, cursor.ch),
+      start: { line: cursor.line, ch: outcome.replaceStart },
+      end: { line: cursor.line, ch: outcome.replaceEnd },
+      query: completionQuery(line, outcome.tokenStart, cursor.ch),
     };
   }
 
@@ -119,12 +120,10 @@ export class MarkiiCompletionSuggest extends EditorSuggest<CompletionSuggestion>
     // changes go into the SAME transaction as the accepted text, so the
     // whole acceptance is one undo step, and they never touch the line
     // being replaced. A non-container item, or a document whose fences do
-    // not pair cleanly, yields none and this stays a plain range replace.
-    const fenceChanges = fenceEditorChanges(
-      context.editor.getValue(),
-      context.start.line,
-      item.insertText,
-    );
+    // not pair cleanly, has none and this stays a plain range replace.
+    const fenceChanges = isContainerCompletionItem(item)
+      ? (this.stashed?.fenceEdits ?? [])
+      : [];
 
     if (fenceChanges.length === 0) {
       context.editor.replaceRange(item.insertText, context.start, context.end);
@@ -132,8 +131,8 @@ export class MarkiiCompletionSuggest extends EditorSuggest<CompletionSuggestion>
       context.editor.transaction({
         changes: [
           ...fenceChanges.map((change) => ({
-            from: { ...change.from },
-            to: { ...change.to },
+            from: { line: change.line, ch: change.startColumn },
+            to: { line: change.line, ch: change.endColumn },
             text: change.text,
           })),
           { from: context.start, to: context.end, text: item.insertText },

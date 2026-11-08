@@ -1,5 +1,14 @@
 {
-  "outcomes": [{ "kind": "completions", "labels": ["callout"] }],
+  "outcomes": [
+    {
+      "kind": "completions",
+      "labels": ["callout"],
+      "replaceStart": 0,
+      "replaceEnd": 6,
+      "tokenStart": 3,
+      "fenceEditCount": 0
+    }
+  ],
   "diagnostics": [],
   "prompts": []
 }

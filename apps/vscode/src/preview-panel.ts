@@ -36,14 +36,7 @@ import {
   EXPORT_CASCADE_NO_DOCUMENT_MESSAGE,
   EXPORT_CASCADE_SAVE_DIALOG_TITLE,
   EXPORT_CASCADE_SAVE_LABEL,
-  buildNoteCascadeArchive,
   exportCascadeDefaultFileName,
-  exportCascadeDiagnosticLines,
-  exportCascadeResultMessage,
-} from './export-cascade.js';
-import type {
-  CascadeArchiveRequest,
-  CascadeExportOutcome,
 } from './export-cascade.js';
 import { resolveNoteRelativeLink } from './cascade-links.js';
 import {
@@ -68,11 +61,13 @@ import {
 import { buildWebviewHtml, createNonce } from './webview-html.js';
 import {
   clearGrantForDocument,
+  buildCascadeArchive,
+  cascadeDiagnosticLines,
+  cascadeResultMessage,
+  createMarkiiHost,
   readPersistedValues,
-  runOnce,
   staleValuesForRehydration,
   readLastRunTrace,
-  writeLastRunTrace,
   buildBundleSnapshot,
   decodeBundleCacheFromStorage,
   encodeBundleCacheForStorage,
@@ -81,10 +76,6 @@ import {
   buildNoteExport,
   noteHasScripts,
   MAX_EMBEDDED_IMAGE_BYTES,
-  formatRunFailureLines,
-  promptsFromAdapter,
-  spawnRunViaAdapter,
-  HOST_RUN_TIMEOUT_MS,
   MIN_REFRESH_INTERVAL_SECONDS,
   scheduledRefreshNotStartedLine,
   scriptsDisabledDiagnosticLine,
@@ -92,14 +83,17 @@ import {
   VSCODE_LABELS,
 } from '@markii/host';
 import type {
+  CascadeArchiveRequest,
+  CascadeExportOutcome,
   CascadeLinkResolver,
   CascadeNoteReader,
   ExportBodyResult,
   ExportImageReader,
   HostPromptRequest,
-  RunOnceResult,
+  RunOnceOptions,
 } from '@markii/host';
 import { createVSCodeHostAdapter } from './host-adapter.js';
+import { valuesMessageForRun } from './run-values-message.js';
 import { resolveWorkerPath } from './worker-path.js';
 import type { RunTrigger, StoredValue } from '@markii/runtime';
 import {
@@ -692,48 +686,6 @@ function logPackDiagnostics(packContext: PackContext): void {
 function logRenderDiagnostics(lines: readonly string[]): void {
   if (!diagnosticsChannel) return;
   if (lines.length === 0) return;
-  for (const line of lines) diagnosticsChannel.appendLine(`  ${line}`);
-}
-
-/**
- * Writes a run's per-script failures to the "Markii" output channel
- * (GitHub issue #37, `./run-diagnostics.ts`), so a failure a collapsed or
- * hidden marker buries is still discoverable without hovering. A clean run
- * writes nothing.
- */
-function logRunFailures(
-  trigger: RunTrigger,
-  failures: RunOnceResult['failureDetails'],
-): void {
-  if (!diagnosticsChannel) return;
-  const lines = formatRunFailureLines(failures);
-  if (lines.length === 0) return;
-  diagnosticsChannel.appendLine(
-    `Markii: ${trigger} run at ${new Date().toISOString()}, ${String(lines.length)} script failure(s)`,
-  );
-  for (const line of lines) diagnosticsChannel.appendLine(`  ${line}`);
-}
-
-/**
- * Writes a run's net-declaration mismatch lines to the "Markii" output
- * channel (consent unification, SECURITY-RELEVANT: `@markii/host`'s
- * `RunOnceResult.netDeclarationDiagnostics`, built by
- * `netDeclarationDiagnostics` in `packages/markii-host/src/run/bundle-run.ts`).
- * A bundle manifest's `permissions.net` is declared intent only — it never
- * widens or narrows what a run is prompted for — so a mismatch between the
- * declaration and what the run's scripts actually reach is never silent;
- * it lands here. A bare `.mk.md` run, or a bundle whose declaration and
- * scan agree, writes nothing.
- */
-function logNetDeclarationDiagnostics(
-  trigger: RunTrigger,
-  lines: readonly string[],
-): void {
-  if (!diagnosticsChannel) return;
-  if (lines.length === 0) return;
-  diagnosticsChannel.appendLine(
-    `Markii: ${trigger} run at ${new Date().toISOString()}, net declaration mismatch`,
-  );
   for (const line of lines) diagnosticsChannel.appendLine(`  ${line}`);
 }
 
@@ -1537,7 +1489,7 @@ function bundleCacheStorageKeyFor(identity: string): string {
 function bundleOptionsFor(
   context: vscode.ExtensionContext,
   bundle: BundleRunContext,
-): Parameters<typeof runOnce>[0]['bundle'] {
+): RunOnceOptions['bundle'] {
   if (bundle.form === 'directory') {
     const rootDir = bundle.rootDir;
     return {
@@ -1652,17 +1604,15 @@ async function runWithTrigger(
   const adapter = runHostAdapter(context);
 
   try {
-    const result = await runOnce({
+    // The whole run (grant flow, spawn, diagnostics lines, the persisted
+    // `RunTrace`) goes through the shared host; this function is plumbing.
+    const outcome = await createMarkiiHost(adapter).run({
       documentKey,
       text,
       trigger,
       netPolicy: {
         allowRestrictedAddresses: allowPrivateNetworkAddresses(),
       },
-      memento: adapter.memento,
-      ...promptsFromAdapter(adapter),
-      spawnRun: (options) => spawnRunViaAdapter(adapter.isolate, options),
-      timeoutMs: HOST_RUN_TIMEOUT_MS,
       // Omitted entirely (not an empty object) when no packs are
       // installed: `@markii/lua`'s `require` classifies a pack-namespaced
       // `require` differently depending on whether a resolver exists at
@@ -1697,44 +1647,25 @@ async function runWithTrigger(
     // to, and touching `preview.panel` past disposal would itself throw.
     if (active !== preview) return;
 
-    // ITEM 3 (AGENTS.md "clean is not silent"): this run's own outcome,
-    // attached to its `values` message so the marker updates immediately —
-    // see `./run/run-trace.ts`'s doc comment and `ValuesMessage.lastRun`'s.
-    logRunFailures(trigger, result.failureDetails);
-    logNetDeclarationDiagnostics(trigger, result.netDeclarationDiagnostics);
+    if (outcome.kind === 'unsupported') {
+      // The shared path already wrote the diagnostics line; the user gets
+      // the same short notice every failed run does.
+      void vscode.window.showErrorMessage(
+        "Markii: running this note's scripts failed.",
+      );
+      return;
+    }
 
-    // `ok` means "no script failed", the same thing it means on every
-    // other host, so one note's run marker reads the same way whichever
-    // application opened it. A per-script failure also has its own value
-    // marker and its own diagnostics line; this is the run's own summary,
-    // and a summary that said "ran" while a script failed would be the
-    // quiet kind of success AGENTS.md's cleanliness rule rules out.
-    // The clock comes from the adapter so a fixed clock makes the trace
-    // reproducible.
-    const lastRun = {
-      trigger,
-      ranAt: adapter.now(),
-      ok: result.failures.length === 0,
-    };
-    const message: ValuesMessage = {
-      type: 'values',
-      revision,
-      values: result.values,
-      failures: result.failures,
-      lastRun,
-    };
+    // ITEM 3 (AGENTS.md "clean is not silent"): this run's own outcome,
+    // from the trace the shared path persisted, rides on the `values`
+    // message so the marker updates immediately. Failure lines and the
+    // net-declaration lines were already written to the output channel by
+    // the shared run path.
     // Awaited (not fire-and-forget) so a rejection here — e.g. a disposal
     // racing this exact call — lands in the catch below instead of becoming
     // its own unhandled rejection.
-    await preview.panel.webview.postMessage(message);
-
-    // Persisted separately so a reopened panel (or the next `postUpdate`)
-    // can read it back without a fresh run — best-effort: a write failure
-    // here must never turn a successful run into a reported failure, so it
-    // is swallowed rather than routed through the catch below.
-    void writeLastRunTrace(context.workspaceState, documentKey, lastRun).then(
-      undefined,
-      () => {},
+    await preview.panel.webview.postMessage(
+      valuesMessageForRun(revision, outcome),
     );
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
@@ -1747,12 +1678,9 @@ async function runWithTrigger(
     void vscode.window.showErrorMessage(
       "Markii: running this note's scripts failed.",
     );
-    void writeLastRunTrace(context.workspaceState, documentKey, {
-      trigger,
-      ranAt: Date.now(),
-      ok: false,
-      reason: detail,
-    }).then(undefined, () => {});
+    // The shared run path already wrote the diagnostics line and a failed
+    // trace; re-sending the document makes the marker show it right away.
+    if (active === preview) postUpdate(preview);
   } finally {
     preview.running = false;
   }
@@ -2072,7 +2000,7 @@ function logCascadeDiagnostics(outcome: CascadeExportOutcome): void {
   diagnosticsChannel.appendLine(
     `Markii: HTML cascade export at ${new Date().toISOString()}`,
   );
-  for (const line of exportCascadeDiagnosticLines(outcome)) {
+  for (const line of cascadeDiagnosticLines(outcome)) {
     diagnosticsChannel.appendLine(`  ${line}`);
   }
 }
@@ -2221,7 +2149,7 @@ export async function exportHtmlCascade(
       request = { ...common, staticReason };
     }
 
-    const archive = await buildNoteCascadeArchive(request);
+    const archive = await buildCascadeArchive(request);
     if (archive.kind === 'failed') {
       outcome = {
         kind: 'failed',
@@ -2250,7 +2178,7 @@ export async function exportHtmlCascade(
   }
 
   logCascadeDiagnostics(outcome);
-  const message = exportCascadeResultMessage(outcome);
+  const message = cascadeResultMessage(outcome, VSCODE_LABELS);
   if (outcome.kind === 'failed') {
     void vscode.window.showWarningMessage(message);
     return;

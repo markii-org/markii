@@ -1,8 +1,16 @@
 {
   "outcomes": [
     { "kind": "opened" },
-    { "kind": "ran", "values": { "total": 3 }, "failureKinds": [] }
+    {
+      "kind": "ran",
+      "values": { "total": 3 },
+      "failureKinds": [],
+      "traceOk": true
+    }
   ],
-  "diagnostics": [],
+  "diagnostics": [
+    "manual run: net declaration mismatch",
+    "uses net access to api.example.com"
+  ],
   "prompts": ["This note's scripts can send data to api.example.com. Allow?"]
 }

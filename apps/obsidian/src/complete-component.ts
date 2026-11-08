@@ -15,7 +15,7 @@
  * the behavior is identical: case-insensitive substring match on `label`,
  * empty query matches everything.
  */
-import type { CompletionContext, CompletionItem } from '@markii/stdlib/editor';
+import type { CompletionItem } from '@markii/stdlib/editor';
 import { completionOriginTag } from '@markii/host';
 import { filterSuggestionsByLabel } from './insert-component.js';
 
@@ -45,11 +45,11 @@ export interface CompletionSuggestion {
   readonly item: CompletionItem;
 }
 
-/** Turns a completion context's items into rows, one per item, preserving order. */
+/** Turns a completion outcome's items into rows, one per item, preserving order. */
 export function completionSuggestions(
-  context: CompletionContext,
+  items: readonly CompletionItem[],
 ): readonly CompletionSuggestion[] {
-  return context.items.map((item) => ({
+  return items.map((item) => ({
     label: item.label,
     origin: completionOriginTag(item),
     detail: item.detail,
@@ -74,10 +74,10 @@ export function completionSuggestions(
  */
 export function completionQuery(
   line: string,
-  context: CompletionContext,
+  tokenStart: number,
   column: number,
 ): string {
-  return line.slice(context.tokenStart ?? context.replaceStart, column);
+  return line.slice(tokenStart, column);
 }
 
 /**

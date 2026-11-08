@@ -53,9 +53,13 @@ import {
   readPersistedValues,
   scriptsDisabledConfirmationText,
   scriptsEnabledConfirmationText,
+  cascadeDiagnosticLines,
+  cascadeResultMessage,
 } from '@markii/host';
 import type {
+  CascadeExportOutcome,
   CascadeLinkResolver,
+  MarkiiHost,
   DiscoveredPack,
   ExportImageReader,
   HostAdapter,
@@ -82,11 +86,9 @@ import { renderNoteBodyForExport } from './export/render-body.js';
 import { createVaultImageReader } from './export/export-images.js';
 import type { VaultImageReaderDeps } from './export/export-images.js';
 import {
-  exportCascadeDiagnosticLines,
-  exportCascadeNoticeText,
+  CASCADE_ARCHIVE_PLACEMENT,
   exportNoteCascade,
 } from './export/cascade-export.js';
-import type { CascadeExportOutcome } from './export/cascade-export.js';
 import { createLocalStorageMemento } from './run/local-storage-memento.js';
 import type { Registry } from '@markii/react';
 import { defaultRegistry } from '@markii/react/components';
@@ -260,7 +262,7 @@ export default class MarkiiPlugin extends Plugin {
     });
 
     this.registerEditorSuggest(
-      new MarkiiCompletionSuggest(this.app, () => this.completionCatalog),
+      new MarkiiCompletionSuggest(this.app, () => this.completionHost()),
     );
 
     // A plain `callback`, not a `checkCallback`: an export command that
@@ -603,14 +605,16 @@ export default class MarkiiPlugin extends Plugin {
       };
     }
 
-    for (const line of exportCascadeDiagnosticLines(outcome)) {
-      if (outcome.kind === 'cascade') {
+    for (const line of cascadeDiagnosticLines(outcome)) {
+      if (outcome.kind === 'written') {
         console.info(`[markii] ${line}`);
       } else {
         console.error(`[markii] ${line}`);
       }
     }
-    new Notice(exportCascadeNoticeText(outcome));
+    new Notice(
+      cascadeResultMessage(outcome, OBSIDIAN_LABELS, CASCADE_ARCHIVE_PLACEMENT),
+    );
   }
 
   /**
@@ -665,6 +669,46 @@ export default class MarkiiPlugin extends Plugin {
    */
   readingViewRegistry(): Registry {
     return this.packContext?.registry ?? defaultRegistry;
+  }
+
+  private completionHostInstance: MarkiiHost | undefined;
+
+  /**
+   * The long-lived host behind directive completion. Its catalog is cached
+   * inside the host and dropped by `refreshCompletionCatalog` whenever the
+   * pack set changes. Every request carries its own document text, so the
+   * `editor` capability here only declares that completion exists on this
+   * host: the closures are inert on purpose, and nothing can write through
+   * them.
+   */
+  private completionHost(): MarkiiHost {
+    if (this.completionHostInstance === undefined) {
+      this.completionHostInstance = createMarkiiHost(
+        createObsidianHostAdapter({
+          prompt: async () => false,
+          loadLocalStorage: (key) => this.app.loadLocalStorage(key),
+          saveLocalStorage: (key, value) => {
+            this.app.saveLocalStorage(key, value);
+          },
+          diagnostics: (line) => {
+            console.log(line);
+          },
+          packs: {
+            authorizedFolders: async () =>
+              this.installedPackFolders().loadable.map((entry) => entry.folder),
+            reservedNamespaces: () => new Set<string>(),
+            bundledPacks: () => bundledDiscoveredPacks(),
+          },
+          editor: {
+            documentText: () => '',
+            documentPath: () => undefined,
+            cursor: () => ({ line: 0, column: 0 }),
+            applyEdits: async () => false,
+          },
+        }),
+      );
+    }
+    return this.completionHostInstance;
   }
 
   /**
@@ -882,6 +926,7 @@ export default class MarkiiPlugin extends Plugin {
       ...bundledDiscoveredPacks(),
       ...packs,
     ]);
+    this.completionHostInstance?.invalidateCatalog();
   }
 
   /**

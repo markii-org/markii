@@ -276,9 +276,18 @@ packages/markii-host    PRIVATE, never published (no npm presence, absent from
                      behavior modules beside them (script-execution,
                      refresh-interval, run-behavior, run-diagnostics,
                      pack-archive, pack-install, pack-load,
-                     export-behavior, export/md-plain, editor-behavior)
+                     export-behavior, cascade-export-behavior (the
+                     linked-set walk, archive, index page, outcome and
+                     wording), export/md-plain, editor-behavior)
                      are each the ONE home of what the three apps used to
-                     duplicate; conformance-runner.ts drives
+                     duplicate. The shared run path writes every run's
+                     failure and net-declaration lines (run-diagnostics);
+                     no app writes them again. createMarkiiHost owns the
+                     completion/hover catalog cache (completeAtSync for a
+                     synchronous editor, invalidateCatalog, invalidated by
+                     installPack/loadPacks), and HostPackSource.bundledPacks
+                     carries packs a host embeds in memory;
+                     conformance-runner.ts drives
                      conformance/host/ against any adapter under a fake
                      editor. adapter.ts, labels.ts, script-execution.ts,
                      refresh-interval.ts and editor-behavior.ts are

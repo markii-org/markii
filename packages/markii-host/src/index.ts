@@ -196,6 +196,20 @@ export {
   rewriteCascadeLinks,
   walkNoteCascade,
 } from './export/cascade.js';
+export type {
+  CascadeArchiveRequest,
+  CascadeArchiveResult,
+  CascadeExportOutcome,
+  CascadeExportedNote,
+  UnreadableCascadeNote,
+} from './host/cascade-export-behavior.js';
+export {
+  buildCascadeArchive,
+  cascadeDiagnosticLines,
+  cascadeReasonOf,
+  cascadeResultMessage,
+  countedNoun,
+} from './host/cascade-export-behavior.js';
 export type { ExportArchiveEntry } from './export/export-zip.js';
 export { zipExportArchive } from './export/export-zip.js';
 
@@ -413,8 +427,14 @@ export {
   spawnRunViaAdapter,
   RUN_TIMEOUT_MS as HOST_RUN_TIMEOUT_MS,
 } from './host/run-behavior.js';
-export type { RunViaAdapterRequest } from './host/run-behavior.js';
-export { formatRunFailureLines } from './host/run-diagnostics.js';
+export type {
+  RunViaAdapterRequest,
+  RunViaAdapterResult,
+} from './host/run-behavior.js';
+export {
+  formatRunFailureLines,
+  runDiagnosticLines,
+} from './host/run-diagnostics.js';
 
 // Batch 11 Phase 1b: packs, export, and the editor seam.
 export type { ArchiveExtractFs } from './host/pack-archive.js';
@@ -458,6 +478,7 @@ export {
 } from './host/export-behavior.js';
 export type {
   CatalogCache,
+  CompletionPlan,
   InsertComponentEdit,
   InsertComponentPlan,
 } from './host/editor-behavior.js';
@@ -466,10 +487,12 @@ export {
   STANDARD_ORIGIN_TAG,
   completeAtViaEditor,
   completionOriginTag,
+  completionPlanAt,
   createCatalogCache,
   hoverAtViaEditor,
   hoverDocumentationText,
   insertComponentPlan,
+  isContainerCompletionItem,
 } from './host/editor-behavior.js';
 
 export { createMarkiiHost } from './host/create-host.js';

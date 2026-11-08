@@ -6,10 +6,12 @@ import type {
 import {
   completeAtViaEditor,
   completionOriginTag,
+  completionPlanAt,
   createCatalogCache,
   hoverAtViaEditor,
   hoverDocumentationText,
   insertComponentPlan,
+  isContainerCompletionItem,
 } from './editor-behavior.js';
 import type { HostEditor } from './adapter.js';
 
@@ -286,5 +288,46 @@ describe('insertComponentPlan', () => {
     );
     expect(plan.edits).toHaveLength(1);
     expect(plan.edits[0]?.text).toContain('callout');
+  });
+});
+
+describe('completionPlanAt', () => {
+  it('returns the span, the filter start, and no fence edits for a top-level opener', () => {
+    const plan = completionPlanAt(
+      ':::cal',
+      { line: 0, column: 6 },
+      calloutCatalog(),
+    );
+    expect(plan?.replaceStart).toBe(0);
+    expect(plan?.replaceEnd).toBe(6);
+    expect(plan?.tokenStart).toBe(3);
+    expect(plan?.fenceEdits).toEqual([]);
+  });
+
+  it('is undefined for a bare colon run that closes an open container', () => {
+    expect(
+      completionPlanAt(
+        ':::callout\nbody\n:::',
+        { line: 2, column: 3 },
+        calloutCatalog(),
+      ),
+    ).toBeUndefined();
+  });
+
+  it('carries fence edits off the insertion line for a nested container', () => {
+    const plan = completionPlanAt(
+      ':::card\n:::cal\n:::',
+      { line: 1, column: 6 },
+      calloutCatalog(),
+    );
+    expect(plan?.fenceEdits.length).toBeGreaterThan(0);
+    expect(plan?.fenceEdits.every((edit) => edit.line !== 1)).toBe(true);
+  });
+
+  it('flags a container item and not an attribute item', () => {
+    expect(
+      isContainerCompletionItem({ insertText: ':::callout{}\n\n:::' }),
+    ).toBe(true);
+    expect(isContainerCompletionItem({ insertText: 'tone=""' })).toBe(false);
   });
 });

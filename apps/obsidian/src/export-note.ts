@@ -32,6 +32,7 @@ import {
   buildExportDocument,
   exportedSiblingPath,
   fileNameOf,
+  countedNoun,
 } from '@markii/host';
 import type {
   EmbeddedImageReport,
@@ -339,15 +340,6 @@ export function exportNoticeText(outcome: NoteExportOutcome): string {
     case 'failed':
       return 'Markii: could not export this note. Open the Markii diagnostics for details.';
   }
-}
-
-/**
- * `count` plus `noun`, pluralized with a trailing `s`. Every noun this
- * module uses is regular. Exported so `./export/cascade-export.ts` shares
- * the exact wording rather than growing a second copy.
- */
-export function countedNoun(count: number, noun: string): string {
-  return `${String(count)} ${noun}${count === 1 ? '' : 's'}`;
 }
 
 /**

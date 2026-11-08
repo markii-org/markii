@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildComponentCatalog } from '@markii/host';
 import type { DiscoveredPack } from '@markii/host';
 import { completionAt } from '@markii/stdlib/editor';
-import type { CompletionContext, CompletionItem } from '@markii/stdlib/editor';
+import type { CompletionItem } from '@markii/stdlib/editor';
 import {
   completionOriginTag,
   completionQuery,
@@ -73,111 +73,75 @@ describe('completionOriginTag', () => {
 
 describe('completionSuggestions', () => {
   it('maps each item to a row, preserving order', () => {
-    const context: CompletionContext = {
-      kind: 'directive-name',
-      replaceStart: 0,
-      replaceEnd: 3,
-      items: [
-        componentItem({ label: 'callout' }),
-        componentItem({ label: 'card', group: 'pack', packName: 'cat' }),
-      ],
-    };
-    const rows = completionSuggestions(context);
+    const items = [
+      componentItem({ label: 'callout' }),
+      componentItem({ label: 'card', group: 'pack', packName: 'cat' }),
+    ];
+    const rows = completionSuggestions(items);
     expect(rows.map((row) => row.label)).toEqual(['callout', 'card']);
     expect(rows[0]?.origin).toBe('standard');
     expect(rows[1]?.origin).toBe('cat');
   });
 
   it('carries the detail through without repeating the origin', () => {
-    const context: CompletionContext = {
-      kind: 'directive-name',
-      replaceStart: 0,
-      replaceEnd: 3,
-      items: [componentItem({ detail: 'A boxed note.' })],
-    };
-    const [row] = completionSuggestions(context);
+    const items = [componentItem({ detail: 'A boxed note.' })];
+    const [row] = completionSuggestions(items);
     expect(row?.detail).toBe('A boxed note.');
     expect(row?.detail).not.toContain(row?.origin ?? '');
   });
 
   it('carries the original item through', () => {
     const item = componentItem();
-    const context: CompletionContext = {
-      kind: 'directive-name',
-      replaceStart: 0,
-      replaceEnd: 3,
-      items: [item],
-    };
-    expect(completionSuggestions(context)[0]?.item).toBe(item);
+    const items = [item];
+    expect(completionSuggestions(items)[0]?.item).toBe(item);
   });
 });
 
 describe('completionQuery', () => {
   it('slices from tokenStart, past the colon run, for a directive-name context', () => {
     const line = ':::cal';
-    const context: CompletionContext = {
-      kind: 'directive-name',
-      replaceStart: 0,
-      replaceEnd: 6,
-      tokenStart: 3,
-      items: [],
-    };
-    expect(completionQuery(line, context, line.length)).toBe('cal');
+    const tokenStart = 3;
+    expect(completionQuery(line, tokenStart, line.length)).toBe('cal');
   });
 
   it('slices from tokenStart for a four-colon run the same way', () => {
     const line = '::::tab';
-    const context: CompletionContext = {
-      kind: 'directive-name',
-      replaceStart: 0,
-      replaceEnd: 7,
-      tokenStart: 4,
-      items: [],
-    };
-    expect(completionQuery(line, context, line.length)).toBe('tab');
+    const tokenStart = 4;
+    expect(completionQuery(line, tokenStart, line.length)).toBe('tab');
   });
 
   it('leaves an attribute-name slice unchanged, no colons present', () => {
     const line = ':::callout{ty';
-    const context: CompletionContext = {
-      kind: 'attribute-name',
-      replaceStart: 11,
-      replaceEnd: 13,
-      items: [],
-    };
-    expect(completionQuery(line, context, line.length)).toBe('ty');
+    const tokenStart = 11;
+    expect(completionQuery(line, tokenStart, line.length)).toBe('ty');
   });
 
   it('leaves an attribute-value slice unchanged, no colons present', () => {
     const line = ':::callout{type="in';
-    const context: CompletionContext = {
-      kind: 'attribute-value',
-      replaceStart: 17,
-      replaceEnd: 20,
-      items: [],
-    };
-    expect(completionQuery(line, context, line.length)).toBe('in');
+    const tokenStart = 17;
+    expect(completionQuery(line, tokenStart, line.length)).toBe('in');
   });
 
   it('matches real completionAt output for a directive-name context', () => {
     const line = ':::cal';
     const context = completionAt(line, line.length, catalog);
     expect(context.kind).toBe('directive-name');
-    expect(completionQuery(line, context, line.length)).toBe('cal');
+    expect(
+      completionQuery(
+        line,
+        context.tokenStart ?? context.replaceStart,
+        line.length,
+      ),
+    ).toBe('cal');
   });
 });
 
 describe('filterCompletionSuggestions', () => {
-  const suggestions: readonly CompletionSuggestion[] = completionSuggestions({
-    kind: 'directive-name',
-    replaceStart: 0,
-    replaceEnd: 3,
-    items: [
-      componentItem({ label: 'callout' }),
-      componentItem({ label: 'card' }),
-      componentItem({ label: 'cat_card', group: 'pack', packName: 'cat' }),
-    ],
-  });
+  const suggestions: readonly CompletionSuggestion[] = completionSuggestions([
+    componentItem({ label: 'callout' }),
+    componentItem({ label: 'card' }),
+    componentItem({ label: 'cat_card', group: 'pack', packName: 'cat' }),
+  ]);
 
   it('returns everything for an empty query', () => {
     expect(filterCompletionSuggestions(suggestions, '')).toHaveLength(3);
@@ -200,7 +164,7 @@ describe('filterCompletionSuggestions', () => {
 describe('user-visible strings', () => {
   it('contain no em dash or parentheses', () => {
     const context = completionAt(':::c', 4, catalog);
-    const rows = completionSuggestions(context);
+    const rows = completionSuggestions(context.items);
     for (const row of rows) {
       expect(row.origin).not.toContain('—');
       expect(row.origin).not.toMatch(/[()]/);
@@ -242,7 +206,7 @@ describe('pack attribute metadata reaches the Obsidian suggest rows', () => {
   it('suggests the declared attribute names, with no origin tag of their own', () => {
     const line = ':::ana_timeline{';
     const rows = completionSuggestions(
-      completionAt(line, line.length, packCatalog),
+      completionAt(line, line.length, packCatalog).items,
     );
     expect(rows.map((row) => row.label)).toEqual([
       'from',
@@ -259,8 +223,12 @@ describe('pack attribute metadata reaches the Obsidian suggest rows', () => {
     const line = ':::ana_timeline{sc';
     const context = completionAt(line, line.length, packCatalog);
     const rows = filterCompletionSuggestions(
-      completionSuggestions(context),
-      completionQuery(line, context, line.length),
+      completionSuggestions(context.items),
+      completionQuery(
+        line,
+        context.tokenStart ?? context.replaceStart,
+        line.length,
+      ),
     );
     expect(rows.map((row) => row.label)).toEqual(['scale']);
   });
@@ -268,14 +236,14 @@ describe('pack attribute metadata reaches the Obsidian suggest rows', () => {
   it('suggests the declared enum values', () => {
     const line = ':::ana_timeline{scale="';
     const context = completionAt(line, line.length, packCatalog);
-    const rows = completionSuggestions(context);
+    const rows = completionSuggestions(context.items);
     expect(rows.map((row) => row.label)).toEqual(['days', 'weeks']);
     expect(rows[0]?.item.insertText).toBe('days"');
   });
 
   it('keeps the pack name as the origin on the component row itself', () => {
     const rows = completionSuggestions(
-      completionAt(':::ana_time', 11, packCatalog),
+      completionAt(':::ana_time', 11, packCatalog).items,
     );
     const row = rows.find((candidate) => candidate.label === 'ana_timeline');
     expect(row?.origin).toBe('ana');

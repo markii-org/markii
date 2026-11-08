@@ -327,6 +327,75 @@ describe('createMarkiiHost editor behaviors', () => {
     expect(outcome.labels).toContain('callout');
   });
 
+  it('completeAt carries the replace span, the filter start, and no fence edits for a top-level opener', async () => {
+    const adapter = fakeAdapter({ editor: fakeEditor(':::cal', 0, 6) });
+    const outcome = await createMarkiiHost(adapter).completeAt({
+      line: 0,
+      column: 6,
+    });
+    if (outcome.kind !== 'completions') throw new Error('expected completions');
+    expect(outcome.replaceStart).toBe(0);
+    expect(outcome.replaceEnd).toBe(6);
+    expect(outcome.tokenStart).toBe(3);
+    expect(outcome.items.length).toBeGreaterThan(0);
+    expect(outcome.fenceEdits).toEqual([]);
+  });
+
+  it('completeAt reads the request document when one is given, not the editor', async () => {
+    const adapter = fakeAdapter({ editor: fakeEditor('plain', 0, 0) });
+    const outcome = await createMarkiiHost(adapter).completeAt({
+      line: 0,
+      column: 6,
+      documentText: ':::cal',
+    });
+    expect(outcome.kind).toBe('completions');
+  });
+
+  it('completeAt says "none" for a bare colon run that closes an open container', async () => {
+    const text = ':::callout\ntext\n:::';
+    const adapter = fakeAdapter({ editor: fakeEditor(text, 2, 3) });
+    const outcome = await createMarkiiHost(adapter).completeAt({
+      line: 2,
+      column: 3,
+    });
+    expect(outcome).toEqual({ kind: 'none' });
+  });
+
+  it('completeAt returns fence edits for a container opened inside a container', async () => {
+    const text = ':::card\n:::cal\n:::';
+    const adapter = fakeAdapter({ editor: fakeEditor(text, 1, 6) });
+    const outcome = await createMarkiiHost(adapter).completeAt({
+      line: 1,
+      column: 6,
+    });
+    if (outcome.kind !== 'completions') throw new Error('expected completions');
+    expect(outcome.fenceEdits.length).toBeGreaterThan(0);
+    expect(outcome.fenceEdits.every((edit) => edit.line !== 1)).toBe(true);
+  });
+
+  it('completeAtSync answers from the standard set cold, and sees packs once warm', async () => {
+    const adapter = fakeAdapter({ editor: fakeEditor(':::cal', 0, 6) });
+    const host = createMarkiiHost(adapter);
+    const cold = host.completeAtSync({ line: 0, column: 6 });
+    expect(cold.kind).toBe('completions');
+    await host.completeAt({ line: 0, column: 6 });
+    expect(host.completeAtSync({ line: 0, column: 6 }).kind).toBe(
+      'completions',
+    );
+    host.invalidateCatalog();
+  });
+
+  it('hoverAt carries the structured documentation and the name range', async () => {
+    const adapter = fakeAdapter({ editor: fakeEditor(':::callout', 0, 5) });
+    const outcome = await createMarkiiHost(adapter).hoverAt({
+      line: 0,
+      column: 5,
+    });
+    if (outcome.kind !== 'hover') throw new Error('expected hover');
+    expect(outcome.documentation.summary.length).toBeGreaterThan(0);
+    expect(outcome.start).toBeLessThan(outcome.end);
+  });
+
   it('hoverAt returns "none" for a line with no directive', async () => {
     const adapter = fakeAdapter({ editor: fakeEditor('plain', 0, 2) });
     const outcome = await createMarkiiHost(adapter).hoverAt({

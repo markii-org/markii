@@ -1,8 +1,16 @@
 {
   "outcomes": [
     { "kind": "opened" },
-    { "kind": "ran", "values": {}, "failureKinds": ["tier-blocked"] }
+    {
+      "kind": "ran",
+      "values": {},
+      "failureKinds": ["tier-blocked"],
+      "traceOk": false
+    }
   ],
-  "diagnostics": [],
+  "diagnostics": [
+    "auto run finished with 1 script failure(s)",
+    "counter (tier-blocked)"
+  ],
   "prompts": []
 }

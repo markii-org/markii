@@ -21,9 +21,11 @@
  * simply never calls `hoverAtViaAdapter`.
  */
 import {
+  closesOpenContainerFence,
   completionAt,
   componentDocumentation,
   fenceExtensionEdits,
+  insertedContainerColonCount,
   formatComponentDocumentation,
   hoverAt,
   offsetToLineColumn,
@@ -36,7 +38,7 @@ import type {
   InsertableComponent,
   LineColumn,
 } from '@markii/stdlib/editor';
-import type { HostEditor } from './adapter.js';
+import type { HostEditor, HostTextEdit } from './adapter.js';
 
 /** The origin tag every host's completion row shows for a component item: `'standard'`, `'layout'`, or the owning pack's own namespace. Empty string for an attribute or value item, which has no `group`. */
 export const STANDARD_ORIGIN_TAG = 'standard';
@@ -61,6 +63,8 @@ export function completionOriginTag(item: CompletionItem): string {
 export interface CatalogCache {
   /** The cached catalog, building it via `load` on first use and again after `invalidate()`. Never throws: a rejected `load` degrades to the standard-set-only catalog. */
   get(): Promise<readonly InsertableComponent[]>;
+  /** The cached catalog if one is built, else `undefined`. Never starts a build. */
+  peek(): readonly InsertableComponent[] | undefined;
   /** Drops the cached catalog (and any in-flight build), so the next `get()` rebuilds from `load`. */
   invalidate(): void;
 }
@@ -98,6 +102,9 @@ export function createCatalogCache(
       }
       return pending;
     },
+    peek(): readonly InsertableComponent[] | undefined {
+      return cached;
+    },
     invalidate(): void {
       cached = undefined;
       pending = undefined;
@@ -127,6 +134,96 @@ export function completeAtViaEditor(
 ): CompletionContext {
   const line = lineTextAt(editor.documentText(), position.line);
   return completionAt(line, position.column, catalog);
+}
+
+/**
+ * Everything a completion UI needs for one request, decided once in the
+ * shared layer: the items, the replace span (`replaceStart`/`replaceEnd`),
+ * the token start a filtering popup should score against (`tokenStart`,
+ * which equals `replaceStart` unless a colon run precedes the name), and
+ * the fence lengthening edits an accepted CONTAINER item needs. Hosts only
+ * map this onto their own popup type.
+ */
+export interface CompletionPlan {
+  readonly kind: CompletionContext['kind'];
+  readonly items: readonly CompletionItem[];
+  readonly replaceStart: number;
+  readonly replaceEnd: number;
+  readonly tokenStart: number;
+  /**
+   * Fence rewrites to apply in the SAME undo step as an accepted container
+   * item, in pre-edit coordinates, never on the insertion line. Empty when
+   * no item in the response opens a container or the document's fences do
+   * not pair cleanly. Every container item in one context inserts the same
+   * fence shape, so one list serves them all; a host applies it only when
+   * the accepted item is a container (`isContainerCompletionItem`).
+   */
+  readonly fenceEdits: readonly HostTextEdit[];
+}
+
+/** Whether accepting `item` opens a container, and so needs `CompletionPlan.fenceEdits` applied with it. */
+export function isContainerCompletionItem(item: {
+  readonly insertText: string;
+}): boolean {
+  try {
+    return insertedContainerColonCount(item.insertText) !== undefined;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * `completionAt` over a whole document at a position, plus the two
+ * decisions both editors used to repeat at their own trigger boundary: a
+ * bare colon run that CLOSES an open container is not an opener waiting
+ * for a name (so no plan), and fence edits are computed once per response.
+ * Returns `undefined` when there is nothing to offer. Never throws.
+ */
+export function completionPlanAt(
+  documentText: string,
+  position: LineColumn,
+  catalog: readonly InsertableComponent[],
+): CompletionPlan | undefined {
+  try {
+    const line = lineTextAt(documentText, position.line);
+    if (closesOpenContainerFence(documentText, position.line, line)) {
+      return undefined;
+    }
+    const context = completionAt(line, position.column, catalog);
+    if (context.kind === 'none' || context.items.length === 0) {
+      return undefined;
+    }
+    const container = context.items.find(isContainerCompletionItem);
+    let fenceEdits: readonly HostTextEdit[] = [];
+    if (container !== undefined) {
+      try {
+        fenceEdits = fenceExtensionEdits(
+          documentText,
+          position.line,
+          container.insertText,
+        )
+          .filter((edit) => edit.line !== position.line)
+          .map((edit) => ({
+            line: edit.line,
+            startColumn: edit.column,
+            endColumn: edit.column + edit.oldText.length,
+            text: edit.newText,
+          }));
+      } catch {
+        fenceEdits = [];
+      }
+    }
+    return {
+      kind: context.kind,
+      items: context.items,
+      replaceStart: context.replaceStart,
+      replaceEnd: context.replaceEnd,
+      tokenStart: context.tokenStart ?? context.replaceStart,
+      fenceEdits,
+    };
+  } catch {
+    return undefined;
+  }
 }
 
 /** `hoverAt` composed over a `HostEditor`'s document text at a given position, the same way `completeAtViaEditor` composes `completionAt`. */

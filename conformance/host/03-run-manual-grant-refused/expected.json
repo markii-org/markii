@@ -1,8 +1,18 @@
 {
   "outcomes": [
     { "kind": "opened" },
-    { "kind": "ran", "values": {}, "failureKinds": ["capability-denied"] }
+    {
+      "kind": "ran",
+      "values": {},
+      "failureKinds": ["capability-denied"],
+      "traceOk": false
+    }
   ],
-  "diagnostics": [],
+  "diagnostics": [
+    "manual run finished with 1 script failure(s)",
+    "total (capability-denied)",
+    "manual run: net declaration mismatch",
+    "uses net access to api.example.com"
+  ],
   "prompts": ["This note's scripts can send data to api.example.com. Allow?"]
 }

@@ -166,6 +166,7 @@ export {
 // main-entry only.
 export type {
   CatalogCache,
+  CompletionPlan,
   InsertComponentEdit,
   InsertComponentPlan,
 } from './host/editor-behavior.js';
@@ -174,8 +175,10 @@ export {
   STANDARD_ORIGIN_TAG,
   completeAtViaEditor,
   completionOriginTag,
+  completionPlanAt,
   createCatalogCache,
   hoverAtViaEditor,
   hoverDocumentationText,
   insertComponentPlan,
+  isContainerCompletionItem,
 } from './host/editor-behavior.js';

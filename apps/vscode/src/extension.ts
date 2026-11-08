@@ -41,6 +41,7 @@ import {
   buildPackRegistrationScript,
   createMarkiiHost,
   createNodeArchiveExtractFs,
+  isContainerCompletionItem,
   exportPackArchive,
   installPackDiagnosticLines,
   installPackFromArchive,
@@ -53,11 +54,6 @@ import {
   VSCODE_LABELS,
 } from '@markii/host';
 import type { DiscoveredPack, HostPromptRequest } from '@markii/host';
-import {
-  closesOpenContainerFence,
-  completionAt,
-  hoverAt,
-} from '@markii/stdlib/editor';
 import type { CompletionItem as MarkCompletionItem } from '@markii/stdlib/editor';
 import {
   addPackFolderDiagnosticLines,
@@ -65,8 +61,7 @@ import {
   unusablePackFolderMessage,
   validatePackFolder,
 } from './packs/validate-pack-folder.js';
-import { createCatalogCache } from '@markii/host';
-import type { CatalogCache } from '@markii/host';
+import type { HostTextEdit, MarkiiHost } from '@markii/host';
 import {
   MARKII_COMPLETION_TRIGGER_CHARACTERS,
   completionFilterText,
@@ -83,11 +78,6 @@ import {
   NO_ACTIVE_MARK_EDITOR_MESSAGE,
 } from './insert-component.js';
 import type { InsertComponentQuickPickEntry } from './insert-component.js';
-import {
-  completionFenceTextEdits,
-  isContainerInsertText,
-} from './fence-edits.js';
-import type { FenceTextEdit } from './fence-edits.js';
 
 /**
  * The `markii.addPackFolder` command: a folder picker that appends the chosen
@@ -766,7 +756,7 @@ function toVscodeCompletionItem(
   replaceStart: number,
   replaceEnd: number,
   tokenStart: number,
-  fenceEdits: readonly FenceTextEdit[],
+  fenceEdits: readonly HostTextEdit[],
 ): vscode.CompletionItem {
   const completion = new vscode.CompletionItem(
     item.label,
@@ -809,14 +799,14 @@ function toVscodeCompletionItem(
   // returns an edit on the insertion line, and the range above is on that
   // line. Only container items carry them; a leaf or inline item accepts
   // without touching anything else in the document.
-  if (fenceEdits.length > 0 && isContainerInsertText(item.insertText)) {
+  if (fenceEdits.length > 0 && isContainerCompletionItem(item)) {
     completion.additionalTextEdits = fenceEdits.map((edit) =>
       vscode.TextEdit.replace(
         new vscode.Range(
           new vscode.Position(edit.line, edit.startColumn),
           new vscode.Position(edit.line, edit.endColumn),
         ),
-        edit.newText,
+        edit.text,
       ),
     );
   }
@@ -824,14 +814,15 @@ function toVscodeCompletionItem(
 }
 
 /**
- * Builds the `CompletionItemProvider`/`HoverProvider` pair, both reading
- * the cursor's line and the cached catalog and delegating every decision
- * to `@markii/host`'s `completionAt`/`hoverAt` and `./completion.ts`'s
- * wording. Both bodies are wrapped defensively: slice 1 never throws, but
- * a failure anywhere in a provider must degrade to "no completions" /
- * "no hover", never a VS Code error toast.
+ * Builds the `CompletionItemProvider`/`HoverProvider` pair. Every decision
+ * (what completes, the replace span, the fence edits, whether a colon run
+ * closes a container, the hover documentation and range) is
+ * `@markii/host`'s `completeAt`/`hoverAt` outcome; this function only maps
+ * those outcomes onto `vscode` types with `./completion.ts`'s wording. Both
+ * bodies are wrapped defensively: a failure anywhere in a provider must
+ * degrade to "no completions" / "no hover", never a VS Code error toast.
  */
-function createCompletionAndHoverProviders(catalogCache: CatalogCache): {
+function createCompletionAndHoverProviders(host: MarkiiHost): {
   completionProvider: vscode.CompletionItemProvider;
   hoverProvider: vscode.HoverProvider;
 } {
@@ -839,36 +830,22 @@ function createCompletionAndHoverProviders(catalogCache: CatalogCache): {
     async provideCompletionItems(document, position) {
       try {
         const lineText = document.lineAt(position.line).text;
-        // A bare colon run that CLOSES an open container is not an opener
-        // waiting for a name, so the catalog stays shut. `completionAt`
-        // sees one line and cannot tell the two apart; the trigger
-        // boundary, which has the whole document, can.
-        if (
-          closesOpenContainerFence(document.getText(), position.line, lineText)
-        ) {
-          return undefined;
-        }
-        const catalog = await catalogCache.get();
-        const ctx = completionAt(lineText, position.character, catalog);
-        if (ctx.kind === 'none' || ctx.items.length === 0) return undefined;
-        // Computed once for the whole response, not per row: every
-        // container item in one context inserts the same fence shape.
-        const fenceEdits = completionFenceTextEdits(
-          () => document.getText(),
-          position.line,
-          ctx.items,
-        );
-        const tokenStart = ctx.tokenStart ?? ctx.replaceStart;
-        return ctx.items.map((item, index) =>
+        const outcome = await host.completeAt({
+          line: position.line,
+          column: position.character,
+          documentText: document.getText(),
+        });
+        if (outcome.kind !== 'completions') return undefined;
+        return outcome.items.map((item, index) =>
           toVscodeCompletionItem(
             item,
             index,
             lineText,
             position.line,
-            ctx.replaceStart,
-            ctx.replaceEnd,
-            tokenStart,
-            fenceEdits,
+            outcome.replaceStart,
+            outcome.replaceEnd,
+            outcome.tokenStart,
+            outcome.fenceEdits,
           ),
         );
       } catch {
@@ -880,15 +857,17 @@ function createCompletionAndHoverProviders(catalogCache: CatalogCache): {
   const hoverProvider: vscode.HoverProvider = {
     async provideHover(document, position) {
       try {
-        const lineText = document.lineAt(position.line).text;
-        const catalog = await catalogCache.get();
-        const info = hoverAt(lineText, position.character, catalog);
-        if (info === undefined) return undefined;
-        const markdown = completionMarkdown(info.documentation);
+        const outcome = await host.hoverAt({
+          line: position.line,
+          column: position.character,
+          documentText: document.getText(),
+        });
+        if (outcome.kind !== 'hover') return undefined;
+        const markdown = completionMarkdown(outcome.documentation);
         if (markdown.length === 0) return undefined;
         const range = new vscode.Range(
-          new vscode.Position(position.line, info.start),
-          new vscode.Position(position.line, info.end),
+          new vscode.Position(position.line, outcome.start),
+          new vscode.Position(position.line, outcome.end),
         );
         return new vscode.Hover(new vscode.MarkdownString(markdown), range);
       } catch {
@@ -901,21 +880,20 @@ function createCompletionAndHoverProviders(catalogCache: CatalogCache): {
 }
 
 /**
- * The catalog cache's `load`: today's configured packs (plus the
- * extension's own bundled packs, GitHub issue #15), discovered fresh.
- * Shared shape with `insertComponentCommand`'s own discovery call, kept
- * separate rather than factored together since the two callers have
- * different failure handling (the cache degrades to the standard set and
- * caches nothing on failure; the command just falls back to `[]` inline).
+ * The pack folders completion and hover read: `markii.packs` resolved
+ * against the workspace root, with the extension's own bundled packs ahead
+ * of them. Read at call time, so a changed setting is seen after
+ * `host.invalidateCatalog()`.
  */
-function loadConfiguredPacksForCompletion(
-  extensionPath: string,
-): Promise<readonly DiscoveredPack[]> {
+function completionPackFolders(extensionPath: string): readonly string[] {
   const configuredPacks = vscode.workspace
     .getConfiguration('markii')
     .get<string[]>('packs', []);
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  return discoverConfiguredPacks(configuredPacks, workspaceRoot, extensionPath);
+  return [
+    bundledPacksFolder(extensionPath),
+    ...resolvePackPaths(configuredPacks, workspaceRoot, homedir()),
+  ];
 }
 
 /**
@@ -1027,24 +1005,33 @@ export function activate(context: vscode.ExtensionContext): void {
     },
   );
 
-  // Directive autocompletion and hover (GitHub issue #27, slice 2). The
-  // cache avoids re-discovering packs from disk on every keystroke; it is
+  // Directive autocompletion and hover (GitHub issue #27, slice 2), routed
+  // through the shared host. Its catalog cache avoids re-discovering packs from disk on every keystroke; it is
   // invalidated whenever what it would discover could have changed:
   // `markii.packs` edited, or a workspace folder added/removed (packs are
   // discovered relative to the workspace root).
-  const catalogCache = createCatalogCache(async () => {
-    let packs: readonly DiscoveredPack[] = [];
-    try {
-      packs = await loadConfiguredPacksForCompletion(
-        context.extensionUri.fsPath,
-      );
-    } catch {
-      packs = [];
-    }
-    return buildComponentCatalog(packs);
-  });
+  const editorHost = createMarkiiHost(
+    createVSCodeHostAdapter({
+      memento: context.workspaceState,
+      // Completion and hover never ask a question; a refusal keeps this
+      // adapter honest if one ever does.
+      prompt: async () => false,
+      diagnostics: (line) => diagnosticsChannel.appendLine(line),
+      authorizedFolders: async () =>
+        completionPackFolders(context.extensionUri.fsPath),
+      // The providers pass each document's own text with every request;
+      // these closures exist so the host sees an `editor` capability.
+      editorDocumentText: () =>
+        vscode.window.activeTextEditor?.document.getText() ?? '',
+      editorCursor: () => {
+        const start = vscode.window.activeTextEditor?.selection.start;
+        return { line: start?.line ?? 0, column: start?.character ?? 0 };
+      },
+      editorApplyEdits: async () => false,
+    }),
+  );
   const { completionProvider, hoverProvider } =
-    createCompletionAndHoverProviders(catalogCache);
+    createCompletionAndHoverProviders(editorHost);
   const completionProviderHandle =
     vscode.languages.registerCompletionItemProvider(
       MARKII_DOCUMENT_SELECTOR,
@@ -1058,14 +1045,14 @@ export function activate(context: vscode.ExtensionContext): void {
   const packsConfigChangeListener = vscode.workspace.onDidChangeConfiguration(
     (event) => {
       if (event.affectsConfiguration('markii.packs')) {
-        catalogCache.invalidate();
+        editorHost.invalidateCatalog();
         void reloadActivePreviewPacks(context);
       }
     },
   );
   const workspaceFoldersChangeListener =
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
-      catalogCache.invalidate();
+      editorHost.invalidateCatalog();
     });
 
   context.subscriptions.push(

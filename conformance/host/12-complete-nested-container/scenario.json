@@ -1,0 +1,12 @@
+{
+  "id": "complete-nested-container",
+  "invariant": "completion of a container inside an equal-length container carries the fence edits that keep the pair legal",
+  "clock": 1700000000000,
+  "actions": [
+    {
+      "type": "completeAt",
+      "line": 3,
+      "column": 6
+    }
+  ]
+}

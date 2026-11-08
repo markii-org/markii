@@ -119,7 +119,8 @@ coarse, matching each `kind`:
 
 - `ran`: `values` compares the landed, non-error `StoredValue`s by name
   (`{name: value}`); `failureKinds` compares the closed `FailureKind`
-  taxonomy only, never a raw message or a timing.
+  taxonomy only, never a raw message or a timing; an optional `traceOk`
+  compares the recorded run trace's `ok` flag.
 - `exported`: `contains`/`excludes` are substrings checked against the
   written file's content, never the whole document — the render corpora
   already pin bytes.
@@ -130,8 +131,12 @@ coarse, matching each `kind`:
 - `loaded`: `namespaces`, order-independent.
 - `completions`: `labels`, checked as "every one of these appears",
   not an exact set (a pack-aware host's catalog is a superset of the
-  standard one).
-- `hover`: `contains`, a substring of the hover text.
+  standard one). Optional `replaceStart`, `replaceEnd`, and `tokenStart`
+  compare the column span an accepted item replaces and where filtering
+  starts; `fenceEditCount` compares how many fence rewrites travel with an
+  accepted container item.
+- `hover`: `contains`, a substring of the hover text. Optional `start` and
+  `end` compare the hovered name's columns.
 - every other `kind` (`opened`, `none`, `not-found`, `failed`, `rejected`,
   `reserved`, `cancelled`, `inserted`): `kind` equality is the whole check.
 
@@ -173,7 +178,7 @@ run the whole corpus honestly: its result records say `unsupported`
 where it genuinely offers nothing, which is the truth and is visible,
 rather than a skipped test or a faked empty answer.
 
-## The ten scenarios
+## The twelve scenarios
 
 | id | what it proves |
 |---|---|
@@ -187,6 +192,8 @@ rather than a skipped test or a faked empty answer.
 | `08-hover-standard-component` | hover on a standard component returns its documented attributes |
 | `09-insert-skeleton` | inserting a component applies one edit |
 | `10-scripts-disabled` | the device switch blocks the run before the isolate, and says so on both surfaces |
+| `11-complete-closing-fence` | a bare colon run that closes an open container offers nothing, as `none` rather than a failure |
+| `12-complete-nested-container` | completing a container inside an equal-length container carries the fence edits that keep the pair legal |
 
 See `tmp/W11-phase3.md` for which capabilities each of the three real
 adapters currently declares, and which scenarios are consequently

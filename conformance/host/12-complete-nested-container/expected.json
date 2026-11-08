@@ -1,0 +1,5 @@
+{
+  "outcomes": [{ "kind": "completions", "labels": ["callout"], "fenceEditCount": 2 }],
+  "diagnostics": [],
+  "prompts": []
+}

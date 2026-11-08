@@ -1,0 +1,5 @@
+# Closing fence
+
+:::callout
+Body.
+:::

@@ -1,5 +1,5 @@
 {
-  "outcomes": [{ "kind": "hover", "contains": "callout" }],
+  "outcomes": [{ "kind": "hover", "contains": "callout", "start": 2, "end": 9 }],
   "diagnostics": [],
   "prompts": []
 }

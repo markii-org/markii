@@ -8,7 +8,7 @@ import {
   createRenderDiagnosticReporter,
   mergeArrivingValue,
   readPersistedValues,
-  runViaAdapter,
+  createMarkiiHost,
   scheduledRefreshNotStartedLine,
   scriptsDisabledDiagnosticLine,
   scriptsDisabledNotice,
@@ -332,7 +332,7 @@ export class MarkiiPreviewView extends ItemView {
 
   /**
    * Runs the currently-shown note's scripts once. `trigger` flows straight
-   * to `@markii/host`'s `runViaAdapter` (batch 11: wraps `runOnce`, the
+   * to `@markii/host`'s `createMarkiiHost(...).run` (wraps `runOnce`, the
    * grant-flow-plus-spawn orchestration, over this view's `HostAdapter`),
    * which is what enforces the whole "effects always cost a click" rule:
    * only `'manual'` (the `run-markii-scripts` command) runs the
@@ -398,7 +398,7 @@ export class MarkiiPreviewView extends ItemView {
         this.plugin.packContext && this.plugin.packContext.packs.length > 0
           ? this.plugin.packContext.packModules
           : undefined;
-      const result = await runViaAdapter(adapter, {
+      const outcome = await createMarkiiHost(adapter).run({
         documentKey,
         text,
         trigger,
@@ -422,6 +422,15 @@ export class MarkiiPreviewView extends ItemView {
           emitValuesChanged(documentKey);
         },
       });
+
+      if (outcome.kind === 'unsupported') {
+        // The shared path already wrote the diagnostics line.
+        if (trigger === 'manual') {
+          new Notice("Markii: this note's scripts cannot run on this device.");
+        }
+        return;
+      }
+      const result = outcome;
 
       // The file shown may have changed while the run (grant prompts
       // included) was in flight; only apply the result if we're still
@@ -451,8 +460,8 @@ export class MarkiiPreviewView extends ItemView {
 
   /**
    * A completed run's outcome, on this host's two designated surfaces
-   * (AGENTS.md, "clean is not silent"): every failure gets a full line in
-   * the developer console, and a MANUAL run — the one a user is actively
+   * (AGENTS.md, "clean is not silent"): every failure's full line was already
+   * written to the developer console by the shared run path, and a MANUAL run — the one a user is actively
    * watching for — additionally gets a `Notice` either way. A scheduled/
    * auto run stays quiet on success (its updated values are the feedback)
    * and quiet-but-logged on failure, so a monitoring note can never turn
@@ -466,14 +475,6 @@ export class MarkiiPreviewView extends ItemView {
     if (failures.length === 0) {
       if (trigger === 'manual') new Notice("Markii: this note's scripts ran.");
       return;
-    }
-    console.error(
-      `[markii] run (${trigger}) finished with ${String(failures.length)} failure(s):`,
-    );
-    for (const failure of failures) {
-      console.error(
-        `[markii]   ${failure.name} (${failure.kind}): ${failure.message}`,
-      );
     }
     if (trigger === 'manual') {
       const what =

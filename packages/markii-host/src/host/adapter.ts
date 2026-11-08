@@ -15,6 +15,7 @@
 import type { GrantMemento } from '../run/grant-flow.js';
 import type { IsolateSpawner } from '../run/isolate.js';
 import type { LineColumn } from '@markii/stdlib/editor';
+import type { DiscoveredPack } from '../packs/discover.js';
 
 /** One entry from `listFolder`. Reuses the shape `@markii/host`'s existing `PackDirectoryLister` (`../packs/discover.ts`) already returns, rather than inventing a second. */
 export interface HostDirEntry {
@@ -135,6 +136,14 @@ export interface HostPackSource {
   reservedNamespaces(): ReadonlySet<string>;
   /** Where an installed pack is unzipped. Absent means this host cannot install a pack. */
   installRoot?(): string;
+  /**
+   * Packs embedded in the host's own build, with no folder on disk
+   * (Obsidian carries its bundled packs inside `main.js`). They join the
+   * catalog completion, hover, and insert read, ahead of the discovered
+   * ones. Absent when every pack the host offers lives in a folder
+   * `authorizedFolders` names.
+   */
+  bundledPacks?(): readonly DiscoveredPack[];
   /** Removes an installed pack folder. Required when `installRoot` is present. */
   removeFolder?(path: string): Promise<void>;
 }

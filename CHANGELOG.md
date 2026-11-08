@@ -42,8 +42,20 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
   `formMismatchTitle`. A host that switches on the kind exhaustively needs
   a case for it.
 
+- **The live terminal viewer scrolls.** `@markii/ansi`'s
+  `buildMarkElement` takes `viewportRows`: the document gets that many rows
+  minus one, with the status line pinned below it. Space, PgDn and ctrl-f
+  page down; b, PgUp and ctrl-b page up; g and Home jump to the top, G and
+  End to the bottom; ctrl-e and ctrl-y scroll one line, and so do j and k
+  when nothing is focusable. A newly focused block scrolls into view. The
+  render-once output is unchanged. `markii view` passes the terminal's
+  height and re-fits on resize.
+
 ### Fixed
 
+- **The terminal status line names the active tab**, not the first one,
+  also after a `--watch` re-parse. The line is cut to the terminal width
+  and never wraps, and its key legend starts with `q quit`.
 - **`@markii/ansi`'s npm description matches the engine.** It no longer
   claims "Zero React"; the engine is built on Ink. The GitHub release notes
   list `@markii/ansi` with the other packages and attach its tarball link.
@@ -68,6 +80,17 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The two editor hosts export a linked set the same way.** VS Code's
+  archive gains the `index.html` entry page Obsidian's already had, and
+  Obsidian gains VS Code's notice when some linked notes were left out.
+  Both notices point at the host's diagnostics surface. A run's failure
+  lines are written once, by the shared run path, on every host; with
+  `--verbose`, `markii view` no longer repeats them.
+- **Tabs and details nested in a callout take focus in the live viewer.**
+  The callout's colored bar is drawn as a left border on an Ink box, so its
+  body is a real subtree; the same holds inside a card or a row cell with
+  `text=center` or `text=right`. In the live viewer an aligned callout is
+  placed as one block.
 - **The three host applications are adapters over one shared layer.** The
   VS Code extension, the Obsidian plugin, and the command line tool
   implement one small set of host primitives (file access, one yes or no

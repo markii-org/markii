@@ -16,10 +16,18 @@
  */
 import type { HostAdapter, HostExportFormat, HostTextEdit } from './adapter.js';
 import type { RunResult, SpawnRunOptions } from '../run/run-host.js';
-import type { RunOnceResult } from '../run/run-flow.js';
 import type { StoredValue } from '@markii/runtime';
-import type { InsertableComponent, LineColumn } from '@markii/stdlib/editor';
-import { runViaAdapter, type RunViaAdapterRequest } from './run-behavior.js';
+import type {
+  CompletionItem,
+  ComponentDocumentation,
+  InsertableComponent,
+  LineColumn,
+} from '@markii/stdlib/editor';
+import {
+  runViaAdapter,
+  type RunViaAdapterRequest,
+  type RunViaAdapterResult,
+} from './run-behavior.js';
 import {
   createNodeArchiveExtractFs,
   type ArchiveExtractFs,
@@ -37,7 +45,8 @@ import {
   exportNoteFileViaAdapter,
 } from './export-behavior.js';
 import {
-  completeAtViaEditor,
+  completionPlanAt,
+  createCatalogCache,
   hoverAtViaEditor,
   insertComponentPlan,
 } from './editor-behavior.js';
@@ -75,7 +84,7 @@ export type OpenOutcome =
 export type RunRequest = RunViaAdapterRequest;
 
 export type RunOutcome =
-  ({ readonly kind: 'ran' } & RunOnceResult) | Unsupported;
+  ({ readonly kind: 'ran' } & RunViaAdapterResult) | Unsupported;
 
 // --- export ------------------------------------------------------------
 
@@ -127,14 +136,43 @@ export type LoadPacksOutcome =
 export interface EditorPositionRequest {
   readonly line: number;
   readonly column: number;
+  /**
+   * The document the position belongs to. Omitted, the adapter's own
+   * `editor.documentText()` is read. A provider invoked for a document that
+   * is not the host's active editor (VS Code asks about any visible
+   * document) passes its own text here.
+   */
+  readonly documentText?: string;
 }
 
 export type CompleteOutcome =
-  | { readonly kind: 'completions'; readonly labels: readonly string[] }
+  | {
+      readonly kind: 'completions';
+      readonly labels: readonly string[];
+      /** The full items, so a host can map them onto its own popup rows. */
+      readonly items: readonly CompletionItem[];
+      /** Zero-based columns an accepted item replaces. */
+      readonly replaceStart: number;
+      readonly replaceEnd: number;
+      /** Where the name token starts, for filtering. Equals `replaceStart` unless a colon run precedes the name. */
+      readonly tokenStart: number;
+      /** Fence rewrites to apply with an accepted container item, in one undo step, in pre-edit coordinates. Empty otherwise. */
+      readonly fenceEdits: readonly HostTextEdit[];
+    }
+  /** Nothing to offer here: no directive context, or a bare colon run closing an open container. Not a failure. */
+  | { readonly kind: 'none' }
   | Unsupported;
 
 export type HoverOutcome =
-  | { readonly kind: 'hover'; readonly text: string }
+  | {
+      readonly kind: 'hover';
+      readonly text: string;
+      /** The structured documentation, for a host that renders its own markup. */
+      readonly documentation: ComponentDocumentation;
+      /** Zero-based columns of the hovered directive name, for the hover range. */
+      readonly start: number;
+      readonly end: number;
+    }
   | { readonly kind: 'none' }
   | Unsupported;
 
@@ -169,6 +207,15 @@ export interface MarkiiHost {
   installPack(request: InstallPackRequest): Promise<InstallPackOutcome>;
   loadPacks(): Promise<LoadPacksOutcome>;
   completeAt(request: EditorPositionRequest): Promise<CompleteOutcome>;
+  /**
+   * `completeAt` for a caller that must answer synchronously (Obsidian's
+   * `EditorSuggest.onTrigger`). Reads the cached catalog; while the cache
+   * is cold it answers from the standard set and starts warming the cache,
+   * so the next request sees installed packs.
+   */
+  completeAtSync(request: EditorPositionRequest): CompleteOutcome;
+  /** Drops the cached completion/hover catalog, for a host whose pack folders just changed. `installPack` and `loadPacks` do this themselves. */
+  invalidateCatalog(): void;
   hoverAt(request: EditorPositionRequest): Promise<HoverOutcome>;
   insertComponent(request: InsertComponentRequest): Promise<InsertOutcome>;
   diagnostics(line: string): void;
@@ -197,7 +244,42 @@ export function createMarkiiHost(
   async function currentCatalog(): Promise<readonly InsertableComponent[]> {
     if (!adapter.packs) return buildComponentCatalog([]);
     const { packs } = await loadPacksViaAdapter(adapter.packs);
-    return buildComponentCatalog(packs);
+    return buildComponentCatalog([
+      ...(adapter.packs.bundledPacks?.() ?? []),
+      ...packs,
+    ]);
+  }
+
+  /** Completion and hover fire per keystroke, so they read a cached catalog. `insertComponent` stays uncached: it runs once per command. */
+  const catalogCache = createCatalogCache(currentCatalog);
+
+  function documentTextFor(
+    editor: NonNullable<HostAdapter['editor']>,
+    request: EditorPositionRequest,
+  ): string {
+    return request.documentText ?? editor.documentText();
+  }
+
+  function completeWith(
+    catalog: readonly InsertableComponent[],
+    request: EditorPositionRequest,
+    editor: NonNullable<HostAdapter['editor']>,
+  ): CompleteOutcome {
+    const plan = completionPlanAt(
+      documentTextFor(editor, request),
+      request,
+      catalog,
+    );
+    if (plan === undefined) return { kind: 'none' };
+    return {
+      kind: 'completions',
+      labels: plan.items.map((item) => item.label),
+      items: plan.items,
+      replaceStart: plan.replaceStart,
+      replaceEnd: plan.replaceEnd,
+      tokenStart: plan.tokenStart,
+      fenceEdits: plan.fenceEdits,
+    };
   }
 
   return {
@@ -285,6 +367,7 @@ export function createMarkiiHost(
         reservedNamespaces: adapter.packs.reservedNamespaces(),
       });
 
+      catalogCache.invalidate();
       for (const line of installPackDiagnosticLines(outcome, archivePath)) {
         adapter.diagnostics(line);
       }
@@ -317,6 +400,7 @@ export function createMarkiiHost(
           'this host has no pack folders configured.',
         );
       }
+      catalogCache.invalidate();
       const result = await loadPacksViaAdapter(adapter.packs);
       for (const line of formatPackDiagnosticLines({
         packs: result.packs,
@@ -329,31 +413,50 @@ export function createMarkiiHost(
     },
 
     async completeAt(request: EditorPositionRequest): Promise<CompleteOutcome> {
-      if (!adapter.editor) {
+      const editor = adapter.editor;
+      if (!editor) {
         return unsupported(
           adapter,
           'editor',
           'completion is not available: this host has no live editor.',
         );
       }
-      const catalog = await currentCatalog();
-      const context = completeAtViaEditor(adapter.editor, request, catalog);
-      return {
-        kind: 'completions',
-        labels: context.items.map((item) => item.label),
-      };
+      return completeWith(await catalogCache.get(), request, editor);
+    },
+
+    completeAtSync(request: EditorPositionRequest): CompleteOutcome {
+      const editor = adapter.editor;
+      if (!editor) {
+        return unsupported(
+          adapter,
+          'editor',
+          'completion is not available: this host has no live editor.',
+        );
+      }
+      const warm = catalogCache.peek();
+      if (warm === undefined) void catalogCache.get();
+      return completeWith(warm ?? buildComponentCatalog([]), request, editor);
+    },
+
+    invalidateCatalog(): void {
+      catalogCache.invalidate();
     },
 
     async hoverAt(request: EditorPositionRequest): Promise<HoverOutcome> {
-      if (!adapter.editor) {
+      const editor = adapter.editor;
+      if (!editor) {
         return unsupported(
           adapter,
           'editor',
           'hover is not available: this host has no live editor.',
         );
       }
-      const catalog = await currentCatalog();
-      const hover = hoverAtViaEditor(adapter.editor, request, catalog);
+      const catalog = await catalogCache.get();
+      const hover = hoverAtViaEditor(
+        { documentText: () => documentTextFor(editor, request) },
+        request,
+        catalog,
+      );
       if (hover === undefined) return { kind: 'none' };
       // The formatted text (summary, attributes, and the usage example),
       // not the bare summary sentence: a component's description alone
@@ -363,6 +466,9 @@ export function createMarkiiHost(
       return {
         kind: 'hover',
         text: formatComponentDocumentation(hover.documentation),
+        documentation: hover.documentation,
+        start: hover.start,
+        end: hover.end,
       };
     },
 

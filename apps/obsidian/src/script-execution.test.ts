@@ -98,7 +98,7 @@ describe('the gate sits at the one choke point every trigger passes through', ()
     const gate = runScripts.indexOf(
       'if (this.plugin.localSettings.scriptsDisabled) {',
     );
-    const spawn = runScripts.indexOf('await runViaAdapter(');
+    const spawn = runScripts.indexOf('createMarkiiHost(adapter).run(');
     expect(gate).toBeGreaterThan(-1);
     expect(spawn).toBeGreaterThan(-1);
     expect(gate).toBeLessThan(spawn);

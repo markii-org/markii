@@ -543,6 +543,10 @@ The responsibilities below are what conformance is measured against.
    the rendered note even when that note is being piped into another
    program; it writes a failure line for every failed script always, and the
    full detail behind a verbose flag.
+   Write a run's failure lines in one place: the shared body every trigger
+   passes through, which reports each failed script and each mismatch
+   between a script's declared hosts and its requests. A host that also
+   writes them from its own commands prints every failure twice.
    The renderers' `onDiagnostic` callback belongs here too: a quiet marker
    in the page is half of the contract, and the reason has to reach this
    surface as well. Deduplicate before writing, because a preview re-renders
@@ -560,6 +564,10 @@ The responsibilities below are what conformance is measured against.
     say so on the diagnostics surface. That keeps the ordinary rule that two
     packs cannot share a namespace, and settles the tie by load order rather
     than by refusing both.
+    Shipped packs feed completion and the insert picker as well as the
+    renderer. A host that embeds them in its own bundle rather than placing
+    them on disk hands them to those behaviors directly, or they render but
+    are never offered.
     A pack list names folders, never archive files. A host that offers a
     folder list validates a folder before it reports the folder added:
     discovery runs first, the notice says what was actually found, and the
@@ -885,11 +893,16 @@ folder of the note that wrote them, and refuses any target that lands
 outside the note's own folder and the open workspace folders. Neither host
 follows a link to something that is not a markdown note.
 
+Every archive carries an `index.html` that lists the exported notes, so an
+unzipped set has one page to open first. A note that is itself named
+`index` is renamed so it does not collide with that page.
+
 The walk detects cycles and stops at a depth bound and a note-count bound,
 saying on the diagnostics surface which bound stopped it. A note that a link
 pointed at and the host could not read is named there too, beside the note
 that linked to it, so a set that came back smaller than expected is never
-silent about why.
+silent about why. When that happens, the notice for the export says that some
+linked notes were left out and points at the diagnostics surface.
 
 Links between exported notes are rewritten to point at the sibling files, so
 the archive is navigable with no vault and no network. A link to a note

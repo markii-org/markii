@@ -1,3 +1,4 @@
+import type { RunTrigger } from '@markii/runtime';
 import type { RunOnceResult } from '../run/run-flow.js';
 
 /**
@@ -18,4 +19,41 @@ export function formatRunFailureLines(
   return failures.map(
     (failure) => `${failure.name} (${failure.kind}): ${failure.message}`,
   );
+}
+
+/**
+ * Every diagnostics line one completed run owes the host's surface, in
+ * the order they are written: a header and one indented line per failed
+ * script (the "second home" of each failure, `formatRunFailureLines`),
+ * then a header and the lines of any net-declaration mismatch. A clean
+ * run with agreeing declarations returns no lines, so an empty surface
+ * still means nothing went wrong.
+ */
+export function runDiagnosticLines(
+  trigger: RunTrigger,
+  result: Pick<RunOnceResult, 'failureDetails' | 'netDeclarationDiagnostics'>,
+): string[] {
+  const lines: string[] = [];
+  const failureLines = formatRunFailureLines(result.failureDetails);
+  if (failureLines.length > 0) {
+    lines.push(
+      `${trigger} run finished with ${String(failureLines.length)} script failure(s):`,
+    );
+    for (const line of failureLines) lines.push(`  ${line}`);
+  }
+  if (result.netDeclarationDiagnostics.length > 0) {
+    lines.push(`${trigger} run: net declaration mismatch:`);
+    for (const line of result.netDeclarationDiagnostics) {
+      lines.push(`  ${line}`);
+    }
+  }
+  return lines;
+}
+
+/** The one line a run that threw (rather than returning failures) owes the diagnostics surface. */
+export function runCrashDiagnosticLine(
+  trigger: RunTrigger,
+  detail: string,
+): string {
+  return `${trigger} run failed before it could report: ${detail}`;
 }

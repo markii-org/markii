@@ -21,7 +21,7 @@ describe('the scriptsDisabled gate sits at the one choke point every trigger pas
     const body = source.slice(source.indexOf('async function runWithTrigger('));
     expect(body).not.toBe('');
     const gate = body.indexOf('if (scriptsDisabled()) {');
-    const spawn = body.indexOf('await runOnce({');
+    const spawn = body.indexOf('createMarkiiHost(adapter).run(');
     expect(gate).toBeGreaterThan(-1);
     expect(spawn).toBeGreaterThan(-1);
     expect(gate).toBeLessThan(spawn);
