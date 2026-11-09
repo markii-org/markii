@@ -54,8 +54,8 @@ directory the same way.
 
 A note-writer does not need any of this. Bundles serve the case where a
 note's data collection is worth caching beside the note and carrying with
-it. The reference host for running bundles is the VS Code extension, whose
-responsibilities as a host are covered in [integration.md](integration.md).
+it. The VS Code extension and the command line tool open and run bundles;
+their responsibilities as hosts are covered in [integration.md](integration.md).
 
 ## The cache is disposable
 

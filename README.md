@@ -185,7 +185,7 @@ and ordinary components for your engine, built once and pointed at your app.
 On a machine without the pack, the same note shows a labeled fallback and
 stays readable. The contract lives in [docs/packs.md](docs/packs.md).
 
-Both apps also ship three packs by default, no configuration needed: `read`
+The VS Code extension, the Obsidian plugin and the command line tool also ship three packs by default, no configuration needed: `read`
 (citation cards, quotes, inline marks and terms), `dash` (sparklines, gauges,
 status dots, an uptime bar) and `prep` (question cards, topic confidence,
 a self-test quiz). Their sources live at `packs/` in this repository.
@@ -211,7 +211,7 @@ npm test       # every workspace
 npm run dev    # playground
 ```
 
-The repo is an npm-workspaces monorepo: eight `@markii/*` packages split along
+The repo is an npm-workspaces monorepo: `@markii/*` packages split along
 the format's seams, a conformance corpus, and a thin playground. Read
 [AGENTS.md](AGENTS.md) and the docs before changing parser or renderer
 behavior.

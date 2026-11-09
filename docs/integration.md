@@ -63,8 +63,8 @@ application. The split is:
   for a note that has stopped changing, which is what publishing, CI,
   email, and archives need. Zero React.
 - `@markii/ansi`: the terminal renderer. It emits text with optional ANSI
-  color for a note read in a shell. Zero React, and no dependencies beyond
-  core and stdlib.
+  color for a note read in a shell. It is built on Ink, so it depends on
+  React 19; its Markii dependencies are core, stdlib and pack.
 - `@markii/runtime`: the value store, run orchestration, vault store, and
   grant-key computation. Framework-free and runtime-agnostic; the script
   executor is injected.
@@ -189,12 +189,11 @@ gets it for free and needs no status surface of its own. A tabs block is
 named by its active panel, so the line follows the reader across a switch.
 
 A tabs or details block is focusable at the top level of the document and
-inside a card or a figure, both of which are drawn with the layout
-engine's own borders and so can hold live children. One nested inside a
-callout renders as the string form of itself, exactly as it does in a
-static render, and is not part of the focus cycle: a callout marks its
-type with a colored bar rather than a frame, and a border cannot carry
-that color, so its body stays a fixed string.
+inside a card, a callout or a figure, all of which draw their bodies with
+the layout engine's own boxes and so can hold live children. A callout's
+colored type bar is a one-column left border whose glyph the engine styles
+itself. A block inside a string-drawn body, such as a table cell, renders
+as the string form of itself and is not part of the focus cycle.
 
 Interactivity is a property of the render, not of the note. The same
 document rendered through the string entry points is the flat page
@@ -402,8 +401,7 @@ mapping. Hiding script markers works this way in both editor hosts: the renderer
 still emits every marker, and the host's rule hides `.mk-script`
 and nothing else, so value failure markers, run markers, and pack markers
 stay where they were. A preference that reached into the renderer instead
-would have to be an option defaulting to today's behavior, never a change
-to what the renderer does by default.
+would have to be an option that leaves the default rendering unchanged.
 
 ## Host responsibilities for scripting (L3)
 
@@ -753,9 +751,9 @@ A pack contributes its own attribute metadata to the same layer. A component
 that declares an `attributes` list in its `pack.json` (see docs/packs.md) is
 completed by attribute name and by enumerated value, and its hover
 documentation lists those attributes, so a pack component reads the same way
-a standard one does in the editor. A pack that declares nothing keeps the
-earlier behavior: its name completes, and its description is all the
-documentation there is.
+a standard one does in the editor. A pack that declares nothing gets completion by
+name only: its name completes, and its description is all the documentation
+there is.
 
 A preview also resolves the images a note references. VS Code resolves a
 relative `src` against the note's folder. Obsidian tries the same
@@ -865,7 +863,8 @@ same box with a different label (no preview, HTML, or terminal view, per
 engine) and reports the `no-engine-view` kind, so a reader can tell it from
 a typo. The host builds that list from its pack loading, which returns every
 installed component and the ones lacking a view for the host's engine. A
-renderer given no list behaves exactly as before.
+renderer given no list renders every unknown directive as the ordinary
+unknown-component box.
 
 ### The language server and Neovim
 

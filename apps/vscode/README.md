@@ -109,7 +109,10 @@ need in order to work out what went wrong.
   and their shared Lua is reachable from `require "ana/..."` in a note's
   scripts. A note that uses a pack you have not installed stays readable: the
   unknown component shows a labeled fallback. The setting is user-scope only,
-  so opening someone else's project never loads a pack on your behalf. See the
+  so opening someone else's project never loads a pack on your behalf.
+  **Markii: Install Pack from File…** installs a `.mkp` archive, **Markii:
+  Remove Installed Pack…** takes one out, and **Markii: Export Pack…**
+  packages a pack you are developing as a `.mkp`. See the
   [packs guide](https://github.com/markii-org/markii/blob/main/docs/packs.md).
 - **Authoring help.** Typing `:` or `:::` suggests component names; inside a
   brace it suggests attribute names and, for an attribute with a fixed set
@@ -120,9 +123,11 @@ need in order to work out what went wrong.
 - **Export.** **Markii: Export as HTML…** writes the note as one
   self-contained `.html` file, styles embedded and the last run's values
   baked in, at a path you pick. Saving it beside the note keeps its relative
-  images working. The static renderer knows the standard component set, so a
-  pack component exports as the same labeled fallback box an uninstalled
-  pack shows, with your own content still inside it. For a PDF, open the
+  images working. Pack components render in the export as they do in the
+  preview, with each loaded pack's stylesheet embedded. If the preview
+  cannot render the note in time, the export falls back to the static
+  engine, and a pack component appears as a labeled fallback box with your
+  content still inside it. For a PDF, open the
   exported file in a browser and print it. **Markii: Export as HTML
   cascade…** does the same for a whole set: it follows the markdown links
   out of the note, exports every note it reaches, and writes one zip

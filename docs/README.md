@@ -16,8 +16,8 @@ Start with the page that matches what you're doing:
 - [integration.md](integration.md): embedding the libraries, the React,
   static HTML and terminal engines, writing your own renderer, and what a
   host application owns.
-- [packs.md](packs.md): sharing components and Lua modules. The VS Code and
-  Obsidian hosts load packs.
+- [packs.md](packs.md): sharing components and Lua modules. All three
+  reference hosts load packs.
 - [spec.md](spec.md): the rules an implementation must follow, and what
   conformance means. The normative core.
 

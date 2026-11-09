@@ -335,9 +335,9 @@ The two are told apart by the first path segment. The bundle's structural
 directories, `scripts`, `assets`, and `.cache`, are reserved: a name starting
 with one of them always resolves inside the bundle and can never be a pack
 namespace. Every other first segment is a pack namespace. All required
-code is pure Lua; a `require` that can't resolve fails softly, and the
-consuming script reports "requires library `mylib`" in the same graceful way
-an unknown component falls back.
+code is pure Lua. A `require` that can't resolve fails the script with a
+short error, such as `no pack module "http" in pack "ana"`, and the
+components bound to that script show their quiet failure state.
 
 There is deliberately no package manager: no luarocks, no network `require`,
 no dependency resolution. Fetching code from the network is code injection

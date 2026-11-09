@@ -99,7 +99,7 @@ export type PackModuleResolver = (
 export interface RequireConfig {
   /** The SAME `ScriptView` `./capabilities` wires up for `bundle.read`/`bundle.write` — reused, never re-implemented, so bundle-local `require` is subject to the identical path-jail and read-permission check. */
   bundle?: ScriptView;
-  /** Optional pack-module seam — see the module doc comment. Absent (the current default: no host wires packs yet) means every pack-namespaced `require` fails as a clean capability denial. */
+  /** Optional pack-module seam — see the module doc comment. Absent (a host that has not wired pack modules) means every pack-namespaced `require` fails as a clean capability denial. */
   packModuleResolver?: PackModuleResolver;
   /**
    * Records a genuine denial onto the SAME per-run `CapabilityDenials`

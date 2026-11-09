@@ -129,8 +129,7 @@ internal DNS legitimately points names at private space opts in with the
 `markii.allowPrivateNetworkAddresses` setting, which is user-scope only so
 a workspace cannot widen network reach for whoever opens it.
 
-One property of hostname grants is unchanged and still worth stating: a
-grant covers every port and path on the host it names.
+A grant covers every port and path on the host it names.
 
 ### In a web page
 
@@ -336,8 +335,9 @@ that position.
 Auto-run and scheduled execution are only sound on top of that watchdog,
 because they carry no user gesture: an auto-run note that hangs would freeze
 the host on open. Manual runs share the requirement but at least fail behind
-a deliberate click. No isolate ships in this repository; it is the
-embedding application's code, and the host checklist in
+a deliberate click. The reference isolates live in `@markii/host`: a worker
+thread for Node hosts and a Web Worker for browser and Electron hosts. A host
+that does not use that package supplies its own, and the host checklist in
 [integration.md](integration.md) lists it first.
 
 ## The bundle jail
@@ -444,7 +444,7 @@ host. It loads only prebuilt `.mkp` archives that went through an install
 step asking for consent, and where its pack folder can receive packs it did
 not install, it keeps a device trust list so a folder that merely arrived
 is never evaluated. A sandboxed iframe per pack would contain a pack's code
-further; that option is tracked in issue #66.
+further; that is not implemented.
 
 ## Escape sequences in terminal output
 

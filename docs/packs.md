@@ -2,8 +2,8 @@
 
 A pack is how components and shared Lua modules travel between people. The
 contract, the namespace rules, the registry merging, and the sandboxed
-`require` are implemented, and both reference hosts (the VS Code extension
-and the Obsidian plugin) load packs. This page describes that shipped
+`require` are implemented, and all three reference hosts (the VS Code
+extension, the Obsidian plugin and the command line tool) load packs. This page describes that shipped
 contract. Ready-made packs live in a separate repository,
 [markii-packs](https://github.com/markii-org/markii-packs); the last
 section says why they are not here.
@@ -266,7 +266,7 @@ engines".
 ## Loading a pack in a host
 
 Installing a pack means handing its folder to whichever app renders your
-notes. Two hosts show the shape.
+notes. The reference hosts show the shape.
 
 In your own React application, a pack is a build-time dependency. You import
 its built components and merge them into your registry with `installPacks`,
@@ -283,8 +283,11 @@ pack's components, including completion and insert lists, so nothing is
 offered that could not render.
 
 In an editor host, a pack is installed per device, because a pack decides
-what code may run in your previews. The two reference hosts differ in how a
-pack gets there, and the difference follows what each host is for.
+what code may run in your previews. The reference hosts differ in how a
+pack gets there, and the difference follows what each host is for. The
+command line tool installs `.mkp` archives with `markii pack install`,
+after asking for consent, into a device-local `packs` folder beside its
+`state.json`, and loads only their terminal views.
 
 The VS Code extension is the authoring host. It reads the `markii.packs`
 setting, a list of folders you trust, which lives in your user settings
@@ -394,8 +397,7 @@ distribute. While you are developing, delete the built file so your edits
 take effect, and produce a fresh one when you ship.
 
 The prebuilt filenames are a host convention layered on the pack
-contract, the same way `webview.js` always was. The manifest gains no
-field for them: `pack.json` keeps describing the sources, and a host
+contract, like `webview.js` itself. The manifest has no field for them: `pack.json` keeps describing the sources, and a host
 simply prefers the built files when they are present.
 
 ### What a prebuilt `webview.js` must do

@@ -52,7 +52,7 @@ When containers nest, the outer one carries the most colons:
 
 ```
 ::::card
-:::callout{type=note}
+:::callout{type=info}
 The inner container uses three colons, the outer uses four.
 :::
 ::::

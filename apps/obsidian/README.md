@@ -58,6 +58,9 @@ All of these are in the command palette.
 - **Export Markii note as HTML** writes the note as one self-contained
   `.html` file beside it in the vault, with the last run's values baked in.
   The file carries its own styles, so it opens anywhere.
+- **Export Markii note as HTML cascade** follows the links out of the
+  note, exports every note it reaches, and writes one zip beside the root
+  note.
 - **Export Markii note as PDF** prints that same file to a `.pdf` beside the
   note. If this device cannot print, the command writes the HTML file instead
   and says so.
@@ -139,7 +142,7 @@ collapsed script markers out of the preview, for a note meant to be read
 rather than edited. It hides the source blocks only: a script that fails
 still marks the value it feeds, and a manual run still says that it failed.
 Turning off inline Reading view only stops that inline rendering; the Markii
-Preview pane keeps working exactly as before.
+Preview pane keeps working.
 
 The settings under **Scripting**, run on open, the scheduled refresh interval,
 and **Turn off script execution on this device**, are stored on this device

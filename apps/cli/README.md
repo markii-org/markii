@@ -218,8 +218,10 @@ failure by default, plus one line for each pack that failed to load; pass
 
 ## Ceilings
 
-- **Pack views are static.** A pack's terminal view is drawn once, as a
-  snapshot: it cannot take focus or react to keys in the live viewer.
+- **Pack views are static unless they opt in.** A pack view registered as
+  `focusable` joins the focus order and receives keys while focused. Any
+  other pack view, and any pack view inside a callout or card body, is
+  drawn once as a snapshot.
 - **`md-plain` is a downgrade, not a render.** It rewrites the note's own
   source text: a container directive loses its opening and closing fence
   lines but keeps its inner markdown, a leaf directive is removed, a text

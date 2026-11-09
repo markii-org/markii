@@ -259,7 +259,7 @@ The `Fixtures` column uses one of five forms:
   alone can check;
 - `other:<reason>`: a requirement that is neither parse- nor
   render-observable at all (a dependency constraint, or a rule enforced by
-  a different package's own tests). Used only for the two rows marked below;
+  a different package's own tests). Used only for the rows marked below;
 - `gap:<reason>`: an honest admission that nothing pins this requirement
   yet. A `gap:` row is a known TODO, not a passing state. The accompanying
   test in `packages/markii-core` fails on every `gap:` row on purpose, so
