@@ -1,0 +1,73 @@
+name: Browser host e2e
+
+# Runs the browser host fixture (e2e/browser-host) in Chromium, Firefox and
+# WebKit. The fixture installs the PACKED @markii/* tarballs, so this proves
+# what a consumer of the published packages gets, including the Web Worker,
+# the Lua wasm and the `@markii/host/browser` entry under a real bundler.
+# The weekly run catches a browser release that breaks the worker path
+# without any change in this repo.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/**'
+      - 'e2e/**'
+      - '.github/workflows/e2e-browser.yml'
+  pull_request:
+    paths:
+      - 'packages/**'
+      - 'e2e/**'
+      - '.github/workflows/e2e-browser.yml'
+  schedule:
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Builds dist for the needed packages, packs them, installs the
+      # tarballs into the fixture and builds the test pack.
+      - name: Pack the packages and install them into the fixture
+        working-directory: e2e/browser-host
+        run: npm run setup
+
+      - name: Install the browser and its system libraries
+        working-directory: e2e/browser-host
+        run: npx playwright install --with-deps ${{ matrix.browser }}
+
+      - name: Build the fixture app
+        working-directory: e2e/browser-host
+        run: npm run build
+
+      - name: Production build (vite preview)
+        working-directory: e2e/browser-host
+        run: npx playwright test --project=${{ matrix.browser }}
+
+      - name: Development server (vite dev)
+        working-directory: e2e/browser-host
+        env:
+          E2E_MODE: dev
+        run: npx playwright test --project=${{ matrix.browser }}
+
+      - name: Upload traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-traces-${{ matrix.browser }}
+          path: e2e/browser-host/test-results
+          if-no-files-found: ignore

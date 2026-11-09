@@ -454,6 +454,18 @@ The shared layer is internal to this repository and is not published, so
 these paragraphs describe a shape to copy rather than a dependency to take.
 The responsibilities below are what conformance is measured against.
 
+A host running in a web page meets the first responsibility below with a
+module Web Worker and the second half of the network rules with an origin
+allowlist, and both have limits worth stating plainly. A Web Worker takes no
+heap cap, so a runaway allocation is bounded only by the browser; Lua's own
+limits and the external watchdog still apply. A page cannot choose the
+address a name connects to, so a browser host has no address pinning and no
+private-range protection. Its network provider sends a request with `fetch`
+only when the host is one the run was granted and its origin is on the
+page's allowlist; an empty allowlist denies everything, credentials are
+never sent, and redirects are refused. A browser host has no compiler, so it
+installs prebuilt `.mkp` archives only.
+
 1. **A terminatable isolate.** Run scripts in a Web Worker or worker thread
    with an external wall-clock watchdog that terminates it on overrun. This
    is normative, and auto-run is unsound without it; see

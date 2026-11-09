@@ -5,7 +5,6 @@
 // - the worker_threads isolate and the pinned network provider (`node:*`);
 // - the Node-backed file-system seams the neutral code takes by injection;
 // - the `@markii/html`-backed static export engine;
-// - the conformance-runner (reads the corpus from disk).
 //
 // A Node host imports from both entries. No browser bundle imports this one.
 
@@ -25,26 +24,3 @@ export {
   createNodeReader as createNodePackScriptsReader,
 } from './node-fs.js';
 export { createHtmlExportEngine } from './html-engine.js';
-
-export {
-  ACTION_CAPABILITY,
-  assertHostScenario,
-  containsInOrder,
-  createAnswerQueue,
-  hostConformanceDir,
-  hostDeclaresCapability,
-  listHostScenarioNames,
-  loadHostScenario,
-  outcomeMismatches,
-  runHostScenario,
-  zipArchiveDirectory,
-} from './host/conformance-runner.js';
-export type {
-  HostScenario,
-  HostScenarioAction,
-  HostScenarioCapability,
-  HostScenarioExpected,
-  HostScenarioRunResult,
-  LoadedHostScenario,
-  RunSimulation,
-} from './host/conformance-runner.js';

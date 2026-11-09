@@ -1,0 +1,28 @@
+{
+  "name": "markii-e2e-browser-host",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Browser host fixture: a Vite app that consumes the PACKED @markii/* tarballs (never workspace links) and the Playwright suite that drives it in Chromium, Firefox and WebKit. Standalone: not a root workspace, so the root npm test never starts a browser.",
+  "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "build": "vite build",
+    "dev": "vite --port 5301 --strictPort --host 127.0.0.1",
+    "typecheck": "tsc --noEmit",
+    "test": "playwright test",
+    "e2e": "npm run setup && npm run build && playwright test"
+  },
+  "dependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^6.0.5",
+    "typescript": "^5.9.3",
+    "vite": "^8.2.1"
+  }
+}

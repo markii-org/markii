@@ -32,7 +32,7 @@ import {
   listHostScenarioNames,
   loadHostScenario,
   runHostScenario,
-} from '@markii/host/node';
+} from '@markii/host/conformance';
 
 /**
  * A minimal in-memory stand-in for a `vscode.TextEditor`: mutable line

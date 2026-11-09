@@ -27,6 +27,10 @@ export default tseslint.config(
       // bytes at test time by `@markii/host`'s conformance runner — same
       // reasoning as the three entries above.
       'conformance/host/**/files/**',
+      // Browser host e2e fixture: the pack source is compiled by esbuild-wasm
+      // at setup time, not by this repo's TypeScript project.
+      'e2e/browser-host/pack-fixture/**',
+      'e2e/browser-host/public/generated/**',
     ],
   },
   tseslint.configs.recommended,
@@ -52,7 +56,14 @@ export default tseslint.config(
     // esbuild.options.mjs sits beside esbuild.config.mjs (the options
     // split out so a Vitest probe can import them) and is the same kind of
     // plain, un-tsconfig'd build script.
-    files: ['**/*.config.{js,ts,mjs,cjs}', '**/esbuild.options.mjs'],
+    // `packages/*/scripts/*.mjs` and `e2e/**/scripts/*.mjs` are plain build
+    // and setup scripts of the same kind.
+    files: [
+      '**/*.config.{js,ts,mjs,cjs}',
+      '**/esbuild.options.mjs',
+      'packages/*/scripts/*.mjs',
+      'e2e/**/scripts/*.mjs',
+    ],
     languageOptions: {
       parserOptions: {
         projectService: false,

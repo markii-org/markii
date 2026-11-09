@@ -340,7 +340,19 @@ packages/markii-host    PRIVATE, never published (no npm presence, absent from
                      Node fs seams (node-fs.ts), the @markii/html export
                      engine (html-engine.ts), pack compile/export, and the
                      conformance runner. The /browser subpath is reserved
-                     for the browser platform entry
+                     for the browser platform entry (src/browser.ts)
+  src/browser.ts     @markii/host/browser, the browser PLATFORM entry (twin
+                     of node.ts): createBrowserHostIsolate (a module Web
+                     Worker from dist/browser-worker.js, dist/glue.wasm sent
+                     as wasmUri on every job) and createFetchNetProvider
+                     (fetch only for a host the run was granted AND an
+                     origin on the page's allowlist; deny-all by default; no
+                     address pinning). Probed Node-free like the main entry
+  src/conformance.ts @markii/host/conformance: the host scenario runner;
+                     build:dist ships the corpus in dist/conformance/host/
+  scripts/build-dist-assets.mjs  finishes build:dist: dist/package.json
+                     (type module), the self-contained browser worker
+                     (esbuild), glue.wasm, the conformance corpus
   src/path-util.ts   adapter-path helpers (join, dirname, isAbsolute); the
                      separator comes from the base path, so Windows paths
                      from VS Code survive
@@ -414,6 +426,16 @@ packs/                  the bundled packs (read, dash, prep): plain component
                         typecheck:packs script (in the build chain) typecheck
                         them. Everything else pack-shaped lives in the
                         markii-packs repo
+e2e/browser-host     a STANDALONE Vite fixture (not a workspace) that installs
+                     the packed @markii/* tarballs (scripts/setup.mjs runs
+                     build:dist + npm pack) and runs a Playwright suite in
+                     Chromium, Firefox and WebKit against a browser
+                     HostAdapter: render, Run in the Web Worker, watchdog,
+                     grant + origin allowlist, no CDN fetch, renderCode, a
+                     prebuilt .mkp. `npm run e2e` from the root; root
+                     `npm test` never starts a browser. CI:
+                     .github/workflows/e2e-browser.yml (path-triggered +
+                     weekly)
 apps/playground      thin Vite dev harness to view .mk.md files. NOT the product.
 apps/vscode          the "Markii" VS Code extension (preview + Run + packs) — an
                      app/consumer of @markii/react, never a renderer:
@@ -684,6 +706,12 @@ join the authoring side; nothing is built for that in advance.
   measured faster cold. One path, no divergence to maintain. It costs
   roughly 14 MB unpacked in the extension, which is acceptable there.
 
+- Browser e2e only (`e2e/browser-host`, user-approved 2026-11-09):
+  `@playwright/test`, a devDependency of that standalone fixture. It never
+  enters `packages/*` or the root workspaces.
+- `@markii/host`'s build:dist bundles its browser worker with `esbuild`, a
+  devDependency of that package only (build-time, never shipped as a
+  dependency).
 - Command line tool only (`apps/cli`): `esbuild` (bundling) and `tsx`
   (dev-only: spawns the TypeScript worker under Vitest), the same two
   `apps/vscode` already carries. These never enter `packages/*`.

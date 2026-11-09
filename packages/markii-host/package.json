@@ -1,23 +1,33 @@
 {
   "name": "@markii/host",
   "version": "0.1.0",
-  "description": "Shared, host-neutral script-running layer for Markii hosts (apps/vscode, and any future host): tier gating, the grant model, DNS/address pinning, and the terminatable-isolate watchdog around the worker_thread Run path. PRIVATE — never published, exists only to be shared between apps in this repo.",
+  "description": "Shared, host-neutral script-running layer for Markii hosts: tier gating, the grant model, address pinning, and the terminatable-isolate watchdog, plus the HostAdapter contract and createMarkiiHost. Entries: the neutral main entry, /node, /browser, /conformance.",
   "license": "MIT",
   "author": "sadigaxund",
   "private": true,
-  "main": "./src/index.ts",
-  "module": "./src/index.ts",
-  "types": "./src/index.ts",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./src/index.ts",
-      "import": "./src/index.ts",
-      "default": "./src/index.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
     },
     "./node": {
-      "types": "./src/node.ts",
-      "import": "./src/node.ts",
-      "default": "./src/node.ts"
+      "types": "./dist/node.d.ts",
+      "import": "./dist/node.js",
+      "default": "./dist/node.js"
+    },
+    "./browser": {
+      "types": "./dist/browser.d.ts",
+      "import": "./dist/browser.js",
+      "default": "./dist/browser.js"
+    },
+    "./conformance": {
+      "types": "./dist/conformance.d.ts",
+      "import": "./dist/conformance.js",
+      "default": "./dist/conformance.js"
     }
   },
   "scripts": {
@@ -25,17 +35,36 @@
     "test": "vitest run",
     "prebuild": "npm run generate:doc-css --workspace @markii/html",
     "build": "tsc --noEmit -p tsconfig.json",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "build:dist": "rm -rf dist && tsc -p tsconfig.build.json && node scripts/build-dist-assets.mjs"
   },
   "dependencies": {
-    "@markii/bundle": "*",
-    "@markii/core": "*",
-    "@markii/html": "*",
-    "@markii/lua": "*",
-    "@markii/pack": "*",
-    "@markii/react": "*",
-    "@markii/runtime": "*",
-    "@markii/stdlib": "*",
+    "@markii/bundle": "^0.17.0-next.0",
+    "@markii/core": "^0.17.0-next.0",
+    "@markii/lua": "^0.17.0-next.0",
+    "@markii/pack": "^0.17.0-next.0",
+    "@markii/runtime": "^0.17.0-next.0",
+    "@markii/stdlib": "^0.17.0-next.0",
     "fflate": "^0.8.3"
+  },
+  "files": [
+    "dist"
+  ],
+  "peerDependencies": {
+    "@markii/html": "^0.17.0-next.0",
+    "@markii/react": "^0.17.0-next.0"
+  },
+  "peerDependenciesMeta": {
+    "@markii/html": {
+      "optional": true
+    },
+    "@markii/react": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@markii/html": "^0.17.0-next.0",
+    "@markii/react": "^0.17.0-next.0",
+    "esbuild": "^0.28.2"
   }
 }

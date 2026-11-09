@@ -25,3 +25,9 @@ conformance/
 
 # local scratch/audit output (untracked; see .gitignore)
 tmp/
+
+# browser host e2e fixture: generated output
+e2e/browser-host/.tarballs/
+e2e/browser-host/public/generated/
+e2e/browser-host/test-results/
+e2e/browser-host/playwright-report/

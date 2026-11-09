@@ -30,12 +30,18 @@ const TSX_DEV_EXEC_ARGV = ['--require', 'tsx/cjs'];
  * `apps/vscode/esbuild.config.mjs`'s worker build for where it bundles to.
  */
 export function defaultWorkerPath(): string {
-  const devSource = path.join(__dirname, 'worker-entry.ts');
-  if (existsSync(devSource)) return devSource;
+  // The built package is ESM, where `__dirname` does not exist: a packaged
+  // host always passes its own bundled worker, so say so instead of
+  // throwing a ReferenceError.
+  const devSource =
+    typeof __dirname === 'undefined'
+      ? undefined
+      : path.join(__dirname, 'worker-entry.ts');
+  if (devSource !== undefined && existsSync(devSource)) return devSource;
 
   throw new Error(
     'spawnRun: could not resolve the worker entry file (looked for ' +
-      `${devSource}) — pass workerPath explicitly`,
+      `${devSource ?? 'worker-entry.ts beside the package source'}) — pass workerPath explicitly`,
   );
 }
 
@@ -63,7 +69,9 @@ function execArgvFor(workerPath: string): string[] | undefined {
 function devTsconfigEnv(
   entryPath: string,
 ): { env: NodeJS.ProcessEnv } | undefined {
-  if (!entryPath.endsWith('.ts')) return undefined;
+  if (!entryPath.endsWith('.ts') || typeof __dirname === 'undefined') {
+    return undefined;
+  }
   const tsconfig = path.resolve(__dirname, '../../../..', 'tsconfig.dev.json');
   if (!existsSync(tsconfig)) return undefined;
   return { env: { ...process.env, TSX_TSCONFIG_PATH: tsconfig } };

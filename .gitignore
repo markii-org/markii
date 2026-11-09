@@ -13,3 +13,9 @@ TODO.md
 # local scratch/audit output; never committed
 tmp/
 apps/obsidian/*.tgz
+
+# browser host e2e fixture (e2e/browser-host): generated, never committed
+e2e/browser-host/.tarballs/
+e2e/browser-host/public/generated/
+e2e/browser-host/test-results/
+e2e/browser-host/playwright-report/

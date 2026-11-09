@@ -142,3 +142,56 @@ describe('@markii/host main entry is environment-neutral under the webview bundl
     await expect(build_).rejects.toThrow();
   }, 30_000);
 });
+
+describe('@markii/host/browser platform entry is environment-neutral', () => {
+  it('bundles at platform: browser with no node: specifier and none of the Node-only modules', async () => {
+    const entryPoint = path.join(
+      repoRoot,
+      'packages',
+      'markii-host',
+      'src',
+      'browser.ts',
+    );
+
+    const result = await build({
+      entryPoints: [entryPoint],
+      bundle: true,
+      write: false,
+      platform: 'browser',
+      format: 'esm',
+      target: 'chrome122',
+      alias: markiiSrcRoots,
+      logLevel: 'silent',
+      metafile: true,
+    });
+
+    const bundled = result.outputFiles[0]?.text ?? '';
+    expect(bundled.length).toBeGreaterThan(0);
+    expect(bundled).not.toMatch(/\bnode:[a-z_]+/);
+
+    const inputs = Object.keys(result.metafile.inputs).map((p) =>
+      p.split(path.sep).join('/'),
+    );
+    const forbidden = [
+      /markii-host\/src\/node\.ts$/,
+      /markii-host\/src\/node-fs\.ts$/,
+      /markii-host\/src\/html-engine\.ts$/,
+      /markii-host\/src\/run\/node-isolate\.ts$/,
+      /markii-host\/src\/run\/net-provider\.ts$/,
+      /markii-host\/src\/run\/net-pinning\.ts$/,
+      /markii-host\/src\/host\/conformance-runner\.ts$/,
+      /markii-html\/src\//,
+      /markii-react\/src\//,
+      /esbuild-wasm/,
+      // The Lua engine lives in the worker bundle, never in the page.
+      /markii-lua\/src\//,
+      /wasmoon/,
+    ];
+    for (const pattern of forbidden) {
+      expect(
+        inputs.filter((input) => pattern.test(input)),
+        String(pattern),
+      ).toEqual([]);
+    }
+  }, 30_000);
+});

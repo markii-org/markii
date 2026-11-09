@@ -26,7 +26,7 @@ import {
   listHostScenarioNames,
   loadHostScenario,
   runHostScenario,
-} from '@markii/host/node';
+} from '@markii/host/conformance';
 
 function createMemoryMemento(): GrantMemento {
   const store = new Map<string, unknown>();

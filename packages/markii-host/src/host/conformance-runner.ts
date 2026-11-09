@@ -38,7 +38,9 @@
  * declarations, trigger forwarding) — see this file's `simulatedRunResult`.
  * Every OTHER action runs through the real, unmocked shared behavior code.
  */
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createHtmlExportEngine } from '../html-engine.js';
 import { createNodeArchiveExtractFs } from '../node-fs.js';
 import { usesPackTrust } from './pack-trust-behavior.js';
@@ -64,8 +66,17 @@ import {
 
 // --- corpus location ----------------------------------------------------
 
-/** `conformance/host/`, resolved the same way `@markii/core/corpus`'s `conformanceDir` resolves the repo-root corpus: relative to this module's own file, never `process.cwd()`. */
+/**
+ * `conformance/host/`, resolved relative to this module's own file, never
+ * `process.cwd()`. An installed package carries the corpus at
+ * `dist/conformance/host/`, a sibling of `dist/host/`; a repo checkout runs
+ * from `src/host/` and finds the repo-root corpus through
+ * `@markii/core/corpus`'s `conformanceDir`.
+ */
 export function hostConformanceDir(): string {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const packaged = join(here, '..', 'conformance', 'host');
+  if (existsSync(packaged)) return packaged;
   return join(conformanceDir(), 'host');
 }
 
