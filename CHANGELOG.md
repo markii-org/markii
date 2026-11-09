@@ -6,6 +6,11 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.17.0-next.1] - 2026-11-09
+
+A second prerelease on the npm `next` dist-tag. `@markii/host` and
+`@markii/pack-build` are not part of it.
+
 ### Added
 
 - **`renderCode` for fenced code blocks** in `@markii/react`, `@markii/html`

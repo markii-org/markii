@@ -39,20 +39,20 @@
     "build:dist": "rm -rf dist && tsc -p tsconfig.build.json && node scripts/build-dist-assets.mjs"
   },
   "dependencies": {
-    "@markii/bundle": "^0.17.0-next.0",
-    "@markii/core": "^0.17.0-next.0",
-    "@markii/lua": "^0.17.0-next.0",
-    "@markii/pack": "^0.17.0-next.0",
-    "@markii/runtime": "^0.17.0-next.0",
-    "@markii/stdlib": "^0.17.0-next.0",
+    "@markii/bundle": "^0.17.0-next.1",
+    "@markii/core": "^0.17.0-next.1",
+    "@markii/lua": "^0.17.0-next.1",
+    "@markii/pack": "^0.17.0-next.1",
+    "@markii/runtime": "^0.17.0-next.1",
+    "@markii/stdlib": "^0.17.0-next.1",
     "fflate": "^0.8.3"
   },
   "files": [
     "dist"
   ],
   "peerDependencies": {
-    "@markii/html": "^0.17.0-next.0",
-    "@markii/react": "^0.17.0-next.0"
+    "@markii/html": "^0.17.0-next.1",
+    "@markii/react": "^0.17.0-next.1"
   },
   "peerDependenciesMeta": {
     "@markii/html": {
@@ -63,8 +63,8 @@
     }
   },
   "devDependencies": {
-    "@markii/html": "^0.17.0-next.0",
-    "@markii/react": "^0.17.0-next.0",
+    "@markii/html": "^0.17.0-next.1",
+    "@markii/react": "^0.17.0-next.1",
     "esbuild": "^0.28.2"
   }
 }
