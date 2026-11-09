@@ -126,8 +126,10 @@ Component packs add directives of their own. A pack can carry terminal
 views next to its React ones, and `markii view` and `markii export --format
 ansi` draw those. A pack component with no terminal view renders as a box
 reading "no terminal view for `name`", and in an HTML export every pack
-component reads "no HTML view for `name`". A misspelled or uninstalled name
-still reads "unknown component".
+component reads "no HTML view for `name`". A pack whose `terminal.js`
+fails to load reads "the `name` pack failed to load" instead, with the
+cause on stderr. A misspelled or uninstalled name still reads "unknown
+component".
 The packs `read`, `dash` and `prep` ship with the CLI; their names cannot
 be installed over or removed.
 
@@ -198,12 +200,12 @@ failure by default, plus one line for each pack that failed to load; pass
 
 ## Exit codes
 
-| Code | Meaning                                                          |
-| ---- | ---------------------------------------------------------------- |
-| 0    | Success                                                          |
-| 1    | The file could not be read, or rendering failed                  |
-| 2    | A script failed while running                                    |
-| 3    | A usage error (bad flags, missing arguments, unknown subcommand) |
+| Code | Meaning                                                                                                     |
+| ---- | ----------------------------------------------------------------------------------------------------------- |
+| 0    | Success                                                                                                     |
+| 1    | The file could not be read, or rendering failed                                                             |
+| 2    | A script failed while running                                                                               |
+| 3    | A usage error (an unknown flag, a flag the subcommand does not take, missing arguments, unknown subcommand) |
 
 ## Ceilings
 

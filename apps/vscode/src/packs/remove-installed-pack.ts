@@ -6,10 +6,11 @@
  * (`./install-pack.ts`), so a pack installed there can be taken out again
  * without finding the storage folder by hand.
  *
- * The command deletes the pack's own directory and removes its entry from
- * `markii.packs` (`extension.ts`, the same GLOBAL, user-scoped write
- * `./install-pack.ts` makes on install); `extension.ts` reuses
- * `removePackListEntry` below for the second half.
+ * The delete itself, its outcome and its wording are the shared
+ * `removePack` behavior of `@markii/host`. This module keeps the listing,
+ * the confirmation text, and the `markii.packs` entry removal
+ * (`extension.ts`, the same GLOBAL, user-scoped write `./install-pack.ts`
+ * makes on install) that follows a successful removal.
  */
 import * as path from 'node:path';
 import { parsePackManifest } from '@markii/pack';
@@ -73,64 +74,9 @@ export function installedPackQuickPickLabel(pack: InstalledPackEntry): string {
 export const NO_INSTALLED_PACKS_MESSAGE =
   'Markii: no packs are installed. Use Install Pack from File to add one.';
 
-/** Asks the user to confirm removing `pack`. Resolves `true` to proceed. */
-export type ConfirmRemovePack = (pack: InstalledPackEntry) => Promise<boolean>;
-
 /** The confirmation prompt's wording: removal deletes files and cannot be undone. */
 export function removePackConfirmMessage(pack: InstalledPackEntry): string {
   return `Removing "${pack.name}" deletes its installed files and cannot be undone.`;
-}
-
-export interface RemoveInstalledPackOptions {
-  readonly pack: InstalledPackEntry;
-  /** Deletes `pack.directory` and everything under it. May reject on a genuine I/O failure. */
-  readonly removeDirectory: (absolutePath: string) => Promise<void>;
-  readonly confirmRemove: ConfirmRemovePack;
-}
-
-export type RemoveInstalledPackOutcome =
-  | {
-      readonly kind: 'removed';
-      readonly packName: string;
-      readonly directory: string;
-    }
-  | { readonly kind: 'declined'; readonly packName: string }
-  | {
-      readonly kind: 'failed';
-      readonly packName: string;
-      readonly reason: string;
-    };
-
-function describeThrown(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
-
-/**
- * Never throws: a declined confirmation or a delete failure both come back
- * as a structured outcome. Nothing is deleted until confirmation succeeds.
- */
-export async function removeInstalledPack(
-  options: RemoveInstalledPackOptions,
-): Promise<RemoveInstalledPackOutcome> {
-  const { pack, removeDirectory, confirmRemove } = options;
-
-  let confirmed: boolean;
-  try {
-    confirmed = await confirmRemove(pack);
-  } catch (err) {
-    return { kind: 'failed', packName: pack.name, reason: describeThrown(err) };
-  }
-  if (!confirmed) {
-    return { kind: 'declined', packName: pack.name };
-  }
-
-  try {
-    await removeDirectory(pack.directory);
-  } catch (err) {
-    return { kind: 'failed', packName: pack.name, reason: describeThrown(err) };
-  }
-
-  return { kind: 'removed', packName: pack.name, directory: pack.directory };
 }
 
 /** Removes `directory` from `markii.packs`'s existing entries, or `undefined` when it was not listed (so the caller can skip the config write). Symmetric with `./add-pack-folder.ts`'s `appendPackFolder`, which installing a pack already uses to add this same entry. */
@@ -140,36 +86,4 @@ export function removePackListEntry(
 ): string[] | undefined {
   if (!existing.includes(directory)) return undefined;
   return existing.filter((entry) => entry !== directory);
-}
-
-/** The one result message for the command (two short sentences, no em dashes or parentheses; the full detail goes to the output channel). */
-export function removeInstalledPackResultMessage(
-  outcome: RemoveInstalledPackOutcome,
-): string {
-  if (outcome.kind === 'failed') {
-    return `Markii: could not remove pack "${outcome.packName}". Open the Markii output for details.`;
-  }
-  if (outcome.kind === 'declined') {
-    return `Markii: pack removal cancelled. Nothing was removed.`;
-  }
-  return `Markii: removed pack "${outcome.packName}".`;
-}
-
-/** The full diagnostics-channel detail for one removal attempt. */
-export function removeInstalledPackDiagnosticLines(
-  outcome: RemoveInstalledPackOutcome,
-): string[] {
-  if (outcome.kind === 'failed') {
-    return [
-      `Remove Installed Pack failed for "${outcome.packName}": ${outcome.reason}`,
-    ];
-  }
-  if (outcome.kind === 'declined') {
-    return [
-      `Remove Installed Pack cancelled for "${outcome.packName}"; nothing was removed.`,
-    ];
-  }
-  return [
-    `Remove Installed Pack removed pack "${outcome.packName}" from ${outcome.directory}.`,
-  ];
 }

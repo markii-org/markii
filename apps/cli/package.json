@@ -20,7 +20,7 @@
     "directory": "apps/cli"
   },
   "bin": {
-    "markii": "./dist/markii.mjs"
+    "markii": "dist/markii.mjs"
   },
   "files": [
     "dist",

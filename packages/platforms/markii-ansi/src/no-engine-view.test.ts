@@ -67,3 +67,41 @@ describe('a component of an installed pack with no view for this engine', () => 
     expect(out).toContain('unknown component `constructor`');
   });
 });
+
+describe('a component of a pack that failed to load', () => {
+  const failed: UnavailableComponent[] = [
+    {
+      directive: 'ana_meter',
+      pack: 'ana',
+      engines: ['ansi'],
+      loadFailed: true,
+    },
+  ];
+
+  it('reads "the pack failed to load" in the same frame, content kept', async () => {
+    const out = await plain(':::ana_meter\nbody text\n:::', {
+      unavailableComponents: failed,
+    });
+    expect(out).toContain('the `ana` pack failed to load');
+    expect(out).toContain('`ana_meter`');
+    expect(out).toContain('body text');
+    expect(out).not.toContain('unknown component');
+  });
+
+  it('uses the inline form for a text directive', async () => {
+    const out = await plain('see :ana_meter[x] here', {
+      unavailableComponents: failed,
+    });
+    expect(out).toContain('pack failed to load');
+  });
+
+  it('reports a diagnostic naming the pack', async () => {
+    const events: DiagnosticEvent[] = [];
+    await plain('::ana_meter{}', {
+      unavailableComponents: failed,
+      onDiagnostic: (event) => events.push(event),
+    });
+    expect(events).toHaveLength(1);
+    expect(events[0]?.message).toContain('The ana pack failed to load');
+  });
+});

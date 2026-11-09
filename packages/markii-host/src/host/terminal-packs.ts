@@ -7,8 +7,8 @@
  * through this module; the host then hands the text to the engine's own
  * `loadTerminalPackScript`. Everything here is the one home of the wording
  * for the failures in between (docs/integration.md's "clean is not silent":
- * a failure reaches the diagnostics surface and the note falls back to the
- * unknown-component box).
+ * a failure reaches the diagnostics surface and the note shows the pack's
+ * components as a failed pack).
  *
  * SECURITY: a terminal pack runs inside the host's own process with that
  * process's full privileges. Nothing here widens who may reach it: the
@@ -39,28 +39,28 @@ export function packHasTerminalViews(pack: DiscoveredPack): boolean {
 }
 
 export function terminalScriptMissingLine(namespace: string): string {
-  return `Pack "${namespace}" names terminal views but ships no terminal.js; its components fall back to the unknown-component box.`;
+  return `Pack "${namespace}" names terminal views but ships no terminal.js; its components read as a failed pack in the note.`;
 }
 
 export function terminalScriptUnreadableLine(
   namespace: string,
   reason: string,
 ): string {
-  return `Pack "${namespace}" has a terminal.js that could not be read (${reason}); its components fall back to the unknown-component box.`;
+  return `Pack "${namespace}" has a terminal.js that could not be read (${reason}); its components read as a failed pack in the note.`;
 }
 
 export function terminalScriptRejectedLine(
   namespace: string,
   reason: string,
 ): string {
-  return `Pack "${namespace}" was not loaded: ${reason}. Its components fall back to the unknown-component box.`;
+  return `Pack "${namespace}" was not loaded: ${reason}. Its components read as a failed pack in the note.`;
 }
 
 export function terminalScriptNamespaceMismatchLine(
   namespace: string,
   claimed: string,
 ): string {
-  return `Pack "${namespace}" was not loaded: its terminal.js registers the namespace "${claimed}", which does not match its pack.json. Its components fall back to the unknown-component box.`;
+  return `Pack "${namespace}" was not loaded: its terminal.js registers the namespace "${claimed}", which does not match its pack.json. Its components read as a failed pack in the note.`;
 }
 
 /** Reads each terminal-capable pack's `terminal.js`. Never throws. */

@@ -6,6 +6,32 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **A pack that fails to load reads as a failed pack.** `@markii/stdlib`'s
+  `UnavailableComponent` gains an optional `loadFailed` flag. When the
+  terminal engine is given a component with it, the fallback box keeps its
+  structure and reads "the `ana` pack failed to load, no terminal view for
+  `ana_timeline`", and `onDiagnostic` gets a `no-engine-view` event worded
+  for the failure. The command line tool sets it for every component of a
+  pack whose `terminal.js` throws, registers nothing or the wrong
+  namespace, or is missing or unreadable, instead of showing "unknown
+  component". The existing diagnostics line for the cause is unchanged.
+
+### Changed
+
+- **`markii` rejects a flag that does not apply.** Each subcommand accepts
+  only its own flags, so `markii pack list --watch` is now a usage error
+  (exit code 3, one line on stderr naming the flag and the subcommand)
+  instead of being ignored. An unknown flag's message now names the
+  subcommand too. `--yes` and `-y` are accepted on `pack install` only.
+- **Both editors remove packs through the shared host behavior.** Remove
+  Installed Pack in VS Code and the Remove control in Obsidian go through
+  `@markii/host`'s `removePack`, so the reserved-namespace check, the
+  outcome and the diagnostics line are the same as in the command line
+  tool. Obsidian's Insert component no longer needs a bundled-pack
+  fallback: the host catalog covers the bundled packs.
+
 ## [0.17.0-next.0] - 2026-11-09
 
 A prerelease on the npm `next` dist-tag (`npm install @markii/react@next`),

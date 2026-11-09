@@ -238,6 +238,33 @@ describe('markii pack install', () => {
     expect(view.errLines).toEqual([]);
   });
 
+  it('labels a pack whose terminal.js throws "failed to load", not "unknown component"', async () => {
+    const { env } = configEnv();
+    const dir = makeTempDir();
+    const mkp = writeArchive(
+      dir,
+      'ana.mkp',
+      archive('ana', 'throw new Error("boom");\n', BOTH),
+    );
+    await run(['pack', 'install', mkp, '--yes'], createFakeTerminal({ env }));
+
+    const view = createFakeTerminal({ env });
+    const file = note(dir, `${NOTE}\n::ana_typo\n::\n`);
+    expect(
+      await run(['view', file, '--static', '--color', 'never'], view),
+    ).toBe(0);
+    const out = view.outLines.join('');
+    expect(out).toContain('the `ana` pack failed to load');
+    expect(out).toContain('`ana_timeline`');
+    expect(out).toContain('content');
+    expect(out).not.toContain('unknown component `ana_timeline`');
+    // A typo beside the failed pack is still just unknown.
+    expect(out).toContain('unknown component `ana_typo`');
+    // The loader's reason reaches stderr.
+    expect(view.errLines.join('')).toContain('ana');
+    expect(view.errLines.join('')).toContain('boom');
+  });
+
   it('labels an installed pack component "no HTML view" in an html export', async () => {
     const { env } = configEnv();
     const dir = makeTempDir();
@@ -318,7 +345,8 @@ describe('a broken or untrusted pack', () => {
     expect(
       await run(['view', file, '--static', '--color', 'never'], view),
     ).toBe(0);
-    expect(view.outLines.join('')).toContain('unknown component');
+    expect(view.outLines.join('')).toContain('the `ana` pack failed to load');
+    expect(view.outLines.join('')).not.toContain('unknown component');
     expect(view.errLines.join('')).toContain('Pack "ana" was not loaded');
     expect(view.errLines.join('')).toContain('boom');
   });

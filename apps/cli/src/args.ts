@@ -108,6 +108,63 @@ interface Flags {
   yes: boolean;
   format?: ExportFormat;
   output?: string;
+  /** Every subcommand-specific flag, as the user typed it, in order. Checked against the subcommand's allowed set. */
+  used: string[];
+}
+
+/**
+ * The flags each subcommand accepts besides the global ones (`--help`/`-h`,
+ * `--version`/`-V`, `--verbose`). A flag outside its subcommand's set is a
+ * usage error rather than being silently ignored. Keyed by the spelling
+ * used in messages; `-y` and `-o` are checked through their long forms.
+ */
+const ALLOWED_FLAGS: Readonly<Record<string, ReadonlySet<string>>> = {
+  view: new Set([
+    '--width',
+    '--color',
+    '--box',
+    '--no-run',
+    '--static',
+    '--watch',
+  ]),
+  export: new Set(['--format', '--output', '--color', '--box']),
+  run: new Set(),
+  'pack install': new Set(['--yes']),
+  'pack list': new Set(),
+  'pack remove': new Set(),
+};
+
+const SCOPED_FLAGS: ReadonlySet<string> = new Set([
+  '--width',
+  '--color',
+  '--box',
+  '--no-run',
+  '--static',
+  '--watch',
+  '--yes',
+  '-y',
+  '--format',
+  '-o',
+  '--output',
+]);
+
+const LONG_FORM: Readonly<Record<string, string>> = {
+  '-y': '--yes',
+  '-o': '--output',
+};
+
+/** A usage error naming the first flag that does not apply to `command`, or undefined when every flag does. */
+function inapplicableFlag(
+  command: string,
+  used: readonly string[],
+): ParsedCommand | undefined {
+  const allowed = ALLOWED_FLAGS[command] ?? new Set<string>();
+  for (const token of used) {
+    if (!allowed.has(LONG_FORM[token] ?? token)) {
+      return usageError(`${token} does not apply to markii ${command}`);
+    }
+  }
+  return undefined;
 }
 
 /**
@@ -140,6 +197,7 @@ function isKnownSubcommand(
  */
 function parseTokens(
   tokens: readonly string[],
+  subcommand: string | undefined,
 ): { flags: Flags; positionals: string[] } | { error: string } {
   const flags: Flags = {
     help: false,
@@ -149,6 +207,7 @@ function parseTokens(
     static: false,
     watch: false,
     yes: false,
+    used: [],
   };
   const positionals: string[] = [];
   let onlyPositionals = false;
@@ -165,6 +224,8 @@ function parseTokens(
       onlyPositionals = true;
       continue;
     }
+
+    if (SCOPED_FLAGS.has(token)) flags.used.push(token);
 
     switch (token) {
       case '--help':
@@ -255,7 +316,12 @@ function parseTokens(
       }
       default:
         if (token.startsWith('-') && token !== '-') {
-          return { error: `unknown flag ${JSON.stringify(token)}` };
+          return {
+            error:
+              subcommand === undefined
+                ? `unknown flag ${JSON.stringify(token)}`
+                : `unknown flag ${JSON.stringify(token)} for markii ${subcommand}`,
+          };
         }
         positionals.push(token);
     }
@@ -274,7 +340,7 @@ export function parseArgs(argv: readonly string[]): ParsedCommand {
   const subcommand = hasSubcommand ? first : undefined;
   const rest = hasSubcommand ? argv.slice(1) : argv;
 
-  const parsed = parseTokens(rest);
+  const parsed = parseTokens(rest, subcommand);
   if ('error' in parsed) return usageError(parsed.error);
   const { flags, positionals } = parsed;
 
@@ -298,6 +364,8 @@ export function parseArgs(argv: readonly string[]): ParsedCommand {
     const rest = positionals.slice(1);
     if (action === 'install') {
       const file = rest[0];
+      const bad = inapplicableFlag('pack install', flags.used);
+      if (bad) return bad;
       if (file === undefined) {
         return usageError('markii pack install requires a .mkp file argument');
       }
@@ -309,10 +377,14 @@ export function parseArgs(argv: readonly string[]): ParsedCommand {
       };
     }
     if (action === 'list') {
+      const bad = inapplicableFlag('pack list', flags.used);
+      if (bad) return bad;
       return { kind: 'pack-list', verbose: flags.verbose };
     }
     if (action === 'remove') {
       const namespace = rest[0];
+      const bad = inapplicableFlag('pack remove', flags.used);
+      if (bad) return bad;
       if (namespace === undefined) {
         return usageError('markii pack remove requires a pack namespace');
       }
@@ -324,6 +396,9 @@ export function parseArgs(argv: readonly string[]): ParsedCommand {
         : `unknown pack command ${JSON.stringify(action)}; expected install, list, or remove`,
     );
   }
+
+  const badFlag = inapplicableFlag(subcommand, flags.used);
+  if (badFlag) return badFlag;
 
   if (subcommand === 'view') {
     const file = positionals[0];

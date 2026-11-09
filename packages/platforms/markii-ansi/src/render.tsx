@@ -88,6 +88,8 @@ import {
   formMismatchTitle,
   NO_ENGINE_VIEW_LABEL,
   noEngineViewTitle,
+  packLoadFailedLabel,
+  packLoadFailedTitle,
   invalidAttributeValueLabel,
   invalidAttributeValueTitle,
   unsafeImageSrcLabel,
@@ -334,13 +336,20 @@ function isRegisteredInline(entry: AnsiRegistryEntry): boolean {
   }
 }
 
+type FallbackReason =
+  'unregistered' | 'form-mismatch' | 'no-engine-view' | 'pack-load-failed';
+
 /** The fallback label line, worded for the reason and the form the directive was written in. Plain text (no escapes). */
 function fallbackLabel(
   name: string,
   inline: boolean,
-  reason: 'unregistered' | 'form-mismatch' | 'no-engine-view',
+  reason: FallbackReason,
+  pack?: string,
 ): string {
   const code = `\`${stripControlCharacters(name)}\``;
+  if (reason === 'pack-load-failed') {
+    return `${packLoadFailedLabel(stripControlCharacters(pack ?? ''))} ${code}`;
+  }
   if (reason === 'no-engine-view') return `${NO_ENGINE_VIEW_LABEL} ${code}`;
   if (reason === 'form-mismatch') {
     return inline
@@ -355,12 +364,13 @@ function unknownDirective(
   name: string,
   inline: boolean,
   childrenText: string,
-  reason: 'unregistered' | 'form-mismatch' | 'no-engine-view',
+  reason: FallbackReason,
   width: number,
   color: ColorLevel,
   glyphs: GlyphSet,
+  pack?: string,
 ): string {
-  const label = fallbackLabel(name, inline, reason);
+  const label = fallbackLabel(name, inline, reason, pack);
   if (inline) {
     return childrenText === ''
       ? dim(label, color)
@@ -584,16 +594,19 @@ function renderDirectiveContentString(
       reportDiagnostic(wctx.onDiagnostic, {
         kind: 'no-engine-view',
         directive: name,
-        message: noEngineViewTitle(name, missingView.pack, missingView.engines),
+        message: missingView.loadFailed
+          ? packLoadFailedTitle(name, missingView.pack)
+          : noEngineViewTitle(name, missingView.pack, missingView.engines),
       });
       return unknownDirective(
         name,
         inline,
         safeChildrenText(childrenText),
-        'no-engine-view',
+        missingView.loadFailed ? 'pack-load-failed' : 'no-engine-view',
         width,
         wctx.color,
         wctx.glyphs,
+        missingView.pack,
       );
     }
     return unknownDirective(

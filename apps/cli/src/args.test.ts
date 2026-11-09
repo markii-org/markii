@@ -338,7 +338,7 @@ const cases: Case[] = [
     argv: ['view', 'note.mk.md', '--frobnicate'],
     expected: {
       kind: 'usage-error',
-      message: 'unknown flag "--frobnicate"',
+      message: 'unknown flag "--frobnicate" for markii view',
     },
   },
   {
@@ -371,7 +371,7 @@ const cases: Case[] = [
     argv: ['view', '-weird.mk.md'],
     expected: {
       kind: 'usage-error',
-      message: 'unknown flag "-weird.mk.md"',
+      message: 'unknown flag "-weird.mk.md" for markii view',
     },
   },
   {
@@ -426,5 +426,102 @@ const cases: Case[] = [
 describe('parseArgs', () => {
   it.each(cases)('$name', ({ argv, expected }) => {
     expect(parseArgs(argv)).toEqual(expected);
+  });
+});
+
+describe('flags that do not apply to a subcommand', () => {
+  const usage = (message: string) => ({ kind: 'usage-error', message });
+
+  it("accepts exactly each subcommand's own flags", () => {
+    expect(parseArgs(['pack', 'list', '--verbose']).kind).toBe('pack-list');
+    expect(parseArgs(['pack', 'install', 'a.mkp', '-y']).kind).toBe(
+      'pack-install',
+    );
+    expect(parseArgs(['pack', 'install', 'a.mkp', '--yes']).kind).toBe(
+      'pack-install',
+    );
+    expect(parseArgs(['pack', 'remove', 'ana', '--verbose']).kind).toBe(
+      'pack-remove',
+    );
+    expect(parseArgs(['run', 'n.mk.md', '--verbose']).kind).toBe('run');
+    expect(
+      parseArgs([
+        'export',
+        'n.mk.md',
+        '--format',
+        'ansi',
+        '-o',
+        'o.txt',
+        '--color',
+        'never',
+        '--box',
+        'ascii',
+      ]).kind,
+    ).toBe('export');
+    expect(
+      parseArgs([
+        'view',
+        'n.mk.md',
+        '--width',
+        '80',
+        '--color',
+        'never',
+        '--box',
+        'ascii',
+        '--no-run',
+        '--static',
+        '--watch',
+      ]).kind,
+    ).toBe('view');
+  });
+
+  it('rejects an inapplicable flag on pack list, install, and remove', () => {
+    expect(parseArgs(['pack', 'list', '--watch', '--no-run'])).toEqual(
+      usage('--watch does not apply to markii pack list'),
+    );
+    expect(parseArgs(['pack', 'remove', 'ana', '--yes'])).toEqual(
+      usage('--yes does not apply to markii pack remove'),
+    );
+    expect(parseArgs(['pack', 'install', 'a.mkp', '--width', '9'])).toEqual(
+      usage('--width does not apply to markii pack install'),
+    );
+  });
+
+  it('rejects --yes, -y, and the view flags on view, export, and run', () => {
+    expect(parseArgs(['view', 'n.mk.md', '-y'])).toEqual(
+      usage('-y does not apply to markii view'),
+    );
+    expect(parseArgs(['run', 'n.mk.md', '--color', 'never'])).toEqual(
+      usage('--color does not apply to markii run'),
+    );
+    expect(
+      parseArgs([
+        'export',
+        'n.mk.md',
+        '--format',
+        'html',
+        '-o',
+        'o',
+        '--watch',
+      ]),
+    ).toEqual(usage('--watch does not apply to markii export'));
+    expect(parseArgs(['view', 'n.mk.md', '--format', 'html'])).toEqual(
+      usage('--format does not apply to markii view'),
+    );
+    expect(parseArgs(['view', 'n.mk.md', '-o', 'x'])).toEqual(
+      usage('-o does not apply to markii view'),
+    );
+  });
+
+  it('names the subcommand in an unknown-flag error', () => {
+    expect(parseArgs(['run', 'n.mk.md', '--nope'])).toEqual(
+      usage('unknown flag "--nope" for markii run'),
+    );
+  });
+
+  it('still lets --help win over an inapplicable flag', () => {
+    expect(parseArgs(['pack', 'list', '--watch', '--help'])).toEqual({
+      kind: 'help',
+    });
   });
 });

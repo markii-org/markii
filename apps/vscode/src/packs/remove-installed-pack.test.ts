@@ -1,12 +1,9 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import * as path from 'node:path';
 import {
   installedPackQuickPickLabel,
   listInstalledPacks,
   NO_INSTALLED_PACKS_MESSAGE,
-  removeInstalledPack,
-  removeInstalledPackDiagnosticLines,
-  removeInstalledPackResultMessage,
   removePackConfirmMessage,
   removePackListEntry,
 } from './remove-installed-pack.js';
@@ -93,69 +90,6 @@ describe('installedPackQuickPickLabel', () => {
   });
 });
 
-describe('removeInstalledPack', () => {
-  const pack: InstalledPackEntry = {
-    name: 'ana',
-    directory: '/ext/global-storage/installed-packs/ana',
-  };
-
-  it('removes the directory once confirmed', async () => {
-    const removeDirectory = vi.fn(async () => {});
-    const outcome = await removeInstalledPack({
-      pack,
-      removeDirectory,
-      confirmRemove: async () => true,
-    });
-    expect(outcome).toEqual({
-      kind: 'removed',
-      packName: 'ana',
-      directory: pack.directory,
-    });
-    expect(removeDirectory).toHaveBeenCalledWith(pack.directory);
-  });
-
-  it('declines without touching disk when the user says no', async () => {
-    const removeDirectory = vi.fn(async () => {});
-    const outcome = await removeInstalledPack({
-      pack,
-      removeDirectory,
-      confirmRemove: async () => false,
-    });
-    expect(outcome).toEqual({ kind: 'declined', packName: 'ana' });
-    expect(removeDirectory).not.toHaveBeenCalled();
-  });
-
-  it('reports a failed delete without throwing', async () => {
-    const outcome = await removeInstalledPack({
-      pack,
-      removeDirectory: async () => {
-        throw new Error('EPERM');
-      },
-      confirmRemove: async () => true,
-    });
-    expect(outcome).toEqual({
-      kind: 'failed',
-      packName: 'ana',
-      reason: 'EPERM',
-    });
-  });
-
-  it('reports a thrown confirmation without throwing', async () => {
-    const outcome = await removeInstalledPack({
-      pack,
-      removeDirectory: async () => {},
-      confirmRemove: async () => {
-        throw new Error('dialog closed');
-      },
-    });
-    expect(outcome).toEqual({
-      kind: 'failed',
-      packName: 'ana',
-      reason: 'dialog closed',
-    });
-  });
-});
-
 describe('removePackListEntry', () => {
   it('removes the matching entry', () => {
     expect(removePackListEntry(['/a', '/b'], '/a')).toEqual(['/b']);
@@ -171,45 +105,6 @@ describe('messages', () => {
     expect(removePackConfirmMessage({ name: 'ana', directory: '/x' })).toBe(
       'Removing "ana" deletes its installed files and cannot be undone.',
     );
-  });
-
-  it('formats each outcome kind', () => {
-    expect(
-      removeInstalledPackResultMessage({
-        kind: 'removed',
-        packName: 'ana',
-        directory: '/x',
-      }),
-    ).toBe('Markii: removed pack "ana".');
-    expect(
-      removeInstalledPackResultMessage({ kind: 'declined', packName: 'ana' }),
-    ).toBe('Markii: pack removal cancelled. Nothing was removed.');
-    expect(
-      removeInstalledPackResultMessage({
-        kind: 'failed',
-        packName: 'ana',
-        reason: 'EPERM',
-      }),
-    ).toBe(
-      'Markii: could not remove pack "ana". Open the Markii output for details.',
-    );
-  });
-
-  it('diagnostic lines carry the reason and directory', () => {
-    expect(
-      removeInstalledPackDiagnosticLines({
-        kind: 'removed',
-        packName: 'ana',
-        directory: '/x',
-      }),
-    ).toEqual(['Remove Installed Pack removed pack "ana" from /x.']);
-    expect(
-      removeInstalledPackDiagnosticLines({
-        kind: 'failed',
-        packName: 'ana',
-        reason: 'EPERM',
-      }),
-    ).toEqual(['Remove Installed Pack failed for "ana": EPERM']);
   });
 
   it('NO_INSTALLED_PACKS_MESSAGE points at the install command', () => {

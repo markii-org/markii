@@ -180,3 +180,20 @@ export function noEngineViewTitle(
       : 'it has no views for any engine';
   return `The ${pack} pack has no terminal view for this component; ${has}`;
 }
+
+/**
+ * The fallback label for a directive of a pack whose terminal view script
+ * could not be loaded. Followed by the directive name in backticks, like the
+ * other fallback labels. `pack` is stripped by the caller's sanitizer.
+ */
+export function packLoadFailedLabel(pack: string): string {
+  return `the \`${pack}\` pack failed to load, no terminal view for`;
+}
+
+/**
+ * The diagnostic text for the same case. The loader's own line (what threw)
+ * is on the diagnostics surface already; this one names the directive.
+ */
+export function packLoadFailedTitle(directive: string, pack: string): string {
+  return `The ${pack} pack failed to load in the terminal, so ${directive} has no view`;
+}

@@ -19,9 +19,6 @@ import {
   listInstalledPacks,
   installedPackQuickPickLabel,
   NO_INSTALLED_PACKS_MESSAGE,
-  removeInstalledPack,
-  removeInstalledPackDiagnosticLines,
-  removeInstalledPackResultMessage,
   removePackConfirmMessage,
   removePackListEntry,
 } from './packs/remove-installed-pack.js';
@@ -48,6 +45,7 @@ import {
   installPackFromArchive,
   installPackMessage,
   parseRefreshIntervalSeconds,
+  removePackMessage,
   refreshIntervalValidationMessage,
   resolvePackPaths,
   scriptsDisabledConfirmationText,
@@ -276,10 +274,10 @@ async function readVscodeTextFile(
  * into), a confirmation, then deletes the pack's directory and removes its
  * entry from `markii.packs` (the same GLOBAL, user-scoped write install
  * makes), then reloads the open preview so the removal takes effect right
- * away. Every decision worth testing (listing, the delete outcome, the
- * config-entry removal, the wording) lives in
- * `./packs/remove-installed-pack.ts`; this function is `vscode` wiring
- * only.
+ * away. The delete, its outcome and its wording are `@markii/host`'s
+ * shared `removePack`; the listing, the confirmation text and the
+ * config-entry removal live in `./packs/remove-installed-pack.ts`. This
+ * function is `vscode` wiring only.
  */
 async function removeInstalledPackCommand(
   context: vscode.ExtensionContext,
@@ -309,34 +307,32 @@ async function removeInstalledPackCommand(
   if (!picked) return;
   const target: InstalledPackEntry = picked.pack;
 
-  const outcome = await removeInstalledPack({
-    pack: target,
-    removeDirectory: async (absolutePath) => {
+  const choice = await vscode.window.showWarningMessage(
+    removePackConfirmMessage(target),
+    { modal: true },
+    'Remove',
+  );
+  if (choice !== 'Remove') return; // the cancel itself is feedback enough
+
+  const adapter = createVSCodeHostAdapter({
+    memento: context.workspaceState,
+    prompt: async () => false,
+    diagnostics: (line) => diagnosticsChannel.appendLine(line),
+    authorizedFolders: async () => [],
+    installRoot: () => installRoot,
+    removeFolder: async (absolutePath) => {
       await vscode.workspace.fs.delete(vscode.Uri.file(absolutePath), {
         recursive: true,
         useTrash: false,
       });
     },
-    confirmRemove: async (pack) => {
-      const choice = await vscode.window.showWarningMessage(
-        removePackConfirmMessage(pack),
-        { modal: true },
-        'Remove',
-      );
-      return choice === 'Remove';
-    },
   });
-
-  for (const line of removeInstalledPackDiagnosticLines(outcome)) {
-    diagnosticsChannel.appendLine(line);
-  }
-  const message = removeInstalledPackResultMessage(outcome);
-  if (outcome.kind === 'failed') {
+  const outcome = await createMarkiiHost(adapter).removePack(target.name);
+  if (outcome.kind === 'unsupported') return; // already diagnosed
+  const message = removePackMessage(outcome);
+  if (outcome.kind !== 'removed') {
     void vscode.window.showWarningMessage(message);
     return;
-  }
-  if (outcome.kind === 'declined') {
-    return; // the cancel itself is feedback enough; nothing changed
   }
 
   const config = vscode.workspace.getConfiguration('markii');

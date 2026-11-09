@@ -48,9 +48,9 @@ import {
   installPackDiagnosticLines,
   installPackFromArchive,
   installPackMessage,
-  insertComponentPlan,
   MARK_EXTENSION,
   readPersistedValues,
+  removePackMessage,
   scriptsDisabledConfirmationText,
   scriptsEnabledConfirmationText,
   cascadeDiagnosticLines,
@@ -734,17 +734,9 @@ export default class MarkiiPlugin extends Plugin {
    * same shared path the VS Code extension drives — over an `editor`
    * capability built from this method's own `view.editor` closures.
    *
-   * FALLBACK, reported rather than silently absorbed: `HostPackSource`
-   * names pack folders on disk, and this plugin's BUNDLED packs
-   * (`read`/`dash`/`prep`) are embedded in `main.js` and reconstructed
-   * purely in memory (`bundledDiscoveredPacks()`) — they have no folder
-   * path to hand `authorizedFolders()`. The shared path's own catalog
-   * rebuild therefore never sees a bundled-pack component, so a `chosen`
-   * one comes back `not-found`; this method falls back to the previous
-   * direct `insertComponentPlan`/`editor.transaction` wiring only in that
-   * one case, so a bundled-pack component still inserts correctly. Every
-   * other component (standard or an installed, on-disk pack) goes through
-   * the shared path alone.
+   * The adapter's `bundledPacks` carries the in-memory bundled packs
+   * (`read`/`dash`/`prep`, embedded in `main.js`), so the shared catalog
+   * rebuild sees their components like any other.
    */
   private async insertComponent(view: MarkdownView): Promise<void> {
     const editor = view.editor;
@@ -768,6 +760,7 @@ export default class MarkiiPlugin extends Plugin {
       packs: {
         authorizedFolders: async () => loadable.map((entry) => entry.folder),
         reservedNamespaces: () => new Set<string>(),
+        bundledPacks: () => bundledDiscoveredPacks(),
       },
       editor: obsidianHostEditor(editor),
     });
@@ -780,14 +773,8 @@ export default class MarkiiPlugin extends Plugin {
         line: outcome.cursor.line,
         ch: outcome.cursor.column,
       });
-      return;
     }
-    if (outcome.kind !== 'not-found') return; // 'failed'/'unsupported': already diagnosed
-
-    // Bundled-pack fallback (see this method's doc comment): the same
-    // plan-and-transaction wiring the shared path now owns for every
-    // other component.
-    insertComponentDirectly(editor, chosen);
+    // 'not-found'/'failed'/'unsupported' are already diagnosed by the host.
   }
 
   /**
@@ -1110,27 +1097,38 @@ export default class MarkiiPlugin extends Plugin {
   async removeInstalledPack(namespace: string): Promise<void> {
     const installRoot = this.installedPacksDir();
     if (installRoot === undefined) return;
-    const dir = path.join(installRoot, namespace);
-    let folderDeleted = true;
-    try {
-      await nodeRm(dir, { recursive: true, force: true });
-    } catch (err) {
-      folderDeleted = false;
-      console.error(
-        `[markii] could not remove pack folder "${dir}": ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      );
+    const adapter = createObsidianHostAdapter({
+      prompt: createObsidianPrompt(this.app),
+      loadLocalStorage: (key) => this.app.loadLocalStorage(key),
+      saveLocalStorage: (key, value) => {
+        this.app.saveLocalStorage(key, value);
+      },
+      diagnostics: (line) => {
+        console.log(line);
+      },
+      packs: {
+        authorizedFolders: async () => [],
+        reservedNamespaces: () => this.bundledNamespaces(),
+        installRoot: () => installRoot,
+        removeFolder: (folder) =>
+          nodeRm(folder, { recursive: true, force: true }),
+      },
+    });
+    const outcome = await createMarkiiHost(adapter).removePack(namespace);
+    if (outcome.kind === 'unsupported') return; // already diagnosed
+    if (outcome.kind === 'reserved' || outcome.kind === 'invalid') {
+      new Notice(removePackMessage(outcome));
+      return;
     }
-    // The trust entry goes either way: whatever happened to the folder,
-    // this device has withdrawn its authorization, so the pack stops
-    // loading on the reload below. What differs is what the user is told.
+    // The trust entry goes whatever happened to the folder: this device
+    // has withdrawn its authorization, so the pack stops loading on the
+    // reload below. What differs is what the user is told.
     this.savePackTrust(untrustPack(this.packTrust, namespace));
     await this.reloadPacks(false);
     new Notice(
-      folderDeleted
-        ? packRemovedNotice(namespace)
-        : packRemoveFolderFailedNotice(namespace),
+      outcome.kind === 'failed'
+        ? packRemoveFolderFailedNotice(namespace)
+        : packRemovedNotice(namespace),
     );
   }
 
@@ -1281,42 +1279,4 @@ function obsidianHostEditor(editor: Editor): HostEditor {
       return true;
     },
   };
-}
-
-/**
- * The pre-batch-11 direct wiring, kept ONLY as `insertComponent`'s
- * bundled-pack fallback (see that method's doc comment): builds the
- * skeleton and any fence-lengthening edits with `@markii/host`'s
- * `insertComponentPlan` and applies them in one transaction, exactly as
- * every component's insertion worked before the shared host path existed.
- */
-function insertComponentDirectly(
-  editor: Editor,
-  chosen: InsertableComponent,
-): void {
-  const insertPosition = editor.getCursor('from');
-  const plan = insertComponentPlan(
-    chosen,
-    editor.getValue(),
-    insertPosition.line,
-    insertPosition.ch,
-  );
-
-  editor.transaction({
-    changes: plan.edits.map((edit) => {
-      const isInsertion =
-        edit.line === insertPosition.line &&
-        edit.startColumn === insertPosition.ch &&
-        edit.endColumn === insertPosition.ch;
-      return {
-        from: { line: edit.line, ch: edit.startColumn },
-        to: isInsertion
-          ? editor.getCursor('to')
-          : { line: edit.line, ch: edit.endColumn },
-        text: edit.text,
-      };
-    }),
-  });
-
-  editor.setCursor({ line: plan.cursor.line, ch: plan.cursor.column });
 }

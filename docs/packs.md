@@ -131,7 +131,11 @@ engine is simply absent, and its directives render as the fallback. The fallback
 component of an installed pack reads "no terminal view for `name`" (or no
 preview view, or no HTML view, depending on where the note is shown), and the
 host's diagnostics surface names the pack and the engines it does cover. A
-misspelled or uninstalled name still reads "unknown component". A pack
+misspelled or uninstalled name still reads "unknown component". When a
+pack's `terminal.js` cannot be loaded (it throws, registers nothing, or
+registers another namespace), its components read "the `ana` pack failed
+to load, no terminal view for `name`", and the cause is on the
+diagnostics surface. A pack
 with components but none for the host's engine is reported as skipped, with
 the engines it does declare.
 

@@ -81,11 +81,18 @@ export function reportDiagnostic(
  * `directive` is the composed directive name (`ana_meter`), `pack` the
  * pack's namespace, and `engines` the engine ids (`react`, `ansi`) the
  * component DOES ship a view for.
+ *
+ * `loadFailed` marks a component whose pack could not be loaded for this
+ * render's engine at all (its view script threw, registered nothing, or
+ * registered another namespace). The renderer then words the fallback as a
+ * failed pack rather than a missing view. Absent means the pack loaded and
+ * simply has no view for the component.
  */
 export interface UnavailableComponent {
   readonly directive: string;
   readonly pack: string;
   readonly engines: readonly string[];
+  readonly loadFailed?: true;
 }
 
 /** A lookup from a directive name to its `UnavailableComponent`, or `undefined`. */
@@ -108,7 +115,10 @@ export function createUnavailableComponentLookup(
   const byName = new Map<string, UnavailableComponent>();
   for (const entry of components as readonly unknown[]) {
     if (entry === null || typeof entry !== 'object') continue;
-    const { directive, pack, engines } = entry as Record<string, unknown>;
+    const { directive, pack, engines, loadFailed } = entry as Record<
+      string,
+      unknown
+    >;
     if (typeof directive !== 'string' || typeof pack !== 'string') continue;
     if (!Array.isArray(engines)) continue;
     if (byName.has(directive)) continue;
@@ -116,6 +126,7 @@ export function createUnavailableComponentLookup(
       directive,
       pack,
       engines: engines.filter((e): e is string => typeof e === 'string'),
+      ...(loadFailed === true ? { loadFailed: true as const } : {}),
     });
   }
   if (byName.size === 0) return undefined;

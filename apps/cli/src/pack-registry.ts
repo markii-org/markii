@@ -5,7 +5,7 @@
  * packs and reads each `terminal.js`; this module hands that text to
  * `@markii/ansi`'s loader and installs the result on top of the standard
  * set. A pack that cannot be used contributes nothing: its directives
- * render as the unknown-component fallback and the reason is one line on
+ * render as a "pack failed to load" fallback and the reason is one line on
  * the diagnostics surface, never a crash and never silent.
  *
  * The pack's own `pack.json` is the authority on what it declares: the
@@ -51,6 +51,24 @@ export async function loadCliPackRegistry(
 
   const failureLines = [...outcome.failureLines];
   const toInstall: AnsiPackToInstall[] = [];
+  // Components of packs whose terminal script could not be used. They read
+  // "pack failed to load" in the note instead of "unknown component".
+  const loadFailed: UnavailableComponent[] = [];
+  const markLoadFailed = (namespace: string): void => {
+    for (const component of outcome.components) {
+      if (component.pack === namespace) {
+        loadFailed.push({ ...component, loadFailed: true });
+      }
+    }
+  };
+  // A pack that names terminal views but whose terminal.js was missing or
+  // unreadable never reaches the loop below; it fails the same way.
+  const scripted = new Set(outcome.scripts.map((script) => script.namespace));
+  for (const component of outcome.components) {
+    if (component.engines.includes('ansi') && !scripted.has(component.pack)) {
+      loadFailed.push({ ...component, loadFailed: true });
+    }
+  }
   for (const script of outcome.scripts) {
     const discovered = outcome.packs.find(
       (pack) => pack.manifest.name === script.namespace,
@@ -61,6 +79,7 @@ export async function loadCliPackRegistry(
       const line = terminalScriptRejectedLine(script.namespace, loaded.reason);
       host.diagnostics(line);
       failureLines.push(line);
+      markLoadFailed(script.namespace);
       continue;
     }
     if (loaded.pack.manifest.name !== script.namespace) {
@@ -70,6 +89,7 @@ export async function loadCliPackRegistry(
       );
       host.diagnostics(line);
       failureLines.push(line);
+      markLoadFailed(script.namespace);
       continue;
     }
     toInstall.push({
@@ -78,20 +98,27 @@ export async function loadCliPackRegistry(
     });
   }
 
+  const unavailable = [
+    ...loadFailed,
+    ...outcome.unavailable.filter(
+      (component) =>
+        !loadFailed.some((failed) => failed.directive === component.directive),
+    ),
+  ];
   const installed = installAnsiPacks(toInstall, defaultAnsiRegistry);
   if (!installed.ok) {
     const line = `Packs share a namespace (${installed.collisions.join(', ')}); none of them were loaded.`;
     host.diagnostics(line);
     return {
       registry: defaultAnsiRegistry,
-      unavailable: outcome.unavailable,
+      unavailable,
       components: outcome.components,
       failureLines: [...failureLines, line],
     };
   }
   return {
     registry: installed.registry,
-    unavailable: outcome.unavailable,
+    unavailable,
     components: outcome.components,
     failureLines,
   };
