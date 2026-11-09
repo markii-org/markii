@@ -448,9 +448,12 @@ make an absent feature look like a working one that found nothing, which is
 the failure the cleanliness rule exists to prevent. A host offering fewer
 capabilities is a supported host, not an unfinished one.
 
-The shared layer is internal to this repository and is not published, so
-these paragraphs describe a shape to copy rather than a dependency to take.
-The responsibilities below are what conformance is measured against.
+The shared layer is published as `@markii/host`, so a new host can take it
+as a dependency instead of copying its shape: the neutral main entry, plus
+`@markii/host/browser` or `@markii/host/node` for the isolate and network,
+and `@markii/host/conformance` to run the same scenario corpus against its
+own adapter. The responsibilities below are what conformance is measured
+against, whichever way a host meets them.
 
 A host running in a web page meets the first responsibility below with a
 module Web Worker and the second half of the network rules with an origin
@@ -921,8 +924,7 @@ An export is not a screenshot of the preview, but it renders the same
 components. A host that already has a renderer and a loaded registry in front
 of it, which both editor hosts do for their preview, renders the export
 body with exactly that registry and hands the resulting markup to
-`@markii/host`'s `composeNoteHtmlExport`, this repository's own shared host
-layer, which is not published. A host with nothing to render
+`@markii/host`'s `composeNoteHtmlExport`. A host with nothing to render
 through falls back to `@markii/html`, the static string engine. Either way the
 exported file carries the shared `doc.css` inside it and loads nothing at
 runtime, so it opens in any browser, attaches to an email, or goes into an

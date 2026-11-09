@@ -1,10 +1,23 @@
 {
   "name": "@markii/host",
-  "version": "0.1.0",
+  "version": "0.17.0-next.1",
   "description": "Shared, host-neutral script-running layer for Markii hosts: tier gating, the grant model, address pinning, and the terminatable-isolate watchdog, plus the HostAdapter contract and createMarkiiHost. Entries: the neutral main entry, /node, /browser, /conformance.",
+  "keywords": [
+    "markdown",
+    "mk.md",
+    "markii",
+    "host",
+    "sandbox"
+  ],
   "license": "MIT",
   "author": "sadigaxund",
-  "private": true,
+  "homepage": "https://github.com/markii-org/markii#readme",
+  "bugs": "https://github.com/markii-org/markii/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/markii-org/markii.git",
+    "directory": "packages/markii-host"
+  },
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -66,5 +79,8 @@
     "@markii/html": "^0.17.0-next.1",
     "@markii/react": "^0.17.0-next.1",
     "esbuild": "^0.28.2"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

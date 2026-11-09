@@ -236,8 +236,7 @@ packages/markii-pack    component pack contract (docs/packs.md, issue #3) — no
   src/uses.ts        resolveUses(): resolves a note's declared `uses:` list
                      against installed pack namespaces (missing/satisfied),
                      host-facing metadata only — no loading, no registry
-packages/markii-pack-build  PRIVATE until its first release (planned, the
-                        user approved publishing it). The pack compiler and
+packages/markii-pack-build  PUBLISHED (user-approved 2026-11-09). The pack compiler and
                         exporter, and the ONLY package declaring
                         esbuild-wasm. It imports @markii/host and
                         @markii/pack; host never imports it:
@@ -256,9 +255,9 @@ packages/markii-pack-build  PRIVATE until its first release (planned, the
                      prebuilt form zipped as <name>-<version>.mkp (no folder
                      form, user-set 2026-09-02)
   test-fixtures/packs/  the .tsx pack fixtures the build tests compile
-packages/markii-host    PRIVATE, never published (no npm presence, absent from
-                        build:dist and the release workflow). The shared,
-                        host-neutral script-running layer both apps consume,
+packages/markii-host    PUBLISHED (user-approved 2026-11-09; in build:dist and
+                        PACKAGE_DIRS). The shared,
+                        host-neutral script-running layer every app consumes,
                         so there is exactly ONE copy of the security-critical
                         glue: tier gating, the grant model, address pinning,
                         and the terminatable-isolate watchdog:
@@ -671,9 +670,10 @@ corpus is plain data — no TypeScript in `conformance/`.
 
 ## Repo structure policy (user-set 2026-08-26)
 
-One repo, deliberately, while the host seam is still moving: the
-security-critical shared layer (`packages/markii-host`) is unpublished by
-design, and app fixes routinely land across it and an app in one commit.
+One repo, deliberately, while the host seam is still moving: app fixes
+routinely land across the shared layer (`packages/markii-host`, published
+since 2026-11-09 so outside apps consume the same copy) and an app in one
+commit.
 Monorepo does NOT mean lockstep releases: the npm packages, the VS Code
 extension, and the Obsidian plugin each version and ship independently.
 

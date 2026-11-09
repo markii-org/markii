@@ -8,6 +8,13 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`@markii/host` and `@markii/pack-build` are published.** `@markii/host`
+  is the shared host layer (the `HostAdapter` contract and
+  `createMarkiiHost`), with `/browser`, `/node` and `/conformance` entries.
+  `@markii/pack-build` compiles packs and writes `.mkp` archives; it is
+  the only package that carries esbuild-wasm. A Node host passes its own
+  worker entry path (`workerPath`); the package ships the browser worker
+  only.
 - **`markii lsp`** (`@markii/cli`): a language server over stdio with
   completion, hover, diagnostics and fence lengthening for `.mk.md`
   documents, built on `@markii/stdlib/editor` and the shared host editor

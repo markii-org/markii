@@ -51,6 +51,8 @@ env:
     packages/platforms/markii-react
     packages/platforms/markii-html
     packages/platforms/markii-ansi
+    packages/markii-host
+    packages/markii-pack-build
   # ------------------------------------------------------------------------
   # @markii/cli publish gate. @markii/cli 0.0.1 was published by hand and
   # its Trusted Publisher points at this repo and release.yml, so the gate
