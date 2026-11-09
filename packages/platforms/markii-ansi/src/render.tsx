@@ -85,6 +85,7 @@ import {
   dataStateSuffix,
   emptyInlineTitle,
   failureToken,
+  codeRendererFailedTitle,
   formMismatchTitle,
   NO_ENGINE_VIEW_LABEL,
   noEngineViewTitle,
@@ -238,6 +239,8 @@ interface WalkContext {
   onDiagnostic: OnDiagnostic | undefined;
   /** Components of installed packs this render cannot draw, from the host; `undefined` when none were offered. */
   unavailable: UnavailableComponentLookup | undefined;
+  /** The host's `renderCode` callback for ordinary fenced code blocks, when one was given. */
+  renderCode: RenderCode | undefined;
   focusCounter: { current: number };
   /** Populated only by `buildMarkElement`'s counting walk; `undefined` for every other walk (string rendering, the mounted render's own tree), which have no use for it and skip the bookkeeping. */
   focusables: FocusableDescriptor[] | undefined;
@@ -858,6 +861,8 @@ function renderBlockString(
   if (node.tagName === 'pre') {
     const marker = renderScriptMarker(node, wctx.color, wctx.glyphs);
     if (marker !== undefined) return marker;
+    const custom = applyRenderCode(node, wctx);
+    if (custom !== undefined) return custom;
     return renderCodeBlock(node, wctx.color);
   }
   return wrapText(
@@ -1007,6 +1012,33 @@ function renderScriptMarker(
       : `${glyphs.script} ${name}`;
     return dim(summary, color);
   } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Offers one ordinary fenced code block to the host's `renderCode`. The
+ * text handed over is already run through `sanitizeBlockText` (control
+ * characters dropped, tabs expanded), so a host that echoes it cannot
+ * smuggle author escapes into the terminal. Returns the host's string, or
+ * `undefined` to draw the block as usual: no callback, a decline, a
+ * non-string result, or a throw (reported through `onDiagnostic`).
+ */
+function applyRenderCode(node: Element, wctx: WalkContext): string | undefined {
+  if (!wctx.renderCode) return undefined;
+  const codeNode = findChildElement(node, 'code');
+  if (!codeNode) return undefined;
+  try {
+    const result = wctx.renderCode({
+      lang: getLanguage(codeNode) || undefined,
+      code: sanitizeBlockText(getCodeText(codeNode)),
+    });
+    return typeof result === 'string' ? result : undefined;
+  } catch {
+    reportDiagnostic(wctx.onDiagnostic, {
+      kind: 'code-renderer-failed',
+      message: codeRendererFailedTitle(),
+    });
     return undefined;
   }
 }
@@ -2209,6 +2241,7 @@ function buildWalkContext(
   resolveHref: ResolveHref | undefined,
   onDiagnostic: OnDiagnostic | undefined,
   unavailable: UnavailableComponentLookup | undefined,
+  renderCode?: RenderCode,
 ): WalkContext {
   return {
     registry,
@@ -2221,6 +2254,7 @@ function buildWalkContext(
     resolveHref,
     onDiagnostic,
     unavailable,
+    renderCode,
     focusCounter: { current: 0 },
     focusables: undefined,
   };
@@ -2229,12 +2263,38 @@ function buildWalkContext(
 /** The columns assumed when a caller supplies no `width` option. */
 const DEFAULT_WIDTH = 80;
 
+/** A fenced code block as offered to `RenderMarkOptions.renderCode`. */
+export interface RenderCodeBlock {
+  /** The info-string language, or `undefined` when the fence names none. */
+  readonly lang: string | undefined;
+  /** The code text, control characters removed and tabs expanded. */
+  readonly code: string;
+}
+
+/** The `renderCode` callback: a string for a code block, or `undefined` to draw it as usual. */
+export type RenderCode = (code: RenderCodeBlock) => string | undefined;
+
 /**
  * Options for `renderMarkToAnsi`/`renderMarkNodeToAnsi`/`renderMarkInlineToAnsi`.
  * `store`/`vault` are offered both here and as positional parameters; when
  * both are given, the option wins.
  */
 export interface RenderMarkOptions {
+  /**
+   * Replaces the output for an ordinary fenced code block. Called with the
+   * info-string language (`undefined` when the fence names none) and the
+   * code text, already stripped of control characters and with tabs
+   * expanded (the engine's own sanitizer, so author escapes cannot reach
+   * the terminal through a host that echoes it). Return a string to use it,
+   * or `undefined` to draw the block as usual. The returned string is
+   * HOST-TRUSTED and inserted as-is, so the host may add its own SGR
+   * styling and owns keeping control characters out of anything it adds.
+   * Never called for script fences or inline code. A callback that throws
+   * draws the block as usual and reports a `'code-renderer-failed'` event
+   * through `onDiagnostic`. Element results are not supported: fenced blocks
+   * are drawn as strings in this engine.
+   */
+  readonly renderCode?: RenderCode;
   readonly width?: number;
   readonly color?: ColorOption;
   readonly theme?: AnsiTheme;
@@ -2291,6 +2351,7 @@ function buildRootElement(
   onDiagnostic: OnDiagnostic | undefined,
   unavailable: UnavailableComponentLookup | undefined,
   width: number,
+  renderCode?: RenderCode,
 ): ReactElement {
   const wctx = buildWalkContext(
     registry,
@@ -2303,6 +2364,7 @@ function buildRootElement(
     resolveHref,
     onDiagnostic,
     unavailable,
+    renderCode,
   );
   const body = renderBlocksElement(root.children, width, '', wctx);
   return (
@@ -2325,6 +2387,7 @@ async function renderRootToString(
   onDiagnostic: OnDiagnostic | undefined,
   unavailable: UnavailableComponentLookup | undefined,
   width: number,
+  renderCode?: RenderCode,
 ): Promise<string> {
   const element = buildRootElement(
     root,
@@ -2339,6 +2402,7 @@ async function renderRootToString(
     onDiagnostic,
     unavailable,
     width,
+    renderCode,
   );
   const raw = await renderInkToString(element, width);
   return finalizeOutput(raw);
@@ -2384,6 +2448,7 @@ export async function renderMarkToAnsi(
       options?.onDiagnostic,
       createUnavailableComponentLookup(options?.unavailableComponents),
       options?.width ?? DEFAULT_WIDTH,
+      options?.renderCode,
     );
   } catch (error) {
     return renderFailureFallback(error, color);
@@ -2418,6 +2483,7 @@ export async function renderMarkNodeToAnsi(
       options?.onDiagnostic,
       createUnavailableComponentLookup(options?.unavailableComponents),
       options?.width ?? DEFAULT_WIDTH,
+      options?.renderCode,
     );
   } catch (error) {
     return renderFailureFallback(error, color);
@@ -2508,6 +2574,7 @@ export function buildMarkElement(
     options?.onDiagnostic,
     unavailable,
     width,
+    options?.renderCode,
   );
 
   if (!interactive) return content;

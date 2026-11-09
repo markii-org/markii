@@ -123,3 +123,35 @@ jobs:
           console.log('packed consumer ansi render OK,', ansi.length, 'chars');
           SMOKE
           node smoke.mjs
+
+  # @markii/react declares React 18 or 19 as its peer. The repo itself stays
+  # on React 18, so this job proves the 19 half on every change: it swaps in
+  # React 19 with --no-save (the committed lockfile is untouched), drops the
+  # workspace-local React 18 copies so the package resolves the root copy
+  # (two copies of React in one process fail with "older version of React"),
+  # and runs the package's own suite.
+  react19:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Install React 19 for @markii/react only (no lockfile change)
+        run: |
+          set -euo pipefail
+          npm install --no-save react@19 react-dom@19 @types/react@19 @types/react-dom@19
+          rm -rf packages/platforms/markii-react/node_modules/react \
+                 packages/platforms/markii-react/node_modules/react-dom \
+                 packages/platforms/markii-react/node_modules/@types/react \
+                 packages/platforms/markii-react/node_modules/@types/react-dom
+          cd packages/platforms/markii-react
+          node -e "const v=require('react/package.json').version; console.log('react', v); if(!v.startsWith('19.')) process.exit(1)"
+
+      - name: Run the @markii/react suite under React 19
+        run: npm test -w @markii/react

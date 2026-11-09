@@ -90,11 +90,11 @@ import { CAPABILITY_ERROR_TAG } from './errors.js';
  * `pcall` around it reports.
  */
 
-/** A pack-namespaced `require "packName/modulePath"` resolver, injected by a host that has actually wired up pack installation. Returns pure Lua SOURCE TEXT, or `undefined` if this pack/module isn't available — never throws for a routine "not found". */
+/** A pack-namespaced `require "packName/modulePath"` resolver, injected by a host that has actually wired up pack installation. Returns pure Lua SOURCE TEXT, or `undefined` if this pack/module isn't available — never throws for a routine "not found". May be synchronous or return a promise; a rejection fails the require like a sync throw, and a promise that never settles is bounded by the run's wall-clock guard. */
 export type PackModuleResolver = (
   packName: string,
   modulePath: string,
-) => string | undefined;
+) => string | undefined | Promise<string | undefined>;
 
 export interface RequireConfig {
   /** The SAME `ScriptView` `./capabilities` wires up for `bundle.read`/`bundle.write` — reused, never re-implemented, so bundle-local `require` is subject to the identical path-jail and read-permission check. */
@@ -228,7 +228,7 @@ export function buildRequire(config: RequireConfig): {
       const segIdx = name.indexOf('/');
       const packName = segIdx === -1 ? name : name.slice(0, segIdx);
       const modulePath = segIdx === -1 ? '' : name.slice(segIdx + 1);
-      const resolved = resolver(packName, modulePath);
+      const resolved = await resolver(packName, modulePath);
       if (resolved === undefined) {
         throw new Error(
           `require: no pack module "${modulePath}" in pack "${packName}"`,

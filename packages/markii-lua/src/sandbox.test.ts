@@ -1457,3 +1457,34 @@ describe('runScript — adversarial verification pass fixes', () => {
     });
   });
 });
+
+describe('runScript — no silent CDN fetch for the wasm file', () => {
+  it('outside Node with no wasmUri, fails before any engine as a labeled runtime failure', async () => {
+    const r = await runScript({
+      code: 'return 1',
+      tier: 'manual',
+      isNode: false,
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error.kind).toBe('runtime');
+      expect(r.error.message).toContain('wasmUri');
+    }
+  });
+
+  it('outside Node, an explicit wasmUri runs', async () => {
+    const require = createRequire(import.meta.url);
+    const r = await runScript({
+      code: 'return 2',
+      tier: 'manual',
+      isNode: false,
+      wasmUri: require.resolve('wasmoon/dist/glue.wasm'),
+    });
+    expect(r).toEqual({ ok: true, value: 2 });
+  });
+
+  it('in Node (the real environment), no wasmUri still runs', async () => {
+    const r = await runScript({ code: 'return 3', tier: 'manual' });
+    expect(r).toEqual({ ok: true, value: 3 });
+  });
+});

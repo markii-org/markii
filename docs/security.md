@@ -217,6 +217,9 @@ grant and prompts nothing.
 ## The sandbox
 
 Scripts run in Lua 5.4 (wasmoon, WebAssembly) with an empty environment.
+The WebAssembly binary comes only from the host: outside Node, a run with
+no `wasmUri` is refused rather than letting wasmoon fetch the binary from a
+public CDN at run time.
 The dangerous standard libraries (`os`, `io`, `package`, `debug`,
 `coroutine`) are never linked into the interpreter at all, which is stronger
 than loading and deleting them; only a curated slice of `string`, `table`,
@@ -357,7 +360,10 @@ is read through the identical `ScriptView` and path-jail that `bundle.read`
 uses, and pack-namespaced modules (`require "packName/..."`), gated behind an
 optional host-injected resolver. A host that has not wired one up denies
 every pack-namespaced `require` cleanly rather than reaching any real pack
-loader.
+loader. The resolver may answer synchronously or with a promise. A rejected
+promise fails the `require` exactly as a thrown error does, and a promise
+that never settles is bounded by the run's wall-clock limit, so a slow
+host cannot hold a run open past its budget.
 
 A resolved module runs as a protected chunk on the same Lua thread as the rest
 of the run, sharing its globals, capabilities, and instruction, wall-clock, and

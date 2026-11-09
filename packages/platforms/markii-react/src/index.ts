@@ -13,6 +13,8 @@ export {
   renderMark,
   renderMarkNode,
   renderMarkInline,
+  type RenderCode,
+  type RenderCodeBlock,
   type RenderMarkOptions,
 } from './render.js';
 export { type ResolveImageSrc } from './image-resolve.js';

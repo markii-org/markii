@@ -290,22 +290,55 @@ export const DENIED_GLOBALS: readonly string[] = [
 export interface CreateEmptyLuaEngineOptions {
   /**
    * Forwarded verbatim as wasmoon's `LuaFactory` first constructor argument
-   * (`customWasmUri` — confirmed against `node_modules/wasmoon/dist/
-   * factory.d.ts`). Left `undefined` (the default), `LuaFactory` keeps its
-   * own built-in resolution: the local `node_modules/wasmoon/dist/glue.wasm`
-   * file in Node (used by this package's own Vitest suite), or — in a
-   * browser bundle with no bundler-provided URL — a fetch to
-   * `https://unpkg.com/wasmoon@<version>/dist/glue.wasm` at runtime
-   * (confirmed in `node_modules/wasmoon/dist/index.js`). That CDN fetch is
-   * exactly what makes an unconfigured browser host non-offline-capable: no
-   * network to unpkg means no script can ever run. A host that wants to
-   * avoid it (e.g. the playground, via a Vite `?url` asset import so the
-   * wasm ships in its own bundle) passes its own local URL here instead.
-   * Passing `undefined` is IDENTICAL to omitting this options object
-   * entirely — this parameter only ever narrows behavior, never changes it
-   * by default.
+   * (`customWasmUri`). In Node, leaving it `undefined` keeps wasmoon's own
+   * resolution of the local `node_modules/wasmoon/dist/glue.wasm`. Outside
+   * Node it is REQUIRED: wasmoon's browser default is a runtime fetch from
+   * `https://unpkg.com/...`, and this package never lets that happen
+   * silently. With no `wasmUri` outside Node, engine creation throws a
+   * `MissingWasmUriError` before wasmoon is touched (`runScript` turns it
+   * into a labeled `runtime` failure). A browser host ships its own copy of
+   * `glue.wasm` (for example via a bundler `?url` import) and passes that
+   * URL here.
    */
   wasmUri?: string;
+  /**
+   * Test seam: overrides the Node detection (`isNodeEnvironment`). Leave
+   * unset in production.
+   */
+  isNode?: boolean;
+}
+
+/** Message shared by the thrown error and the `runScript` failure. */
+export const MISSING_WASM_URI_MESSAGE =
+  'the Lua engine needs its WebAssembly file but this host did not pass `wasmUri`; the host must pass `wasmUri` (a URL to wasmoon glue.wasm) when running outside Node';
+
+/** Thrown by `createEmptyLuaEngine` when no `wasmUri` is given outside Node. */
+export class MissingWasmUriError extends Error {
+  constructor() {
+    super(MISSING_WASM_URI_MESSAGE);
+    this.name = 'MissingWasmUriError';
+  }
+}
+
+/**
+ * True only when running under Node. Guarded so a browser, worker, or any
+ * other environment without a real `process.versions.node` counts as "not
+ * Node".
+ */
+export function isNodeEnvironment(): boolean {
+  try {
+    const proc = (globalThis as { process?: { versions?: { node?: unknown } } })
+      .process;
+    return typeof proc?.versions?.node === 'string';
+  } catch {
+    return false;
+  }
+}
+
+/** True when a run with these options must be refused for want of `wasmUri`. */
+export function needsWasmUri(options?: CreateEmptyLuaEngineOptions): boolean {
+  if (options?.wasmUri !== undefined) return false;
+  return !(options?.isNode ?? isNodeEnvironment());
 }
 
 /**
@@ -327,6 +360,7 @@ export interface CreateEmptyLuaEngineOptions {
 export async function createEmptyLuaEngine(
   options?: CreateEmptyLuaEngineOptions,
 ): Promise<LuaEngine> {
+  if (needsWasmUri(options)) throw new MissingWasmUriError();
   const factory = new LuaFactory(options?.wasmUri);
   const engine = await factory.createEngine({
     openStandardLibs: false,

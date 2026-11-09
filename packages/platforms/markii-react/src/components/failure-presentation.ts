@@ -167,6 +167,11 @@ export function unsafeImageSrcTitle(directive: string): string {
   return `${directive}: image source was refused as unsafe and was not shown`;
 }
 
+/** The diagnostic text for a host `renderCode` callback that threw; the code block rendered as usual. Identical across the engines. */
+export function codeRendererFailedTitle(): string {
+  return 'code block: the host code renderer failed, so the plain block was shown';
+}
+
 /** The diagnostic text for a registered block component written as an inline directive, which renders as the inline fallback instead. */
 export function formMismatchTitle(directive: string): string {
   return `${directive}: block component was written inline and was not rendered`;

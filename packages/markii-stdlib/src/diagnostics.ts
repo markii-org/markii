@@ -33,12 +33,17 @@
  * terminal, a terminal-only component in an editor preview). It rendered
  * the fallback box, labeled as a missing view rather than an unknown
  * component. Only reported when the host passed `unavailableComponents`.
+ *
+ * `'code-renderer-failed'` — a host's `renderCode` callback threw for an
+ * ordinary fenced code block; the block rendered as usual. Carries no
+ * directive or attribute.
  */
 export type DiagnosticKind =
   | 'invalid-attribute-value'
   | 'unsafe-image-src'
   | 'form-mismatch'
-  | 'no-engine-view';
+  | 'no-engine-view'
+  | 'code-renderer-failed';
 
 export interface DiagnosticEvent {
   readonly kind: DiagnosticKind;

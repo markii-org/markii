@@ -9,6 +9,8 @@ export {
   renderMarkNodeToAnsi,
   renderMarkInlineToAnsi,
   buildMarkElement,
+  type RenderCode,
+  type RenderCodeBlock,
   type RenderMarkOptions,
 } from './render.js';
 export {

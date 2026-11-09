@@ -472,6 +472,12 @@ The responsibilities below are what conformance is measured against.
    it as the worker bundle does, but decide deliberately: a host that
    embeds the worker and leaves the wasm on disk runs scripts only where
    the install channel happened to copy the extra file.
+   Outside Node, the host must tell the Lua runtime where that binary is,
+   by passing `wasmUri` to `@markii/lua`'s `runScript` or
+   `createEmptyLuaEngine`. A run without it fails before any engine is
+   created, as a labeled `runtime` failure that names `wasmUri`. The
+   runtime never fetches the binary from a CDN on its own. In Node,
+   `wasmUri` may be left out, and the copy installed with wasmoon is used.
    A host that ships its own executable rather than plugging into someone
    else's application has the easiest version of this problem and should
    not invent a harder one: bundle the worker entry into the same output
@@ -778,6 +784,29 @@ same rule about which values are offered to it, the same refusal of a
 `javascript:` or `vbscript:` result, and the same fall-through when it
 returns nothing or throws. No standard component builds its own link, so it
 only ever sees a link the parser itself produced.
+
+Every engine also takes a `renderCode` callback for ordinary fenced code
+blocks, which is where a host plugs in syntax highlighting. It receives the
+fence's language (or `undefined` when the fence names none) and the code
+text:
+
+```ts
+renderMark(text, registry, store, vault, {
+  renderCode: ({ lang, code }) => highlight(lang, code),
+});
+```
+
+The React engine expects an element back, the HTML engine a string, and
+the terminal engine a string. Returning `undefined` renders the block as
+usual. The callback is never called for script fences or inline code. A
+callback that throws also renders the block as usual and reports a
+`code-renderer-failed` event through `onDiagnostic`.
+
+The HTML engine inserts the returned string as-is. It is host-trusted
+output, so the host escapes the code text itself before wrapping it in
+markup. The terminal engine hands the callback text that its sanitizer
+has already cleaned of control characters; anything the host adds is the
+host's responsibility.
 
 `renderMarkNode` and `renderMarkNodeToHtml` accept a whole parsed document
 as well as a single node, so a host that already holds the tree `parse`

@@ -50,6 +50,7 @@ import type { ResolveHref } from './href-resolve.js';
 import {
   EMPTY_INLINE_MARKER_CLASS,
   emptyInlineTitle,
+  codeRendererFailedTitle,
   formMismatchTitle,
   invalidAttributeValueTitle,
   noEngineViewTitle,
@@ -747,7 +748,24 @@ interface PreElementProps {
  * highlighted code instead — the same display-only degradation the spec
  * gives a fence with no `name` at all, and never an error.
  */
-function PreElement({ node, children }: PreElementProps): ReactElement {
+function createPreElement(
+  renderCode: RenderCode | undefined,
+  onDiagnostic: OnDiagnostic | undefined,
+): (props: PreElementProps) => ReactElement {
+  return function PreElement({
+    node,
+    children,
+  }: PreElementProps): ReactElement {
+    return renderPre(node, children, renderCode, onDiagnostic);
+  };
+}
+
+function renderPre(
+  node: HastElement | undefined,
+  children: ReactNode,
+  renderCode: RenderCode | undefined,
+  onDiagnostic: OnDiagnostic | undefined,
+): ReactElement {
   try {
     const codeNode = findChildElement(node, 'code');
     const meta = codeNode?.properties[CODE_META_ATTR];
@@ -769,6 +787,26 @@ function PreElement({ node, children }: PreElementProps): ReactElement {
   } catch {
     // Malformed meta degrades to ordinary code-block rendering below —
     // script detection must never be able to break rendering.
+  }
+  if (renderCode) {
+    // An ordinary fenced block (script fences returned above): offer it to
+    // the host. `undefined`, a non-element result, or a throw all fall
+    // through to the default `<pre>` below.
+    const codeNode = findChildElement(node, 'code');
+    if (codeNode) {
+      try {
+        const custom = renderCode({
+          lang: getLanguage(codeNode) || undefined,
+          code: getCodeText(codeNode),
+        });
+        if (isValidElement(custom)) return custom;
+      } catch {
+        reportDiagnostic(onDiagnostic, {
+          kind: 'code-renderer-failed',
+          message: codeRendererFailedTitle(),
+        });
+      }
+    }
   }
   return <pre>{children}</pre>;
 }
@@ -845,6 +883,7 @@ function hastToReactTree(
   resolveHref: ResolveHref | undefined,
   onDiagnostic: OnDiagnostic | undefined,
   unavailable: UnavailableComponentLookup | undefined,
+  renderCode?: RenderCode,
 ): ReactElement {
   const DirectiveElement = createDirectiveElement(
     registry,
@@ -861,7 +900,7 @@ function hastToReactTree(
     passNode: true,
     components: {
       'mk-directive': DirectiveElement,
-      pre: PreElement,
+      pre: createPreElement(renderCode, onDiagnostic),
       img: createImgElement(resolveImageSrc),
       a: createAnchorElement(resolveHref),
     },
@@ -904,6 +943,17 @@ function renderFailureFallback(error: unknown): ReactElement {
     </div>
   );
 }
+
+/** A fenced code block as offered to `RenderMarkOptions.renderCode`. */
+export interface RenderCodeBlock {
+  /** The info-string language, or `undefined` when the fence names none. */
+  readonly lang: string | undefined;
+  /** The raw code text, without the fence lines. */
+  readonly code: string;
+}
+
+/** The `renderCode` callback: a React element for a code block, or `undefined` to render it as usual. */
+export type RenderCode = (code: RenderCodeBlock) => ReactElement | undefined;
 
 /**
  * Renders Super Markdown text to a React element tree using `registry` to
@@ -969,6 +1019,16 @@ function renderFailureFallback(error: unknown): ReactElement {
  * `@markii/stdlib`'s `reportDiagnostic`, which swallows it.
  */
 export interface RenderMarkOptions {
+  /**
+   * Replaces the output for an ordinary fenced code block. Called with the
+   * info-string language (`undefined` when the fence names none) and the
+   * raw code text. Return a React element to use it, or `undefined` to
+   * render the block as usual. Never called for script fences (the
+   * collapsed `{name=...}` markers) or for inline code. A callback that
+   * throws renders the block as usual and reports a
+   * `'code-renderer-failed'` event through `onDiagnostic`.
+   */
+  readonly renderCode?: RenderCode;
   readonly resolveImageSrc?: ResolveImageSrc;
   readonly resolveHref?: ResolveHref;
   readonly onDiagnostic?: OnDiagnostic;
@@ -1009,6 +1069,7 @@ export function renderMark(
       options?.resolveHref,
       options?.onDiagnostic,
       createUnavailableComponentLookup(options?.unavailableComponents),
+      options?.renderCode,
     );
   } catch (error) {
     return renderFailureFallback(error);
@@ -1067,6 +1128,7 @@ export function renderMarkNode(
       options?.resolveHref,
       options?.onDiagnostic,
       createUnavailableComponentLookup(options?.unavailableComponents),
+      options?.renderCode,
     );
   } catch (error) {
     return renderFailureFallback(error);

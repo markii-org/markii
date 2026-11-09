@@ -12,7 +12,11 @@ import {
 import { buildDoc } from './doc.js';
 import { MARSHAL_ERROR_TAG, ScriptLimitError } from './errors.js';
 import type { ScriptFailure, ScriptMarshalReason } from './errors.js';
-import { createEmptyLuaEngine } from './globals.js';
+import {
+  createEmptyLuaEngine,
+  MISSING_WASM_URI_MESSAGE,
+  needsWasmUri,
+} from './globals.js';
 import { buildJsonTable } from './json-table.js';
 import { DEFAULT_LIMITS, installLimits, type ScriptLimits } from './limits.js';
 import {
@@ -47,16 +51,15 @@ export interface RunScriptOptions {
   limits?: Partial<ScriptLimits>;
   marshalLimits?: Partial<MarshalLimits>;
   /**
-   * Forwarded to `./globals`' `createEmptyLuaEngine` as its
-   * `wasmUri` option (wasmoon's `customWasmUri`). Left `undefined` (the
-   * default), engine creation is byte-for-byte the same as before this
-   * option existed: local `node_modules` resolution in Node, the unpkg CDN
-   * default in an unconfigured browser bundle. A host that bundles its own
-   * copy of wasmoon's `glue.wasm` (e.g. the playground, to avoid a runtime
-   * dependency on the unpkg CDN) passes that local URL here instead — see
-   * `createEmptyLuaEngine`'s doc comment for the full rationale.
+   * Forwarded to `./globals`' `createEmptyLuaEngine` as its `wasmUri`
+   * option (wasmoon's `customWasmUri`). In Node it may be omitted (local
+   * `node_modules` resolution). Outside Node it is required: a run without
+   * it fails before any engine is created, as a `runtime` failure saying
+   * the host must pass `wasmUri`. There is no silent CDN fetch.
    */
   wasmUri?: string;
+  /** Test seam: overrides the Node detection. Leave unset in production. */
+  isNode?: boolean;
 }
 
 export type RunScriptResult =
@@ -289,7 +292,14 @@ export async function runScript(
     ...options.marshalLimits,
   };
 
-  const engine = await createEmptyLuaEngine({ wasmUri: options.wasmUri });
+  const engineOptions = { wasmUri: options.wasmUri, isNode: options.isNode };
+  if (needsWasmUri(engineOptions)) {
+    return {
+      ok: false,
+      error: { kind: 'runtime', message: MISSING_WASM_URI_MESSAGE },
+    };
+  }
+  const engine = await createEmptyLuaEngine(engineOptions);
   engine.global.setMemoryMax(limits.maxMemoryBytes);
 
   let thread: LuaThread | undefined;

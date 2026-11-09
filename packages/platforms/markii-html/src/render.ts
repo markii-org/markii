@@ -30,6 +30,7 @@ import {
   failureTitle,
   EMPTY_INLINE_MARKER_CLASS,
   emptyInlineTitle,
+  codeRendererFailedTitle,
   formMismatchTitle,
   INLINE_FALLBACK_SEPARATOR,
   invalidAttributeValueTitle,
@@ -720,12 +721,43 @@ function applyHrefResolver(
   }
 }
 
+/**
+ * Offers one ordinary fenced code block (a `<pre>` holding a `<code>`) to the
+ * host's `renderCode`. Returns the host's HTML, or `undefined` to render the
+ * block as usual: no callback, a callback that declines, or one that throws
+ * (reported through `onDiagnostic`, never breaking the render). A callback
+ * result that is not a string is treated as declining.
+ */
+function applyRenderCode(
+  node: Element,
+  renderCode: RenderCode | undefined,
+  onDiagnostic: OnDiagnostic | undefined,
+): string | undefined {
+  if (!renderCode) return undefined;
+  const codeNode = findChildElement(node, 'code');
+  if (!codeNode) return undefined;
+  try {
+    const result = renderCode({
+      lang: getLanguage(codeNode) || undefined,
+      code: getCodeText(codeNode),
+    });
+    return typeof result === 'string' ? result : undefined;
+  } catch {
+    reportDiagnostic(onDiagnostic, {
+      kind: 'code-renderer-failed',
+      message: codeRendererFailedTitle(),
+    });
+    return undefined;
+  }
+}
+
 function makeTransform(
   registry: HtmlRegistry,
   ctx: HtmlRenderContext,
   scope: ValueScope,
   resolveHref: ResolveHref | undefined,
   unavailable: UnavailableComponentLookup | undefined,
+  renderCode: RenderCode | undefined,
 ): (node: RootContent) => RootContent {
   function transform(node: RootContent): RootContent {
     if (node.type !== 'element') return node;
@@ -739,6 +771,8 @@ function makeTransform(
     if (node.tagName === 'pre') {
       const marker = renderScriptMarker(node);
       if (marker !== undefined) return raw(marker);
+      const custom = applyRenderCode(node, renderCode, ctx.onDiagnostic);
+      if (custom !== undefined) return raw(custom);
     }
     if (node.tagName === 'img') {
       applyImageResolver(node, ctx.resolveImageSrc);
@@ -769,6 +803,7 @@ function renderRoot(
   resolveHref: ResolveHref | undefined,
   onDiagnostic: OnDiagnostic | undefined,
   unavailable: UnavailableComponentLookup | undefined,
+  renderCode: RenderCode | undefined,
 ): string {
   const ctx = createBaseContext(scope, resolveImageSrc, onDiagnostic);
   const transform = makeTransform(
@@ -777,10 +812,22 @@ function renderRoot(
     scope,
     resolveHref,
     unavailable,
+    renderCode,
   );
   root.children = root.children.map(transform);
   return serialize(root.children);
 }
+
+/** A fenced code block as offered to `RenderMarkOptions.renderCode`. */
+export interface RenderCodeBlock {
+  /** The info-string language, or `undefined` when the fence names none. */
+  readonly lang: string | undefined;
+  /** The raw code text, without the fence lines. */
+  readonly code: string;
+}
+
+/** The `renderCode` callback: host HTML for a code block, or `undefined` to render it as usual. */
+export type RenderCode = (code: RenderCodeBlock) => string | undefined;
 
 /**
  * Renders Markii text to a static HTML string using `registry` to resolve
@@ -835,6 +882,20 @@ function renderRoot(
  * `RenderMarkOptions`, so the two engines cannot diverge.
  */
 export interface RenderMarkOptions {
+  /**
+   * Replaces the output for an ordinary fenced code block. Called with the
+   * info-string language (`undefined` when the fence names none) and the
+   * raw code text. Return an HTML string to use it, or `undefined` to render
+   * the block as usual. Never called for script fences (the collapsed
+   * `{name=...}` markers) or for inline code.
+   *
+   * The returned string is HOST-TRUSTED output and is inserted as-is, with
+   * no escaping and no sanitizing: the host owns the escaping. Escape the
+   * code text yourself if you wrap it in markup. A callback that throws
+   * renders the block as usual and reports a `'code-renderer-failed'`
+   * event through `onDiagnostic`.
+   */
+  readonly renderCode?: RenderCode;
   readonly resolveImageSrc?: ResolveImageSrc;
   readonly resolveHref?: ResolveHref;
   readonly onDiagnostic?: OnDiagnostic;
@@ -873,6 +934,7 @@ export function renderMarkToHtml(
       options?.resolveHref,
       options?.onDiagnostic,
       createUnavailableComponentLookup(options?.unavailableComponents),
+      options?.renderCode,
     );
   } catch (error) {
     return renderFailureFallback(error);
@@ -908,6 +970,7 @@ export function renderMarkNodeToHtml(
       options?.resolveHref,
       options?.onDiagnostic,
       createUnavailableComponentLookup(options?.unavailableComponents),
+      options?.renderCode,
     );
   } catch (error) {
     return renderFailureFallback(error);

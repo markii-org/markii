@@ -20,7 +20,10 @@ export type { CreateEmptyLuaEngineOptions } from './globals.js';
 export {
   ALLOWED_GLOBALS,
   DENIED_GLOBALS,
+  MISSING_WASM_URI_MESSAGE,
+  MissingWasmUriError,
   createEmptyLuaEngine,
+  isNodeEnvironment,
 } from './globals.js';
 
 export type { LimitHandle, ScriptLimits } from './limits.js';

@@ -8,6 +8,20 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`renderCode` for fenced code blocks** in `@markii/react`, `@markii/html`
+  and `@markii/ansi` (types `RenderCode` and `RenderCodeBlock`). A host
+  passes a callback that receives `{ lang, code }` for each ordinary
+  fenced block and returns that engine's output, or `undefined` to render
+  as usual. It is never called for script fences or inline code. A throw
+  renders as usual and reports the new `code-renderer-failed`
+  `DiagnosticKind` (`@markii/stdlib`). The HTML engine inserts the
+  returned string as-is; the terminal engine passes sanitized text.
+- **`@markii/react` accepts React 19** as a peer
+  (`^18.3.1 || ^19.0.0`). CI runs its suite under React 19.
+- **`@markii/lua`'s `PackModuleResolver` may return a promise.** Sync
+  resolvers behave as before. A rejection fails the `require` like a
+  throw, and a promise that never settles ends at the wall-clock limit.
+
 - **A pack that fails to load reads as a failed pack.** `@markii/stdlib`'s
   `UnavailableComponent` gains an optional `loadFailed` flag. When the
   terminal engine is given a component with it, the fallback box keeps its
@@ -19,6 +33,13 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
   component". The existing diagnostics line for the cause is unchanged.
 
 ### Changed
+
+- **Breaking for browser hosts: `@markii/lua` requires `wasmUri` outside
+  Node.** With no `wasmUri`, `runScript` returns a `runtime` failure
+  naming `wasmUri`, and `createEmptyLuaEngine` throws the new
+  `MissingWasmUriError`, instead of wasmoon silently fetching glue.wasm
+  from unpkg. Node is unchanged. `isNodeEnvironment` and
+  `MISSING_WASM_URI_MESSAGE` are exported.
 
 - **`markii` rejects a flag that does not apply.** Each subcommand accepts
   only its own flags, so `markii pack list --watch` is now a usage error

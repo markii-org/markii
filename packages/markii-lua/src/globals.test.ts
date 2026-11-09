@@ -4,6 +4,7 @@ import {
   ALLOWED_GLOBALS,
   createEmptyLuaEngine,
   DENIED_GLOBALS,
+  isNodeEnvironment,
 } from './globals';
 
 async function evalGlobal(name: string): Promise<unknown> {
@@ -189,5 +190,17 @@ describe('createEmptyLuaEngine — isolation across engines', () => {
     } finally {
       engineB.global.close();
     }
+  });
+});
+
+describe('createEmptyLuaEngine — no silent CDN fetch', () => {
+  it('throws MissingWasmUriError outside Node with no wasmUri', async () => {
+    await expect(createEmptyLuaEngine({ isNode: false })).rejects.toThrow(
+      /wasmUri/,
+    );
+  });
+
+  it('isNodeEnvironment is true under Vitest', () => {
+    expect(isNodeEnvironment()).toBe(true);
   });
 });
