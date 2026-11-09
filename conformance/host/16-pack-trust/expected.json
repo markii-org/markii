@@ -1,0 +1,37 @@
+{
+  "outcomes": [
+    { "kind": "opened" },
+    { "kind": "installed", "namespace": "ana", "replaced": false },
+    { "kind": "placed", "namespace": "sneaky" },
+    { "kind": "listed", "enabled": ["ana"], "notEnabled": ["sneaky"] },
+    { "kind": "loaded", "namespaces": ["ana"] },
+    { "kind": "enabled", "namespace": "sneaky" },
+    { "kind": "loaded", "namespaces": ["ana", "sneaky"] },
+    { "kind": "disabled", "namespace": "ana" },
+    { "kind": "listed", "enabled": ["sneaky"], "notEnabled": ["ana"] },
+    { "kind": "loaded", "namespaces": ["sneaky"] },
+    { "kind": "enabled", "namespace": "ana" },
+    { "kind": "removed", "namespace": "sneaky" },
+    { "kind": "listed", "enabled": ["ana"], "notEnabled": [] },
+    { "kind": "not-installed", "namespace": "ghost" }
+  ],
+  "diagnostics": [
+    "Install pack from file installed pack \"ana\"",
+    "Loaded pack \"ana\" (namespace: ana, 1 component)",
+    "Pack \"sneaky\" is present but not enabled on this device; it was not loaded.",
+    "Enable pack enabled \"sneaky\"",
+    "Loaded pack \"ana\" (namespace: ana, 1 component)",
+    "Loaded pack \"sneaky\" (namespace: sneaky, 1 component)",
+    "Disable pack disabled \"ana\"",
+    "Loaded pack \"sneaky\" (namespace: sneaky, 1 component)",
+    "Pack \"ana\" is present but not enabled on this device; it was not loaded.",
+    "Enable pack enabled \"ana\"",
+    "Remove pack removed \"sneaky\"",
+    "Enable pack found no installed pack \"ghost\""
+  ],
+  "prompts": [
+    "Installing \"ana\" lets its code run inside",
+    "Installing \"sneaky\" lets its code run inside",
+    "Installing \"ana\" lets its code run inside"
+  ]
+}

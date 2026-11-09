@@ -3,7 +3,7 @@ import { unzipSync, strFromU8 } from 'fflate';
 import { exportPackArchive } from './pack-export-archive.js';
 import type { PackExportBuilder, PackExportFs } from './pack-export.js';
 import type { PackBuildOutcome } from './pack-build.js';
-import type { DiscoveredPack } from './discover.js';
+import type { DiscoveredPack } from '@markii/host';
 
 function packAt(folder: string, version?: string): DiscoveredPack {
   return {

@@ -67,6 +67,12 @@ const markiiSrcRoots = {
     'src',
   ),
   '@markii/host': path.join(repoRoot, 'packages', 'markii-host', 'src'),
+  '@markii/pack-build': path.join(
+    repoRoot,
+    'packages',
+    'markii-pack-build',
+    'src',
+  ),
 };
 
 const args = new Set(process.argv.slice(2));

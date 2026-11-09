@@ -232,21 +232,11 @@ export {
 export type { PackModulesMap } from './run/lua-resolver.js';
 export { createPackModuleResolver } from './run/lua-resolver.js';
 
-export {
-  lintPackCss,
-  lintPackCssColors,
-  lintPackCssPrefix,
-} from './packs/pack-css-lint.js';
-
 // Pack discovery/loading plumbing shared by every host (docs/packs.md;
 // hoisted out of apps/vscode's and apps/obsidian's duplicate copies).
-// `PackFileReader` from `./packs/discover.js` is intentionally NOT
-// re-exported here: it would collide with `./packs/pack-build.js`'s own
-// `PackFileReader` (a deliberately separate, structurally identical type —
-// see that file's doc comment). Nothing outside this package needs to name
-// discover's variant directly; `discoverPacks`'s default parameter covers
-// every production caller, and its own test imports the type via a
-// relative path within this package.
+// `PackFileReader` from `./packs/discover.js` is intentionally not
+// re-exported: `discoverPacks` takes it as a parameter and no caller outside
+// this package needs to name it.
 export type {
   DiscoveredPack,
   DiscoverPacksResult,
@@ -445,6 +435,30 @@ export {
   terminalScriptUnreadableLine,
 } from './host/terminal-packs.js';
 export type { RemovePackOutcome } from './host/pack-remove.js';
+
+// The shared device-local pack trust list (docs/integration.md).
+export type { PackTrustEntry, PackTrustList } from './packs/pack-trust.js';
+export {
+  DEFAULT_PACK_TRUST_LIST,
+  MAX_TRUSTED_PACKS,
+  PACK_TRUST_STORAGE_KEY,
+  isPackTrusted,
+  normalizePackTrustList,
+  trustPack,
+  untrustPack,
+} from './packs/pack-trust.js';
+export type {
+  DisablePackOutcome,
+  EnabledPack,
+  EnablePackOutcome,
+  InstalledPacksListing,
+} from './host/pack-trust-behavior.js';
+export {
+  disablePackMessage,
+  enablePackMessage,
+  notEnabledPackDiagnosticLine,
+  selectEnabledPacks,
+} from './host/pack-trust-behavior.js';
 export {
   removePackDiagnosticLine,
   removePackMessage,
@@ -502,6 +516,9 @@ export type {
   OpenOutcome,
   OpenRequest,
   RemovePackResult,
+  DisablePackResult,
+  EnablePackResult,
+  InstalledPacksOutcome,
   RunOutcome,
   RunRequest,
   Unsupported,

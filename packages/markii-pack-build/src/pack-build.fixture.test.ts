@@ -37,7 +37,7 @@ import type { PackBuildOutcome } from './pack-build.js';
 
 const FIXTURE_ROOT = path.resolve(
   import.meta.dirname,
-  '../../test-fixtures/packs',
+  '../test-fixtures/packs',
 );
 const TSXPACK_DIR = path.join(FIXTURE_ROOT, 'tsxpack');
 /** `../../test-fixtures/packs/tsxpack-css`: a real `.tsx` pack that imports its own CSS (`import './Stat.css'`) — clean, correctly prefixed, token-based content (see that fixture's doc comments). */

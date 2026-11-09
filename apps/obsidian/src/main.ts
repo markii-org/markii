@@ -21,19 +21,6 @@ import {
 } from './local-settings.js';
 import type { LocalSettings } from './local-settings.js';
 import {
-  DEFAULT_PACK_TRUST_LIST,
-  PACK_TRUST_STORAGE_KEY,
-  normalizePackTrustList,
-  trustPack,
-  untrustPack,
-} from './packs/pack-trust.js';
-import type { PackTrustList } from './packs/pack-trust.js';
-import {
-  createNodePackDirLister,
-  selectLoadablePackFolders,
-} from './packs/installed-packs.js';
-import type { LoadablePackFolder } from './packs/installed-packs.js';
-import {
   createBrowserWorkerSetup,
   type BrowserWorkerSetup,
 } from './run/browser-worker.js';
@@ -42,12 +29,12 @@ import {
   buildComponentCatalog,
   createMarkiiHost,
   discoverConfiguredPacks,
-  installConsentMessage,
   installPackDiagnosticLines,
   installPackFromArchive,
   installPackMessage,
   MARK_EXTENSION,
   readPersistedValues,
+  enablePackMessage,
   removePackMessage,
   scriptsDisabledConfirmationText,
   scriptsEnabledConfirmationText,
@@ -113,7 +100,7 @@ import {
 } from './packs/pack-styles.js';
 import { registerReadingView } from './reading-view.js';
 import { pickPackArchiveFile } from './pick-folder.js';
-import { confirmModal, createObsidianPrompt } from './run-modals.js';
+import { createObsidianPrompt } from './run-modals.js';
 import { createObsidianHostAdapter } from './host-adapter.js';
 
 /**
@@ -137,13 +124,6 @@ export default class MarkiiPlugin extends Plugin {
    */
   localSettings: LocalSettings = DEFAULT_LOCAL_SETTINGS;
   /**
-   * DEVICE-LOCAL (`app.saveLocalStorage`, NEVER `saveData`) — which
-   * installed-pack namespaces this device trusts to load. See
-   * `src/packs/pack-trust.ts`'s top comment for why: this list authorizes
-   * code execution, exactly like a network grant.
-   */
-  packTrust: PackTrustList = DEFAULT_PACK_TRUST_LIST;
-  /**
    * This plugin's currently loaded packs (docs/packs.md, AGENTS.md's Host
    * positioning: Obsidian is archive-only, no compiler) — loaded ONCE here
    * rather than once per view, so the preview pane, Reading view, export,
@@ -155,7 +135,7 @@ export default class MarkiiPlugin extends Plugin {
    * the "Reload Markii packs" command, and once on plugin load).
    */
   packContext: PackContext | undefined;
-  /** Every namespace present on disk under `packs/` but not trusted on this device (`./packs/installed-packs.ts`) — the settings tab's "present, not enabled" rows. Refreshed alongside `packContext`. */
+  /** Every namespace present on disk under `packs/` but not trusted on this device (`@markii/host`'s `installedPacks`) — the settings tab's "present, not enabled" rows. Refreshed alongside `packContext`. */
   notEnabledPackNamespaces: readonly string[] = [];
   /**
    * The Web Worker isolate this host runs scripts in, plus the blob URLs it
@@ -187,7 +167,6 @@ export default class MarkiiPlugin extends Plugin {
   override async onload(): Promise<void> {
     await this.loadSettings();
     this.loadLocalSettings();
-    this.loadPackTrust();
     this.browserWorker = this.createBrowserWorker();
     // Not awaited: pack loading touches the filesystem, and every reader
     // of `packContext`/`completionCatalog` already treats "not loaded yet"
@@ -708,12 +687,7 @@ export default class MarkiiPlugin extends Plugin {
           diagnostics: (line) => {
             console.log(line);
           },
-          packs: {
-            authorizedFolders: async () =>
-              this.installedPackFolders().loadable.map((entry) => entry.folder),
-            reservedNamespaces: () => new Set<string>(),
-            bundledPacks: () => bundledDiscoveredPacks(),
-          },
+          packs: this.packSource(),
           editor: {
             documentText: () => '',
             documentPath: () => undefined,
@@ -750,7 +724,6 @@ export default class MarkiiPlugin extends Plugin {
     );
     if (!chosen) return; // dismissed
 
-    const { loadable } = this.installedPackFolders();
     const adapter = createObsidianHostAdapter({
       prompt: createObsidianPrompt(this.app),
       loadLocalStorage: (key) => this.app.loadLocalStorage(key),
@@ -760,11 +733,7 @@ export default class MarkiiPlugin extends Plugin {
       diagnostics: (line) => {
         console.log(line);
       },
-      packs: {
-        authorizedFolders: async () => loadable.map((entry) => entry.folder),
-        reservedNamespaces: () => new Set<string>(),
-        bundledPacks: () => bundledDiscoveredPacks(),
-      },
+      packs: this.packSource(),
       editor: obsidianHostEditor(editor),
     });
 
@@ -809,7 +778,34 @@ export default class MarkiiPlugin extends Plugin {
       diagnostics: (line) => {
         console.log(line);
       },
+      packs: this.packSource(),
     });
+  }
+
+  /**
+   * This plugin's pack source for the shared host. The install root is the
+   * plugin's own `packs/` folder, and the adapter declares the device trust
+   * list, so `@markii/host` decides which installed folders load: a folder
+   * this device never enabled is listed as present and never read. No
+   * folder beyond the install root is authorized, and the bundled packs
+   * travel in memory.
+   */
+  private packSource(): NonNullable<
+    Parameters<typeof createObsidianHostAdapter>[0]['packs']
+  > {
+    const installRoot = this.installedPacksDir();
+    return {
+      authorizedFolders: async () => [],
+      reservedNamespaces: () => this.bundledNamespaces(),
+      ...(installRoot !== undefined
+        ? {
+            installRoot: () => installRoot,
+            removeFolder: (folder: string) =>
+              nodeRm(folder, { recursive: true, force: true }),
+          }
+        : {}),
+      bundledPacks: () => bundledDiscoveredPacks(),
+    };
   }
 
   /**
@@ -837,46 +833,23 @@ export default class MarkiiPlugin extends Plugin {
   }
 
   /**
-   * Every namespace on disk under `installedPacksDir()`, split into
-   * loadable (trusted on this device) and present-but-not-enabled
-   * (`./packs/installed-packs.ts`'s pure `selectLoadablePackFolders`).
-   * `[]`/`[]` when the plugin has no filesystem-backed directory at all.
+   * Every namespace on disk under `installedPacksDir()`, split into enabled
+   * (trusted on this device) and present-but-not-enabled, by the shared
+   * host (`@markii/host`'s `installedPacks`). Empty when the plugin has no
+   * filesystem-backed directory at all.
    */
-  private installedPackFolders(): {
-    readonly loadable: readonly LoadablePackFolder[];
+  private async installedPackFolders(): Promise<{
+    readonly loadable: readonly { readonly folder: string }[];
     readonly notEnabled: readonly string[];
-  } {
-    const installRoot = this.installedPacksDir();
-    if (installRoot === undefined) return { loadable: [], notEnabled: [] };
-    const onDisk = createNodePackDirLister()(installRoot);
-    return selectLoadablePackFolders(installRoot, onDisk, this.packTrust);
+  }> {
+    const outcome = await createMarkiiHost(this.hostAdapter()).installedPacks();
+    if (outcome.kind !== 'listed') return { loadable: [], notEnabled: [] };
+    return { loadable: outcome.enabled, notEnabled: outcome.notEnabled };
   }
 
   /** Every namespace a bundled pack already claims — an install or an enable naming one of these is refused/moot, since the bundled pack always wins that namespace (docs/packs.md). */
   private bundledNamespaces(): ReadonlySet<string> {
     return new Set(bundledDiscoveredPacks().map((pack) => pack.manifest.name));
-  }
-
-  /**
-   * Reads an installed pack's declared `version`, if it has one — used to
-   * populate the trust list's optional version field at install and
-   * enable time. Never throws: a missing or malformed `pack.json` simply
-   * yields `undefined`, matching every other pack-loading step's
-   * "degrade, don't fail" posture.
-   */
-  private async readInstalledPackVersion(
-    installedDir: string,
-  ): Promise<string | undefined> {
-    try {
-      const text = await nodeReadFile(
-        path.join(installedDir, 'pack.json'),
-        'utf8',
-      );
-      const parsed = JSON.parse(text) as { version?: unknown };
-      return typeof parsed.version === 'string' ? parsed.version : undefined;
-    } catch {
-      return undefined;
-    }
   }
 
   /**
@@ -893,7 +866,7 @@ export default class MarkiiPlugin extends Plugin {
         this.packContext.stylesheets.map((sheet) => sheet.namespace),
       );
     }
-    const { loadable, notEnabled } = this.installedPackFolders();
+    const { loadable, notEnabled } = await this.installedPackFolders();
     this.notEnabledPackNamespaces = notEnabled;
 
     const context = await loadPackContext(
@@ -915,7 +888,7 @@ export default class MarkiiPlugin extends Plugin {
    * `discoverConfiguredPacks` already degrades quietly.
    */
   private async refreshCompletionCatalog(): Promise<void> {
-    const { loadable } = this.installedPackFolders();
+    const { loadable } = await this.installedPackFolders();
     let packs: readonly DiscoveredPack[] = [];
     try {
       packs = (
@@ -1065,9 +1038,9 @@ export default class MarkiiPlugin extends Plugin {
     // successful install (below); VS Code's does not.
     new Notice(installPackMessage(outcome, archivePath, OBSIDIAN_LABELS, true));
 
+    // The shared install path already recorded the namespace as trusted on
+    // this device; only the reload is left.
     if (outcome.kind === 'installed') {
-      const version = await this.readInstalledPackVersion(outcome.installedDir);
-      this.savePackTrust(trustPack(this.packTrust, outcome.packName, version));
       await this.reloadPacks(false);
     }
   }
@@ -1080,18 +1053,15 @@ export default class MarkiiPlugin extends Plugin {
    * will run inside the preview from this point on.
    */
   async enablePresentPack(namespace: string): Promise<void> {
-    const consented = await confirmModal(
-      this.app,
-      installConsentMessage(namespace, OBSIDIAN_LABELS),
+    const outcome = await createMarkiiHost(this.hostAdapter()).enablePack(
+      namespace,
     );
-    if (!consented) return;
-
-    const installRoot = this.installedPacksDir();
-    if (installRoot === undefined) return;
-    const version = await this.readInstalledPackVersion(
-      path.join(installRoot, namespace),
-    );
-    this.savePackTrust(trustPack(this.packTrust, namespace, version));
+    if (outcome.kind === 'unsupported') return; // already diagnosed
+    if (outcome.kind === 'declined') return;
+    if (outcome.kind !== 'enabled') {
+      new Notice(enablePackMessage(outcome));
+      return;
+    }
     await this.reloadPacks(false);
     new Notice(packEnabledNotice(namespace));
   }
@@ -1102,35 +1072,17 @@ export default class MarkiiPlugin extends Plugin {
    * bundled pack — the settings tab never offers this control for one.
    */
   async removeInstalledPack(namespace: string): Promise<void> {
-    const installRoot = this.installedPacksDir();
-    if (installRoot === undefined) return;
-    const adapter = createObsidianHostAdapter({
-      prompt: createObsidianPrompt(this.app),
-      loadLocalStorage: (key) => this.app.loadLocalStorage(key),
-      saveLocalStorage: (key, value) => {
-        this.app.saveLocalStorage(key, value);
-      },
-      diagnostics: (line) => {
-        console.log(line);
-      },
-      packs: {
-        authorizedFolders: async () => [],
-        reservedNamespaces: () => this.bundledNamespaces(),
-        installRoot: () => installRoot,
-        removeFolder: (folder) =>
-          nodeRm(folder, { recursive: true, force: true }),
-      },
-    });
-    const outcome = await createMarkiiHost(adapter).removePack(namespace);
+    const outcome = await createMarkiiHost(this.hostAdapter()).removePack(
+      namespace,
+    );
     if (outcome.kind === 'unsupported') return; // already diagnosed
     if (outcome.kind === 'reserved' || outcome.kind === 'invalid') {
       new Notice(removePackMessage(outcome));
       return;
     }
-    // The trust entry goes whatever happened to the folder: this device
-    // has withdrawn its authorization, so the pack stops loading on the
-    // reload below. What differs is what the user is told.
-    this.savePackTrust(untrustPack(this.packTrust, namespace));
+    // The host withdrew the trust entry whatever happened to the folder:
+    // this device has withdrawn its authorization, so the pack stops
+    // loading on the reload below. What differs is what the user is told.
     await this.reloadPacks(false);
     new Notice(
       outcome.kind === 'failed'
@@ -1200,23 +1152,6 @@ export default class MarkiiPlugin extends Plugin {
   saveLocalSettings(next: LocalSettings): void {
     this.localSettings = next;
     this.app.saveLocalStorage(LOCAL_SETTINGS_STORAGE_KEY, next);
-  }
-
-  /**
-   * DEVICE-LOCAL pack trust list (`src/packs/pack-trust.ts`'s top comment)
-   * — `app.loadLocalStorage`/`app.saveLocalStorage`, never `loadData`/
-   * `saveData`, for the same reason `loadLocalSettings`/`saveLocalSettings`
-   * above use it: this authorizes code execution.
-   */
-  loadPackTrust(): void {
-    this.packTrust = normalizePackTrustList(
-      this.app.loadLocalStorage(PACK_TRUST_STORAGE_KEY),
-    );
-  }
-
-  savePackTrust(next: PackTrustList): void {
-    this.packTrust = next;
-    this.app.saveLocalStorage(PACK_TRUST_STORAGE_KEY, next);
   }
 
   private async openPreview(): Promise<void> {

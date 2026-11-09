@@ -3,7 +3,7 @@
  * component, importing its own CSS (`./Badge.css`) AND a relative helper
  * module with no extension (`./helpers/label`) — deliberately NOT a flat
  * single-file pack, since that shape is exactly what let a resolution
- * regression through in `@markii/host`'s `packs/pack-build.ts` (see that
+ * regression through in `@markii/pack-build`'s `pack-build.ts` (see that
  * package's `test-fixtures/packs/tsxpack-helpers/` fixture, which this one
  * mirrors). Compiled by the real `buildPackRegistrationScript` (in a
  * separate `node` process — see the fixture test's top doc comment for

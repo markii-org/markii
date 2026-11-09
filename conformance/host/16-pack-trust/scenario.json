@@ -1,0 +1,26 @@
+{
+  "id": "pack-trust",
+  "invariant": "an installed pack folder loads only while this device's trust list names it: a folder that arrives without consent is listed as present and never loaded, and enable, disable, re-enable and remove move the list accordingly",
+  "clock": 1700000000000,
+  "actions": [
+    { "type": "open" },
+    {
+      "type": "installPack",
+      "archive": "files/ana-1.0.0",
+      "answers": ["allow"],
+      "requiresTrust": true
+    },
+    { "type": "placePack", "archive": "files/sneaky-1.0.0", "namespace": "sneaky" },
+    { "type": "listPacks" },
+    { "type": "loadPacks", "requiresTrust": true },
+    { "type": "enablePack", "namespace": "sneaky", "answers": ["allow"] },
+    { "type": "loadPacks", "requiresTrust": true },
+    { "type": "disablePack", "namespace": "ana" },
+    { "type": "listPacks" },
+    { "type": "loadPacks", "requiresTrust": true },
+    { "type": "enablePack", "namespace": "ana", "answers": ["allow"] },
+    { "type": "removePack", "namespace": "sneaky", "requiresTrust": true },
+    { "type": "listPacks" },
+    { "type": "enablePack", "namespace": "ghost" }
+  ]
+}

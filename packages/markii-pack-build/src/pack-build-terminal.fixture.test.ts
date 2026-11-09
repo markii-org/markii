@@ -16,7 +16,7 @@ import type { PackBuildOutcome } from './pack-build.js';
 
 const TERMPACK_DIR = path.resolve(
   import.meta.dirname,
-  '../../test-fixtures/packs/termpack',
+  '../test-fixtures/packs/termpack',
 );
 const PACK_BUILD_TS = path.join(import.meta.dirname, 'pack-build.ts');
 

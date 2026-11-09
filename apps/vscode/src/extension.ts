@@ -48,12 +48,12 @@ import {
   scriptsEnabledConfirmationText,
   VSCODE_LABELS,
 } from '@markii/host';
+import { createNodeArchiveExtractFs } from '@markii/host/node';
 import {
   buildPackRegistrationScript,
   buildPackTerminalScript,
-  createNodeArchiveExtractFs,
   exportPackArchive,
-} from '@markii/host/node';
+} from '@markii/pack-build';
 import type { DiscoveredPack, HostPromptRequest } from '@markii/host';
 import type { CompletionItem as MarkCompletionItem } from '@markii/stdlib/editor';
 import {
@@ -441,7 +441,7 @@ const PACK_EXPORT_ARCHIVE_FILTERS: Readonly<Record<string, readonly string[]>> =
  * #16): compiles a configured pack and writes it as a single `.mkp`
  * archive at a location the user picks. VS Code is the AUTHORING host and
  * owns pack packaging; the pack's own source folder is never written to
- * (see `@markii/host`'s `packs/pack-export.ts`). All the testable pieces
+ * (see `@markii/pack-build`'s `pack-export.ts`). All the testable pieces
  * (pack discovery, the quick-pick item shape, every user-facing string)
  * live in `./packs/export-pack.ts`; this function is `vscode` wiring only:
  * reads `markii.packs`/the workspace root, offers a quick pick when more

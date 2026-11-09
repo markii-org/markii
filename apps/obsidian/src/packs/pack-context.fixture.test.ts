@@ -11,7 +11,7 @@
  * `@markii/host`'s own build step.
  *
  * The real `buildPackRegistrationScript` call runs in a genuinely separate
- * `node` process — mirroring `packages/markii-host/src/packs/pack-build.fixture.test.ts`'s
+ * `node` process — mirroring `packages/markii-pack-build/src/pack-build.fixture.test.ts`'s
  * own pattern exactly, including the reason: esbuild-wasm's browser
  * (in-process WebAssembly) entry fails an internal startup invariant check
  * when evaluated inside Vitest's per-file `vm` module-transform context.
@@ -35,7 +35,7 @@ import {
   installPackRuntime,
 } from './pack-runtime.js';
 import { buildRenderRegistry } from '@markii/host';
-import type { PackBuildOutcome } from '@markii/host/node';
+import type { PackBuildOutcome } from '@markii/pack-build';
 
 const FIXTURE_DIR = path.resolve(
   import.meta.dirname,
@@ -43,7 +43,7 @@ const FIXTURE_DIR = path.resolve(
 );
 const PACK_BUILD_TS = path.resolve(
   import.meta.dirname,
-  '../../../../packages/markii-host/src/packs/pack-build.ts',
+  '../../../../packages/markii-pack-build/src/pack-build.ts',
 );
 
 /** Runs the real `buildPackRegistrationScript` in a separate `node` process — see this file's top doc comment for why. */

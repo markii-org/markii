@@ -168,13 +168,13 @@ describe('buildRenderRegistry — surfacing a duplicate-composed-name skip', () 
   // `packages/markii-pack/src/namespace.ts`'s top doc comment). There is no
   // manifest this webview could register that legitimately reaches
   // `duplicateComposedNames` non-empty, so this test constructs the
-  // collision directly: it stubs `@markii/host/browser`'s
+  // collision directly: it stubs `@markii/host`'s
   // `buildRenderRegistry` to return a `BuildRenderRegistryResult` carrying a
   // hand-built `DuplicateComposedName`, and asserts this file's own
   // `buildRenderRegistry` forwards it unchanged. What this file owns is the
   // forwarding (so `./main.tsx` can post it to the extension host); the
   // keep-first DECISION itself lives in, and is the responsibility of,
-  // `@markii/host/browser`'s own merge.
+  // `@markii/host`'s own merge.
   it('forwards a duplicateComposedNames entry the shared merge reports', async () => {
     const duplicate = {
       composedName: 'demo_badge',

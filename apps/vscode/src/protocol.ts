@@ -222,9 +222,9 @@ export interface ReadyMessage {
 /**
  * One composed directive name two DIFFERENT packs both claimed, as it
  * crosses the wire — restated here (matching `WireStoredValue`'s and
- * `WireRunTrace`'s pattern) rather than imported from `@markii/host/browser`,
+ * `WireRunTrace`'s pattern) rather than imported from `@markii/host`,
  * so this file's own hostile-shape guard owns the wire validation. Mirrors
- * `@markii/host/browser`'s `DuplicateComposedName`.
+ * `@markii/host`'s `DuplicateComposedName`.
  */
 export interface WireDuplicateComposedName {
   readonly composedName: string;
@@ -234,7 +234,7 @@ export interface WireDuplicateComposedName {
 
 /**
  * Webview -> host (issue #20): the webview's pack-registration merge
- * (`webview/pack-registry.ts`, via `@markii/host/browser`'s
+ * (`webview/pack-registry.ts`, via `@markii/host`'s
  * `buildRenderRegistry`) found something worth a diagnostic line — a
  * malformed registration, a namespace collision, or a duplicate-composed-name
  * skip. Sent once, right after the merge at mount time, only when at least

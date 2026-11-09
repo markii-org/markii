@@ -23,14 +23,14 @@
  * is injected too.
  */
 import * as path from 'node:path';
-import type { DiscoveredPack } from './discover.js';
+import type { DiscoveredPack } from '@markii/host';
 import type { PackBuildOutcome } from './pack-build.js';
 import {
   PREBUILT_SCRIPT_FILENAME,
   PREBUILT_STYLESHEET_FILENAME,
   PREBUILT_TERMINAL_SCRIPT_FILENAME,
   emptyWebviewScript,
-} from './prebuilt.js';
+} from '@markii/host';
 
 const MANIFEST_FILENAME = 'pack.json';
 const SCRIPTS_DIRNAME = 'scripts';

@@ -65,6 +65,10 @@ export const workspaceAliases = [
     replacement: pkgSrc('packages', 'platforms', 'markii-ansi'),
   },
   {
+    find: '@markii/pack-build',
+    replacement: pkgSrc('packages', 'markii-pack-build'),
+  },
+  {
     find: '@markii/host',
     replacement: pkgSrc('packages', 'markii-host'),
   },

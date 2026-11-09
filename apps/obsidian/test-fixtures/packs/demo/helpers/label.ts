@@ -1,7 +1,7 @@
 /**
  * A relative helper module imported by `../Badge.tsx` with no extension
  * (`import { formatLabel } from './helpers/label'`) — the shape
- * `resolveImportCandidate` in `@markii/host`'s `packs/pack-build.ts`
+ * `resolveImportCandidate` in `@markii/pack-build`'s `pack-build.ts`
  * resolves by trying `.tsx`/`.ts`/`.jsx`/`.js`/`.mjs`/`.cjs`/`.css` in
  * turn. A distinctive marker string proves this file's own code (not just
  * `Badge.tsx`) made it into the compiled output.

@@ -17,7 +17,7 @@
  * wording of the same warning.
  *
  * The pack-registration validation itself (issue #3 slice 5) happens
- * inside the webview, a separate process, via `@markii/host/browser`'s
+ * inside the webview, a separate process, via `@markii/host`'s
  * `buildRenderRegistry` (`../webview/pack-registry.ts`). Its outcome
  * (`invalidReasons`/`collisions`/`duplicateComposedNames`) crosses back to
  * this extension host over `postMessage` as a `PackDiagnosticsMessage`

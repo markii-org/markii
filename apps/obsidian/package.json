@@ -19,6 +19,7 @@
     "@markii/host": "*",
     "@markii/lua": "*",
     "@markii/pack": "*",
+    "@markii/pack-build": "*",
     "@markii/react": "*",
     "@markii/runtime": "*",
     "@markii/stdlib": "*",

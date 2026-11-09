@@ -33,7 +33,7 @@ import type {
   PackPathExists,
   SkippedPackFolder,
 } from '@markii/host';
-import type { PackBuildOutcome } from '@markii/host/node';
+import type { PackBuildOutcome } from '@markii/pack-build';
 import { discoverBundledPacks, mergeBundledPacks } from './bundled-packs.js';
 
 export interface PackContext {
@@ -62,7 +62,7 @@ export interface PackContext {
    * component", and the render reports why.
    */
   readonly unavailableComponents: readonly UnavailableComponent[];
-  /** Configured folders that produced no usable pack, and why (developer-facing only). Also carries a build-failure reason for a pack whose `.tsx` sources failed to compile (`@markii/host`'s `pack-build.ts`) — it still counts toward `packs`, just not `webviewPacks`. */
+  /** Configured folders that produced no usable pack, and why (developer-facing only). Also carries a build-failure reason for a pack whose `.tsx` sources failed to compile (`@markii/pack-build`'s `pack-build.ts`) — it still counts toward `packs`, just not `webviewPacks`. */
   readonly skipped: readonly SkippedPackFolder[];
   /**
    * ITEM 4: the ORIGINAL `markii.packs` entries (as configured, not
@@ -77,11 +77,11 @@ export interface PackContext {
    */
   readonly relativeEntries: readonly string[];
   /**
-   * Pack CSS authoring warnings (`@markii/host`'s `pack-css-lint.ts` Rule
+   * Pack CSS authoring warnings (`@markii/pack-build`'s `pack-css-lint.ts` Rule
    * A/B, raw color literals and the missing-namespace-prefix rule) against
    * every built pack's emitted stylesheet — collected from
    * `buildWebviewScript`'s `'built'` outcomes, cache hit or miss alike
-   * (`@markii/host`'s `pack-build.ts` re-lints a cached stylesheet on every
+   * (`@markii/pack-build`'s `pack-build.ts` re-lints a cached stylesheet on every
    * load). Warnings only, developer-facing: never a build failure, never
    * something shown as page content. `preview-panel.ts`'s
    * `logPackDiagnostics` writes these to the "Markii" output channel
@@ -105,7 +105,7 @@ export interface PackContext {
   }[];
 }
 
-/** Builds one pack's webview registration script from source — injected so this module stays testable without a real esbuild-wasm invocation, and so `preview-panel.ts` can wire up the real `@markii/host`'s `pack-build.ts`'s `buildPackRegistrationScript` with production-specific options (the packaged `esbuild-wasm` location) that this module has no business knowing about. */
+/** Builds one pack's webview registration script from source — injected so this module stays testable without a real esbuild-wasm invocation, and so `preview-panel.ts` can wire up the real `@markii/pack-build`'s `pack-build.ts`'s `buildPackRegistrationScript` with production-specific options (the packaged `esbuild-wasm` location) that this module has no business knowing about. */
 export type PackWebviewBuilder = (
   pack: DiscoveredPack,
   cacheDir: string,
@@ -124,7 +124,7 @@ export interface LoadPackContextOptions {
    * `buildWebviewScript` is never invoked.
    */
   readonly cacheDir?: string;
-  /** Defaults to `noopBuilder` (see above). `preview-panel.ts` passes `@markii/host`'s `pack-build.ts`'s `buildPackRegistrationScript`. */
+  /** Defaults to `noopBuilder` (see above). `preview-panel.ts` passes `@markii/pack-build`'s `pack-build.ts`'s `buildPackRegistrationScript`. */
   readonly buildWebviewScript?: PackWebviewBuilder;
   /**
    * Whether an absolute path exists on disk — injected (defaults to

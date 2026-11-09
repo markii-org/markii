@@ -654,6 +654,16 @@ The responsibilities below are what conformance is measured against.
     rather than for grants alone: the same store carries each note's last
     values and its run record, and a reader who deletes it expecting to
     reset permissions should not be surprised by what else goes.
+    The list of packs a device loads matters most where the pack folder
+    itself can arrive by sync. A host whose install folder can receive
+    packs it did not install, such as Obsidian's vault, keeps a device
+    trust list: an installed folder loads only when that list names it,
+    and a folder that is present but not named is shown as "present, not
+    enabled" and is never read or evaluated. Installing a pack trusts it,
+    enabling a present folder asks the same consent as an install, and
+    removing a pack withdraws its entry. A host whose install store only
+    it writes to (VS Code, the command line tool) can trust that store
+    directly.
     Getting this wrong hands whoever receives a copy of the content
     authority they never granted.
 13. **A module format that can hold the terminal engine, if you bundle it.**

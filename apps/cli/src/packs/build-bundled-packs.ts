@@ -18,13 +18,13 @@
 import { createNodeDirectoryLister } from '@markii/host/node';
 import * as path from 'node:path';
 import { discoverPacks, packHasTerminalViews } from '@markii/host';
+import { createNodeFileReader } from '@markii/host/node';
 import {
   buildPackTerminalScript,
-  createNodeFileReader,
   exportPack,
   type PackBuildOutcome,
   type PackExportFs,
-} from '@markii/host/node';
+} from '@markii/pack-build';
 import {
   access,
   mkdir,

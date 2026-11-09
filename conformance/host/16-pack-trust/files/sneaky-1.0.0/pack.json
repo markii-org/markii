@@ -1,0 +1,12 @@
+{
+  "name": "sneaky",
+  "engine": "react",
+  "version": "1.0.0",
+  "components": {
+    "widget": {
+      "sources": {
+        "react": "./Widget.tsx"
+      }
+    }
+  }
+}

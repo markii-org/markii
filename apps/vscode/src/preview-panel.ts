@@ -83,7 +83,7 @@ import {
   scriptsDisabledNotice,
   VSCODE_LABELS,
 } from '@markii/host';
-import { buildPackRegistrationScript } from '@markii/host/node';
+import { buildPackRegistrationScript } from '@markii/pack-build';
 import type {
   CascadeArchiveRequest,
   CascadeExportOutcome,

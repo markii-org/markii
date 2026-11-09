@@ -57,6 +57,12 @@ const markiiSrcRoots = {
     'src',
   ),
   '@markii/host': path.join(repoRoot, 'packages', 'markii-host', 'src'),
+  '@markii/pack-build': path.join(
+    repoRoot,
+    'packages',
+    'markii-pack-build',
+    'src',
+  ),
 };
 
 const args = new Set(process.argv.slice(2));
@@ -96,7 +102,7 @@ const extensionBuild = {
   // to find at runtime; `pack-build.ts`'s `loadEsbuildWasm` doc comment has
   // the other half of this contract.
   external: ['vscode', 'esbuild-wasm'],
-  // `@markii/host`'s `src/packs/pack-build.ts` references `import.meta.url`
+  // `@markii/pack-build`'s `pack-build.ts` references `import.meta.url`
   // (guarded by a `typeof require` runtime check — see its `resolveRequire`
   // doc comment) purely for the ESM/dev-and-Vitest half of that check; the
   // CJS half this build produces never evaluates it. esbuild's warning
@@ -173,7 +179,7 @@ const esbuildWasmOutDir = path.join(here, 'dist', 'esbuild-wasm');
 
 /**
  * Copies the REAL, unbundled `esbuild-wasm/lib/browser.js` (the in-process
- * WebAssembly entry — see `@markii/host`'s `src/packs/pack-build.ts` top
+ * WebAssembly entry — see `@markii/pack-build`'s `pack-build.ts` top
  * doc comment for why this is the entry used, not the Node
  * child-process one, `lib/main.js`) next to `dist/extension.js`
  * (`dist/esbuild-wasm/lib/browser.js`), plus the `esbuild.wasm` binary it

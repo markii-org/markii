@@ -36,7 +36,6 @@
     "@markii/react": "*",
     "@markii/runtime": "*",
     "@markii/stdlib": "*",
-    "esbuild-wasm": "^0.28.2",
     "fflate": "^0.8.3"
   }
 }

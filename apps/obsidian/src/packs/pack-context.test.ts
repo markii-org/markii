@@ -34,7 +34,7 @@ async function writePackManifest(packDir: string, name: string): Promise<void> {
   );
 }
 
-/** A prebuilt registration script that really calls `window.__markiiRegisterPack`, matching `@markii/host`'s `pack-build.ts` output shape, for a test that wants a non-empty `registry`. */
+/** A prebuilt registration script that really calls `window.__markiiRegisterPack`, matching `@markii/pack-build`'s `pack-build.ts` output shape, for a test that wants a non-empty `registry`. */
 function registeringScript(name: string): string {
   return `
     window.__markiiRegisterPack(

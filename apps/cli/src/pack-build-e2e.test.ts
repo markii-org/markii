@@ -27,11 +27,11 @@ import { createFakeTerminal } from './test-terminal.js';
 
 const FIXTURE = path.resolve(
   import.meta.dirname,
-  '../../../packages/markii-host/test-fixtures/packs/termpack',
+  '../../../packages/markii-pack-build/test-fixtures/packs/termpack',
 );
 const PACK_BUILD_TS = path.resolve(
   import.meta.dirname,
-  '../../../packages/markii-host/src/packs/pack-build.ts',
+  '../../../packages/markii-pack-build/src/pack-build.ts',
 );
 
 const tempDirs: string[] = [];

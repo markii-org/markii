@@ -116,6 +116,9 @@ export function createVSCodeHostAdapter(
       ? undefined
       : {
           engine: 'react',
+          // VS Code trusts its own install store and the user's markii.packs
+          // setting; there is no per-device trust list.
+          trust: 'none',
           authorizedFolders: deps.authorizedFolders,
           reservedNamespaces: () => new Set<string>(),
           ...(deps.installRoot !== undefined

@@ -1,9 +1,9 @@
 /**
  * `createMarkiiHost`: the behaviors every app calls instead of assembling
- * its own run/export/pack/editor wiring. Behind the main entry only (it
- * reaches packs, the filesystem, and the isolate) — VS Code's webview
- * stays on `@markii/host/browser`'s pure pieces and never sees this
- * function (`tmp/W11-adapter-design.md`, section 1).
+ * its own run/export/pack/editor wiring. Everything it touches (files, prompts,
+ * the isolate) arrives through the adapter, so the main entry stays
+ * environment-neutral. VS Code's webview imports only the pure pieces and
+ * never calls this function (`tmp/W11-adapter-design.md`, section 1).
  *
  * Phase 1a implemented `run`, `diagnostics`, and `open`. This phase
  * (1b) fills in `exportNote`, `installPack`, `loadPacks`, `completeAt`,
@@ -14,7 +14,12 @@
  * when the adapter lacks the capability it needs — AGENTS.md's "clean is
  * not silent": a decline is never a silent no-op.
  */
-import type { HostAdapter, HostExportFormat, HostTextEdit } from './adapter.js';
+import type {
+  HostAdapter,
+  HostExportFormat,
+  HostPackSource,
+  HostTextEdit,
+} from './adapter.js';
 import type { RunResult, SpawnRunRequest } from '../run/run-host.js';
 import type { StoredValue } from '@markii/runtime';
 import type { OnDiagnostic, UnavailableComponent } from '@markii/stdlib';
@@ -61,6 +66,22 @@ import {
   exportNoteFileViaAdapter,
 } from './export-behavior.js';
 import {
+  disablePackDiagnosticLine,
+  disablePackViaAdapter,
+  enablePackDiagnosticLine,
+  enablePackViaAdapter,
+  forgetPackTrust,
+  listInstalledPacks,
+  notEnabledPackDiagnosticLine,
+  trustedPackFolders,
+  usesPackTrust,
+} from './pack-trust-behavior.js';
+import type {
+  DisablePackOutcome,
+  EnablePackOutcome,
+  InstalledPacksListing,
+} from './pack-trust-behavior.js';
+import {
   completionPlanAt,
   createCatalogCache,
   hoverAtViaEditor,
@@ -70,7 +91,8 @@ import {
 /** The shared decline shape every behavior returns when the adapter lacks the capability it needs. */
 export interface Unsupported {
   readonly kind: 'unsupported';
-  readonly capability: 'isolate' | 'editor' | 'packs' | 'export-format';
+  readonly capability:
+    'isolate' | 'editor' | 'packs' | 'pack-trust' | 'export-format';
   readonly detail?: string;
 }
 
@@ -192,6 +214,13 @@ export type LoadTerminalPacksOutcome =
 
 export type RemovePackResult = RemovePackOutcome | Unsupported;
 
+export type InstalledPacksOutcome =
+  ({ readonly kind: 'listed' } & InstalledPacksListing) | Unsupported;
+
+export type EnablePackResult = EnablePackOutcome | Unsupported;
+
+export type DisablePackResult = DisablePackOutcome | Unsupported;
+
 // --- editor seam -----------------------------------------------------
 
 export interface EditorPositionRequest {
@@ -273,8 +302,18 @@ export interface MarkiiHost {
    * declares the `ansi` engine.
    */
   loadTerminalPacks(): Promise<LoadTerminalPacksOutcome>;
-  /** Removes one installed pack by namespace, through the install root. Writes its outcome to the diagnostics surface. */
+  /** Removes one installed pack by namespace, through the install root. Writes its outcome to the diagnostics surface. Under `trust: 'device-list'` it also withdraws the namespace's trust entry. */
   removePack(namespace: string): Promise<RemovePackResult>;
+  /**
+   * Under `trust: 'device-list'`: the install root's folders split into the
+   * ones this device has enabled and the ones merely present. Unsupported
+   * for a host that does not declare the trust list.
+   */
+  installedPacks(): Promise<InstalledPacksOutcome>;
+  /** Asks the install consent prompt, then trusts an installed folder on this device. Unsupported without the trust list. */
+  enablePack(namespace: string): Promise<EnablePackResult>;
+  /** Withdraws a namespace's trust entry and leaves its folder in place. Unsupported without the trust list. */
+  disablePack(namespace: string): Promise<DisablePackResult>;
   completeAt(request: EditorPositionRequest): Promise<CompleteOutcome>;
   /**
    * `completeAt` for a caller that must answer synchronously (Obsidian's
@@ -315,10 +354,30 @@ export function createMarkiiHost(
 ): MarkiiHost {
   const packIo = options.packDiscoveryIo ?? packDiscoveryIoFromAdapter(adapter);
 
+  /**
+   * The pack source every load reads: under `trust: 'device-list'` the
+   * trusted installed folders are added to what the adapter authorizes, so
+   * an untrusted folder is never a candidate for discovery. Other hosts
+   * get their own source back unchanged.
+   */
+  function packSource(packs: HostPackSource): HostPackSource {
+    if (!usesPackTrust(adapter)) return packs;
+    return {
+      ...packs,
+      authorizedFolders: async () => [
+        ...(await packs.authorizedFolders()),
+        ...(await trustedPackFolders(adapter)),
+      ],
+    };
+  }
+
   /** The pack-aware insert/completion catalog, built fresh from this host's currently authorized folders. Not cached here: `./editor-behavior.js`'s `createCatalogCache` is the caching seam, and a caller wiring a live editor (repeated completion/hover calls per keystroke) is expected to wrap this call in one. */
   async function currentCatalog(): Promise<readonly InsertableComponent[]> {
     if (!adapter.packs) return buildComponentCatalog([]);
-    const { packs } = await loadPacksViaAdapter(adapter.packs, packIo);
+    const { packs } = await loadPacksViaAdapter(
+      packSource(adapter.packs),
+      packIo,
+    );
     return buildComponentCatalog(
       [...(adapter.packs.bundledPacks?.() ?? []), ...packs],
       adapter.packs.engine,
@@ -491,7 +550,10 @@ export function createMarkiiHost(
         );
       }
       catalogCache.invalidate();
-      const result = await loadPacksViaAdapter(adapter.packs, packIo);
+      const result = await loadPacksViaAdapter(
+        packSource(adapter.packs),
+        packIo,
+      );
       for (const line of formatPackDiagnosticLines({
         packs: result.packs,
         skipped: result.skipped,
@@ -499,6 +561,14 @@ export function createMarkiiHost(
         cssWarnings: [],
       })) {
         adapter.diagnostics(line);
+      }
+      if (usesPackTrust(adapter)) {
+        for (const namespace of (await listInstalledPacks(adapter))
+          .notEnabled) {
+          adapter.diagnostics(
+            notEnabledPackDiagnosticLine(namespace, adapter.labels.deviceNoun),
+          );
+        }
       }
       return {
         kind: 'loaded',
@@ -526,7 +596,10 @@ export function createMarkiiHost(
         );
       }
       catalogCache.invalidate();
-      const result = await loadPacksViaAdapter(adapter.packs, packIo);
+      const result = await loadPacksViaAdapter(
+        packSource(adapter.packs),
+        packIo,
+      );
       const read = await readTerminalPackScripts(adapter, result.packs);
       for (const line of formatPackDiagnosticLines({
         packs: result.packs,
@@ -572,7 +645,52 @@ export function createMarkiiHost(
         packs.reservedNamespaces(),
       );
       catalogCache.invalidate();
+      // The trust entry goes whatever happened to the folder: this device
+      // has withdrawn its authorization, so the pack stops loading. Only a
+      // refused or malformed request leaves the list alone.
+      if (outcome.kind !== 'reserved' && outcome.kind !== 'invalid') {
+        await forgetPackTrust(adapter, namespace);
+      }
       adapter.diagnostics(removePackDiagnosticLine(outcome));
+      return outcome;
+    },
+
+    async installedPacks(): Promise<InstalledPacksOutcome> {
+      if (!usesPackTrust(adapter)) {
+        return unsupported(
+          adapter,
+          'pack-trust',
+          'this host does not gate installed packs on a trust list.',
+        );
+      }
+      return { kind: 'listed', ...(await listInstalledPacks(adapter)) };
+    },
+
+    async enablePack(namespace: string): Promise<EnablePackResult> {
+      if (!usesPackTrust(adapter)) {
+        return unsupported(
+          adapter,
+          'pack-trust',
+          'this host does not gate installed packs on a trust list.',
+        );
+      }
+      const outcome = await enablePackViaAdapter(adapter, namespace);
+      catalogCache.invalidate();
+      adapter.diagnostics(enablePackDiagnosticLine(outcome));
+      return outcome;
+    },
+
+    async disablePack(namespace: string): Promise<DisablePackResult> {
+      if (!usesPackTrust(adapter)) {
+        return unsupported(
+          adapter,
+          'pack-trust',
+          'this host does not gate installed packs on a trust list.',
+        );
+      }
+      const outcome = await disablePackViaAdapter(adapter, namespace);
+      catalogCache.invalidate();
+      adapter.diagnostics(disablePackDiagnosticLine(outcome));
       return outcome;
     },
 

@@ -231,7 +231,7 @@ async function resolveInstalledPacks(
 /**
  * Loads everything about the packs found under `installedFolders` (already
  * resolved, absolute, trusted-on-this-device folders — `../main.ts`'s
- * `selectLoadablePackFolders`). Never throws: every step it composes
+ * `@markii/host`'s `installedPacks`). Never throws: every step it composes
  * already degrades quietly.
  */
 export async function loadPackContext(
@@ -280,7 +280,7 @@ export async function loadPackContext(
   for (const pack of discovery.packs) {
     // An installed pack's folder is named by its namespace: that is what
     // `./install-pack.ts` writes, and it is what the trust list
-    // (`./pack-trust.ts`) authorizes, so the settings tab can offer
+    // (`@markii/host`'s device trust list) authorizes, so the settings tab can offer
     // Remove for a name and have it delete the right folder. A folder
     // whose `pack.json` declares some other namespace can only come from
     // a hand copy or a hand edit, and loading it would mean running code

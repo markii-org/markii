@@ -5,7 +5,7 @@ import type {
   PackExportBuilder,
   PackExportFs,
 } from './pack-export.js';
-import type { DiscoveredPack } from './discover.js';
+import type { DiscoveredPack } from '@markii/host';
 
 function packAt(folder: string): DiscoveredPack {
   return {

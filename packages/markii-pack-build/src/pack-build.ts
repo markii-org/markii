@@ -14,13 +14,11 @@
  * silently falls through to the unknown-component fallback with no
  * explanation.
  *
- * Lives in `@markii/host` (not `apps/vscode`) because it is shared,
- * host-neutral logic: any Markii host that wants to compile a pack from
- * source — `apps/vscode` today, a future Obsidian host next — needs the
- * exact same builder, not a second drifting copy of it. `@markii/host` is
- * PRIVATE and never published, so depending on `esbuild-wasm` here does not
- * put a build toolchain into a published package (AGENTS.md's Stack
- * section). This module knows nothing about a host's discovery mechanism
+ * Lives in `@markii/pack-build` (not `apps/vscode`) because it is shared:
+ * any Markii host that wants to compile a pack from source needs the exact
+ * same builder, not a second drifting copy of it. `@markii/pack-build` is
+ * the only package that declares `esbuild-wasm`, so no neutral package
+ * carries a build toolchain (AGENTS.md's Stack section). This module knows nothing about a host's discovery mechanism
  * (`markii.packs`, an Obsidian settings tab, …) — it only needs
  * `PackBuildSource`: a pack's folder, manifest, and component paths, which
  * a host's own discovery module can hand it directly (structurally

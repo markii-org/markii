@@ -24,6 +24,7 @@ import { openPackArchive } from '@markii/pack';
 import { describeArchiveError, writeArchiveContents } from './pack-archive.js';
 import type { ArchiveExtractFs } from './pack-archive.js';
 import type { HostAdapter, HostLabels } from './adapter.js';
+import { trustInstalledPack } from './pack-trust-behavior.js';
 
 /** Whether a directory already exists under the install root, injected so this module needs no real disk to test. */
 export type PackDirectoryExists = (absolutePath: string) => Promise<boolean>;
@@ -158,6 +159,7 @@ export async function installPackFromArchive(
     };
   }
 
+  await trustInstalledPack(adapter, packName, targetDir);
   return { kind: 'installed', packName, installedDir: targetDir, replaced };
 }
 

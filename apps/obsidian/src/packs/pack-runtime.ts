@@ -3,7 +3,7 @@
  * what it registers — the Obsidian-specific half of the pack-loading
  * contract documented in docs/packs.md ("The component script follows a
  * small registration convention...") and implemented by
- * `@markii/host`'s `packs/pack-build.ts`: a classic IIFE that calls
+ * `@markii/pack-build`'s `pack-build.ts`: a classic IIFE that calls
  * `window.__markiiRegisterPack(manifestJson, componentModules)` and reads
  * `window.__markiiReact` LAZILY (only when a component actually renders,
  * never at load time — see that file's top doc comment for why).

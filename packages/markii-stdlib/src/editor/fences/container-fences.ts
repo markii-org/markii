@@ -22,7 +22,7 @@
  * how a note renders.
  *
  * Pure and host-neutral: no editor API, no filesystem, no `node:*`. It is
- * re-exported from `@markii/host/browser`, and
+ * re-exported from `@markii/host`'s main entry, and
  * `apps/vscode/src/browser-entry.probe.test.ts` is the gate for that.
  */
 

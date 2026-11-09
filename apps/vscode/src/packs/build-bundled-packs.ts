@@ -21,11 +21,8 @@ import { createNodeDirectoryLister } from '@markii/host/node';
 import * as path from 'node:path';
 import { mkdir, rm } from 'node:fs/promises';
 import { discoverPacks } from '@markii/host';
-import {
-  buildPackRegistrationScript,
-  createNodeFileReader,
-  exportPack,
-} from '@markii/host/node';
+import { createNodeFileReader } from '@markii/host/node';
+import { buildPackRegistrationScript, exportPack } from '@markii/pack-build';
 import { createNodePackExportFs } from './export-pack.js';
 
 /**

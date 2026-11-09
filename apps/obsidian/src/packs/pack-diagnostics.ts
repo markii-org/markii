@@ -34,7 +34,7 @@ import type { PackContext } from './pack-context.js';
 /** This plugin's own rebuild instruction for `@markii/host`'s shared `prebuiltShadowLine`: it has no build command of its own (AGENTS.md's Host positioning), so it points at VS Code's Export Pack command. */
 const REBUILD_INSTRUCTION = 'rebuild it with the VS Code Export Pack command';
 
-/** One line per namespace present on disk under `packs/` but not on this device's trust list — `../packs/installed-packs.ts`'s `selectLoadablePackFolders`. Informational, not a failure: the settings tab's "Enable" control is the way to load it. */
+/** One line per namespace present on disk under `packs/` but not on this device's trust list — `@markii/host`'s `installedPacks`. Informational, not a failure: the settings tab's "Enable" control is the way to load it. */
 export function notEnabledPackLine(namespace: string): string {
   return `Pack "${namespace}" is present but not enabled on this device. Enable it in Markii's settings, under "Component packs", to load it.`;
 }

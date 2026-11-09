@@ -223,6 +223,9 @@ function cliPackSource(
 ): NonNullable<HostAdapter['packs']> {
   return {
     engine: 'ansi',
+    // The CLI trusts its own device-local pack store (`markii pack install`
+    // is the consent step); there is no separate trust list.
+    trust: 'none',
     reservedNamespaces: () => packs.reservedNamespaces,
     installRoot: () => packs.installRoot,
     removeFolder: (folder: string): Promise<void> =>

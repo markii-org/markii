@@ -42,6 +42,7 @@
     "@markii/core": "*",
     "@markii/host": "*",
     "@markii/lua": "*",
+    "@markii/pack-build": "*",
     "@markii/runtime": "*",
     "esbuild": "^0.28.2",
     "tsx": "^4.23.12",

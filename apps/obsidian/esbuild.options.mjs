@@ -83,6 +83,12 @@ const markiiSrcRoots = {
     'src',
   ),
   '@markii/host': path.join(repoRoot, 'packages', 'markii-host', 'src'),
+  '@markii/pack-build': path.join(
+    repoRoot,
+    'packages',
+    'markii-pack-build',
+    'src',
+  ),
   '@markii/pack': path.join(repoRoot, 'packages', 'markii-pack', 'src'),
   '@markii/stdlib': path.join(repoRoot, 'packages', 'markii-stdlib', 'src'),
 };
@@ -263,7 +269,7 @@ const bundledPackFolders = ['read', 'dash', 'prep'].map((name) =>
   path.join(repoRoot, 'packs', name),
 );
 
-/** A plugin-owned scratch directory for both the compiled pack cache (`@markii/host`'s `buildPackRegistrationScript`) and the throwaway entry module below — never a pack's own folder (AGENTS.md's cleanliness rule), and already covered by the repo's `dist/` ignore pattern. */
+/** A plugin-owned scratch directory for both the compiled pack cache (`@markii/pack-build`'s `buildPackRegistrationScript`) and the throwaway entry module below — never a pack's own folder (AGENTS.md's cleanliness rule), and already covered by the repo's `dist/` ignore pattern. */
 const bundledPacksCacheDir = path.join(here, 'dist', '.bundled-packs-cache');
 
 /**
@@ -271,7 +277,7 @@ const bundledPacksCacheDir = path.join(here, 'dist', '.bundled-packs-cache');
  * just embedded) at build time — the difference from `workerBuild` above,
  * which is compiled and shipped to run LATER, inside a Web Worker. This
  * one needs to run NOW, in this Node build process, because building a
- * pack's registration script (`@markii/host`'s `buildPackRegistrationScript`)
+ * pack's registration script (`@markii/pack-build`'s `buildPackRegistrationScript`)
  * is what actually produces the `webview.js`/`webview.css` bytes to embed.
  *
  * It cannot be `node`-executed directly the way `scripts/generate-doc-css.ts`
@@ -288,7 +294,7 @@ const bundledPacksEntrySource = `
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import * as path from 'node:path';
 import { parsePackManifest, packComponentsForEngine } from '@markii/pack';
-import { buildPackRegistrationScript } from '@markii/host/node';
+import { buildPackRegistrationScript } from '@markii/pack-build';
 
 function collectLuaModules(scriptsDir) {
   const modules = {};
@@ -392,7 +398,7 @@ export async function buildEmbeddedBundledPacks() {
     bundle: true,
     write: false,
     platform: 'node',
-    // CommonJS, not ESM: `@markii/host`'s `pack-build.ts` picks HOW to load
+    // CommonJS, not ESM: `@markii/pack-build`'s `pack-build.ts` picks HOW to load
     // esbuild-wasm by checking `typeof require === 'function'` and calling
     // it with a runtime-computed specifier (`resolveRequire`'s doc
     // comment). Bundled to ESM, esbuild synthesizes a `require` shim that
@@ -627,7 +633,7 @@ export function createMainBuild() {
     jsx: 'automatic',
     // `esbuild-wasm` stays external even though nothing in this plugin's
     // runtime calls it any more (no pack compiler here — AGENTS.md's Host
-    // positioning): `@markii/host`'s `src/packs/pack-build.ts`, part of the
+    // positioning): `@markii/pack-build`'s `pack-build.ts`, part of the
     // shared module graph, still `require()`s it dynamically behind a
     // runtime check. Marking it external keeps that dynamic require
     // unresolved at bundle time rather than esbuild trying (and failing, or
@@ -645,7 +651,7 @@ export function createMainBuild() {
       'os',
       'crypto',
     ],
-    // `@markii/host`'s `src/packs/pack-build.ts` references `import.meta.url`
+    // `@markii/pack-build`'s `pack-build.ts` references `import.meta.url`
     // (guarded by a `typeof require` runtime check) purely for the ESM/
     // dev-and-Vitest half of that check; the CJS bundle this build produces
     // never evaluates it. esbuild's warning here is accurate but inert.

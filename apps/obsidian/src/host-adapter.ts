@@ -69,7 +69,7 @@ export interface ObsidianHostAdapterDeps {
   readonly now?: () => number;
   readonly isolate?: HostIsolate;
   /** The pack source, minus the engine: the plugin renders with React, so the adapter fills `engine: 'react'` itself. */
-  readonly packs?: Omit<HostPackSource, 'engine'>;
+  readonly packs?: Omit<HostPackSource, 'engine' | 'trust'>;
   readonly exports?: HostExportCapabilities;
   /**
    * The live editor surface, built at the call site from the Obsidian
@@ -135,7 +135,7 @@ export function createObsidianHostAdapter(
 
     ...(deps.isolate !== undefined ? { isolate: deps.isolate } : {}),
     ...(deps.packs !== undefined
-      ? { packs: { ...deps.packs, engine: 'react' } }
+      ? { packs: { ...deps.packs, engine: 'react', trust: 'device-list' } }
       : {}),
     ...(deps.exports !== undefined ? { exports: deps.exports } : {}),
     ...(deps.editor !== undefined ? { editor: deps.editor } : {}),

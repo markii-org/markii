@@ -233,6 +233,26 @@ packages/markii-pack    component pack contract (docs/packs.md, issue #3) — no
   src/uses.ts        resolveUses(): resolves a note's declared `uses:` list
                      against installed pack namespaces (missing/satisfied),
                      host-facing metadata only — no loading, no registry
+packages/markii-pack-build  PRIVATE until its first release (planned, the
+                        user approved publishing it). The pack compiler and
+                        exporter, and the ONLY package declaring
+                        esbuild-wasm. It imports @markii/host and
+                        @markii/pack; host never imports it:
+  src/pack-build.ts  compiles a pack's component sources (and imported CSS)
+                     with esbuild-wasm's in-process wasm path, cached outside
+                     the pack's own folder (buildPackRegistrationScript,
+                     buildPackTerminalScript). See the Stack section for why
+                     the in-process path is mandatory
+  src/pack-css-lint.ts  the class-prefix and token lint behind build warnings
+  src/pack-export.ts  the compose-and-write path (issue #16): builds via the
+                     normal cache, then writes the prebuilt form into a
+                     caller-chosen destination behind resolveExportTarget's
+                     path jail. Used by the bundled-pack builds; a pack's
+                     SOURCE folder is never written to
+  src/pack-export-archive.ts  what VS Code's Export Pack produces: the
+                     prebuilt form zipped as <name>-<version>.mkp (no folder
+                     form, user-set 2026-09-02)
+  test-fixtures/packs/  the .tsx pack fixtures the build tests compile
 packages/markii-host    PRIVATE, never published (no npm presence, absent from
                         build:dist and the release workflow). The shared,
                         host-neutral script-running layer both apps consume,
@@ -325,27 +345,26 @@ packages/markii-host    PRIVATE, never published (no npm presence, absent from
                      separator comes from the base path, so Windows paths
                      from VS Code survive
   src/lua-resolver.ts      the pure worker-side PackModuleResolver
-  src/packs/pack-build.ts  compiles a pack's component sources (and imported
-                     CSS) with esbuild-wasm's in-process wasm path, cached
-                     outside the pack's own folder. See the Stack section for
-                     why the in-process path is mandatory, not preferred
-  src/packs/pack-export-archive.ts  what VS Code's Export Pack produces:
-                     the prebuilt form zipped as <name>-<version>.mkp. The
-                     command writes no folder form (user-set 2026-09-02)
   src/packs/pack-contract.test.ts  loads a hand-written webview.js built only
                      from docs/packs.md's registration contract, so the docs
                      cannot drift from the loader (markii-packs builds its
                      archives against that documented contract)
   src/packs/prebuilt.ts    the prebuilt-pack convention (issue #15): the
                      sibling webview.css next to webview.js, and detection
-                     of a prebuilt script shadowing on-disk sources
-  src/packs/pack-export.ts  the internal compose-and-write path (issue #16):
-                     builds via the normal cache, then writes the prebuilt
-                     form (pack.json, webview.js, webview.css, scripts/) into
-                     a caller-chosen destination behind resolveExportTarget's
-                     path jail. Used by the bundled-pack build and composed
-                     through by pack-export-archive.ts; not a user command on
-                     its own. A pack's SOURCE folder is never written to
+                     of a prebuilt script shadowing on-disk sources. Stays
+                     here (not in pack-build) because the terminal-pack
+                     reader uses it
+  src/packs/pack-trust.ts  the device-local trust list's stored shape
+                     (key markii:installedPacks), normalization, trustPack/
+                     untrustPack. Pure
+  src/host/pack-trust-behavior.ts  the shared trust behavior behind
+                     HostPackSource.trust: 'device-list' (Obsidian): an
+                     installed folder loads only when the list in the
+                     adapter's memento names it, a present-but-untrusted
+                     folder is listed and never read; installedPacks,
+                     enablePack, disablePack; install trusts, remove
+                     withdraws. VS Code and the CLI declare trust: 'none'.
+                     conformance/host/16-pack-trust covers it
   src/insert/        the PACK-AWARE half of the insert catalog:
                      buildComponentCatalog composes @markii/stdlib/editor's
                      standardComponentCatalog() with each discovered pack's
@@ -539,13 +558,14 @@ apps/obsidian        the "Markii" Obsidian plugin (desktop only) — an
                      archive-only, NO compiler, no folder list. A pack is
                      installed from a .mkp into
                      .obsidian/plugins/markii/packs/<namespace>/ and loads
-                     only when the DEVICE-LOCAL trust list (pack-trust.ts,
-                     saveLocalStorage) names it; a folder present but
+                     only when the DEVICE-LOCAL trust list (@markii/host's
+                     shared trust behavior; this adapter declares trust:
+                     'device-list' over saveLocalStorage) names it; a folder present but
                      untrusted (arrived via Sync or by hand) is listed as
                      "present, not enabled on this device" and never
                      evaluated (pack-trust.probe.test.ts proves it with real
-                     registration scripts). installed-packs.ts owns the
-                     list; install goes through @markii/host's pack-install
+                     registration scripts, through the real adapter and the
+                     shared behavior); install goes through @markii/host's pack-install
                      (src/host-adapter.ts), which refuses a bundled
                      namespace before any write; pack-context, pack-runtime, pack-styles,
                      pack-diagnostics (the console + notice surface named in
@@ -648,11 +668,12 @@ join the authoring side; nothing is built for that in advance.
 - Pack compilation, added 2026-08-25 (user-approved): `esbuild-wasm`, a
   RUNTIME dependency that compiles a pack's component sources (and any CSS
   they import) at load time, so a pack needs no build step of its own. It
-  lives in `packages/markii-host`, which is PRIVATE and never published, and
-  since 2026-09-02 only the VS Code extension consumes it: the Obsidian
-  plugin is archive-only and carries no compiler. The rule it must obey is
-  that it never enters a PUBLISHED package: the neutral `@markii/*` packages
-  on npm stay free of a build toolchain.
+  lives ONLY in `packages/markii-pack-build` (`@markii/pack-build`), which
+  only authoring hosts and pack build scripts import; since 2026-09-02 the
+  Obsidian plugin is archive-only and carries no compiler. The rule it must
+  obey: no other package declares it, so the neutral `@markii/*` packages
+  stay free of a build toolchain. Publishing `@markii/pack-build` itself
+  was user-approved 2026-11-09.
 
   The host uses esbuild-wasm's IN-PROCESS WebAssembly path (its `browser`
   entry, initialized with a compiled `WebAssembly.Module`), with sources fed

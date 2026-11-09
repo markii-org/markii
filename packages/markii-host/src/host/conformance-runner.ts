@@ -41,6 +41,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { createHtmlExportEngine } from '../html-engine.js';
 import { createNodeArchiveExtractFs } from '../node-fs.js';
+import { usesPackTrust } from './pack-trust-behavior.js';
 import { join, relative, sep } from 'node:path';
 import { zipSync } from 'fflate';
 import { conformanceDir } from '@markii/core/corpus';
@@ -110,9 +111,28 @@ export type HostScenarioAction =
       /** A directory under the scenario's own folder (e.g. `"files/ana-1.0.0"`), zipped into `.mkp` bytes by this module — never a committed binary. */
       readonly archive: string;
       readonly answers?: readonly string[];
+      /** `true`: the action belongs to a trust scenario, so a host without the device trust list reports it as `unsupported` (`pack-trust`) instead of running it. */
+      readonly requiresTrust?: boolean;
     }
-  | { readonly type: 'loadPacks' }
-  | { readonly type: 'removePack'; readonly namespace: string }
+  | { readonly type: 'loadPacks'; readonly requiresTrust?: boolean }
+  | {
+      readonly type: 'removePack';
+      readonly namespace: string;
+      readonly requiresTrust?: boolean;
+    }
+  | {
+      /** Copies a directory under the scenario's folder into the install root as `<namespace>/`, with no consent and no trust entry: the way a pack arrives through a file sync or a hand copy. */
+      readonly type: 'placePack';
+      readonly archive: string;
+      readonly namespace: string;
+    }
+  | { readonly type: 'listPacks' }
+  | {
+      readonly type: 'enablePack';
+      readonly namespace: string;
+      readonly answers?: readonly string[];
+    }
+  | { readonly type: 'disablePack'; readonly namespace: string }
   | {
       readonly type: 'completeAt';
       readonly line: number;
@@ -186,7 +206,7 @@ export function zipArchiveDirectory(archiveDir: string): Uint8Array {
 // --- the capability rule --------------------------------------------------
 
 export type HostScenarioCapability =
-  'isolate' | 'editor' | 'packs' | 'export-format';
+  'isolate' | 'editor' | 'packs' | 'pack-trust' | 'export-format';
 
 /** The one static map from an action's type to the capability it needs. `undefined` means every host supports it (there is nothing to decline). */
 export const ACTION_CAPABILITY: Readonly<
@@ -199,10 +219,29 @@ export const ACTION_CAPABILITY: Readonly<
   installPack: 'packs',
   loadPacks: 'packs',
   removePack: 'packs',
+  placePack: 'pack-trust',
+  listPacks: 'pack-trust',
+  enablePack: 'pack-trust',
+  disablePack: 'pack-trust',
   completeAt: 'editor',
   hoverAt: 'editor',
   insertComponent: 'editor',
 };
+
+/** An action's capability: the static map, except that a pack action flagged `requiresTrust` needs the device trust list. */
+function capabilityFor(
+  action: HostScenarioAction,
+): HostScenarioCapability | undefined {
+  if (
+    (action.type === 'installPack' ||
+      action.type === 'loadPacks' ||
+      action.type === 'removePack') &&
+    action.requiresTrust === true
+  ) {
+    return 'pack-trust';
+  }
+  return ACTION_CAPABILITY[action.type];
+}
 
 function exportFormatFor(action: HostScenarioAction): HostExportFormat {
   return action.type === 'exportAnsi' ? 'ansi' : 'html';
@@ -213,8 +252,9 @@ export function hostDeclaresCapability(
   adapter: HostAdapter,
   action: HostScenarioAction,
 ): boolean {
-  const capability = ACTION_CAPABILITY[action.type];
+  const capability = capabilityFor(action);
   if (capability === undefined) return true;
+  if (capability === 'pack-trust') return usesPackTrust(adapter);
   if (capability === 'isolate') return adapter.isolate !== undefined;
   if (capability === 'editor') return adapter.editor !== undefined;
   if (capability === 'packs') {
@@ -251,7 +291,9 @@ export function createAnswerQueue(scenario: HostScenario): {
   const answers: boolean[] = [];
   for (const action of scenario.actions) {
     const source =
-      action.type === 'run' || action.type === 'installPack'
+      action.type === 'run' ||
+      action.type === 'installPack' ||
+      action.type === 'enablePack'
         ? action.answers
         : undefined;
     for (const answer of source ?? []) answers.push(answer === 'allow');
@@ -430,6 +472,15 @@ async function runOneAction(
   action: HostScenarioAction,
   ctx: ActionContext,
 ): Promise<unknown> {
+  // A trust-scenario action on a host without the trust list never reaches
+  // the host: the declaration is what the corpus records.
+  if (capabilityFor(action) === 'pack-trust' && !usesPackTrust(adapter)) {
+    const detail = 'this host does not gate installed packs on a trust list.';
+    adapter.diagnostics(
+      `declined (pack-trust unsupported on ${adapter.id}): ${detail}`,
+    );
+    return { kind: 'unsupported', capability: 'pack-trust', detail };
+  }
   switch (action.type) {
     case 'open':
       return host.open({ path: ctx.notePath });
@@ -482,6 +533,31 @@ async function runOneAction(
 
     case 'removePack':
       return host.removePack(action.namespace);
+
+    case 'placePack': {
+      const installRoot = adapter.packs?.installRoot?.();
+      if (installRoot === undefined) return { kind: 'failed' };
+      const files = readDirRecursive(
+        join(ctx.scenarioDir, action.archive),
+        join(ctx.scenarioDir, action.archive),
+      );
+      for (const [name, bytes] of Object.entries(files)) {
+        await adapter.writeFile(
+          join(installRoot, action.namespace, ...name.split('/')),
+          bytes,
+        );
+      }
+      return { kind: 'placed', namespace: action.namespace };
+    }
+
+    case 'listPacks':
+      return host.installedPacks();
+
+    case 'enablePack':
+      return host.enablePack(action.namespace);
+
+    case 'disablePack':
+      return host.disablePack(action.namespace);
 
     case 'completeAt':
       return host.completeAt({ line: action.line, column: action.column });
@@ -658,6 +734,34 @@ export function outcomeMismatches(
       }
       break;
     }
+    case 'listed': {
+      const names = (
+        list: unknown,
+        pick: (entry: unknown) => unknown,
+      ): string[] =>
+        (Array.isArray(list) ? list.map(pick) : []).map(String).sort();
+      const gotEnabled = names(
+        actualRecord['enabled'],
+        (entry) => (entry as { namespace?: unknown }).namespace,
+      );
+      const gotNotEnabled = names(actualRecord['notEnabled'], (entry) => entry);
+      for (const [key, got] of [
+        ['enabled', gotEnabled],
+        ['notEnabled', gotNotEnabled],
+      ] as const) {
+        const want = [...((expected[key] as string[]) ?? [])].sort();
+        if (JSON.stringify(got) !== JSON.stringify(want)) {
+          mismatches.push(
+            `${key}: expected ${JSON.stringify(want)}, got ${JSON.stringify(got)}`,
+          );
+        }
+      }
+      break;
+    }
+    case 'enabled':
+    case 'disabled':
+    case 'not-enabled':
+    case 'placed':
     case 'removed': {
       if (
         expected['namespace'] !== undefined &&
@@ -771,7 +875,7 @@ export function assertHostScenario(
     const actual = result.outcomes[i];
     const declared = hostDeclaresCapability(adapter, action);
     if (!declared) {
-      const capability = ACTION_CAPABILITY[action.type];
+      const capability = capabilityFor(action);
       const actualRecord =
         typeof actual === 'object' && actual !== null
           ? (actual as Record<string, unknown>)
@@ -801,7 +905,7 @@ export function assertHostScenario(
   // against a capable host's expectation here would be double-counting
   // the same capability gap as a second, spurious failure.
   const capabilityGatedActions = scenario.actions.filter(
-    (action) => ACTION_CAPABILITY[action.type] !== undefined,
+    (action) => capabilityFor(action) !== undefined,
   );
   const anyActionDeclared =
     capabilityGatedActions.length === 0 ||

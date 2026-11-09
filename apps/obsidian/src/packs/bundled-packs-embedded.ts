@@ -5,7 +5,7 @@
  * The plugin build (`../../esbuild.options.mjs`'s `buildEmbeddedBundledPacks`
  * and the `embed-bundled-packs` plugin in `createMainBuild`) compiles
  * `packs/read`, `packs/dash`, and `packs/prep` at the repo root into their
- * prebuilt form (reusing `@markii/host`'s `buildPackRegistrationScript` —
+ * prebuilt form (reusing `@markii/pack-build`'s `buildPackRegistrationScript` —
  * no second compiler), JSON-encodes the result as a `BundledPackAsset[]`
  * (`./bundled-packs.ts`), and REPLACES THIS ENTIRE FILE'S CONTENTS wholesale
  * with the same one `export const` statement below, base64 payload filled

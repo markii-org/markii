@@ -10,7 +10,7 @@ import {
   writePackArchiveFile,
 } from './export-pack.js';
 import type { DiscoveredPack } from '@markii/host';
-import type { PackExportArchiveOutcome } from '@markii/host/node';
+import type { PackExportArchiveOutcome } from '@markii/pack-build';
 
 function pack(name: string, folder: string): DiscoveredPack {
   return {

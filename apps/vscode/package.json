@@ -357,6 +357,7 @@
     "@markii/host": "*",
     "@markii/lua": "*",
     "@markii/pack": "*",
+    "@markii/pack-build": "*",
     "@markii/react": "*",
     "@markii/runtime": "*",
     "react": "^18.3.1",

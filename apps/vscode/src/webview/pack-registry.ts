@@ -16,9 +16,8 @@
  * `node:worker_threads`, ...), which broke this bundle even for a single
  * pure function.
  *
- * That is fixed now: `@markii/host/browser` (`packages/markii-host/src/
- * browser.ts`) is a second, environment-free entry point containing only
- * pure logic, and this file imports its `buildRenderRegistry` as a VALUE —
+ * That is fixed now: `@markii/host`'s main entry (`packages/markii-host/src/
+ * index.ts`) is environment-free, and this file imports its `buildRenderRegistry` as a VALUE —
  * which internally runs the shared `toPackToInstall` per queued entry, so
  * this file no longer needs to call that validation itself, only to hand it
  * a well-shaped batch. Using the shared merge also closes an asymmetry issue #19
@@ -120,7 +119,7 @@ function toQueuedPackRegistration(raw: unknown): QueuedPackRegistration {
  * Builds the render registry: `defaultRegistry` merged with every
  * successfully validated, non-colliding pack registration collected in
  * `window.__markiiPackRegistrations`, via the shared
- * `@markii/host/browser` `buildRenderRegistry` (keep-first on a
+ * `@markii/host` `buildRenderRegistry` (keep-first on a
  * composed-name collision between two different packs, whole-install
  * rejection on a namespace collision between two registrations of the same
  * pack — see that function's own doc comment). Never throws.

@@ -52,9 +52,23 @@ needs, is the runner's own `ACTION_CAPABILITY` map:
 | `installPack` | `packs` (and an `installRoot`) |
 | `loadPacks` | `packs` |
 | `removePack` | `packs` (and an `installRoot` plus `removeFolder`) |
+| `placePack` | `pack-trust` |
+| `listPacks` | `pack-trust` |
+| `enablePack` | `pack-trust` |
+| `disablePack` | `pack-trust` |
 | `completeAt` | `editor` |
 | `hoverAt` | `editor` |
 | `insertComponent` | `editor` |
+
+`pack-trust` is declared by an adapter whose pack source sets
+`trust: 'device-list'` (and an `installRoot`): installed packs load only
+while this device's trust list names them. `placePack` copies a scenario
+directory into the install root with no consent and no trust entry, the way
+a pack arrives through a file sync. An `installPack`, `loadPacks` or
+`removePack` action may carry `"requiresTrust": true`, which makes the
+runner treat it as a `pack-trust` action, so a scenario built around the
+trust list reports `unsupported` as a whole on a host that trusts its own
+install store.
 
 `clock` fixes `adapter.now()` for the whole scenario, so a `RunTrace`
 write is byte-stable.
@@ -129,6 +143,8 @@ coarse, matching each `kind`:
 - `declined`: `step` (`'consent'`/`'replace'`, or absent for the
   scripts-disabled synthetic outcome) and `reasonContains`, a substring of
   the user-facing reason.
+- `listed`: `enabled` and `notEnabled`, namespace lists, order-independent.
+- `enabled`, `disabled`, `placed`, `removed`: `namespace`.
 - `loaded`: `namespaces`, order-independent.
 - `completions`: `labels`, checked as "every one of these appears",
   not an exact set (a pack-aware host's catalog is a superset of the
@@ -179,7 +195,7 @@ run the whole corpus honestly: its result records say `unsupported`
 where it genuinely offers nothing, which is the truth and is visible,
 rather than a skipped test or a faked empty answer.
 
-## The fourteen scenarios
+## The sixteen scenarios
 
 | id | what it proves |
 |---|---|
@@ -198,6 +214,7 @@ rather than a skipped test or a faked empty answer.
 | `13-install-pack-declined` | declining the install consent writes nothing, and removing the never-installed pack reports it |
 | `14-remove-pack` | removing an installed pack deletes it; removing it again reports it is not installed |
 | `15-load-packs-engine-views` | loading packs reports every installed component and, as `unavailable`, the ones this host's engine has no view for |
+| `16-pack-trust` | a folder that arrives without consent is listed as present and never loaded; enable, disable, re-enable and remove move the device trust list; a host without the list reports the whole scenario `unsupported` |
 
 See `tmp/W11-phase3.md` for which capabilities each of the three real
 adapters currently declares, and which scenarios are consequently

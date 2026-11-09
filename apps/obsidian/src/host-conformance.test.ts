@@ -108,7 +108,8 @@ describe('conformance/host/ corpus via the real Obsidian HostAdapter', () => {
           spawnIsolate: workerThreadIsolate,
         },
         packs: {
-          authorizedFolders: async () => [installRoot],
+          // The host adds the trusted installed folders itself.
+          authorizedFolders: async () => [],
           reservedNamespaces: () => new Set(['read', 'dash', 'prep']),
           installRoot: () => installRoot,
           removeFolder: (p) => rm(p, { recursive: true, force: true }),

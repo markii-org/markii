@@ -1,36 +1,27 @@
 /**
- * DEVICE-LOCAL pack trust list: which installed-pack namespaces this
- * device authorizes to load (docs/packs.md). THE RULE THAT MATTERS MOST
- * (AGENTS.md's storage-boundary rule, mirrored from the deleted
- * `./pack-settings.ts`): this list authorizes CODE EXECUTION at host
- * trust. Every namespace named here has its compiled `webview.js`
- * evaluated in-process (`./pack-context.ts`, `./pack-runtime.ts`), and any
- * `scripts/*.lua` it ships becomes `require`-able from the Run path. It
- * therefore MUST use `app.saveLocalStorage`/`app.loadLocalStorage`
- * (device-local, never synced or shared with a vault), and MUST NEVER use
- * `Plugin.saveData`/`loadData` (vault-synced `data.json` — see
- * `../run/local-storage-memento.ts`'s top comment for the full rationale
- * and `../storage-boundary.test.ts` for the executable half of this rule).
+ * The DEVICE-LOCAL pack trust list: which installed-pack namespaces this
+ * device authorizes to load (docs/packs.md). Every namespace named here
+ * has its pack code evaluated at host trust, so the list authorizes code
+ * execution and must live in device-local state (the adapter's
+ * `memento`), never in anything that travels with a vault, a workspace
+ * file, or a sync service.
  *
- * A pack folder can exist under this plugin's `packs/` directory without
- * being trusted: it arrived through Obsidian Sync (which syncs the whole
- * vault, `.obsidian/plugins/markii/packs/` included, even though this
- * trust list itself never does), or a user copied it there by hand. Such a
- * folder is never loaded until its namespace is added here, exactly like a
- * freshly installed one — `./install-pack.ts`'s consent prompt is asked
- * either way (`../settings-tab.ts`'s "Enable" control asks it for this
- * case). This is what makes the trust list, not the mere presence of a
- * folder, the thing that decides whether code runs.
+ * A pack folder can sit in the install root without being trusted: it
+ * arrived through a file sync, or a user copied it there by hand. Such a
+ * folder is never loaded until its namespace is added here, exactly like
+ * a freshly installed one, and the consent prompt is asked either way.
+ * The trust list, not the presence of a folder, decides whether code
+ * runs. `../host/pack-trust-behavior.ts` enforces that for every host
+ * that declares `trust: 'device-list'`.
  *
- * Deliberately `obsidian`-free (like `./pack-settings.ts` before it) so the
- * shape and its hostile-input normalization stay unit-testable without the
- * `obsidian` module.
+ * Pure and environment-free, so the shape and its hostile-input
+ * normalization are unit-testable with no host in sight.
  */
 
-/** The `app.saveLocalStorage`/`loadLocalStorage` key this shape lives under. Deliberately a NEW key, not a rename of the deleted `./pack-settings.ts`'s `'markii:packSettings'`: the old key held a list of folder paths with a completely different shape, and reusing the key would let a stale stored value be misread as this one. The old key is simply no longer read. */
+/** The memento key this shape lives under. It is the key Obsidian has always stored this list under, so an existing device keeps its trust list. */
 export const PACK_TRUST_STORAGE_KEY = 'markii:installedPacks';
 
-/** A sane upper bound on how many namespaces this list may hold — a real vault installs a handful of packs; this only exists to bound a hostile/corrupt stored value (mirrors `apps/vscode/src/protocol.ts`'s `MAX_PACK_NAMESPACES` posture). */
+/** A sane upper bound on how many namespaces this list may hold : a real device installs a handful of packs; this only exists to bound a hostile or corrupt stored value. */
 export const MAX_TRUSTED_PACKS = 200;
 
 /** One namespace this device trusts, and the version it was installed at (the manifest's own `version` field, or `undefined` when the pack declares none). */
@@ -64,7 +55,7 @@ function normalizeEntry(raw: unknown): PackTrustEntry | undefined {
 
 /**
  * Normalizes whatever `app.loadLocalStorage(PACK_TRUST_STORAGE_KEY)` handed
- * back into a well-formed `PackTrustList` — hostile-shape-guarded the same
+ * back into a well-formed `PackTrustList` : hostile-shape-guarded the same
  * way every other device-local shape in this plugin is, since this is also
  * hand-editable, foreign-version-shaped data in principle. A malformed
  * entry is dropped rather than failing the whole read; duplicates are

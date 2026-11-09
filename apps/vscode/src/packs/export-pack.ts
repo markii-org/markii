@@ -15,7 +15,7 @@
  * `./pack-diagnostics.ts` owns this host's diagnostic wording.
  * `extension.ts` (which already imports `vscode`) is wiring only: it
  * discovers packs via `./discover-configured-packs.ts`, offers a quick pick
- * when there is more than one, calls `@markii/host`'s `exportPackArchive`,
+ * when there is more than one, calls `@markii/pack-build`'s `exportPackArchive`,
  * asks where to save via a save dialog prefilled with the archive's own
  * file name, writes the bytes with `writePackArchiveFile`, and shows the
  * message this module renders.
@@ -36,7 +36,10 @@ import {
 } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import type { DiscoveredPack } from '@markii/host';
-import type { PackExportArchiveOutcome, PackExportFs } from '@markii/host/node';
+import type {
+  PackExportArchiveOutcome,
+  PackExportFs,
+} from '@markii/pack-build';
 
 /**
  * A Node-backed `PackExportFs`. `exists`/`readFile`/`listDirectory` never

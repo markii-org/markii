@@ -136,7 +136,20 @@ export interface HostPackSource {
    */
   readonly engine: string;
   /**
-   * Folders this host currently AUTHORIZES: VS Code's resolved
+   * Whether installed packs are gated on a device-local trust list.
+   * `'device-list'`: a folder in `installRoot` loads only when the trust
+   * list in the adapter's `memento` names its namespace, and the host
+   * gains `installedPacks`, `enablePack` and `disablePack`. An install
+   * trusts the pack it installs. Requires `installRoot`. `'none'` (or
+   * absent): every folder this host's own policy authorizes loads, which
+   * is right for a host that trusts its own install store (VS Code, the
+   * CLI). A host states its choice explicitly.
+   */
+  readonly trust?: 'device-list' | 'none';
+  /**
+   * Folders this host currently AUTHORIZES. Under `trust: 'device-list'`
+   * these are the folders beyond the install root (the host adds the
+   * trusted installed ones itself): VS Code's resolved
    * `markii.packs` setting plus bundled packs; Obsidian's trust-filtered
    * installed folders plus bundled packs.
    */

@@ -14,8 +14,8 @@
  * Two copies of a merge this small still drift, and the `__proto__` rule
  * below is exactly the kind of detail one copy would quietly lose.
  *
- * Environment-free on purpose (no `node:*`, no React), so it is exported
- * from `@markii/host/browser` as well as the main entry.
+ * Environment-free on purpose (no `node:*`, no React), so the main entry
+ * can export it and a browser bundle can import it.
  */
 import type { StoredValue } from '@markii/runtime';
 
