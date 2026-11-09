@@ -319,7 +319,7 @@ Obsidian creates its workers with Node integration enabled, so `process`,
 `require`, and `Buffer` exist inside the isolate's global scope. This had
 two consequences. The first was functional: the Lua runtime's environment
 detection saw `process` and took a Node code path a blob worker cannot
-complete, so every run failed; the worker bundle now shadows those
+complete, so every run failed; the worker bundle shadows those
 globals at its top, which restores the browser path and keeps the
 bundle's own code off Node APIs. The second is a boundary statement that
 must be made honestly: that shadowing is scoping, not a privilege
@@ -571,8 +571,7 @@ terminal and without the explicit flag writes nothing.
 
 ## Verification status of the reference sandbox
 
-The `@markii/lua` sandbox was audited adversarially in August 2026 (commit
-`f7d54e8`), with every claim backed by a probe that can be re-run against
+The `@markii/lua` sandbox was audited adversarially in August 2026, with every claim backed by a probe that can be re-run against
 the code. The audit's approach was deliberate about its own trust model:
 claims were graded by whether an attack was actually executed against the
 real interpreter, and a "found nothing" verdict is bounded by the attacks
@@ -586,22 +585,22 @@ which included metatable forgery, denial-message spoofing, function
 smuggling, cycle attacks, and deep-recursion and large-allocation attacks.
 
 Two findings came out of the audit, neither exploitable for escape, leak, or
-hang, and both were fixed in commit `272f1b6`:
+hang, and both are fixed:
 
 1. The marshaller's fast-rejection caps could be bypassed by rebinding the
    Lua globals the walk used, degrading a rejection from ~20k instructions
-   to the full memory-cap budget. The primitives are now captured into
+   to the full memory-cap budget. The primitives are captured into
    locals at prelude definition time, immune to rebinding, and the run path
    gained an unconditional catch so the never-throws guarantee no longer
    depends on downstream behavior.
 2. Strings containing NUL bytes were silently truncated by the interpreter's
-   string marshaling. They are now rejected at the marshal boundary with an
+   string marshaling. They are rejected at the marshal boundary with an
    explicit reason instead of losing data silently.
 
 Both fixes were verified by independent re-runs of the original probes.
 
 A third finding was reported through real-world script writing rather than
-the audit (August 2026, issue #6). The `net` capability returned fetch
+the audit (August 2026). The `net` capability returned fetch
 results to Lua as the engine's own proxy objects instead of plain tables,
 and `cache.get` did the same for a stored value on a cache hit. Proxies
 leaked engine semantics into scripts: `type()` misreported them, returning
@@ -612,7 +611,7 @@ responses and cache hits are decoded inside the sandbox by a trusted JSON
 decoder that builds genuine Lua tables, with the depth and node caps
 enforced on the host side before decoding and reported as an ordinary
 capability denial. The same change bounded the cache write path: a value
-being stored now passes through the same capped, cycle-safe walk a
+being stored passes through the same capped, cycle-safe walk a
 script's own return value gets, so an oversized or cyclic value fails
 cleanly instead of reaching storage. A stored entry that fails those
 checks on a later read, which can only mean host-side corruption, is
@@ -646,7 +645,7 @@ terminated every runaway shape put to it, including the historical
 that never answers.
 
 The engagement's findings were fixes to the layers around that core, all
-now landed with regression tests: a network redirect is resolved hop by hop
+landed with regression tests: a network redirect is resolved hop by hop
 and each hop's host is re-checked before it is contacted, so a redirect
 cannot reach a host the user did not grant; a response body is bounded to
 the fetch-size cap as it streams rather than buffered whole, and the worker
@@ -671,20 +670,20 @@ before inflating, the symlink and hard-link defenses, the declared-intersect-gra
 capability model, and the fail-safe decoding of a hostile manifest or
 cached data all held. Two weakenings specific to a deliverable bundle were
 found and fixed before release: the directory-form snapshot builder read a
-file before checking its size, which a size check ahead of the read now
+file before checking its size, which a size check ahead of the read
 closes; and the grant key omitted the content of `src=` script files, so a
 swapped bundle script could run under an old grant, which folding that
-content into the key now prevents. An independent re-attack afterward
+content into the key prevents. An independent re-attack afterward
 confirmed both fixes held and found one further host-exhaustion path: the
 zip form was read from disk whole before any per-entry cap applied, since
 those caps operate on an already-opened archive. The archive's on-disk size
-is now checked before it is read, so an oversized `.mkz` is refused at open.
+is checked before it is read, so an oversized `.mkz` is refused at open.
 The same re-attack found that the earlier network-denial fix still let a
 script read its classification signal: the per-run tag that marked a denial
 travelled inside the error text, where a script's own `pcall` could read it
 and then forge it onto an unrelated failure to relabel that failure as a
 permission denial. The presentation was cosmetic, since no boundary was
-crossed, but the fix removes the seam: a provider's policy denial is now
+crossed, but the fix removes the seam: a provider's policy denial is
 recorded on the sandbox's out-of-band handle and the tag is gone, so no
 classification signal reaches the script at all. Two smaller observations
 were accepted rather than changed, and are noted here so they stay visible:
@@ -694,7 +693,7 @@ closed and a cache entry is never trusted for freshness; and a bundle's
 shipped `.cache/` is not read back into `cache.get` in the current host, so
 there is no poisoned-cache path through it today.
 
-The sandboxed `require` was wired in for the packs feature (issue #3) and
+The sandboxed `require` was wired in for the packs feature and
 ships with an executed adversarial probe suite run through the real
 interpreter: path traversal in module names (caught by the reused bundle
 path-jail), bytecode rejection on both the host and Lua sides, the
@@ -714,9 +713,9 @@ and the per-run cache does not leak across runs. It also confirmed that webview
 pack loading is driven only by the `markii.packs` setting, never by note
 content, and that the setting's user-only application scope is what keeps a
 workspace from injecting packs. No escape, grant bypass, note-driven loading, or
-crash was found. Two LOW hardening items came out of it and are now fixed: the
+crash was found. Two LOW hardening items came out of it and are fixed: the
 application-scope declaration is pinned by a test so it cannot be silently
-removed, and pre-reading a pack's shared Lua now applies a per-file size cap,
+removed, and pre-reading a pack's shared Lua applies a per-file size cap,
 matching the bundle snapshot's posture.
 
 Scheduled and auto-run execution then shipped in the reference extension (issue
@@ -728,8 +727,7 @@ triggers while the same call succeeds under manual), and grants for these
 triggers are resolved from stored consent only, so a run without a click never
 prompts and never reaches a host the user did not already grant by hand.
 
-That surface has now had its own dedicated adversarial pass (August 2026, issue
-#12), driven through real worker threads, the real Lua sandbox, and real local
+That surface has had its own dedicated adversarial pass (August 2026), driven through real worker threads, the real Lua sandbox, and real local
 HTTP servers rather than mocks. The two rules held under attack. Repeated
 scheduled and auto ticks could not reach an effectful capability by any route
 tried: not a POST or PATCH with the host allowlisted, not a bundle write even
@@ -746,7 +744,7 @@ error message, with the ungranted host's own request counter staying at zero
 across first-ever scheduled runs, auto runs, a script swapped between a manual
 grant and the next tick, and a note naming one granted and one declined host.
 
-The pass found one real gap and two narrower robustness bugs, all now fixed.
+The pass found one real gap and two narrower robustness bugs, all fixed.
 The gap was a declaration, not logic: `markii.runOnOpen` and
 `markii.refreshIntervalSeconds` carried no configuration scope, and an
 unscoped VS Code setting defaults to window scope, which a workspace's own
@@ -757,11 +755,11 @@ network gate still held in that state, since a fresh clone carries no stored
 grant and an auto run never prompts, so what a workspace could actually cause
 was capability-free sandboxed execution rather than any reach outward. The
 property that no code runs without a user gesture was still broken, so both
-settings are now pinned to application scope and a test pins every setting
+settings are pinned to application scope and a test pins every setting
 that can cause an unattended run. The two smaller bugs were in the persisted
 value store: a corrupt entry made rehydration throw where it should degrade,
 and a value named `__proto__`, which is a legal script name, was silently
-dropped by an output object built with plain assignment. Both paths now skip
+dropped by an output object built with plain assignment. Both paths skip
 what they cannot understand and build their output so that every name
 survives, matching the discipline `@markii/runtime`'s own value store already
 followed.
@@ -801,7 +799,7 @@ reviewed by reading rather than by execution, and the layer directly beneath
 it was probed. Closing that gap needs an editor-hosted integration test,
 which is tracked with the other host-level verification below.
 
-The resolve-and-pin work of issue #10 was verified against the real
+The resolve-and-pin work was verified against the real
 resolver and the real network rather than only against injected answers. A
 note granted a public name whose genuine DNS answer is a loopback address
 is refused as an ordinary capability denial, and a note granted
@@ -811,15 +809,15 @@ which was necessary because `fetch` cannot pin where a socket connects
 without pulling in a dependency, silently dropped the default headers
 `fetch` had been adding. With no user agent, the GitHub API answers 403,
 so every note reading it would have broken while a suite of local-server
-tests stayed green. The headers are now set explicitly and pinned by tests.
+tests stayed green. The headers are set explicitly and pinned by tests.
 
 Two areas remain intentionally outside the audited surface, and are tracked
 rather than forgotten: the four known hang reproductions are covered by
 dedicated deadlock tests rather than re-executed in CI (re-triggering a
 genuine hang would wedge the test runner); and the external terminatable
-isolate is now exercised by the extension's own tests but its behavior inside a
+isolate is exercised by the extension's own tests but its behavior inside a
 live editor host is the application's to verify. The consent prompt shown when a note builds network
-addresses at run time now states the denial outright: it says those requests
+addresses at run time states the denial outright: it says those requests
 cannot be listed in advance and will be denied, and that only the hosts
 written directly in the note can be granted, so accepting is never mistaken
 for enabling the dynamic requests.
