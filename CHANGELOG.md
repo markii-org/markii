@@ -6,6 +6,13 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.17.0-next.0] - 2026-11-09
+
+A prerelease on the npm `next` dist-tag (`npm install @markii/react@next`),
+so a plain install still resolves 0.16.0. The `@markii/*` packages and
+`@markii/cli` ship as 0.17.0-next.0. The VS Code extension and the
+Obsidian plugin are not released with it.
+
 ### Added
 
 - **An ASCII box style for the terminal engine.** `@markii/ansi`'s render

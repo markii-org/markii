@@ -99,7 +99,13 @@ jobs:
               echo "$name@$version already on npm, skipping"
             else
               echo "publishing $name@$version"
-              npm publish -w "$name" --access public
+              # A prerelease version (one with a "-", e.g. 0.17.0-next.0)
+              # goes to the `next` dist-tag so `latest` keeps pointing at
+              # the last stable release. npm refuses a prerelease without it.
+              case "$version" in
+                *-*) npm publish -w "$name" --access public --tag next ;;
+                *) npm publish -w "$name" --access public ;;
+              esac
             fi
           done
 
@@ -115,7 +121,10 @@ jobs:
             echo "@markii/cli@$version already on npm, skipping"
           else
             echo "publishing @markii/cli@$version"
-            npm publish -w @markii/cli --access public
+            case "$version" in
+              *-*) npm publish -w @markii/cli --access public --tag next ;;
+              *) npm publish -w @markii/cli --access public ;;
+            esac
           fi
 
   github-release:
@@ -204,11 +213,18 @@ jobs:
             gh release edit "$TAG" --title "$TAG" --notes-file RELEASE_NOTES.md
             gh release upload "$TAG" dist-artifacts/*.tgz --clobber
           else
-            gh release create "$TAG" --title "$TAG" --notes-file RELEASE_NOTES.md dist-artifacts/*.tgz
+            case "$TAG" in
+              *-*) PRE=--prerelease ;;
+              *) PRE= ;;
+            esac
+            gh release create "$TAG" $PRE --title "$TAG" --notes-file RELEASE_NOTES.md dist-artifacts/*.tgz
           fi
 
   vscode-extension:
     needs: github-release
+    # A prerelease tag (v0.17.0-next.0) releases the npm packages only: the
+    # Marketplace takes no semver prerelease, so the extension skips it.
+    if: ${{ !contains(github.ref_name, '-') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
