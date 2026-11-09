@@ -403,6 +403,101 @@ and nothing else, so value failure markers, run markers, and pack markers
 stay where they were. A preference that reached into the renderer instead
 would have to be an option that leaves the default rendering unchanged.
 
+## Writing a host
+
+A host is any application that shows Markii notes. Most of the work is
+already done in published packages; a host chooses which ones it needs and
+writes one adapter.
+
+### Rendering only
+
+A site or app that shows its own notes and runs no scripts needs one
+renderer and nothing else. In React (18 or 19):
+
+```tsx
+import { renderMark } from '@markii/react';
+import { defaultRegistry } from '@markii/react/components';
+import '@markii/react/doc.css';
+
+const view = renderMark(source, defaultRegistry);
+```
+
+Pass `renderCode` to plug in your own syntax highlighting, and
+`resolveImageSrc` or `resolveHref` to map relative paths onto your site.
+Outside React, `@markii/html` renders the same note to a string, and
+`@markii/ansi` renders it for a terminal.
+
+### Running scripts, packs and the editor features
+
+Everything beyond rendering comes from `@markii/host`. The host writes a
+`HostAdapter`: a handful of primitives only it can provide (read and write
+files, list a folder, ask one yes-or-no question, keep device-local state,
+write a diagnostics line, read the clock), plus the optional capability
+groups it supports. `createMarkiiHost` turns that adapter into the shared
+behaviors: run, export, pack install, load, trust and removal, completion,
+hover and component insertion.
+
+Pick the entry that matches the environment:
+
+- A web page: `@markii/host/browser` for a module Web Worker isolate
+  (`createBrowserHostIsolate`) and a network provider bound to an origin
+  allowlist (`createFetchNetProvider`). Bundlers such as Vite need no extra
+  configuration; the worker and the Lua WebAssembly file are shipped beside
+  the entry and found through `import.meta.url`.
+- Node, or an Electron main process: `@markii/host/node` for a worker
+  thread isolate with a heap cap and the address-pinning network provider.
+  The host bundles its own worker entry and passes its path.
+- An Electron renderer: the browser entry's isolate (pass
+  `workerType: 'classic'` for an embedded classic worker), with the pinned
+  network provider served from the renderer's Node side, as the Obsidian
+  plugin does.
+
+A sketch of a browser host:
+
+```ts
+const host = createMarkiiHost({
+  id: 'my-app',
+  labels,
+  readFile, exists, writeFile, listFolder,
+  prompt: (request) => showDialog(request),
+  memento,
+  diagnostics: (line) => console.info(line),
+  now: () => Date.now(),
+  isolate: createBrowserHostIsolate({
+    netProvider: createFetchNetProvider({ allowedOrigins }),
+  }),
+});
+```
+
+`e2e/browser-host/` in the repository is a complete, tested example of
+this shape.
+
+### Proving the adapter
+
+`@markii/host/conformance` ships the scenario corpus the reference apps run
+against: notes, actions, scripted prompt answers and the exact outcomes
+expected. Run it against your adapter in your own test suite. A scenario
+your host cannot support reports `unsupported` because the adapter left
+that capability out, which is a pass, not a failure.
+
+### Limits to know
+
+- **Network in a browser.** A page cannot pin addresses, so there is no
+  protection against DNS rebinding or reaching private ranges. The
+  allowlist and the user's grant are the boundary. A host that needs more
+  routes requests through a server of its own that resolves and pins.
+- **Memory in a Web Worker.** A Web Worker takes no heap cap. Lua's own
+  limits and the external watchdog still apply.
+- **No compiling on the web.** A browser host installs prebuilt `.mkp`
+  archives only. Compiling pack sources needs `@markii/pack-build`, which
+  runs in Node.
+- **Pack code privileges.** A pack's React views run with the page's
+  privileges. Install consent and, where a pack folder can arrive by sync,
+  the device trust list (`HostPackSource.trust: 'device-list'`) are the
+  gate. A sandboxed iframe per pack is not implemented.
+- **Terminal packs** run inside the host's own process; see
+  [security.md](security.md).
+
 ## Host responsibilities for scripting (L3)
 
 The libraries deliberately stop at the seam where application policy begins.
