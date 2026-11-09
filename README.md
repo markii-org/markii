@@ -108,7 +108,7 @@ Ways to use Markii with no coding:
       <br>
       <img src="res/icons/terminal.svg" width="40" height="40" alt="" /><br />
       <h4>Command line</h4>
-      View, export and run a note straight in the terminal.
+      View, export and run a note straight in the terminal, plus a language server for Neovim, Helix and Emacs.
       <br /><br />
       <a href="https://www.npmjs.com/package/@markii/cli">Install from npm &rarr;</a>
       <br><br>
