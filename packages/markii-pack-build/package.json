@@ -1,6 +1,6 @@
 {
   "name": "@markii/pack-build",
-  "version": "0.17.0-next.1",
+  "version": "0.17.0-next.2",
   "description": "Pack compilation for Markii authoring hosts: compiles a pack's component sources (and imported CSS) with esbuild-wasm's in-process path, and writes the prebuilt form or a .mkp archive. Node only.",
   "keywords": [
     "markdown",
@@ -36,8 +36,8 @@
     "build:dist": "rm -rf dist && tsc -p tsconfig.build.json"
   },
   "dependencies": {
-    "@markii/host": "^0.17.0-next.1",
-    "@markii/pack": "^0.17.0-next.1",
+    "@markii/host": "^0.17.0-next.2",
+    "@markii/pack": "^0.17.0-next.2",
     "esbuild-wasm": "^0.28.2",
     "fflate": "^0.8.3"
   },
