@@ -783,7 +783,12 @@ same commit as the change that triggers them:
   `package.json` `build:dist` chain, and the release workflow's package list
   under `.github/`. A non-published _app_ workspace (playground, vscode)
   joins the repo layout only; `build:dist` and the release workflow list
-  npm packages.
+  npm packages. In `release.yml`, `PACKAGE_DIRS` is the ONE package list:
+  the publish loop, the release tarballs, and the release notes' install
+  and download sections are all generated from it (plus the CLI gate).
+  Never hand-write a package name or count anywhere else in the workflow;
+  a package added or removed means editing `PACKAGE_DIRS` and nothing more
+  there.
 - **New PUBLISHED npm package** → before its first release, the user must
   publish version 0.0.1 by hand and configure OIDC trusted publishing for it
   on npm. The release workflow publishes via trusted publishing, which

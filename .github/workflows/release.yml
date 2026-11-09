@@ -153,6 +153,10 @@ jobs:
             npm pack -w "$name" --pack-destination dist-artifacts >/dev/null
             mv dist-artifacts/${stable}-*.tgz "dist-artifacts/${stable}.tgz"
           done
+          if [ "$CLI_PUBLISH_ENABLED" = 'true' ]; then
+            npm pack -w @markii/cli --pack-destination dist-artifacts >/dev/null
+            mv dist-artifacts/markii-cli-*.tgz dist-artifacts/markii-cli.tgz
+          fi
           ls -1 dist-artifacts
 
       - name: Assemble release notes
@@ -169,6 +173,20 @@ jobs:
             grab { print }
           ' CHANGELOG.md > notes-body.md
 
+          # Every package list below is derived from PACKAGE_DIRS (and the
+          # CLI gate), never written by hand, so adding or removing a
+          # package needs no edit here.
+          PKGS=""
+          for dir in $PACKAGE_DIRS; do
+            PKGS="$PKGS $(node -p "require('./$dir/package.json').name")"
+          done
+          COUNT=$(echo $PKGS | wc -w)
+          # A prerelease is never "latest", so its links name the tag.
+          case "$TAG" in
+            *-*) DL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}" ;;
+            *) DL="https://github.com/${GITHUB_REPOSITORY}/releases/latest/download" ;;
+          esac
+
           {
             cat notes-body.md
             echo
@@ -180,23 +198,34 @@ jobs:
             echo "npm install @markii/react@${VERSION}"
             echo '```'
             echo
-            echo 'All nine packages, if you want them explicitly:'
+            echo "All ${COUNT} library packages, if you want them explicitly:"
             echo
             echo '```'
-            for pkg in core stdlib bundle pack runtime lua react html ansi; do
-              echo "npm install @markii/${pkg}@${VERSION}"
+            for name in $PKGS; do
+              echo "npm install ${name}@${VERSION}"
             done
             echo '```'
+            if [ "$CLI_PUBLISH_ENABLED" = 'true' ]; then
+              echo
+              echo 'The command line tool:'
+              echo
+              echo '```'
+              echo "npm install -g @markii/cli@${VERSION}"
+              echo '```'
+            fi
             echo
             echo "## Downloads"
             echo
-            echo 'The attached tarballs are the packed npm packages. The names are'
-            echo 'stable across releases, so the latest of each is always at a fixed URL:'
+            echo 'The attached tarballs are the packed npm packages, with names that'
+            echo 'stay the same across releases:'
             echo
             echo '```'
-            for pkg in core stdlib bundle pack runtime lua react html ansi; do
-              echo "https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/markii-${pkg}.tgz"
+            for name in $PKGS; do
+              echo "${DL}/${name/@markii\//markii-}.tgz"
             done
+            if [ "$CLI_PUBLISH_ENABLED" = 'true' ]; then
+              echo "${DL}/markii-cli.tgz"
+            fi
             echo '```'
           } > RELEASE_NOTES.md
 
