@@ -128,6 +128,24 @@ a workspace cannot widen network reach for whoever opens it.
 One property of hostname grants is unchanged and still worth stating: a
 grant covers every port and path on the host it names.
 
+### In a web page
+
+A host that runs in a browser cannot pin. A page has no resolver and no
+socket of its own; the browser decides which address a name connects to,
+so neither DNS rebinding nor private-range reach can be closed there. The
+reference browser provider (`@markii/host/browser`'s
+`createFetchNetProvider`) narrows what it can instead. A request goes out
+only when its host is one the run was granted and its origin is on an
+allowlist the page itself supplies; an empty allowlist denies every
+request. Credentials are never sent, the referrer is withheld, and any
+redirect is refused, since a page cannot see where a redirect leads before
+following it. The response size cap applies as in every host. What a script
+can read back is then also bounded by the browser's own CORS rules.
+
+A page that needs reach into private networks it does not control should
+not offer scripts network access at all, or should send requests through a
+server of its own that resolves and pins as described above.
+
 ### The note view (`doc`)
 
 A script can read the note it runs in: `doc.directives()` for the note's
@@ -412,6 +430,17 @@ tested, and the skills in `skills/` grade against this table.
 | `cache-not-trusted` | A cached entry with an implausible timestamp is recomputed rather than served, so a shipped `.cache/` cannot pin stale values. | [The bundle jail](#the-bundle-jail) |
 | `unattended-is-user-scoped` | A setting that can make scripts run without a user gesture is user-scope only, so a workspace cannot enable unattended execution for whoever opens it. | [Triggers cap capabilities](#triggers-cap-capabilities); the extension's `contributes.configuration` scopes |
 | `values-are-data` | A script value reaches the page as data only; its text never becomes markup, and a failure carries only its kind, never its text. | [Capabilities](#capabilities); the failure-presentation seam in `@markii/react` |
+
+## Pack components in a web page
+
+A pack's React views run in the page that renders the note, with every
+privilege that page has: its cookies, its storage, and its origin. A
+browser host therefore applies the same provenance rule as a terminal
+host. It loads only prebuilt `.mkp` archives that went through an install
+step asking for consent, and where its pack folder can receive packs it did
+not install, it keeps a device trust list so a folder that merely arrived
+is never evaluated. A sandboxed iframe per pack would contain a pack's code
+further; that option is tracked in issue #66.
 
 ## Escape sequences in terminal output
 

@@ -376,7 +376,14 @@ compiles: it loads the prebuilt form only, which is exactly what a `.mkp`
 archive carries. A pack you develop in VS Code reaches Obsidian by
 exporting it as an archive and installing that. A host that does not
 compile reports a source-only pack on its diagnostics surface, naming what
-it could not load, rather than failing silently.
+it could not load, rather than failing silently. A host that runs in a web
+page never compiles either: it installs prebuilt `.mkp` archives only.
+
+The compiler itself is the `@markii/pack-build` package, the only Markii
+package that carries a build toolchain (esbuild's WebAssembly build). An
+authoring host or a pack repository's own build script uses it to compile
+sources, write the prebuilt form, or produce a `.mkp`; a consuming host
+never needs it.
 
 When a pack folder holds both a `webview.js` and sources, the prebuilt
 script wins and the sources are ignored. The host says so on its
