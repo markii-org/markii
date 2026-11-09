@@ -13,8 +13,9 @@
  *   old `run-note.ts:spawnRun` wrapper already relied on.
  * - `exports`: `html`, `ansi`, and `md-plain`. Never `pdf` — there is no
  *   `BrowserWindow` in a terminal process to print through.
- * - `editor`: NOT declared. A one-shot terminal command has no cursor and
- *   no live edit surface to complete, hover, or insert into.
+ * - `editor`: declared only when the caller passes one, which `markii lsp`
+ *   does. A one-shot terminal command has no cursor and no live edit
+ *   surface to complete, hover, or insert into.
  * - `packs`: declared only when the caller passes `packs` (a pack root
  *   and the bundled-pack namespaces), engine `ansi`. A pack here runs
  *   INSIDE the CLI process with its full privileges, so the only folders
@@ -41,6 +42,7 @@ import {
   type GrantMemento,
   type HostAdapter,
   type HostDirEntry,
+  type HostEditor,
   type HostExportFormat,
   type HostPromptRequest,
 } from '@markii/host';
@@ -133,6 +135,13 @@ export interface CliHostAdapterOptions {
   readonly exportTarget?: string;
   /** Declares the `packs` capability (engine `ansi`) when given. */
   readonly packs?: CliPackOptions;
+  /**
+   * Declares the `editor` capability, for `markii lsp` only: the language
+   * server answers completion and hover for a client's open documents. A
+   * command that has no live document leaves this out, and the editor
+   * behaviors stay `Unsupported`.
+   */
+  readonly editor?: HostEditor;
   /** The explicit `--yes` flag: answers yes to the pack install and replace consent only. */
   readonly assumeYes?: boolean;
 }
@@ -210,7 +219,9 @@ export function createCliHostAdapter(
         Promise.resolve(options.exportTarget ?? suggestedFileName),
     },
 
-    // No `editor`: no cursor, no live edit surface.
+    // `editor` only for `markii lsp`; every other command has no cursor
+    // and no live edit surface.
+    ...(options.editor !== undefined ? { editor: options.editor } : {}),
     ...(options.packs !== undefined
       ? { packs: cliPackSource(options.packs, diagnostics) }
       : {}),

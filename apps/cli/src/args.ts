@@ -49,6 +49,7 @@ export type ParsedCommand =
       readonly yes: boolean;
       readonly verbose: boolean;
     }
+  | { readonly kind: 'lsp'; readonly verbose: boolean }
   | { readonly kind: 'pack-list'; readonly verbose: boolean }
   | {
       readonly kind: 'pack-remove';
@@ -129,6 +130,7 @@ const ALLOWED_FLAGS: Readonly<Record<string, ReadonlySet<string>>> = {
   ]),
   export: new Set(['--format', '--output', '--color', '--box']),
   run: new Set(),
+  lsp: new Set(),
   'pack install': new Set(['--yes']),
   'pack list': new Set(),
   'pack remove': new Set(),
@@ -178,11 +180,12 @@ function inapplicableFlag(
  */
 function isKnownSubcommand(
   token: string,
-): token is 'view' | 'export' | 'run' | 'pack' {
+): token is 'view' | 'export' | 'run' | 'pack' | 'lsp' {
   return (
     token === 'view' ||
     token === 'export' ||
     token === 'run' ||
+    token === 'lsp' ||
     token === 'pack'
   );
 }
@@ -353,7 +356,7 @@ export function parseArgs(argv: readonly string[]): ParsedCommand {
     // usage error.
     if (positionals.length > 0 || argv.length > 0) {
       return usageError(
-        `unknown subcommand ${JSON.stringify(first)}; expected view, export, run, or pack`,
+        `unknown subcommand ${JSON.stringify(first)}; expected view, export, run, lsp, or pack`,
       );
     }
     return { kind: 'help' };
@@ -399,6 +402,13 @@ export function parseArgs(argv: readonly string[]): ParsedCommand {
 
   const badFlag = inapplicableFlag(subcommand, flags.used);
   if (badFlag) return badFlag;
+
+  if (subcommand === 'lsp') {
+    if (positionals.length > 0) {
+      return usageError('markii lsp takes no arguments');
+    }
+    return { kind: 'lsp', verbose: flags.verbose };
+  }
 
   if (subcommand === 'view') {
     const file = positionals[0];

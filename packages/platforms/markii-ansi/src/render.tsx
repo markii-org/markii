@@ -94,6 +94,7 @@ import {
   invalidAttributeValueLabel,
   invalidAttributeValueTitle,
   unsafeImageSrcLabel,
+  unknownDirectiveTitle,
   unsafeImageSrcTitle,
 } from './failure-presentation.js';
 import {
@@ -101,6 +102,7 @@ import {
   formatValue,
   getContract,
   reportDiagnostic,
+  type DiagnosticPosition,
   type OnDiagnostic,
   type UnavailableComponent,
   type UnavailableComponentLookup,
@@ -113,7 +115,7 @@ import { resolveHrefAttribute, type ResolveHref } from './href-resolve.js';
 import type { AnsiValueStore, AnsiVaultStore } from './value-types.js';
 import { defaultAnsiRegistry } from './components/index.js';
 import { renderInkToString, renderInkToStringSync } from './ink-string.js';
-import { InteractiveRoot } from './interactive.js';
+import { InteractiveRoot, PackFocusScope } from './interactive.js';
 import { glyphsFor, type BoxStyle, type GlyphSet } from './glyphs.js';
 import type { FocusableDescriptor } from './interactive.js';
 import { InteractiveTabs } from './components/tabs.js';
@@ -244,6 +246,30 @@ interface WalkContext {
   focusCounter: { current: number };
   /** Populated only by `buildMarkElement`'s counting walk; `undefined` for every other walk (string rendering, the mounted render's own tree), which have no use for it and skip the bookkeeping. */
   focusables: FocusableDescriptor[] | undefined;
+}
+
+/**
+ * A walk context whose `onDiagnostic` stamps each event with the source
+ * range of `element`, unless an inner directive already did. This is how a
+ * host (the language server) places a finding in the note without any
+ * component knowing about positions. A node with no position, or a render
+ * with no `onDiagnostic`, returns `wctx` itself.
+ */
+function withNodePosition(wctx: WalkContext, element: Element): WalkContext {
+  const downstream = wctx.onDiagnostic;
+  const range = element.position;
+  if (downstream === undefined || range === undefined) return wctx;
+  const position: DiagnosticPosition = {
+    startLine: range.start.line,
+    startColumn: range.start.column,
+    endLine: range.end.line,
+    endColumn: range.end.column,
+  };
+  return {
+    ...wctx,
+    onDiagnostic: (event) =>
+      downstream(event.position === undefined ? { ...event, position } : event),
+  };
 }
 
 function nextFocusId(wctx: WalkContext): number {
@@ -612,6 +638,11 @@ function renderDirectiveContentString(
         missingView.pack,
       );
     }
+    reportDiagnostic(wctx.onDiagnostic, {
+      kind: 'unknown-directive',
+      directive: name || '(unnamed)',
+      message: unknownDirectiveTitle(name || '(unnamed)'),
+    });
     return unknownDirective(
       name || '(unnamed)',
       inline,
@@ -1230,8 +1261,9 @@ function renderDirectiveString(
   element: Element,
   width: number,
   indent: string,
-  wctx: WalkContext,
+  walk: WalkContext,
 ): string {
+  const wctx = withNodePosition(walk, element);
   const written = stringProperty(element, 'data-mk-name') ?? '';
   const kind = stringProperty(element, 'data-mk-kind');
   const rawAttributes = parseAttributes(
@@ -1959,8 +1991,9 @@ function renderDirectiveElement(
   element: Element,
   width: number,
   indent: string,
-  wctx: WalkContext,
+  walk: WalkContext,
 ): ReactElement | null {
+  const wctx = withNodePosition(walk, element);
   const written = stringProperty(element, 'data-mk-name') ?? '';
   const kind = stringProperty(element, 'data-mk-kind');
   const rawAttributes = parseAttributes(
@@ -2073,7 +2106,81 @@ function renderDirectiveElement(
     }
   }
 
+  if (entry?.focusable === true && !formMismatch && wctx.interactive) {
+    const focusable = renderFocusablePackElement(
+      element,
+      name,
+      aliased,
+      width,
+      indent,
+      wctx,
+    );
+    if (focusable !== undefined) return focusable;
+  }
+
   return styledText(renderDirectiveString(element, width, indent, wctx));
+}
+
+/**
+ * A `focusable` registry component in the live viewer: the component runs
+ * as usual, but an Ink element it returns is mounted (not drawn once) in a
+ * `PackFocusScope`, so it joins the focus order and receives keys while
+ * focused. Returns `undefined` when the component returns a string or
+ * throws, so the caller falls back to the string path (which reports the
+ * failure the usual way). The component draws two columns narrower: the
+ * scope's gutter carries the focus marker.
+ */
+function renderFocusablePackElement(
+  element: Element,
+  name: string,
+  attributes: DirectiveAttributes,
+  width: number,
+  indent: string,
+  wctx: WalkContext,
+): ReactElement | undefined {
+  const component = readRegistryComponent(wctx.registry[name]);
+  if (component == null) return undefined;
+  const innerWidth = Math.max(1, width - 2);
+  const binding = resolveDataAttribute(attributes, wctx.scope);
+  const focusId = nextFocusId(wctx);
+  recordFocusable(wctx, { kind: 'pack', label: stripControlCharacters(name) });
+  const ctx = buildComponentContext(
+    innerWidth,
+    indent,
+    wctx,
+    binding,
+    undefined,
+    focusId,
+  );
+  let result: ReturnType<NonNullable<ReturnType<typeof readRegistryComponent>>>;
+  try {
+    result = component({
+      attributes: binding.attributes,
+      children: renderDirectiveChildrenString(
+        element.children,
+        innerWidth,
+        indent,
+        wctx,
+      ),
+      ctx,
+    });
+  } catch {
+    // Same as the string path: the failure is contained to a neutral box.
+    return styledText(
+      componentError(
+        name || '(unnamed)',
+        false,
+        '',
+        width,
+        wctx.color,
+        wctx.glyphs,
+      ),
+    );
+  }
+  if (!isValidElement(result)) {
+    return styledText(typeof result === 'string' ? result : '');
+  }
+  return <PackFocusScope focusId={focusId}>{result}</PackFocusScope>;
 }
 
 /** A block-position hast node, whichever of `hast`'s two (near-identical) content unions it arrived as. `render.tsx` walks both a `Root`'s `children` (`RootContent[]`) and an `Element`'s `children` (`ElementContent[]`) with the same functions, so every element-mode block function accepts either. */
@@ -2260,6 +2367,25 @@ function buildWalkContext(
   };
 }
 
+/**
+ * The `onDiagnostic` a render hands its walk: the caller's own, minus
+ * `'unknown-directive'` events unless `reportUnknownDirectives` asked for
+ * them. The fallback box already marks an unknown directive in the output,
+ * so a host that does not place findings in a source (the viewer, an
+ * export) keeps the quiet diagnostics surface it always had.
+ */
+function diagnosticsFor(
+  options: RenderMarkOptions | undefined,
+): OnDiagnostic | undefined {
+  const downstream = options?.onDiagnostic;
+  if (downstream === undefined || options?.reportUnknownDirectives === true) {
+    return downstream;
+  }
+  return (event) => {
+    if (event.kind !== 'unknown-directive') downstream(event);
+  };
+}
+
 /** The columns assumed when a caller supplies no `width` option. */
 const DEFAULT_WIDTH = 80;
 
@@ -2308,6 +2434,13 @@ export interface RenderMarkOptions {
   readonly resolveImageSrc?: ResolveImageSrc;
   readonly resolveHref?: ResolveHref;
   readonly onDiagnostic?: OnDiagnostic;
+  /**
+   * Also report a directive that names no registered component as an
+   * `'unknown-directive'` event. Off by default: the fallback box already
+   * marks it in the output. A host that places findings in the note's
+   * source (a language server) turns it on.
+   */
+  readonly reportUnknownDirectives?: boolean;
   /**
    * Components of installed packs that this render cannot draw, as plain
    * data from the host. A directive named here renders the usual fallback
@@ -2445,7 +2578,7 @@ export async function renderMarkToAnsi(
       options?.interactive ?? false,
       options?.resolveImageSrc,
       options?.resolveHref,
-      options?.onDiagnostic,
+      diagnosticsFor(options),
       createUnavailableComponentLookup(options?.unavailableComponents),
       options?.width ?? DEFAULT_WIDTH,
       options?.renderCode,
@@ -2480,7 +2613,7 @@ export async function renderMarkNodeToAnsi(
       options?.interactive ?? false,
       options?.resolveImageSrc,
       options?.resolveHref,
-      options?.onDiagnostic,
+      diagnosticsFor(options),
       createUnavailableComponentLookup(options?.unavailableComponents),
       options?.width ?? DEFAULT_WIDTH,
       options?.renderCode,
@@ -2571,7 +2704,7 @@ export function buildMarkElement(
     interactive,
     options?.resolveImageSrc,
     options?.resolveHref,
-    options?.onDiagnostic,
+    diagnosticsFor(options),
     unavailable,
     width,
     options?.renderCode,

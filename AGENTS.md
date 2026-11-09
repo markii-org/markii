@@ -126,6 +126,9 @@ packages/platforms/markii-ansi   the terminal renderer, a third platform
                      path: a collecting stream at the requested columns,
                      interactive:false so no cursor escapes reach a pipe
   src/interactive.tsx focus (accent + a leading glyph), tab switching,
+                     PackFocusScope + usePackInput (a `focusable` pack
+                     view's keys, only while focused;
+                     pack-focus.probe.test.tsx),
                      details folding, the dim status line with the key
                      legend; q calls the host's onExit, never process.exit.
                      A tabs/details inside a string-framed block (a
@@ -544,9 +547,24 @@ apps/cli             the "markii" command line tool, a third host and a
                      authority, a terminal.js naming another namespace is
                      refused. `markii pack install/list/remove` (--yes
                      answers only the pack consent, never a network grant)
+  src/lsp/ + src/lsp-command.ts  `markii lsp`, the language server:
+                     frames.ts (hand-written Content-Length framing; no
+                     LSP library, none to be added), positions.ts (the one
+                     UTF-8/16/32 conversion point), server.ts (the
+                     protocol over injected deps, no process access),
+                     note-diagnostics.ts (one ansi render collecting
+                     positioned onDiagnostic events; runs no scripts).
+                     Terminal.openStdio is the only stdio seam and claims
+                     stdout for protocol frames. Completion/hover go
+                     through createMarkiiHost's editor behaviors
   src/packs/build-bundled-packs.ts  builds the packs/ that name ansi
                      sources into dist/packs at CLI build time
   An HTML export still renders pack directives as the unknown fallback
+apps/nvim            a thin Neovim plugin (Lua, NOT a workspace): filetype
+                     `markii` for *.mk.md and `vim.lsp.start` of
+                     `markii lsp`; no Markii logic in Lua. test/run.sh is a
+                     headless test against the built CLI;
+                     .github/workflows/nvim.yml runs it. No mirror repo yet
 apps/obsidian        the "Markii" Obsidian plugin (desktop only) — an
                      app/consumer of @markii/react, never a renderer. A full
                      second host: preview, Run, packs, and in-place

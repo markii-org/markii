@@ -2,7 +2,7 @@
  * A fake `Terminal` (see `terminal.ts`) for tests. Not shipped in the
  * built CLI: nothing outside `*.test.ts` files imports this module.
  */
-import type { Terminal } from './terminal.js';
+import type { Terminal, TerminalStdio } from './terminal.js';
 
 export interface FakeTerminal extends Terminal {
   readonly outLines: string[];
@@ -10,6 +10,14 @@ export interface FakeTerminal extends Terminal {
   /** Queued answers `ask` resolves with, in call order; an exhausted queue resolves `''`. */
   readonly askAnswers: string[];
   readonly askedQuestions: string[];
+  /** Bytes `markii lsp` wrote to stdout, in order. */
+  readonly stdoutBytes: Uint8Array[];
+  /** Feeds bytes to the opened stdio, as the client's stdout would. */
+  readonly feed: (bytes: Uint8Array) => void;
+  /** Closes the opened stdio's input, as a dying client would. */
+  readonly endInput: () => void;
+  /** Whether `release` has been called. */
+  readonly stdioReleased: () => boolean;
 }
 
 export function createFakeTerminal(
@@ -26,7 +34,32 @@ export function createFakeTerminal(
   const askAnswers = [...(overrides.askAnswers ?? [])];
   const askedQuestions: string[] = [];
 
+  const stdoutBytes: Uint8Array[] = [];
+  let dataListener: ((chunk: Uint8Array) => void) | undefined;
+  let endListener: (() => void) | undefined;
+  let released = false;
+
   return {
+    openStdio(): TerminalStdio {
+      return {
+        onData(listener): void {
+          dataListener = listener;
+        },
+        onEnd(listener): void {
+          endListener = listener;
+        },
+        write(bytes: Uint8Array): void {
+          stdoutBytes.push(bytes);
+        },
+        release(): void {
+          released = true;
+        },
+      };
+    },
+    stdoutBytes,
+    feed: (bytes) => dataListener?.(bytes),
+    endInput: () => endListener?.(),
+    stdioReleased: () => released,
     outLines,
     errLines,
     askAnswers,

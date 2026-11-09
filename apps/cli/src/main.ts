@@ -46,6 +46,7 @@ import { resolveViewMode } from './view-mode.js';
 import { resolveCliPackOptions } from './pack-store.js';
 import type { UnavailableComponent } from '@markii/stdlib';
 import { loadCliPackRegistry } from './pack-registry.js';
+import { runLspCommand } from './lsp-command.js';
 import { runLiveViewer } from './live-view.js';
 import { watchNote } from './watch-file.js';
 import type { MountLiveViewerInput, ViewDeps } from './view-deps.js';
@@ -82,6 +83,7 @@ Usage:
               [--box <unicode|ascii>] [--no-run] [--static] [--watch]
   markii export <file> --format <html|ansi|md-plain> -o <file> [--box <unicode|ascii>]
   markii run <file>
+  markii lsp
   markii pack install <file.mkp> [--yes]
   markii pack list
   markii pack remove <namespace>
@@ -116,6 +118,11 @@ export flags:
   --format <fmt>   html, ansi, or md-plain. Required.
   -o, --output <file>   Where to write the exported file. Required.
   --box <style>    For --format ansi: unicode (default) or ascii.
+
+markii lsp starts the language server on stdin and stdout, for an editor
+that speaks LSP (Neovim, Helix, Emacs): directive and attribute completion,
+hover, and diagnostics for .mk.md documents. It prints protocol frames
+only; diagnostics about the server itself go to stderr.
 
 Packs add components to a note. A pack that ships terminal views renders
 them in markii view and markii export --format ansi; a pack without them
@@ -792,6 +799,12 @@ export async function run(
       return runExportCommand(command, terminal);
     case 'run':
       return runRunCommand(command, terminal);
+    case 'lsp':
+      return runLspCommand(terminal, {
+        serverVersion: resolveCliVersion(),
+        platform: process.platform,
+        verbose: command.verbose,
+      });
     case 'pack-install':
       return runPackInstallCommand(command, terminal);
     case 'pack-list':

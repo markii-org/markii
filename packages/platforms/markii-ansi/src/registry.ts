@@ -177,6 +177,16 @@ export interface AnsiRegistryEntry {
    * Ink primitives Yoga can reflow.
    */
   selfLayout?: boolean;
+  /**
+   * Marks a BLOCK component whose returned Ink element the live viewer
+   * mounts and lets take focus, instead of drawing it as a static
+   * snapshot. It joins the focus order (up/down/j/k) and, while focused,
+   * its element's `useInput` calls receive keys (a pack reads
+   * `__markiiInk.useInput`, which is gated this way). In a render-once
+   * pass, or inside a framed body (a callout, a card) it renders as
+   * before: a snapshot with no focus.
+   */
+  focusable?: boolean;
 }
 
 /** One alias: a second name for an existing component, optionally carrying preset attributes. */

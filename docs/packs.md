@@ -159,7 +159,8 @@ A terminal view is a function that receives `{ attributes, children, ctx }`
 and returns a string or an Ink element. The engine calls it as a plain
 function and draws what it returns once, as a static snapshot, so the
 function itself must not use hooks; components it renders inside the
-returned element may. The engine cleans every attribute and stored value of
+returned element may. A block view registered with `focusable: true` is the
+exception, described below. The engine cleans every attribute and stored value of
 control characters before the view sees them. For a string the view
 composes itself, `ctx.text()` applies the same cleaning. Take glyphs from
 `ctx.glyphs` and colors from `ctx.style` and the theme, never from Ink's
@@ -454,7 +455,17 @@ globalThis.__markiiRegisterTerminalPack(manifestJson, componentModules);
 
 Both arguments follow the `webview.js` rules: the raw `pack.json` text as a
 string, and an own-property map from each local component name to an object
-with a `component` function and an optional boolean `inline`.
+with a `component` function, an optional boolean `inline`, and an optional
+boolean `focusable`.
+
+`focusable: true` on a block view asks the live viewer to mount the element
+the view returns instead of drawing it once, and to give it a place in the
+focus order. The view then receives keys through the `useInput` hook on
+`globalThis.__markiiInk`, and only while it has focus. The viewer's own
+navigation keys (up, down, `j`, `k`, `q`) reach it too, so use other keys
+for the pack's own controls. `focusable` is ignored on an inline view, and
+a non-boolean value rejects the registration. The render-once output, and
+a view drawn inside a framed body such as a callout, stay static snapshots.
 
 React and Ink are not bundled. The host publishes the instances its engine
 uses as `globalThis.__markiiReactInk` and `globalThis.__markiiInk`, and a

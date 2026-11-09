@@ -164,6 +164,15 @@ prompt is declined without asking, and the CLI says so once on stderr.
 Granted hosts are remembered per note (keyed by its exact script content)
 so the same note does not re-prompt on every run.
 
+### `markii lsp`
+
+Runs a language server over stdin and stdout for editors such as Neovim,
+Helix and Emacs: completion, hover, diagnostics, and fence lengthening for
+`.mk.md` documents. It never runs a note's scripts and never uses the
+network. Pack-loading problems go to the editor's log; `--verbose` adds the
+informational pack lines. It exits with 0 after the client's shutdown
+request and 1 otherwise, as the protocol specifies.
+
 ## Where the CLI keeps its state
 
 Everything the CLI remembers between runs lives in one file, `state.json`,

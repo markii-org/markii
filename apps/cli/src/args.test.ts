@@ -9,6 +9,29 @@ interface Case {
 
 const cases: Case[] = [
   {
+    name: 'lsp takes no file',
+    argv: ['lsp'],
+    expected: { kind: 'lsp', verbose: false },
+  },
+  {
+    name: 'lsp accepts the global --verbose',
+    argv: ['lsp', '--verbose'],
+    expected: { kind: 'lsp', verbose: true },
+  },
+  {
+    name: 'lsp rejects a positional argument',
+    argv: ['lsp', 'note.mk.md'],
+    expected: { kind: 'usage-error', message: 'markii lsp takes no arguments' },
+  },
+  {
+    name: 'lsp rejects a view flag',
+    argv: ['lsp', '--width', '40'],
+    expected: {
+      kind: 'usage-error',
+      message: '--width does not apply to markii lsp',
+    },
+  },
+  {
     name: 'no arguments prints help',
     argv: [],
     expected: { kind: 'help' },
@@ -330,7 +353,7 @@ const cases: Case[] = [
     expected: {
       kind: 'usage-error',
       message:
-        'unknown subcommand "bogus"; expected view, export, run, or pack',
+        'unknown subcommand "bogus"; expected view, export, run, lsp, or pack',
     },
   },
   {

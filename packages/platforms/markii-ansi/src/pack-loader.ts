@@ -184,6 +184,8 @@ export function loadAnsiPack(
     };
     const inline = kind === undefined ? module.inline : kind === 'inline';
     if (inline !== undefined) entry.inline = inline;
+    // Focus only makes sense for a block view.
+    if (module.focusable === true && inline !== true) entry.focusable = true;
     entries[composed.name] = entry;
   }
   return { registry: createAnsiRegistry(entries) };

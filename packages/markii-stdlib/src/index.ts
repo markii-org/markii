@@ -39,6 +39,7 @@ export {
   type UnavailableComponent,
   type UnavailableComponentLookup,
   type DiagnosticEvent,
+  type DiagnosticPosition,
   type DiagnosticKind,
   type OnDiagnostic,
 } from './diagnostics.js';

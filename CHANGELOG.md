@@ -6,6 +6,24 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **`markii lsp`** (`@markii/cli`): a language server over stdio with
+  completion, hover, diagnostics and fence lengthening for `.mk.md`
+  documents, built on `@markii/stdlib/editor` and the shared host editor
+  behaviors. It runs no scripts and uses no network. A thin Neovim plugin
+  lives in `apps/nvim` (not published).
+- **Diagnostic positions** (`@markii/stdlib`): `DiagnosticEvent.position`
+  and the `DiagnosticPosition` type, and a new `'unknown-directive'`
+  `DiagnosticKind`. A downstream exhaustive switch over `DiagnosticKind`
+  needs the new member. `@markii/ansi` stamps every event with its
+  directive's source range and reports unknown directives when the new
+  `reportUnknownDirectives` render option is true (default off).
+- **Focusable pack terminal views** (`@markii/ansi`): a terminal pack
+  registration may set `focusable: true` on a block view. The live viewer
+  mounts it, gives it focus, and its `useInput` (from `__markiiInk`) fires
+  only while it is focused.
+
 ## [0.17.0-next.1] - 2026-11-09
 
 A second prerelease on the npm `next` dist-tag. `@markii/host` and

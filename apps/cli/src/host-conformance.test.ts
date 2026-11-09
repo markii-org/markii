@@ -48,6 +48,9 @@ function createMemoryMemento(): GrantMemento {
  */
 function createScriptedTerminal(queue: { next(): boolean }): Terminal {
   return {
+    openStdio(): never {
+      throw new Error('the corpus never opens stdio');
+    },
     write(): void {},
     writeError(): void {},
     columns: 80,

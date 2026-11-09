@@ -1,0 +1,97 @@
+*markii.txt*  Markii (.mk.md) support for Neovim
+
+==============================================================================
+CONTENTS                                                        *markii-contents*
+
+  1. Introduction ........................................ |markii-intro|
+  2. Requirements ........................................ |markii-requirements|
+  3. Setup ............................................... |markii-setup|
+  4. Options ............................................. |markii-options|
+  5. Commands ............................................ |markii-commands|
+  6. Language server ..................................... |markii-lsp|
+
+==============================================================================
+1. Introduction                                                    *markii-intro*
+
+This plugin sets up editing of Markii notes (files ending in `.mk.md`). It
+detects the `markii` filetype, starts the `markii lsp` language server for
+those buffers, and defines a command to open the terminal viewer.
+
+The plugin contains no Markii logic. Completion, hover, diagnostics, and
+fence lengthening all come from the server.
+
+==============================================================================
+2. Requirements                                                *markii-requirements*
+
+- Neovim 0.9 or newer.
+- The `markii` command line tool, installed with: >
+    npm install -g @markii/cli
+<
+==============================================================================
+3. Setup                                                           *markii-setup*
+
+Call |markii.setup()| from your configuration: >lua
+    require("markii").setup()
+<
+Filetype detection works without it. The server and commands need it.
+
+                                                                  *markii.setup()*
+require("markii").setup({opts})
+    Configure the plugin. {opts} is a table; see |markii-options|.
+
+                                                                  *markii.start()*
+require("markii").start({buf})
+    Start or reuse the language server for buffer {buf} (default: current).
+
+                                                                   *markii.view()*
+require("markii").view({path})
+    Open {path} (default: the current file) in `markii view`.
+
+==============================================================================
+4. Options                                                       *markii-options*
+
+cmd            Server command.               Default: `{ "markii", "lsp" }`
+view_cmd       Viewer command, the note's
+               path is appended.             Default: `{ "markii", "view" }`
+root_markers   Folders that mark a project
+               root. The note's folder is
+               the root when none is found.  Default: `{ ".git" }`
+lsp            Start the server for markii
+               buffers.                      Default: `true`
+commands       Define |:MarkiiView|.         Default: `true`
+view_split     Command that opens the
+               viewer's split.               Default: `"botright split"`
+on_attach      Passed to |vim.lsp.start()|.  Default: `nil`
+capabilities   Passed to |vim.lsp.start()|.
+               Snippet support in the
+               completion client lets the
+               server place the cursor
+               inside a completed component. Default: `nil`
+
+==============================================================================
+5. Commands                                                     *markii-commands*
+
+                                                                   *:MarkiiView*
+:MarkiiView [file]
+    Open [file] (default: the current note) in `markii view` in a terminal
+    split.
+
+==============================================================================
+6. Language server                                                    *markii-lsp*
+
+`markii lsp` speaks the Language Server Protocol over stdio. It handles
+documents whose name ends in `.mk.md` and offers:
+
+- completion for directive names, attributes, and values, with the packs
+  installed for the command line tool
+- hover documentation for a directive
+- diagnostics for findings the renderer would otherwise show as a quiet
+  marker: an invalid attribute value, a block component written inline, an
+  unsafe image source, a pack component with no terminal view, and a
+  directive that names no component
+- fence lengthening through additional text edits when a completed container
+  would close an enclosing one early
+
+It never runs a note's scripts and never uses the network.
+
+vim:tw=78:ts=8:ft=help:norl:

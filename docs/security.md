@@ -536,6 +536,14 @@ characters before the pack's function is called. A pack that prints those
 values without thinking about escapes still cannot carry an author's escape
 sequence onto the reader's screen.
 
+Keys reach pack code through one path: the `useInput` hook the host
+publishes on `__markiiInk`, which fires only for a view registered as
+`focusable` and only while it has focus. That is a contract boundary, not
+a sandbox: pack code is fully trusted and could read the terminal's input
+itself. `packages/platforms/markii-ansi/src/pack-focus.probe.test.tsx`
+checks the gate in a real Ink tree: of two focusable counters only the
+focused one moves, and a view that is not focusable hears nothing.
+
 Two things are not bounded and are stated here so nobody relies on them. A
 pack's own code can emit any bytes it likes, since nothing stands between it
 and the output stream. A pack's render function also runs with no

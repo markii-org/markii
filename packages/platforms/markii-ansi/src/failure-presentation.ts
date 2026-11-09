@@ -128,6 +128,11 @@ export function codeRendererFailedTitle(): string {
   return 'code block: the host code renderer failed, so the plain block was shown';
 }
 
+/** The diagnostic text for a directive that names no registered component; the unknown-component box was shown. */
+export function unknownDirectiveTitle(directive: string): string {
+  return `${directive}: unknown component, shown as a placeholder`;
+}
+
 /** The diagnostic text for a registered block component written as an inline directive. Wording identical to `@markii/html`'s `formMismatchTitle`. */
 export function formMismatchTitle(directive: string): string {
   return `${directive}: block component was written inline and was not rendered`;

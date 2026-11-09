@@ -259,6 +259,26 @@ describe('createMarkiiHost(createCliHostAdapter(...)).exportNote', () => {
   });
 });
 
+describe('createCliHostAdapter with an editor (markii lsp)', () => {
+  it('declares the editor capability only when one is passed', () => {
+    const editor = {
+      documentText: () => '',
+      documentPath: () => undefined,
+      cursor: () => ({ line: 0, column: 0 }),
+      applyEdits: () => Promise.resolve(false),
+    };
+    const adapter = createCliHostAdapter({
+      terminal: createFakeTerminal(),
+      memento: {
+        get: <T>(_key: string, defaultValue?: T): T | undefined => defaultValue,
+        update: (): Promise<void> => Promise.resolve(),
+      },
+      editor,
+    });
+    expect(adapter.editor).toBe(editor);
+  });
+});
+
 describe('createMarkiiHost(createCliHostAdapter(...)) with no packs/editor declared', () => {
   it('installPack, loadPacks, completeAt, hoverAt, and insertComponent all report unsupported, never a silent no-op', async () => {
     const adapter = createCliHostAdapter({

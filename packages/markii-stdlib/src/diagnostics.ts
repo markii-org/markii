@@ -34,6 +34,12 @@
  * the fallback box, labeled as a missing view rather than an unknown
  * component. Only reported when the host passed `unavailableComponents`.
  *
+ * `'unknown-directive'` — a directive names no registered component and
+ * rendered as the unknown-component fallback box. Reported by the terminal
+ * engine only, so a host that wants a finding for every unknown directive
+ * (the language server) can place it; the other engines draw the same
+ * fallback and stay quiet.
+ *
  * `'code-renderer-failed'` — a host's `renderCode` callback threw for an
  * ordinary fenced code block; the block rendered as usual. Carries no
  * directive or attribute.
@@ -43,7 +49,20 @@ export type DiagnosticKind =
   | 'unsafe-image-src'
   | 'form-mismatch'
   | 'no-engine-view'
+  | 'unknown-directive'
   | 'code-renderer-failed';
+
+/**
+ * Where in the note's source an event happened: the directive's range, in
+ * unist coordinates (1-based line, 1-based column, end exclusive). Present
+ * only when the engine knows the node the event came from.
+ */
+export interface DiagnosticPosition {
+  readonly startLine: number;
+  readonly startColumn: number;
+  readonly endLine: number;
+  readonly endColumn: number;
+}
 
 export interface DiagnosticEvent {
   readonly kind: DiagnosticKind;
@@ -53,6 +72,8 @@ export interface DiagnosticEvent {
   readonly attribute?: string;
   /** The same human-readable text the in-page marker's tooltip carries. */
   readonly message: string;
+  /** The source range of the directive the event came from, when the engine can say. */
+  readonly position?: DiagnosticPosition;
 }
 
 export type OnDiagnostic = (event: DiagnosticEvent) => void;

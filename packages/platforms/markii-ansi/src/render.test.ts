@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createValueStore, createVaultStore } from '@markii/runtime';
+import type { DiagnosticEvent } from '@markii/stdlib';
 import {
   renderMarkToAnsi,
   renderMarkNodeToAnsi,
@@ -424,6 +425,37 @@ describe('empty-inline and invalid-enum quiet markers', () => {
         directive: 'callout',
         message:
           'callout: block component was written inline and was not rendered',
+        position: { startLine: 1, startColumn: 8, endLine: 1, endColumn: 22 },
+      },
+    ]);
+  });
+
+  it('an unknown directive reports nothing unless asked to', async () => {
+    const diagnostics: DiagnosticEvent[] = [];
+    await renderMarkToAnsi('::nothing{}\n', empty, undefined, undefined, {
+      onDiagnostic: (event) => diagnostics.push(event),
+    });
+    expect(diagnostics).toEqual([]);
+  });
+
+  it('an unknown directive reports an unknown-directive diagnostic with its range', async () => {
+    const diagnostics: DiagnosticEvent[] = [];
+    await renderMarkToAnsi(
+      'Intro\n\n::nothing{}\n',
+      empty,
+      undefined,
+      undefined,
+      {
+        onDiagnostic: (event) => diagnostics.push(event),
+        reportUnknownDirectives: true,
+      },
+    );
+    expect(diagnostics).toEqual([
+      {
+        kind: 'unknown-directive',
+        directive: 'nothing',
+        message: 'nothing: unknown component, shown as a placeholder',
+        position: { startLine: 3, startColumn: 1, endLine: 3, endColumn: 12 },
       },
     ]);
   });

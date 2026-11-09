@@ -694,11 +694,12 @@ installs prebuilt `.mkp` archives only.
 
 ## Editor support
 
-Editor tooling is application territory. A directive-aware language server
-was considered and deliberately deferred. What the two hosts carry instead
-is a small, shared authoring layer: a rendered preview, a grammar for
+Editor tooling is application territory. The two editor hosts carry a
+small, shared authoring layer: a rendered preview, a grammar for
 highlighting (VS Code), an Insert Component command, and directive
-completion with hover documentation.
+completion with hover documentation. Every other editor gets the same
+completion, hover, diagnostics and fence lengthening from a language
+server, described at the end of this section.
 
 The same layer keeps container fences legal for the author. Nesting a
 container inside a container needs the outer fence pair to carry more colons
@@ -865,6 +866,29 @@ engine) and reports the `no-engine-view` kind, so a reader can tell it from
 a typo. The host builds that list from its pack loading, which returns every
 installed component and the ones lacking a view for the host's engine. A
 renderer given no list behaves exactly as before.
+
+### The language server and Neovim
+
+`markii lsp`, part of the command line tool, is a language server over
+stdio for `.mk.md` documents. It offers completion (with fence lengthening
+as additional edits when a container is inserted), hover, and pushed
+diagnostics. It never runs scripts and never uses the network. Its catalog
+includes the tool's bundled and installed packs, so it loads those packs'
+`terminal.js` in its own process, the same trust boundary as `markii view`.
+
+The position encoding is negotiated (UTF-8, UTF-16 or UTF-32), with UTF-16
+as the default the protocol defines. Diagnostics come from the terminal
+engine's render: an invalid attribute value, a form mismatch, an unsafe
+image source, a component with no terminal view, and an unknown directive.
+The React and HTML engines do not report unknown directives through
+`onDiagnostic`; the terminal engine does when asked to with its
+`reportUnknownDirectives` option. The server's diagnostics surface is the
+client's diagnostics list, with pack-loading failures sent as log messages.
+
+Helix, Emacs and other LSP clients start the server directly with the
+command `markii lsp`. Neovim has a thin plugin in `apps/nvim` that
+registers the `markii` filetype for `*.mk.md` and starts the server; it
+holds no Markii logic of its own.
 
 ### Marking interactive elements
 

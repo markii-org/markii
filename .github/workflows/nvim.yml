@@ -1,0 +1,49 @@
+name: Neovim plugin
+
+# Runs the plugin's headless test against the CLI built from this commit.
+# The test starts a real `markii lsp`, opens a note in Neovim, and checks
+# the filetype, the client attaching, completion, hover, and diagnostics.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/nvim/**'
+      - 'apps/cli/**'
+      - 'packages/**'
+      - '.github/workflows/nvim.yml'
+  pull_request:
+    paths:
+      - 'apps/nvim/**'
+      - 'apps/cli/**'
+      - 'packages/**'
+      - '.github/workflows/nvim.yml'
+
+jobs:
+  headless:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The oldest release the plugin supports, and the current stable.
+        neovim: [v0.9.5, stable]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: ${{ matrix.neovim }}
+
+      - run: npm ci
+
+      - run: npm run build -w @markii/cli
+
+      - run: nvim --version
+
+      - run: ./apps/nvim/test/run.sh

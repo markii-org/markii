@@ -63,6 +63,57 @@ const FocusContext = createContext<FocusApi>({
   registerAnchor: () => {},
 });
 
+/**
+ * The `focusId` of the pack component a subtree belongs to, or `undefined`
+ * outside one. Provided by `PackFocusScope`; read only by `usePackInput`.
+ */
+const PackFocusContext = createContext<number | undefined>(undefined);
+
+/**
+ * Wraps a focusable pack component's live element. It draws a two-column
+ * gutter (the accent marker while the component has focus, blanks
+ * otherwise) and names the component's focus id for `usePackInput`. The
+ * pack draws inside the width that is left.
+ */
+export function PackFocusScope({
+  focusId,
+  children,
+}: {
+  focusId: number;
+  children: ReactNode;
+}): ReactNode {
+  const gutter = useFocusMarker('▌ ', focusId);
+  const focused = useIsFocused(focusId);
+  return (
+    <PackFocusContext.Provider value={focusId}>
+      <Box flexDirection="row">
+        <Text>{focused ? gutter : '  '}</Text>
+        <Box flexDirection="column" flexGrow={1}>
+          {children}
+        </Box>
+      </Box>
+    </PackFocusContext.Provider>
+  );
+}
+
+/**
+ * Ink's `useInput`, for a terminal pack: the same handler and options, but
+ * keys reach the handler only while the pack component whose subtree calls
+ * it has focus. Outside a focusable pack component it never fires. A pack
+ * reads this as `__markiiInk.useInput`, so it never sees raw stdin.
+ */
+export function usePackInput(
+  handler: Parameters<typeof useInput>[0],
+  options: Parameters<typeof useInput>[1] = {},
+): void {
+  const focusId = useContext(PackFocusContext);
+  const focused = useIsFocused(focusId);
+  useInput(handler, {
+    ...options,
+    isActive: focused && options.isActive !== false,
+  });
+}
+
 /** Whether the component identified by `focusId` is the currently focused one. `undefined` (a non-interactive render, or a component that never got a `focusId`) is never focused. */
 export function useIsFocused(focusId: number | undefined): boolean {
   const api = useContext(FocusContext);
@@ -122,7 +173,7 @@ export function useFocusAnchor(
  * yet (mount, or a reader who has not switched panels).
  */
 export interface FocusableDescriptor {
-  kind: 'tabs' | 'details';
+  kind: 'tabs' | 'details' | 'pack';
   label: string;
 }
 

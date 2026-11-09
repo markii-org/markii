@@ -1,5 +1,6 @@
 import * as React from 'react';
 import * as Ink from 'ink';
+import { usePackInput } from './interactive.js';
 import { parsePackManifest } from '@markii/pack';
 import type {
   AnsiPackComponentModules,
@@ -13,7 +14,7 @@ import type {
  *   globalThis.__markiiRegisterTerminalPack(manifestJson, componentModules)
  *
  * with the raw `pack.json` text and an own-property map of
- * `{ component, inline? }` keyed by local component name, the same shape
+ * `{ component, inline?, focusable? }` keyed by local component name, the same shape
  * `__markiiRegisterPack` takes for the webview. React and Ink are NOT
  * bundled into the script. The host sets `globalThis.__markiiReactInk`
  * (the React instance Ink uses) and `globalThis.__markiiInk` (Ink's
@@ -38,7 +39,9 @@ export const TERMINAL_INK_GLOBAL = '__markiiInk';
 export function installTerminalPackGlobals(): void {
   const g = globalThis as Record<string, unknown>;
   g[TERMINAL_REACT_GLOBAL] = React;
-  g[TERMINAL_INK_GLOBAL] = Ink;
+  // Ink's exports with `useInput` replaced by the focus-gated one: a pack
+  // gets keys while its component has focus and never raw stdin.
+  g[TERMINAL_INK_GLOBAL] = { ...Ink, useInput: usePackInput };
 }
 
 export type LoadTerminalPackScriptResult =
@@ -63,10 +66,19 @@ function toComponentModules(
     if (Object.hasOwn(entry, 'inline') && typeof entry.inline !== 'boolean') {
       return undefined;
     }
+    if (
+      Object.hasOwn(entry, 'focusable') &&
+      typeof entry.focusable !== 'boolean'
+    ) {
+      return undefined;
+    }
     out[key] = {
       component:
         entry.component as AnsiPackComponentModules[string]['component'],
       ...(typeof entry.inline === 'boolean' ? { inline: entry.inline } : {}),
+      ...(typeof entry.focusable === 'boolean'
+        ? { focusable: entry.focusable }
+        : {}),
     };
   }
   return out;
