@@ -896,6 +896,28 @@ same commit as the change that triggers them:
   must all pass from the repo root. Report actual command output, not claims.
 - Do not edit the `docs/` pages or AGENTS.md; propose changes in your report
   instead. (The orchestrator owns spec and docs edits.)
+- Workers get a brief on disk (`tmp/BRIEF-*.md`, gitignored) and write
+  their report beside it (`tmp/REPORT-*.md`): files changed, decisions and
+  why, what was not done and why, actual gate output, proposed docs and
+  CHANGELOG text.
+
+## Orchestrator rules (user-set 2026-11-09)
+
+- A worker's report is a claim, not evidence. Before committing worker
+  output the orchestrator itself: reruns `npm test`, `npm run build` and
+  `npm run lint` from the root; reads the whole diff; checks every
+  decision in the report against the brief and this file; and spot-checks
+  any "verified" or "no change" claim (fixtures byte-identical, probe
+  still green, bundle no longer carries X) with its own command.
+- One deliverable per commit. Docs, CHANGELOG and this file are updated
+  by the orchestrator in the same commit as the code they describe.
+- Unattended runs: a blocker that needs the user stops only the work it
+  touches. Everything unaffected is finished, the blockers are collected,
+  and the run ends with one report. A minor question the orchestrator
+  does not want to decide alone becomes a GitHub issue with the details
+  and reasoning, and the work continues.
+- Progress lives on disk (`tmp/PLAN.md`, `TODO.md`) and is updated as each
+  piece lands, so a context compaction loses nothing.
 
 ## Commit messages (user-set 2026-08-25, binding)
 
