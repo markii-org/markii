@@ -38,7 +38,11 @@ vim.fn.writefile({ "::callout{type=\"bogus\"}", "hi", "::", "", ":::cal", "", ":
 
 vim.cmd("edit " .. vim.fn.fnameescape(note))
 check(vim.bo.filetype == "markii", "filetype is markii (got " .. vim.bo.filetype .. ")")
-check(vim.bo.syntax == "markdown", "markdown syntax is the fallback")
+-- Newer Neovim ships a markdown tree-sitter parser; starting it turns the
+-- regex syntax off, so either highlighter counts.
+local ts_active = vim.treesitter.highlighter
+  and vim.treesitter.highlighter.active[vim.api.nvim_get_current_buf()] ~= nil
+check(ts_active or vim.bo.syntax == "markdown", "markdown highlighting is the fallback")
 
 local attached = vim.wait(20000, function()
   return #get_clients({ bufnr = 0, name = "markii" }) > 0
