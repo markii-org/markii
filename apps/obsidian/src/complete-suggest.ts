@@ -8,7 +8,7 @@ import type {
   TFile,
 } from 'obsidian';
 import { offsetToLineColumn } from '@markii/stdlib/editor';
-import { isContainerCompletionItem } from '@markii/host';
+import { MARK_EXTENSION, isContainerCompletionItem } from '@markii/host';
 import type { HostTextEdit, MarkiiHost } from '@markii/host';
 import {
   completionQuery,
@@ -60,7 +60,7 @@ export class MarkiiCompletionSuggest extends EditorSuggest<CompletionSuggestion>
     editor: Editor,
     file: TFile | null,
   ): EditorSuggestTriggerInfo | null {
-    if (!file?.path.endsWith('.mk.md')) return null;
+    if (!file?.path.endsWith(MARK_EXTENSION)) return null;
 
     const line = editor.getLine(cursor.line);
 

@@ -29,11 +29,11 @@
 import { createHtmlExportEngine } from '@markii/host/node';
 import {
   noteHasScripts,
-  MAX_EMBEDDED_IMAGE_BYTES,
   buildExportDocument,
+  imageEmbedDiagnosticLines,
+  renderEngineDiagnosticLine,
   exportedSiblingPath,
   fileNameOf,
-  countedNoun,
 } from '@markii/host';
 import type { UnavailableComponent } from '@markii/stdlib';
 import type {
@@ -42,7 +42,6 @@ import type {
   ExportImageReader,
   ExportPackStylesheet,
   ExportRenderInfo,
-  SkippedImage,
   StaticExportReason,
 } from '@markii/host';
 import type { StoredValue } from '@markii/runtime';
@@ -215,32 +214,11 @@ async function buildDocument(request: NoteExportRequest): Promise<{
   render: ExportRenderInfo;
   images: EmbeddedImageReport;
 }> {
+  // `NoteExportRequest` carries the shared request's fields under the same
+  // names; the extras (`fs`) are never read by `buildExportDocument`.
   const document = await buildExportDocument({
+    ...request,
     engine: htmlEngine,
-    notePath: request.notePath,
-    text: request.text,
-    ...(request.values !== undefined ? { values: request.values } : {}),
-    ...(request.renderBody !== undefined
-      ? { renderBody: request.renderBody }
-      : {}),
-    ...(request.staticReason !== undefined
-      ? { staticReason: request.staticReason }
-      : {}),
-    ...(request.packStylesheets !== undefined
-      ? { packStylesheets: request.packStylesheets }
-      : {}),
-    ...(request.packCount !== undefined
-      ? { packCount: request.packCount }
-      : {}),
-    ...(request.embedImages !== undefined
-      ? { embedImages: request.embedImages }
-      : {}),
-    ...(request.hideScriptBlocks !== undefined
-      ? { hideScriptBlocks: request.hideScriptBlocks }
-      : {}),
-    ...(request.unavailableComponents !== undefined
-      ? { unavailableComponents: request.unavailableComponents }
-      : {}),
   });
   return {
     html: document.html,
@@ -354,94 +332,6 @@ export function exportNoticeText(outcome: NoteExportOutcome): string {
 }
 
 /**
- * A byte count in the largest whole unit that keeps at least one
- * significant digit, matching how a file manager sizes a file: `900 B`,
- * `48 KB`, `2.3 MB`. Used only in diagnostics lines, never a notice.
- */
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${String(bytes)} B`;
-  const kilobytes = bytes / 1024;
-  if (kilobytes < 1024) {
-    return `${kilobytes < 10 ? kilobytes.toFixed(1) : String(Math.round(kilobytes))} KB`;
-  }
-  const megabytes = kilobytes / 1024;
-  return `${megabytes < 10 ? megabytes.toFixed(1) : String(Math.round(megabytes))} MB`;
-}
-
-/**
- * The last path segment of an image source as the note wrote it, for
- * naming a skipped image without printing its whole relative path.
- */
-function imageFileNameOf(src: string): string {
-  const separator = src.lastIndexOf('/');
-  return separator === -1 ? src : src.slice(separator + 1);
-}
-
-/** One skipped image's diagnostics line, per `SkippedImage.reason`. */
-function skippedImageLine(skipped: SkippedImage): string {
-  const name = imageFileNameOf(skipped.src);
-  switch (skipped.reason) {
-    case 'too-large':
-      return `Skipped ${name}, its size is ${formatBytes(skipped.byteLength ?? 0)}, over the ${formatBytes(MAX_EMBEDDED_IMAGE_BYTES)} embed limit.`;
-    case 'unsupported-type':
-      return `Skipped ${name}, its file type is not embedded.`;
-    case 'unreadable':
-      return skipped.detail
-        ? `Skipped ${name}: ${skipped.detail}`
-        : `Skipped ${name}, it could not be read.`;
-  }
-}
-
-/**
- * The diagnostics lines for one export's image embedding: how many images
- * were embedded and the bytes that added, then one line per skipped
- * image. Nothing at all when the note has no local images, per
- * AGENTS.md's rule that a quiet outcome is still a fact to record, not a
- * line to invent.
- */
-function imageDiagnosticLines(images: EmbeddedImageReport): string[] {
-  const lines: string[] = [];
-  if (images.embedded.length > 0) {
-    lines.push(
-      `Embedded ${countedNoun(images.embedded.length, 'image')}, adding ${formatBytes(images.embeddedBytes)}.`,
-    );
-  }
-  for (const skipped of images.skipped) {
-    lines.push(skippedImageLine(skipped));
-  }
-  return lines;
-}
-
-/**
- * The diagnostics line describing which engine rendered an export's body
- * and why, per `ExportRenderInfo` (GitHub issue #28, slice 2). Kept out of
- * `exportNoticeText` on purpose, user-set: the pack-vs-static distinction
- * belongs in the diagnostics surface, not the notice.
- *
- * `no-renderer` and `timeout` are unreachable on this host today, since
- * `main.ts` never hands `buildNoteExport` a `renderBody` without also
- * meaning to use it and the render itself is a plain synchronous call.
- * They are handled anyway so this switch stays exhaustive against
- * `@markii/host`'s `StaticExportReason`.
- */
-function renderDiagnosticLine(render: ExportRenderInfo): string {
-  if (render.engine === 'react') {
-    return `Rendered through the preview's React engine with ${countedNoun(render.packCount, 'pack component')} and ${countedNoun(render.stylesheetCount, 'pack stylesheet')} embedded.`;
-  }
-  const detail = render.detail ? ` Detail: ${render.detail}` : '';
-  switch (render.reason) {
-    case 'no-packs':
-      return 'Rendered statically because no pack components are loaded, which matches the preview.';
-    case 'no-renderer':
-      return `Rendered statically because no React renderer was available on this host.${detail}`;
-    case 'timeout':
-      return `Rendered statically because the React render timed out. Pack components exported as labeled boxes.${detail}`;
-    case 'render-failed':
-      return `Rendered statically because the React render failed. Pack components exported as labeled boxes.${detail}`;
-  }
-}
-
-/**
  * The console lines for one outcome — this host's diagnostics surface, per
  * docs/integration.md. Every failure reaches here in full, including the
  * reason the notice deliberately omits, so a user can always find out why
@@ -452,28 +342,28 @@ export function exportDiagnosticLines(outcome: NoteExportOutcome): string[] {
     case 'html':
       return [
         `Exported ${outcome.path} as HTML with ${String(outcome.valueCount)} stored values baked in.`,
-        renderDiagnosticLine(outcome.render),
-        ...imageDiagnosticLines(outcome.images),
+        renderEngineDiagnosticLine(outcome.render),
+        ...imageEmbedDiagnosticLines(outcome.images),
       ];
     case 'pdf':
       return [
         `Exported ${outcome.path} as PDF with ${String(outcome.valueCount)} stored values baked in.`,
-        renderDiagnosticLine(outcome.render),
-        ...imageDiagnosticLines(outcome.images),
+        renderEngineDiagnosticLine(outcome.render),
+        ...imageEmbedDiagnosticLines(outcome.images),
       ];
     case 'pdf-unavailable':
       return [
         `PDF export is unavailable on this device: ${outcome.reason}`,
         `Wrote ${outcome.path} as HTML instead. Open it in a browser and print from there to get a PDF.`,
-        renderDiagnosticLine(outcome.render),
-        ...imageDiagnosticLines(outcome.images),
+        renderEngineDiagnosticLine(outcome.render),
+        ...imageEmbedDiagnosticLines(outcome.images),
       ];
     case 'pdf-failed':
       return [
         `PDF export failed: ${outcome.reason}`,
         `Wrote ${outcome.path} as HTML instead. Open it in a browser and print from there to get a PDF.`,
-        renderDiagnosticLine(outcome.render),
-        ...imageDiagnosticLines(outcome.images),
+        renderEngineDiagnosticLine(outcome.render),
+        ...imageEmbedDiagnosticLines(outcome.images),
       ];
     case 'failed':
       return [`Export failed: ${outcome.reason}`];

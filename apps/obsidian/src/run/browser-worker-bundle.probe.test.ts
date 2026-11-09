@@ -423,7 +423,8 @@ it('base64 -> bytes -> blob URL -> a worker that actually starts and completes a
     const setup = createBrowserWorkerSetup(() => dummyNetProvider);
     if (!setup) throw new Error('expected a defined BrowserWorkerSetup');
 
-    const isolate = setup.spawnIsolate({
+    const spawnIsolate = await setup.isolate.spawner();
+    const isolate = spawnIsolate({
       entryPath: 'unused-for-a-blob-worker',
       maxOldGenerationSizeMb: 64,
     });

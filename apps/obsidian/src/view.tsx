@@ -14,6 +14,8 @@ import {
   scriptsDisabledNotice,
   staleValuesForRehydration,
   refreshIntervalMsFromSeconds,
+  MARK_EXTENSION,
+  packsNotInstalledLabel,
 } from '@markii/host';
 import type { HostAdapter, RunOnceResult } from '@markii/host';
 import { extractFrontmatterUses } from '@markii/core';
@@ -36,8 +38,6 @@ import { convertNoteWikilinks } from './reading-view/wikilinks.js';
 import type MarkiiPlugin from './main.js';
 
 export const MARKII_PREVIEW_VIEW_TYPE = 'markii-preview';
-
-const MK_MD_SUFFIX = '.mk.md';
 
 /**
  * Imports `obsidian` — see `src/main.ts`'s file-scope note and
@@ -317,15 +317,7 @@ export class MarkiiPreviewView extends ItemView {
         console.log(line);
       },
       ...(browserWorker !== undefined
-        ? {
-            isolate: {
-              kind: 'browser' as const,
-              spawner: async () => browserWorker.spawnIsolate,
-              dispose: () => {
-                browserWorker.dispose();
-              },
-            },
-          }
+        ? { isolate: browserWorker.isolate }
         : {}),
     });
   }
@@ -496,7 +488,7 @@ export class MarkiiPreviewView extends ItemView {
       return;
     }
 
-    if (!file || !file.path.endsWith(MK_MD_SUFFIX)) {
+    if (!file || !file.path.endsWith(MARK_EXTENSION)) {
       this.values = undefined;
       this.root.render(
         createElement(
@@ -584,11 +576,9 @@ export class MarkiiPreviewView extends ItemView {
               'p',
               {
                 className: 'mk-obsidian-uses-marker',
-                title: `This note declares packs that are not installed: ${usesResolution.missing.join(', ')}. Add their folders in Markii's settings, under "Component packs".`,
+                title: `This note declares packs that are not installed: ${usesResolution.missing.join(', ')}. Use the "Install Markii pack from file" command to add them.`,
               },
-              usesResolution.missing.length === 1
-                ? `Pack not installed: ${usesResolution.missing[0]}`
-                : `Packs not installed: ${usesResolution.missing.join(', ')}`,
+              packsNotInstalledLabel(usesResolution.missing),
             )
           : null,
       ),

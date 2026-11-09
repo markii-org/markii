@@ -162,3 +162,116 @@ test('a prebuilt .mkp installed in the browser host renders its component', asyn
     'pack says: from the pack',
   );
 });
+
+// The three scenarios below are ported from VSNote's
+// tests/e2e/markii-scripts.spec.ts: "opening a .mk.md file never runs
+// anything", "the grant is remembered on a second run" and "editing the
+// script re-prompts for a grant" (here also covering a changed net
+// declaration).
+
+test('opening a note never runs scripts, asks nothing and starts no worker', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const created: string[] = [];
+    (window as unknown as { __workers: string[] }).__workers = created;
+    const Original = window.Worker;
+    window.Worker = class extends Original {
+      constructor(url: string | URL, options?: WorkerOptions) {
+        created.push(String(url));
+        super(url, options);
+      }
+    };
+  });
+  await openNote(page);
+  // Give any eager run time to start; nothing should.
+  await page.waitForTimeout(1000);
+  await expect(page.getByTestId('run-marker')).toHaveAttribute(
+    'data-state',
+    'idle',
+  );
+  await expect(page.getByTestId('prompt-dialog')).toHaveCount(0);
+  await expect(page.locator('.mk-value')).not.toContainText('42');
+  const workers = await page.evaluate(
+    () => (window as unknown as { __workers: string[] }).__workers,
+  );
+  expect(workers).toEqual([]);
+});
+
+test('a remembered grant is not asked for again, in the same page or after a reload', async ({
+  page,
+}) => {
+  const note = fetchNote(DATA_PORT_A);
+  await openNote(page, { text: note, allow: [ORIGIN_A] });
+  await page.getByTestId('run').click();
+  await expect(page.getByTestId('prompt-dialog')).toBeVisible();
+  await page.getByTestId('prompt-allow').click();
+  await expect(page.getByTestId('run-marker')).toHaveAttribute(
+    'data-state',
+    'ok',
+  );
+
+  // Same page, second run: no prompt.
+  await page.getByTestId('run').click();
+  await expect(page.getByTestId('run-marker')).toHaveAttribute(
+    'data-state',
+    'ok',
+  );
+  await expect(page.getByTestId('prompt-dialog')).toHaveCount(0);
+
+  // A reload keeps the device-local grant: still no prompt.
+  await openNote(page, { text: note, allow: [ORIGIN_A] });
+  await page.getByTestId('run').click();
+  await expect(page.getByTestId('run-marker')).toHaveAttribute(
+    'data-state',
+    'ok',
+  );
+  await expect(page.getByTestId('prompt-dialog')).toHaveCount(0);
+  await expect(page.locator('.mk-value')).toContainText('hello from allowed');
+});
+
+test('editing the note re-prompts when the code changes, not when only the declaration does', async ({
+  page,
+}) => {
+  const note = fetchNote(DATA_PORT_A);
+  await openNote(page, { text: note, allow: [ORIGIN_A] });
+  await page.getByTestId('run').click();
+  await page.getByTestId('prompt-allow').click();
+  await expect(page.getByTestId('run-marker')).toHaveAttribute(
+    'data-state',
+    'ok',
+  );
+
+  // Editing only the declaration leaves the code, and so the grant, as it
+  // was. The script still reaches only the host it was approved for, and
+  // the mismatch is reported on the diagnostics surface.
+  const declaredElsewhere = note.replace(
+    'permissions=127.0.0.1',
+    'permissions=127.0.0.1,localhost',
+  );
+  await openNote(page, { text: declaredElsewhere, allow: [ORIGIN_A] });
+  await page.getByTestId('run').click();
+  await expect(page.getByTestId('run-marker')).toHaveAttribute(
+    'data-state',
+    'ok',
+  );
+  await expect(page.getByTestId('prompt-dialog')).toHaveCount(0);
+  await expect(page.getByTestId('diagnostics')).toContainText(
+    'net declaration mismatch',
+  );
+
+  // A script that now targets a different host is different code: asked again.
+  const otherHost = note
+    .replace('permissions=127.0.0.1', 'permissions=localhost')
+    .replace('http://127.0.0.1:', 'http://localhost:');
+  await openNote(page, { text: otherHost, allow: [ORIGIN_A] });
+  await page.getByTestId('run').click();
+  await expect(page.getByTestId('prompt-dialog')).toBeVisible();
+  await page.getByTestId('prompt-deny').click();
+
+  // Same declaration, different script body: asked again as well.
+  const edited = note.replace('return r.msg', 'return r.msg .. "!"');
+  await openNote(page, { text: edited, allow: [ORIGIN_A] });
+  await page.getByTestId('run').click();
+  await expect(page.getByTestId('prompt-dialog')).toBeVisible();
+});

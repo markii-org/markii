@@ -5,7 +5,7 @@
  * `@markii/host` uses by default: it throws "The V8 platform used by this
  * instance of Node does not support creating Workers", and forking a Node
  * child through `ELECTRON_RUN_AS_NODE` was measured failing here too. A Web
- * Worker is what remains, and `@markii/host`'s `createBrowserIsolate`
+ * Worker is what remains, and `@markii/host`'s `createBrowserHostIsolate` (from `@markii/host/browser`)
  * implements it; this file supplies the two things only the host can know:
  * where the bundled bytes are, and how to turn them into URLs a worker can
  * load.
@@ -28,8 +28,11 @@
  * bytes in memory until revoked, and re-decoding/re-blobbing on every run
  * would be both slower and a leak.
  */
-import { createBrowserIsolate, type IsolateSpawner } from '@markii/host';
-import type { NetProvider } from '@markii/lua';
+import {
+  createBrowserHostIsolate,
+  type BrowserNetProviderFactory,
+} from '@markii/host/browser';
+import type { HostIsolate } from '@markii/host';
 import {
   EMBEDDED_WASM_GLUE_BASE64,
   EMBEDDED_WORKER_BUNDLE_BASE64,
@@ -40,9 +43,8 @@ import { decodeBase64 } from './decode-base64.js';
  * Decodes an embedded base64 payload into a blob URL, or `undefined` when
  * there is nothing embedded (the placeholder case: running from source
  * before a build) or the payload is malformed. `decodeBase64` already
- * returns a fresh `Uint8Array` — never a view onto a pooled buffer — so
- * there is no aliasing concern handing it straight to `Blob`, unlike the
- * old `readFileSync`-backed version of this helper.
+ * returns a fresh `Uint8Array`, never a view onto a pooled buffer, so
+ * there is no aliasing concern handing it straight to `Blob`.
  */
 function blobUrlFor(base64: string, type: string): string | undefined {
   const bytes = decodeBase64(base64);
@@ -51,23 +53,26 @@ function blobUrlFor(base64: string, type: string): string | undefined {
 }
 
 export interface BrowserWorkerSetup {
-  spawnIsolate: IsolateSpawner;
+  /**
+   * The shared browser isolate over the embedded bundle. Its own `dispose`
+   * is a no-op: `createMarkiiHost(...).run` calls it after EVERY run, and
+   * the blob URLs must outlive that, so they are freed by `dispose` below.
+   */
+  isolate: Extract<HostIsolate, { kind: 'browser' }>;
   /** Frees the blob URLs. Called from the plugin's `onunload`. */
   dispose: () => void;
 }
 
 /**
- * Builds the spawner, given the pinned network provider the HOST will run
- * on the worker's behalf. Returns `undefined` when the worker bundle was
- * not embedded — the placeholder case (running from source before a
- * build) — which the run path already reports cleanly.
+ * Builds the isolate, given the pinned network provider the HOST will run
+ * on the worker's behalf (a Web Worker has no `node:dns` to pin with, so
+ * the renderer serves `net.*`, keeping address pinning). Returns
+ * `undefined` when the worker bundle was not embedded (the placeholder
+ * case: running from source before a build), which the run path already
+ * reports cleanly.
  */
 export function createBrowserWorkerSetup(
-  netProvider: (
-    netAllowlist: string[],
-    maxFetchBytes: number,
-    netPolicy: unknown,
-  ) => NetProvider,
+  netProvider: BrowserNetProviderFactory,
 ): BrowserWorkerSetup | undefined {
   const workerUrl = blobUrlFor(
     EMBEDDED_WORKER_BUNDLE_BASE64,
@@ -81,14 +86,16 @@ export function createBrowserWorkerSetup(
   // start.
   const wasmUrl = blobUrlFor(EMBEDDED_WASM_GLUE_BASE64, 'application/wasm');
 
-  const spawnIsolate = createBrowserIsolate({
-    createWorker: () => new Worker(workerUrl),
+  const isolate = createBrowserHostIsolate({
+    workerUrl,
+    // The embedded worker is an IIFE (classic) bundle, not a module.
+    workerType: 'classic',
     netProvider,
-    ...(wasmUrl !== undefined ? { wasmUri: wasmUrl } : {}),
+    ...(wasmUrl !== undefined ? { wasmUrl } : {}),
   });
 
   return {
-    spawnIsolate,
+    isolate,
     dispose: () => {
       URL.revokeObjectURL(workerUrl);
       if (wasmUrl !== undefined) URL.revokeObjectURL(wasmUrl);

@@ -3,7 +3,6 @@ import {
   FALLBACK_PREVIEW_TITLE,
   isMarkFileName,
   isPreviewableDocument,
-  MARK_EXTENSION,
   previewTitleFor,
 } from './mark-document';
 
@@ -27,12 +26,6 @@ describe('previewTitleFor', () => {
   it('falls back when the path has no base name', () => {
     expect(previewTitleFor('')).toBe(FALLBACK_PREVIEW_TITLE);
     expect(previewTitleFor('/')).toBe(FALLBACK_PREVIEW_TITLE);
-  });
-});
-
-describe('MARK_EXTENSION', () => {
-  it('is .mk.md', () => {
-    expect(MARK_EXTENSION).toBe('.mk.md');
   });
 });
 

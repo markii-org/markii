@@ -13,10 +13,8 @@
  */
 
 import type { BundleManifest, BundleStorage } from '@markii/bundle';
-import { normalizeBundlePath, parseManifest } from '@markii/bundle';
-
-/** The conventional document path inside a bundle when the manifest doesn't name one — spec's `docs/bundles.md` layout. */
-export const DEFAULT_BUNDLE_DOCUMENT_PATH = 'note.mk.md';
+import { parseManifest } from '@markii/bundle';
+import { resolveBundleDocumentPath } from '@markii/host';
 
 const MANIFEST_PATH = 'manifest.json';
 
@@ -76,29 +74,6 @@ export type BundleResolution =
     };
 
 const utf8Decoder = new TextDecoder('utf-8', { fatal: false });
-
-/**
- * The bundle-relative path of the document to preview: the manifest's own
- * `document` field when it names one (a forward-compatible, unvalidated-by
- * `@markii/bundle` extension point — `BundleManifest`'s index signature
- * allows it), normalized through the same path-jail every other bundle path
- * goes through so a manifest cannot point the preview outside the bundle;
- * otherwise the spec's conventional `note.mk.md`.
- *
- * Returns `undefined` when a `document` field is present but not a usable
- * bundle-relative path (wrong type, or rejected by `normalizeBundlePath` —
- * including any path carrying a `..` segment) — that is a manifest
- * authoring error, reported as `manifest-invalid`, not silently ignored.
- */
-export function resolveBundleDocumentPath(
-  manifest: BundleManifest,
-): string | undefined {
-  const raw = manifest.document;
-  if (raw === undefined) return DEFAULT_BUNDLE_DOCUMENT_PATH;
-  if (typeof raw !== 'string') return undefined;
-  const normalized = normalizeBundlePath(raw);
-  return normalized.ok ? normalized.path : undefined;
-}
 
 /**
  * Reads and validates a bundle's manifest, then resolves and reads its

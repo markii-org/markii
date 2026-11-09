@@ -1,32 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  bundlePreviewTitleFor,
-  classifyBundleTarget,
-  isBundleName,
-} from './bundle-target';
-
-describe('isBundleName', () => {
-  it('accepts the current .mkz extension', () => {
-    expect(isBundleName('note.mkz')).toBe(true);
-    expect(isBundleName('NOTE.MKZ')).toBe(true);
-  });
-
-  it('accepts the legacy .mkbundle extension', () => {
-    expect(isBundleName('note.mkbundle')).toBe(true);
-    expect(isBundleName('NOTE.MKBUNDLE')).toBe(true);
-  });
-
-  it('rejects a bare extension with nothing in front', () => {
-    expect(isBundleName('.mkz')).toBe(false);
-    expect(isBundleName('.mkbundle')).toBe(false);
-  });
-
-  it('rejects unrelated names', () => {
-    expect(isBundleName('note.mk.md')).toBe(false);
-    expect(isBundleName('note.zip')).toBe(false);
-    expect(isBundleName('note.mkzz')).toBe(false);
-  });
-});
+import { bundlePreviewTitleFor, classifyBundleTarget } from './bundle-target';
 
 describe('classifyBundleTarget', () => {
   it('classifies a bundle-named directory as "directory"', () => {

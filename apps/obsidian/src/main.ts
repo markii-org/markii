@@ -621,7 +621,7 @@ export default class MarkiiPlugin extends Plugin {
   private addHeaderActions(): void {
     const view = this.app.workspace.getActiveViewOfType(MarkdownView);
     if (!view) return;
-    if (!view.file?.path.endsWith('.mk.md')) return;
+    if (!view.file?.path.endsWith(MARK_EXTENSION)) return;
 
     const marker = 'markii-header-action';
     if (view.containerEl.querySelector(`.${marker}`)) return;

@@ -99,6 +99,14 @@ export {
   withPersistedCache,
 } from './run/bundle-run.js';
 
+export {
+  BUNDLE_EXTENSION,
+  DEFAULT_BUNDLE_DOCUMENT_PATH,
+  LEGACY_BUNDLE_EXTENSION,
+  isBundleName,
+  resolveBundleDocumentPath,
+} from './run/bundle-document.js';
+
 export type { RunTrace } from './run/run-trace.js';
 export {
   isRunTrace,
@@ -368,7 +376,12 @@ export type {
   HostTextEdit,
 } from './host/adapter.js';
 export { BROWSER_ISOLATE_ENTRY } from './host/adapter.js';
-export { CLI_LABELS, OBSIDIAN_LABELS, VSCODE_LABELS } from './host/labels.js';
+export {
+  CLI_LABELS,
+  OBSIDIAN_LABELS,
+  VSCODE_LABELS,
+  packsNotInstalledLabel,
+} from './host/labels.js';
 export {
   scheduledRefreshNotStartedLine,
   scriptsDisabledConfirmationText,

@@ -285,6 +285,60 @@ describe('fenceExtensionEdits', () => {
   });
 });
 
+// Ported from VSNote's markiiCompletionManualFence suite (its fence cases that
+// apply to the skeleton-insertion path this package owns).
+describe('fenceExtensionEdits: nesting depth and code blocks', () => {
+  it('cascades transitively through three enclosing pairs', () => {
+    // 6 > 5 > 4, inserting a 4-colon container inside the 4-colon pair:
+    // the 4 must reach 5, which collides with the 5, which must reach 6,
+    // which collides with the 6, which must reach 7.
+    const text = doc(
+      '::::::a{}',
+      ':::::b{}',
+      '::::c{}',
+      '',
+      '::::',
+      ':::::',
+      '::::::',
+    );
+    expect(fenceExtensionEdits(text, 3, containerSkeleton('tabs', 4))).toEqual([
+      { line: 0, column: 0, oldText: '::::::', newText: ':::::::' },
+      { line: 1, column: 0, oldText: ':::::', newText: '::::::' },
+      { line: 2, column: 0, oldText: '::::', newText: ':::::' },
+      { line: 4, column: 0, oldText: '::::', newText: ':::::' },
+      { line: 5, column: 0, oldText: ':::::', newText: '::::::' },
+      { line: 6, column: 0, oldText: '::::::', newText: ':::::::' },
+    ]);
+  });
+
+  it('stops the cascade at the first outer pair that is already long enough, three deep', () => {
+    const text = doc(
+      '::::::::a{}',
+      ':::::b{}',
+      '::::c{}',
+      '',
+      '::::',
+      ':::::',
+      '::::::::',
+    );
+    const edits = fenceExtensionEdits(text, 3, containerSkeleton('tabs', 4));
+    expect(edits.map((edit) => edit.line).sort()).toEqual([1, 2, 4, 5]);
+  });
+
+  it('never rewrites a colon run that sits inside a fenced code block', () => {
+    const text = doc(':::card{}', '```', ':::note{}', ':::', '```', '', ':::');
+    expect(fenceExtensionEdits(text, 5, containerSkeleton('tabs'))).toEqual([
+      { line: 0, column: 0, oldText: ':::', newText: '::::' },
+      { line: 6, column: 0, oldText: ':::', newText: '::::' },
+    ]);
+  });
+
+  it('does nothing when the only container-looking lines are inside a code block', () => {
+    const text = doc('```', ':::card{}', '', ':::', '```', '');
+    expect(fenceExtensionEdits(text, 5, containerSkeleton('tabs'))).toEqual([]);
+  });
+});
+
 describe('closesOpenContainerFence', () => {
   it('an opener with no name typed yet is not a closer, even with nothing open above it', () => {
     const text = doc(':::');

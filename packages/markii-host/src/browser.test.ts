@@ -130,4 +130,29 @@ describe('createBrowserHostIsolate', () => {
       vi.unstubAllGlobals();
     }
   });
+
+  it('starts a classic worker (no options) when asked, for an embedded IIFE bundle', async () => {
+    const created: unknown[][] = [];
+    class FakeWorker {
+      constructor(...args: unknown[]) {
+        created.push(args);
+      }
+      postMessage(): void {}
+      terminate(): void {}
+      addEventListener(): void {}
+    }
+    vi.stubGlobal('Worker', FakeWorker);
+    try {
+      const isolate = createBrowserHostIsolate({
+        workerUrl: 'blob:classic',
+        wasmUrl: 'blob:wasm',
+        workerType: 'classic',
+      });
+      const spawn = await isolate.spawner();
+      spawn({ entryPath: 'x', maxOldGenerationSizeMb: 1 });
+      expect(created).toEqual([['blob:classic']]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });

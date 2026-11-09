@@ -188,6 +188,8 @@ export interface BrowserHostIsolateOptions {
   workerUrl?: string | URL;
   /** Where wasmoon's `glue.wasm` lives. Defaults to `glue.wasm` beside this file. Sent on every job, so the Lua engine never falls back to a CDN. */
   wasmUrl?: string | URL;
+  /** How the worker script is loaded. Defaults to `module`, which the packaged `browser-worker.js` is. A host that embeds a classic (IIFE) bundle behind a blob URL passes `classic`. */
+  workerType?: 'module' | 'classic';
   /** Serves `net.*` for each run. Defaults to a provider with an empty allowlist, which denies every request. */
   netProvider?: BrowserNetProviderFactory;
 }
@@ -211,7 +213,10 @@ export function createBrowserHostIsolate(
       const wasmUrl =
         options.wasmUrl ?? new URL('./glue.wasm', import.meta.url);
       return createBrowserIsolate({
-        createWorker: () => new Worker(workerUrl, { type: 'module' }),
+        createWorker: () =>
+          options.workerType === 'classic'
+            ? new Worker(workerUrl)
+            : new Worker(workerUrl, { type: 'module' }),
         netProvider,
         wasmUri: String(wasmUrl),
       });

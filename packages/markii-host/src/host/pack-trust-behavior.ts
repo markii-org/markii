@@ -17,7 +17,7 @@
  * it. Neutral on purpose: only the adapter's file and state primitives
  * are used.
  */
-import { validatePackName } from '@markii/pack';
+import { parsePackManifest, validatePackName } from '@markii/pack';
 import { joinPath } from '../path-util.js';
 import {
   PACK_TRUST_STORAGE_KEY,
@@ -139,6 +139,23 @@ async function readPackVersion(
   }
 }
 
+/** Why a folder's `pack.json` cannot be a pack, or `undefined` when it parses as a valid manifest. Never throws. */
+async function manifestProblem(
+  adapter: HostAdapter,
+  folder: string,
+): Promise<string | undefined> {
+  let text: string;
+  try {
+    text = new TextDecoder().decode(
+      await adapter.readFile(joinPath(folder, 'pack.json')),
+    );
+  } catch {
+    return 'the folder has no readable pack.json';
+  }
+  const parsed = parsePackManifest(text);
+  return parsed.ok ? undefined : parsed.errors.join('; ');
+}
+
 /**
  * Called by the install path after an archive was extracted: records the
  * namespace as trusted on this device. A no-op for a host without trust.
@@ -202,6 +219,16 @@ export async function enablePackViaAdapter(
   try {
     if (!(await adapter.exists(folder))) {
       return { kind: 'not-installed', namespace };
+    }
+    // A folder that is not a valid pack is refused before the consent
+    // prompt: trusting it would record an entry for a namespace that
+    // cannot load, and would trust whatever later appears in that folder.
+    const problem = await manifestProblem(adapter, folder);
+    if (problem !== undefined) {
+      return {
+        kind: 'failed',
+        reason: `could not enable pack "${namespace}": ${problem}`,
+      };
     }
     const consented = await adapter.prompt({
       kind: 'pack-install-consent',

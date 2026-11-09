@@ -35,3 +35,14 @@ export const CLI_LABELS: HostLabels = {
   diagnosticsSurface: 'stderr',
   deviceNoun: 'this device',
 };
+
+/**
+ * The quiet marker a rendered note shows when its `uses:` list names packs
+ * this host has not installed (docs/packs.md). One sentence for every host;
+ * the tooltip beside it, which says how to install, stays host-specific.
+ */
+export function packsNotInstalledLabel(missing: readonly string[]): string {
+  return missing.length === 1
+    ? `Pack not installed: ${missing[0]}`
+    : `Packs not installed: ${missing.join(', ')}`;
+}

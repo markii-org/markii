@@ -6,7 +6,7 @@ import type { Registry } from '@markii/react';
 import { createValueStore } from '@markii/runtime';
 import type { StoredValue } from '@markii/runtime';
 import type { UnavailableComponent } from '@markii/stdlib';
-import { mergeArrivingValue } from '@markii/host';
+import { mergeArrivingValue, packsNotInstalledLabel } from '@markii/host';
 import { extractFrontmatterUses } from '@markii/core';
 import { resolveUses } from '@markii/pack';
 import { isHostToWebviewMessage, isNewerRevision } from '../protocol.js';
@@ -455,9 +455,7 @@ export function Preview({ registry }: PreviewProps): ReactElement {
             className="mk-preview__uses-marker"
             title={`This note declares packs that are not installed: ${usesResolution.missing.join(', ')}. Add their folders to the markii.packs setting to enable them.`}
           >
-            {usesResolution.missing.length === 1
-              ? `Pack not installed: ${usesResolution.missing[0]}`
-              : `Packs not installed: ${usesResolution.missing.join(', ')}`}
+            {packsNotInstalledLabel(usesResolution.missing)}
           </p>
         )}
         {rendered}

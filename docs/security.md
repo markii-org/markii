@@ -74,6 +74,10 @@ bundle-local modules, and the versions of any pack modules it requires. If any o
 host prompts again. Without this rule, edited shared code would silently
 inherit grants that were made to different code. The reference
 implementation of the key is `computeGrantKey` in `@markii/runtime`.
+Editing only a note's network declaration, with the code unchanged, does
+not prompt again: the run still reaches only the hosts already approved for
+that code, and the host writes the mismatch between declaration and grant
+to its diagnostics surface.
 
 A grant is scoped to a hostname, and only to a hostname. Granting
 `api.github.com` authorizes every port, path, query string, and scheme on

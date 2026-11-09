@@ -206,6 +206,101 @@ describe('completionAt — directive-name context', () => {
   });
 });
 
+/** Applies an accepted item to a line the way an editor applies the replace range. */
+function accepted(line: string, column: number, label: string): string {
+  const ctx = completionAt(line, column, STANDARD_CATALOG);
+  const item = ctx.items.find((i) => i.label === label);
+  if (!item) throw new Error(`no ${label} item`);
+  return (
+    line.slice(0, ctx.replaceStart) +
+    item.insertText +
+    line.slice(ctx.replaceEnd)
+  );
+}
+
+// The cases below are ported from VSNote's markiiCompletionAcceptRange,
+// markiiCompletionSourceRange and markiiCompletionFieldSeparation suites.
+describe('completionAt — accepting replaces the whole typed prefix', () => {
+  it('replaces the colon run and the typed name, leaving no tail (markiiCompletionAcceptRange)', () => {
+    expect(accepted(':::ro', 5, 'row')).toBe(':::row\n\n:::');
+    expect(accepted('::rat', 5, 'rating')).toBe('::rating');
+  });
+
+  it('keeps the replace start stable while the author keeps typing, so an item built earlier stays valid', () => {
+    const early = completionAt(':::', 3, STANDARD_CATALOG);
+    const later = completionAt(':::ro', 5, STANDARD_CATALOG);
+    expect(later.replaceStart).toBe(early.replaceStart);
+    const earlyRow = early.items.find((i) => i.label === 'row');
+    const laterRow = later.items.find((i) => i.label === 'row');
+    expect(earlyRow?.insertText).toBe(laterRow?.insertText);
+  });
+
+  it('with a mid-line caret and text after it, replaces only the typed name and never the fence or the tail', () => {
+    const line = ':::ro cols=3';
+    const ctx = completionAt(line, 5, STANDARD_CATALOG);
+    expect(ctx.replaceStart).toBe(3);
+    expect(ctx.replaceEnd).toBe(5);
+    expect(accepted(line, 5, 'row')).toBe(':::row cols=3');
+  });
+
+  it('ends the replace range at the end of the name token, not at the end of the line', () => {
+    const line = ':::ro cols=3';
+    expect(completionAt(line, 5, STANDARD_CATALOG).replaceEnd).toBe(5);
+    expect(completionAt(line, 4, STANDARD_CATALOG).replaceEnd).toBe(5);
+  });
+});
+
+describe('completionAt — filter text starts after the colon run', () => {
+  it('reports the name token start for each colon-run length', () => {
+    expect(completionAt(':::', 3, STANDARD_CATALOG).tokenStart).toBe(3);
+    expect(completionAt('::::', 4, STANDARD_CATALOG).tokenStart).toBe(4);
+    expect(completionAt('::', 2, STANDARD_CATALOG).tokenStart).toBe(2);
+  });
+
+  it('keeps a partly typed name reachable: the text from tokenStart to the caret prefixes the label', () => {
+    const line = ':::ce';
+    const ctx = completionAt(line, 5, STANDARD_CATALOG);
+    const typed = line.slice(ctx.tokenStart, 5);
+    expect(typed).toBe('ce');
+    const center = ctx.items.find((i) => i.label === 'center');
+    expect(center).toBeDefined();
+    expect(center?.label.startsWith(typed)).toBe(true);
+    // The text from replaceStart can never prefix a label.
+    expect(center?.label.startsWith(line.slice(ctx.replaceStart, 5))).toBe(
+      false,
+    );
+  });
+
+  it('offers the whole container catalog for a bare fence', () => {
+    const ctx = completionAt(':::', 3, STANDARD_CATALOG);
+    expect(ctx.items.length).toBeGreaterThan(0);
+    expect(ctx.items.some((i) => i.label === 'center')).toBe(true);
+  });
+});
+
+describe('completionAt — label, detail and documentation stay separate fields', () => {
+  it('keeps every label a bare token, never glued to its detail', () => {
+    const ctx = completionAt(':::', 3, STANDARD_CATALOG);
+    expect(ctx.items.length).toBeGreaterThan(0);
+    for (const item of ctx.items) {
+      expect(item.label).not.toMatch(/\s/);
+      if (item.detail) {
+        expect(item.label.endsWith(item.detail)).toBe(false);
+        expect(item.detail).not.toBe(item.label);
+      }
+    }
+  });
+
+  it('carries documentation on its own field, not folded into label or detail', () => {
+    const ctx = completionAt(':::', 3, STANDARD_CATALOG);
+    const documented = ctx.items.filter((i) => i.documentation !== undefined);
+    expect(documented.length).toBeGreaterThan(0);
+    for (const item of documented) {
+      expect(item.label).not.toContain(item.documentation?.example ?? '\u0000');
+    }
+  });
+});
+
 describe('completionAt — attribute-name context', () => {
   it('offers a standard component contract attributes, minus what is already present', () => {
     const ctx = completionAt('::callout{type=warning ', 24, STANDARD_CATALOG);

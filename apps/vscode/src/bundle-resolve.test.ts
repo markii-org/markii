@@ -9,7 +9,6 @@ import {
   bundleResolutionFailureMessage,
   extractAssetsAsDataUris,
   resolveBundleDocument,
-  resolveBundleDocumentPath,
   zipArchiveTooLarge,
 } from './bundle-resolve';
 
@@ -63,45 +62,6 @@ function zipStorage(files: Record<string, string | Uint8Array>): BundleStorage {
 function manifestJson(manifest: BundleManifest): string {
   return JSON.stringify(manifest);
 }
-
-describe('resolveBundleDocumentPath', () => {
-  it('defaults to note.mk.md when the manifest names no document', () => {
-    expect(resolveBundleDocumentPath({ spec: '0.1.0' })).toBe('note.mk.md');
-  });
-
-  it('uses the manifest-named document when it is a valid bundle-relative path', () => {
-    expect(
-      resolveBundleDocumentPath({ spec: '0.1.0', document: 'main.mk.md' }),
-    ).toBe('main.mk.md');
-  });
-
-  it('rejects a non-string document field', () => {
-    expect(
-      resolveBundleDocumentPath({ spec: '0.1.0', document: 42 as never }),
-    ).toBeUndefined();
-  });
-
-  it('fails closed on a traversal attempt in the document field', () => {
-    expect(
-      resolveBundleDocumentPath({
-        spec: '0.1.0',
-        document: '../outside.mk.md',
-      }),
-    ).toBeUndefined();
-    expect(
-      resolveBundleDocumentPath({
-        spec: '0.1.0',
-        document: '../'.repeat(5) + 'etc/passwd',
-      }),
-    ).toBeUndefined();
-  });
-
-  it('rejects an absolute path in the document field', () => {
-    expect(
-      resolveBundleDocumentPath({ spec: '0.1.0', document: '/etc/passwd' }),
-    ).toBeUndefined();
-  });
-});
 
 describe('resolveBundleDocument', () => {
   it('resolves the conventional note.mk.md', async () => {

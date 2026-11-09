@@ -9,27 +9,7 @@
  * "still recognized for one more release", so both are accepted here too.
  */
 
-/** The current bundle extension; new bundles are always written with this one. */
-export const BUNDLE_EXTENSION = '.mkz';
-
-/** The legacy bundle extension, still recognized (see this file's doc comment). */
-export const LEGACY_BUNDLE_EXTENSION = '.mkbundle';
-
-/**
- * True when `name` ends with `.mkz` or `.mkbundle` (case-insensitively) AND
- * has a non-empty base name before the extension — mirrors
- * `mark-document.ts`'s `isMarkFileName` rule that a bare extension with
- * nothing in front is not a valid name.
- */
-export function isBundleName(name: string): boolean {
-  const lower = name.toLowerCase();
-  for (const extension of [BUNDLE_EXTENSION, LEGACY_BUNDLE_EXTENSION]) {
-    if (lower.endsWith(extension) && lower.length > extension.length) {
-      return true;
-    }
-  }
-  return false;
-}
+import { isBundleName } from '@markii/host';
 
 /** What a filesystem entry at a bundle-shaped name turns out to be. */
 export type BundleTargetKind = 'directory' | 'zip' | 'not-a-bundle';

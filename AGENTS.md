@@ -290,6 +290,9 @@ packages/markii-host    PRIVATE, never published (no npm presence, absent from
   src/run/grant-flow.ts    prompts and grant storage, both injected
   src/run/net-pinning.ts, src/run/ip-address.ts  resolve-then-pin (issue #10)
   src/run/run-trace.ts     last-run outcome, for the host's run marker
+  src/run/bundle-document.ts  where a bundle's note lives
+                     (resolveBundleDocumentPath) and bundle-name recognition
+                     (isBundleName: .mkz and legacy .mkbundle), for every host
   src/host/          the HOST CONTRACT: adapter.ts defines HostAdapter,
                      the small set of primitives a host provides
                      (readFile/exists/writeFile/listFolder, ONE prompt for
@@ -347,7 +350,12 @@ packages/markii-host    PRIVATE, never published (no npm presence, absent from
                      as wasmUri on every job) and createFetchNetProvider
                      (fetch only for a host the run was granted AND an
                      origin on the page's allowlist; deny-all by default; no
-                     address pinning). Probed Node-free like the main entry
+                     address pinning). workerType 'classic' serves a host
+                     that embeds an IIFE worker behind a blob URL
+                     (Obsidian); the isolate's dispose is a no-op because
+                     the shared run path disposes after every run, so URL
+                     lifetime belongs to the host's unload. Probed Node-free
+                     like the main entry
   src/conformance.ts @markii/host/conformance: the host scenario runner;
                      build:dist ships the corpus in dist/conformance/host/
   scripts/build-dist-assets.mjs  finishes build:dist: dist/package.json
@@ -565,7 +573,7 @@ apps/obsidian        the "Markii" Obsidian plugin (desktop only) — an
                      the suite if a run/grant path ever calls saveData
   src/run/           the host seam onto @markii/host: local-storage-memento
                      (GrantMemento over saveLocalStorage, never throws on a
-                     full store) and browser-worker (blob-URL Web Worker
+                     full store) and browser-worker (the shared createBrowserHostIsolate over blob-URL
                      setup); run-modals.ts carries the grant prompts. Run
                      outcomes surface as Notice + console, not an in-page
                      marker. embedded-assets.ts is a build-substituted

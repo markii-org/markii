@@ -672,7 +672,8 @@ installs prebuilt `.mkp` archives only.
     trust list: an installed folder loads only when that list names it,
     and a folder that is present but not named is shown as "present, not
     enabled" and is never read or evaluated. Installing a pack trusts it,
-    enabling a present folder asks the same consent as an install, and
+    enabling a present folder (one with a valid `pack.json`; any other is
+    refused before the prompt) asks the same consent as an install, and
     removing a pack withdraws its entry. A host whose install store only
     it writes to (VS Code, the command line tool) can trust that store
     directly.

@@ -268,4 +268,127 @@ describe('the trust list is a host behavior', () => {
       notEnabled: ['ana'],
     });
   });
+
+  // The cases below are ported from VSNote's markiiPackStore suite, mapped
+  // from its enable/disable/reenable/remove store onto the shared trust
+  // behavior: "enable" persists a pack, "disable" keeps the record but
+  // withdraws trust, and re-enabling needs no reinstall.
+  it('enabling an already-enabled namespace keeps a single entry (markiiPackStore: no silent duplicate)', async () => {
+    const { adapter, memento } = trustAdapter({
+      trust: 'device-list',
+      files: pack('ana'),
+      answers: [true, true],
+    });
+    const host = createMarkiiHost(adapter);
+    await host.enablePack('ana');
+    await host.enablePack('ana');
+    const list = memento.store.get(PACK_TRUST_STORAGE_KEY) as {
+      entries: { namespace: string }[];
+    };
+    expect(list.entries.map((e) => e.namespace)).toEqual(['ana']);
+    expect(await host.installedPacks()).toMatchObject({
+      enabled: [{ namespace: 'ana' }],
+      notEnabled: [],
+    });
+  });
+
+  it('disable keeps the folder and re-enabling it needs no reinstall (markiiPackStore: disable, reenable)', async () => {
+    const { adapter, files } = trustAdapter({
+      trust: 'device-list',
+      files: pack('ana'),
+      answers: [true, true],
+    });
+    const host = createMarkiiHost(adapter);
+    await host.enablePack('ana');
+    await host.disablePack('ana');
+    expect(files.has(`${ROOT}/ana/pack.json`)).toBe(true);
+    expect(await host.enablePack('ana')).toEqual({
+      kind: 'enabled',
+      namespace: 'ana',
+    });
+    expect(await host.installedPacks()).toMatchObject({
+      enabled: [{ namespace: 'ana' }],
+      notEnabled: [],
+    });
+    const loaded = await host.loadPacks();
+    expect(loaded.kind === 'loaded' && loaded.namespaces).toEqual(['ana']);
+  });
+
+  it('a disabled pack is not loaded but is still listed as present (markiiPackStore: disable flips enabled to false)', async () => {
+    const { adapter } = trustAdapter({
+      trust: 'device-list',
+      files: pack('ana'),
+      answers: [true],
+    });
+    const host = createMarkiiHost(adapter);
+    await host.enablePack('ana');
+    await host.disablePack('ana');
+    const loaded = await host.loadPacks();
+    expect(loaded.kind === 'loaded' && loaded.namespaces).toEqual([]);
+    expect(await host.installedPacks()).toMatchObject({
+      enabled: [],
+      notEnabled: ['ana'],
+    });
+  });
+
+  it('removing a pack frees its namespace for a fresh install and enable (markiiPackStore: remove frees the namespace)', async () => {
+    const { adapter, files } = trustAdapter({
+      trust: 'device-list',
+      files: pack('ana'),
+      answers: [true, true],
+    });
+    const host = createMarkiiHost(adapter);
+    await host.enablePack('ana');
+    expect((await host.removePack('ana')).kind).toBe('removed');
+    expect(files.has(`${ROOT}/ana/pack.json`)).toBe(false);
+    expect((await host.enablePack('ana')).kind).toBe('not-installed');
+    // The same namespace installed again enables cleanly.
+    for (const [key, value] of Object.entries(pack('ana', '3.0.0'))) {
+      files.set(key, value);
+    }
+    expect(await host.enablePack('ana')).toEqual({
+      kind: 'enabled',
+      namespace: 'ana',
+    });
+    expect(await host.installedPacks()).toMatchObject({
+      enabled: [{ namespace: 'ana', version: '3.0.0' }],
+    });
+  });
+
+  it('disable and remove of an unknown namespace change nothing (markiiPackStore: no-ops for an unknown namespace)', async () => {
+    const { adapter, memento } = trustAdapter({
+      trust: 'device-list',
+      files: pack('ana'),
+      answers: [true],
+    });
+    const host = createMarkiiHost(adapter);
+    await host.enablePack('ana');
+    const before = structuredClone(memento.store.get(PACK_TRUST_STORAGE_KEY));
+    expect(await host.disablePack('nope')).toEqual({
+      kind: 'not-enabled',
+      namespace: 'nope',
+    });
+    expect((await host.removePack('nope')).kind).toBe('not-installed');
+    expect(memento.store.get(PACK_TRUST_STORAGE_KEY)).toEqual(before);
+    expect(await host.installedPacks()).toMatchObject({
+      enabled: [{ namespace: 'ana' }],
+    });
+  });
+
+  it('enabling a folder whose pack.json is not a valid manifest persists no trust (markiiPackStore: a load failure persists nothing)', async () => {
+    const { adapter, memento, asked } = trustAdapter({
+      trust: 'device-list',
+      files: { [`${ROOT}/broken/pack.json`]: 'not json' },
+      answers: [true],
+    });
+    const host = createMarkiiHost(adapter);
+    const outcome = await host.enablePack('broken');
+    expect(outcome.kind).toBe('failed');
+    // Refused before the consent prompt: nothing to consent to.
+    expect(asked).toEqual([]);
+    const list = memento.store.get(PACK_TRUST_STORAGE_KEY) as
+      { entries: unknown[] } | undefined;
+    expect(list?.entries ?? []).toEqual([]);
+    expect(await host.loadPacks()).toMatchObject({ kind: 'loaded' });
+  });
 });

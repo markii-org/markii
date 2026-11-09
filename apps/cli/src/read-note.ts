@@ -9,18 +9,15 @@
  * the caller (`main.ts`) maps that to exit code 1 with a one-line message.
  */
 import { readFile, stat } from 'node:fs/promises';
-import { extname } from 'node:path';
+import { basename } from 'node:path';
+import { isBundleName, resolveBundleDocumentPath } from '@markii/host';
 import {
-  normalizeBundlePath,
   openZipBundle,
   parseManifest,
   type BundleManifest,
   type BundleStorage,
 } from '@markii/bundle';
 import { openDirBundle } from '@markii/bundle/fs';
-
-/** The conventional entry-note path inside a bundle when the manifest doesn't name one (docs/bundles.md). */
-export const DEFAULT_BUNDLE_DOCUMENT_PATH = 'note.mk.md';
 
 const MANIFEST_PATH = 'manifest.json';
 
@@ -40,15 +37,6 @@ export interface ResolvedNote {
 export type ReadNoteResult =
   | { readonly ok: true; readonly note: ResolvedNote }
   | { readonly ok: false; readonly message: string };
-
-/** Resolves `manifest.document` (or the convention default) to a bundle-relative path, jailed through `normalizeBundlePath`. `undefined` when the manifest names something that isn't a safe bundle-relative path. */
-function resolveDocumentPath(manifest: BundleManifest): string | undefined {
-  const raw = manifest.document;
-  if (raw === undefined) return DEFAULT_BUNDLE_DOCUMENT_PATH;
-  if (typeof raw !== 'string') return undefined;
-  const normalized = normalizeBundlePath(raw);
-  return normalized.ok ? normalized.path : undefined;
-}
 
 async function readBundleNote(
   storage: BundleStorage,
@@ -75,7 +63,7 @@ async function readBundleNote(
     };
   }
 
-  const documentPath = resolveDocumentPath(parsed.manifest);
+  const documentPath = resolveBundleDocumentPath(parsed.manifest);
   if (documentPath === undefined) {
     return {
       ok: false,
@@ -103,12 +91,6 @@ async function readBundleNote(
   };
 }
 
-/** `true` for a path ending in `.mkz` or the legacy `.mkbundle` spelling (case-insensitive). */
-function isZipBundlePath(path: string): boolean {
-  const ext = extname(path).toLowerCase();
-  return ext === '.mkz' || ext === '.mkbundle';
-}
-
 /**
  * Resolves `filePath`: a `.mk.md` file (read as plain text, no bundle), a
  * directory (opened as a bundle via `@markii/bundle/fs`'s `openDirBundle`),
@@ -127,7 +109,7 @@ export async function readNote(filePath: string): Promise<ReadNoteResult> {
     return readBundleNote(openDirBundle(filePath), 'directory', filePath);
   }
 
-  if (isZipBundlePath(filePath)) {
+  if (isBundleName(basename(filePath))) {
     let bytes: Uint8Array;
     try {
       bytes = await readFile(filePath);

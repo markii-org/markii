@@ -518,8 +518,8 @@ describe('exportDiagnosticLines', () => {
       images: EMPTY_IMAGE_REPORT,
     });
     expect(lines.join('\n')).toContain("preview's React engine");
-    expect(lines.join('\n')).toContain('1 pack component');
-    expect(lines.join('\n')).toContain('1 pack stylesheet');
+    expect(lines.join('\n')).toContain('1 pack');
+    expect(lines.join('\n')).toContain('1 stylesheet');
 
     const pluralLines = exportDiagnosticLines({
       kind: 'html',
@@ -528,8 +528,8 @@ describe('exportDiagnosticLines', () => {
       render: { engine: 'react', packCount: 2, stylesheetCount: 3 },
       images: EMPTY_IMAGE_REPORT,
     });
-    expect(pluralLines.join('\n')).toContain('2 pack components');
-    expect(pluralLines.join('\n')).toContain('3 pack stylesheets');
+    expect(pluralLines.join('\n')).toContain('2 packs');
+    expect(pluralLines.join('\n')).toContain('3 stylesheets');
   });
 
   it('says a static render matches the preview when no packs are loaded', () => {
@@ -541,7 +541,7 @@ describe('exportDiagnosticLines', () => {
       images: EMPTY_IMAGE_REPORT,
     });
     expect(lines.join('\n')).toContain('no pack components are loaded');
-    expect(lines.join('\n')).toContain('matches the preview');
+    expect(lines.join('\n')).toContain('matches what the preview shows');
   });
 
   it('says a failed React render fell back and carries the verbatim detail', () => {
@@ -556,7 +556,7 @@ describe('exportDiagnosticLines', () => {
       },
       images: EMPTY_IMAGE_REPORT,
     });
-    expect(lines.join('\n')).toContain('React render failed');
+    expect(lines.join('\n')).toContain('the preview could not render the note');
     expect(lines.join('\n')).toContain('exported as labeled boxes');
     expect(lines.join('\n')).toContain('component exploded');
   });
@@ -617,7 +617,7 @@ describe('exportDiagnosticLines', () => {
       images,
     });
     expect(lines.join('\n')).toContain('Embedded 2 images');
-    expect(lines.join('\n')).toContain('50 KB');
+    expect(lines.join('\n')).toContain('50.0 KB');
   });
 
   it('names a too-large skip with its size', () => {
@@ -662,7 +662,7 @@ describe('exportDiagnosticLines', () => {
       images,
     });
     expect(lines.join('\n')).toContain('scan.tiff');
-    expect(lines.join('\n')).toContain('not embedded');
+    expect(lines.join('\n')).toContain('not supported for embedding');
   });
 
   it('carries the verbatim detail for an unreadable skip', () => {

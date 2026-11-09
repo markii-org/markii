@@ -6,8 +6,7 @@
  * a `*.test.ts` file exercises may import it.
  */
 
-/** The canonical Markii file extension, matching `package.json`'s `contributes.languages[0].extensions`. */
-export const MARK_EXTENSION = '.mk.md';
+import { MARK_EXTENSION } from '@markii/host';
 
 /**
  * True when `fileName` ends with `.mk.md` (case-insensitively) AND has a
