@@ -845,6 +845,43 @@ not notes someone decodes:
   grep the component or its `@markii/stdlib` contract before writing the
   snippet. A snippet that shows an attribute nothing reads is a bug.
 
+**Sentence rules** (user-set 2026-11-10, adapted from AS-FOSS/mandible's
+writing rules). They apply to every sentence committed here: docs, READMEs,
+CHANGELOG, code comments, commit messages, and issue text.
+
+- One fact per sentence, about twenty words, plain verbs.
+- No em dashes. No "not X but Y" constructions. No bold mini-headings
+  inside bullets.
+- Give the number or say nothing. A comparative word with no measurement
+  behind it is a claim nobody made.
+- Name the source. "An audit found" needs the audit, by the name a reader
+  can find in this repository.
+- Delete the words that survive their own deletion: crucial, delve,
+  pivotal, showcase, tapestry, testament, underscore, vibrant, landscape,
+  key (as an adjective), robust, leverage, seamless, comprehensive.
+- No "-ing" clause bolted onto a fact to make it sound deeper.
+- No dates in docs/ or READMEs. Dates live in CHANGELOG.md, and in the
+  verification record of docs/security.md as the month an audit ran.
+
+**No development artifacts in anything committed.** Public text states
+facts a reader can check from the repository alone. It never cites a work
+round, a batch or phase number, a brief, a worker report, anything under
+`tmp/`, a chat or session, or a file outside the repository, and never an
+absolute path from a developer's machine. It describes the change, never
+the conversation that produced it. Code comments state the rule and point
+at the test or doc that holds it; history and reasoning chains belong in
+the commit message, if anywhere. Issue numbers belong in CHANGELOG.md and
+commit messages, not in docs/.
+
+**CHANGELOG.md is release notes.** It records what a user of a release
+would notice: behavior, features, breaking and visual changes. Process
+changes (CI, agent rules, repo tooling) never go in it. A released
+section is history and is not edited afterwards.
+
+Prefer a check over a paragraph: a rule a script can hold (em dashes, the
+word list, absolute paths, `tmp/` references, commit hashes in docs/)
+belongs in a test that fails, and the rule here then points at it.
+
 ## Maintenance map (what to update when something changes)
 
 Cross-references rot silently. These pairings are mandatory and belong in the
