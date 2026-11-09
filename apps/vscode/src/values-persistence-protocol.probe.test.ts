@@ -33,7 +33,7 @@ import type {
   GrantMemento,
   Thenable,
   RunResult,
-  SpawnRunOptions,
+  SpawnRunRequest,
 } from '@markii/host';
 import {
   isHostToWebviewMessage,
@@ -74,7 +74,7 @@ describe('issue #12 / item 6: markii.runValues:* cannot grow unbounded', () => {
       status: 'fresh',
       ranAt: 0,
     };
-    const spawnRun = async (_options: SpawnRunOptions): Promise<RunResult> => ({
+    const spawnRun = async (_options: SpawnRunRequest): Promise<RunResult> => ({
       values: hugeValues as RunResult['values'],
       failures: [],
       cacheSnapshot: {},
@@ -100,7 +100,7 @@ describe('issue #12 / item 6: markii.runValues:* cannot grow unbounded', () => {
   it('a value store that is exactly at the byte cap after a SMALL run is still persisted (the cap does not falsely reject ordinary notes)', async () => {
     const memento = fakeMemento();
     const documentKey = 'file:///small.mk.md';
-    const spawnRun = async (_options: SpawnRunOptions): Promise<RunResult> => ({
+    const spawnRun = async (_options: SpawnRunRequest): Promise<RunResult> => ({
       values: { a: { value: 42, status: 'fresh', ranAt: 0 } },
       failures: [],
       cacheSnapshot: {},
@@ -126,7 +126,7 @@ describe('issue #12 / item 6: markii.runValues:* cannot grow unbounded', () => {
   it('a REPEATED sequence of oversize runs never accumulates: each one independently fails the cap and drops, it never grows across ticks', async () => {
     const memento = fakeMemento();
     const documentKey = 'file:///repeated.mk.md';
-    const spawnRun = async (_options: SpawnRunOptions): Promise<RunResult> => ({
+    const spawnRun = async (_options: SpawnRunRequest): Promise<RunResult> => ({
       values: {
         blob: {
           value: 'y'.repeat(Math.floor(MAX_VALUES_SNAPSHOT_BYTES / 2)),

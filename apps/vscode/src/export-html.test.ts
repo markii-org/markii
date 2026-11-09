@@ -1,3 +1,4 @@
+import { createHtmlExportEngine } from '@markii/host/node';
 import { describe, expect, it } from 'vitest';
 import {
   EXPORT_HTML_FILTERS,
@@ -66,6 +67,7 @@ describe('image embedding pipeline', () => {
     expect(report.embedded).toEqual(['nice.png']);
 
     const document = composeNoteHtmlExport({
+      engine: createHtmlExportEngine(),
       bodyHtml: embeddedBody,
       fileName: 'week.mk.md',
     });

@@ -21,16 +21,18 @@ import { promisify } from 'node:util';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createVSCodeHostAdapter } from './host-adapter.js';
 import {
+  type GrantMemento,
+  type HostTextEdit,
+  type Thenable,
+} from '@markii/host';
+import {
   assertHostScenario,
   createAnswerQueue,
   hostConformanceDir,
   listHostScenarioNames,
   loadHostScenario,
   runHostScenario,
-  type GrantMemento,
-  type HostTextEdit,
-  type Thenable,
-} from '@markii/host';
+} from '@markii/host/node';
 
 /**
  * A minimal in-memory stand-in for a `vscode.TextEditor`: mutable line

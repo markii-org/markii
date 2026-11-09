@@ -9,7 +9,8 @@ import {
   packExportQuickPickItem,
   writePackArchiveFile,
 } from './export-pack.js';
-import type { DiscoveredPack, PackExportArchiveOutcome } from '@markii/host';
+import type { DiscoveredPack } from '@markii/host';
+import type { PackExportArchiveOutcome } from '@markii/host/node';
 
 function pack(name: string, folder: string): DiscoveredPack {
   return {

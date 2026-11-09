@@ -1,42 +1,28 @@
 /**
- * Executed probe of `@markii/host/browser` (issue #20): proves it is
- * actually Node-free by bundling it, not by grepping its source for
- * `node:` strings.
+ * Executed probe of the `@markii/host` MAIN entry: proves it is actually
+ * environment-neutral by bundling it for a browser, not by grepping its
+ * source for `node:` strings.
  *
- * WHY THIS TEST EXISTS. `@markii/host`'s `.` entry (`src/index.ts`) is one
- * barrel over the whole package, and most of that package is Node: the Run
- * path reaches `node:worker_threads`, pack discovery reaches `node:fs`,
- * pinning reaches `node:dns`. This extension's webview bundle
- * (`esbuild.config.mjs`'s `webviewBuild`) is `platform: 'browser'` /
- * `format: 'iife'` with NO `external` entries at all, because the
- * webview's CSP forbids a module graph fetched at runtime — every import
- * has to actually resolve at bundle time. Before `@markii/host/browser`
- * existed, the webview could not import even a pure function from
- * `@markii/host`, so pack-registration validation and merging were
- * hand-duplicated in the webview instead, and that duplicated logic
- * drifted from the real thing (issue #19's duplicate-composed-name guard
- * had to be fixed in two places). `packages/markii-host/src/browser.ts`
- * is the fix: a second, environment-free entry point re-exporting only the
- * modules that never touch Node. Its own top comment states the rule —
- * nothing reachable from it may import `node:*`, even transitively, even
- * behind a lazy import — and names this file as what makes that rule
- * executable instead of a comment someone can silently violate.
+ * The main entry (`packages/markii-host/src/index.ts`) is the one a browser
+ * bundle imports, VS Code's webview among them (`esbuild.config.mjs`'s
+ * `webviewBuild` is `platform: 'browser'` / `format: 'iife'` with NO
+ * `external` entries, because the webview's CSP forbids a module graph
+ * fetched at runtime). Everything that needs Node lives behind
+ * `@markii/host/node` (`src/node.ts`).
  *
- * A source-text grep for `node:` would miss the actual failure mode: a
- * transitive import three modules deep that never appears in
- * `browser.ts` itself. Only a real bundler resolving the real module graph
- * catches that, so this test hands `browser.ts` to esbuild with the same
- * `platform: 'browser'` / `format: 'iife'` / alias settings the webview
- * build uses (mirrored from `esbuild.config.mjs`'s `shared`/`webviewBuild`
- * below, since that file is a driver script with a top-level build call —
- * importing it here would trigger a real build as a side effect of loading
- * a test) and asserts the bundle succeeds.
+ * Three assertions:
+ * - the main entry bundles at `platform: 'browser'` with no `node:`
+ *   specifier surviving;
+ * - the bundle's input list never reaches `src/node.ts` or the modules
+ *   only it pulls in (the Node file system seams, the worker-thread
+ *   isolate, the static HTML engine, `esbuild-wasm`, `@markii/html`), and
+ *   carries no `@markii/react` runtime code;
+ * - a negative control proves the check can fail.
  *
- * If this test ever fails, it means something newly reachable from
- * `@markii/host/browser` pulled in a Node builtin: either a new export was
- * added to `browser.ts` that shouldn't have been, or an existing exported
- * module gained a new dependency that isn't actually environment-free. The
- * fix is to cut that import, not to loosen this test.
+ * A source-text grep would miss a transitive import three modules deep;
+ * only a real bundler resolving the real module graph catches that. If this
+ * test fails, cut the offending import from the main entry's graph; do not
+ * loosen the test.
  */
 import { build } from 'esbuild';
 import * as path from 'node:path';
@@ -71,14 +57,14 @@ const markiiSrcRoots = {
   '@markii/host': path.join(repoRoot, 'packages', 'markii-host', 'src'),
 };
 
-describe('@markii/host/browser is Node-free under the webview bundle config', () => {
+describe('@markii/host main entry is environment-neutral under the webview bundle config', () => {
   it('bundles cleanly at platform: browser with no node: specifier surviving', async () => {
     const entryPoint = path.join(
       repoRoot,
       'packages',
       'markii-host',
       'src',
-      'browser.ts',
+      'index.ts',
     );
 
     const result = await build({
@@ -90,6 +76,7 @@ describe('@markii/host/browser is Node-free under the webview bundle config', ()
       target: 'chrome122',
       alias: markiiSrcRoots,
       logLevel: 'silent',
+      metafile: true,
     });
 
     expect(result.outputFiles).toHaveLength(1);
@@ -102,6 +89,32 @@ describe('@markii/host/browser is Node-free under the webview bundle config', ()
     // still mean this entry is not actually Node-free. Fail loudly on
     // that directly rather than relying only on the build not throwing.
     expect(bundled).not.toMatch(/\bnode:[a-z_]+/);
+
+    // The Node entry and everything only it reaches stays out of the graph.
+    const inputs = Object.keys(result.metafile.inputs).map((p) =>
+      p.split(path.sep).join('/'),
+    );
+    const forbidden = [
+      /markii-host\/src\/node\.ts$/,
+      /markii-host\/src\/node-fs\.ts$/,
+      /markii-host\/src\/html-engine\.ts$/,
+      /markii-host\/src\/run\/node-isolate\.ts$/,
+      /markii-host\/src\/run\/net-provider\.ts$/,
+      /markii-host\/src\/packs\/pack-build\.ts$/,
+      /markii-host\/src\/host\/conformance-runner\.ts$/,
+      /markii-html\/src\//,
+      /esbuild-wasm/,
+    ];
+    for (const pattern of forbidden) {
+      expect(
+        inputs.filter((input) => pattern.test(input)),
+        String(pattern),
+      ).toEqual([]);
+    }
+    // `@markii/react` may appear as erased types only: no runtime module.
+    expect(inputs.filter((input) => /markii-react\/src\//.test(input))).toEqual(
+      [],
+    );
   }, 30_000);
 
   it('negative control: the same browser-platform build genuinely rejects a node: import', async () => {

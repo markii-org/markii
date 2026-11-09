@@ -8,11 +8,14 @@
  * module only takes the already-read setting value, workspace root, and
  * (optionally) an extension-owned cache directory as plain strings.
  */
+import {
+  createNodeDirectoryLister,
+  createNodePackScriptsReader,
+} from '@markii/host/node';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import {
   componentsWithoutEngineView,
-  createNodeFileReader,
   declaredPackComponents,
   discoverPacks,
   installedNamespaces,
@@ -21,15 +24,16 @@ import {
   resolvePackPaths,
   resolvePrebuiltPack,
 } from '@markii/host';
+import { createNodeFileReader } from '@markii/host/node';
 import { REACT_ENGINE_ID } from '@markii/react';
 import type { UnavailableComponent } from '@markii/stdlib';
 import type {
   DiscoveredPack,
-  PackBuildOutcome,
   PackModulesMap,
   PackPathExists,
   SkippedPackFolder,
 } from '@markii/host';
+import type { PackBuildOutcome } from '@markii/host/node';
 import { discoverBundledPacks, mergeBundledPacks } from './bundled-packs.js';
 
 export interface PackContext {
@@ -174,13 +178,20 @@ export async function loadPackContext(
     homeDir,
   );
   const relativeEntries = relativePackEntries(configuredPacks, homeDir);
-  const userResult = await discoverPacks(resolvedPaths, createNodeFileReader());
+  const userResult = await discoverPacks(
+    resolvedPaths,
+    createNodeFileReader(),
+    createNodeDirectoryLister(),
+  );
   const bundled =
     extensionPath !== undefined
       ? await discoverBundledPacks(extensionPath)
       : [];
   const merged = mergeBundledPacks(bundled, userResult.packs);
-  const packModules = await loadPackModules(merged.packs);
+  const packModules = await loadPackModules(
+    merged.packs,
+    createNodePackScriptsReader(),
+  );
 
   const skipped: SkippedPackFolder[] = [
     ...userResult.skipped,

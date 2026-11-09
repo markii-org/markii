@@ -6,7 +6,7 @@
  * root is ever touched: the namespace is validated as a pack name (no
  * separators, no dots) before any path is built.
  */
-import * as path from 'node:path';
+import { joinPath } from '../path-util.js';
 import { validatePackName } from '@markii/pack';
 import type { HostAdapter } from './adapter.js';
 
@@ -35,7 +35,7 @@ export async function removePackViaAdapter(
   if (reservedNamespaces.has(namespace)) {
     return { kind: 'reserved', namespace };
   }
-  const folder = path.join(installRoot, namespace);
+  const folder = joinPath(installRoot, namespace);
   try {
     if (!(await adapter.exists(folder))) {
       return { kind: 'not-installed', namespace };

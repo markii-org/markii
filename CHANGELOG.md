@@ -16,6 +16,9 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
   renders as usual and reports the new `code-renderer-failed`
   `DiagnosticKind` (`@markii/stdlib`). The HTML engine inserts the
   returned string as-is; the terminal engine passes sanitized text.
+- **`@markii/react` exports `reactPackEngine`**, the pack-loading trio
+  (`loadPack`, `createRegistry`, `mergeRegistries`) as one object, so a
+  host layer can be handed the React engine instead of importing it.
 - **`@markii/react` accepts React 19** as a peer
   (`^18.3.1 || ^19.0.0`). CI runs its suite under React 19.
 - **`@markii/lua`'s `PackModuleResolver` may return a promise.** Sync

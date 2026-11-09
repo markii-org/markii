@@ -1,3 +1,4 @@
+import { createHtmlExportEngine } from '../html-engine.js';
 import { describe, expect, it } from 'vitest';
 import type { ExportRenderInfo } from '../export/note-export.js';
 import { EMPTY_IMAGE_REPORT } from '../export/image-embed.js';
@@ -176,7 +177,11 @@ describe('exportDiagnosticLines', () => {
 });
 
 describe('exportNoteFileViaAdapter', () => {
-  const request = { notePath: '/vault/note.mk.md', text: '# Hello\n' };
+  const request = {
+    engine: createHtmlExportEngine(),
+    notePath: '/vault/note.mk.md',
+    text: '# Hello\n',
+  };
 
   it('returns undefined (Unsupported territory) for a format the adapter has not declared', async () => {
     const adapter = fakeAdapter(['html']);
@@ -303,11 +308,13 @@ describe('buildExportDocument', () => {
     const text = '```lua {name=total}\nreturn 1\n```\n';
 
     const hidden = await buildExportDocument({
+      engine: createHtmlExportEngine(),
       notePath: 'note.mk.md',
       text,
       hideScriptBlocks: true,
     });
     const shown = await buildExportDocument({
+      engine: createHtmlExportEngine(),
       notePath: 'note.mk.md',
       text,
     });

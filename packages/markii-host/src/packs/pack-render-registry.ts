@@ -28,8 +28,24 @@
  */
 import { detectNamespaceCollisions, parsePackManifest } from '@markii/pack';
 import type { PackManifest } from '@markii/pack';
-import { createRegistry, loadPack, mergeRegistries } from '@markii/react';
+// Type-only: the renderer's pack machinery is injected as `PackRegistryEngine`
+// (below), so nothing here imports `@markii/react` at runtime.
 import type { PackToInstall, Registry, RegistryEntry } from '@markii/react';
+
+/**
+ * The renderer-specific half of building a pack-aware registry: the
+ * renderer's own `loadPack`, `createRegistry` and `mergeRegistries`. A
+ * React host passes `@markii/react`'s `reactPackEngine`; the host layer
+ * itself names no renderer.
+ */
+export interface PackRegistryEngine {
+  loadPack(
+    manifest: PackManifest,
+    componentModules: Record<string, RegistryEntry>,
+  ): { registry: Registry; dropped?: { name: string; engine: string } };
+  createRegistry(entries?: Record<string, RegistryEntry>): Registry;
+  mergeRegistries(...registries: Registry[]): Registry;
+}
 
 /** One registration a compiled pack script queued by calling `window.__markiiRegisterPack(manifestJson, componentModules)` (see `./pack-build.ts`'s top doc comment for the full registration convention). Structurally identical across every host that satisfies the convention. */
 export interface QueuedPackRegistration {
@@ -155,6 +171,7 @@ export interface BuildRenderRegistryResult {
 function mergePacksKeepingFirstClaim(
   packs: readonly PackToInstall[],
   base: Registry,
+  engine: PackRegistryEngine,
 ): {
   registry: Registry;
   duplicateComposedNames: DuplicateComposedName[];
@@ -166,7 +183,7 @@ function mergePacksKeepingFirstClaim(
   const droppedEngines: { name: string; engine: string }[] = [];
 
   for (const pack of packs) {
-    const { registry: loaded, dropped } = loadPack(
+    const { registry: loaded, dropped } = engine.loadPack(
       pack.manifest,
       pack.componentModules,
     );
@@ -188,7 +205,7 @@ function mergePacksKeepingFirstClaim(
   }
 
   return {
-    registry: createRegistry(merged),
+    registry: engine.createRegistry(merged),
     duplicateComposedNames,
     droppedEngines,
   };
@@ -212,6 +229,7 @@ function mergePacksKeepingFirstClaim(
 export function buildRenderRegistry(
   queued: readonly QueuedPackRegistration[],
   defaultRegistry: Registry,
+  engine: PackRegistryEngine,
 ): BuildRenderRegistryResult {
   const packs: PackToInstall[] = [];
   const invalidReasons: string[] = [];
@@ -236,7 +254,10 @@ export function buildRenderRegistry(
   const namespaceCollisions = detectNamespaceCollisions(namespaces);
   if (namespaceCollisions.length > 0) {
     return {
-      registry: mergeRegistries(createRegistry(), defaultRegistry),
+      registry: engine.mergeRegistries(
+        engine.createRegistry(),
+        defaultRegistry,
+      ),
       invalidReasons,
       collisions: namespaceCollisions.map((collision) => collision.namespace),
       duplicateComposedNames: [],
@@ -245,7 +266,7 @@ export function buildRenderRegistry(
   }
 
   const { registry, duplicateComposedNames, droppedEngines } =
-    mergePacksKeepingFirstClaim(packs, defaultRegistry);
+    mergePacksKeepingFirstClaim(packs, defaultRegistry, engine);
 
   return {
     registry,

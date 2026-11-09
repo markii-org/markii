@@ -35,7 +35,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { RunTrigger } from '@markii/runtime';
 import type { BundleManifest } from '@markii/bundle';
-import { spawnRun } from './run-host';
+import { spawnRunInThread as spawnRun } from './node-isolate';
 
 const WORKER_PATH = path.join(__dirname, 'worker-entry.ts');
 

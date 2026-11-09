@@ -15,12 +15,14 @@
  * this host's adapter, the same way every other scenario already
  * exercises the real run/export/pack path.
  */
+import { workerThreadIsolate } from '@markii/host/node';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createObsidianHostAdapter } from './host-adapter.js';
+import { type HostEditor, type HostTextEdit } from '@markii/host';
 import {
   assertHostScenario,
   createAnswerQueue,
@@ -28,9 +30,7 @@ import {
   listHostScenarioNames,
   loadHostScenario,
   runHostScenario,
-  type HostEditor,
-  type HostTextEdit,
-} from '@markii/host';
+} from '@markii/host/node';
 
 /**
  * A minimal in-memory stand-in for an Obsidian `Editor`, matching
@@ -102,7 +102,11 @@ describe('conformance/host/ corpus via the real Obsidian HostAdapter', () => {
         saveLocalStorage: localStorage.save,
         diagnostics: () => {},
         now: () => scenario.clock,
-        isolate: { kind: 'node', workerPath: () => undefined },
+        isolate: {
+          kind: 'node',
+          workerPath: () => '/worker.js',
+          spawnIsolate: workerThreadIsolate,
+        },
         packs: {
           authorizedFolders: async () => [installRoot],
           reservedNamespaces: () => new Set(['read', 'dash', 'prep']),

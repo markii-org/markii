@@ -7,10 +7,13 @@
  * case here is checked against the REAL classifier, not a re-derivation of
  * its logic.
  */
+import * as nodeNet from 'node:net';
 import { describe, expect, it } from 'vitest';
 import {
   classifyIpAddress,
   describeScope,
+  isIPv4,
+  isIPv6,
   isRestrictedScope,
   type AddressScope,
 } from './ip-address';
@@ -185,5 +188,79 @@ describe('describeScope', () => {
   it('gives every scope a distinct description', () => {
     const descriptions = new Set(ALL_SCOPES.map((s) => describeScope(s)));
     expect(descriptions.size).toBe(ALL_SCOPES.length);
+  });
+});
+
+describe('local IP literal validators', () => {
+  it.each([
+    ['1.2.3.4', true],
+    ['255.255.255.255', true],
+    ['0.0.0.0', true],
+    ['256.0.0.1', false],
+    ['010.0.0.1', false],
+    ['1.2.3', false],
+    ['1.2.3.4.5', false],
+    ['1.2.3.', false],
+    ['a.b.c.d', false],
+    ['', false],
+    [' 1.2.3.4', false],
+  ])('isIPv4(%j) is %s', (value, expected) => {
+    expect(isIPv4(value)).toBe(expected);
+  });
+
+  it.each([
+    ['::', true],
+    ['::1', true],
+    ['2001:db8::1', true],
+    ['1:2:3:4:5:6:7:8', true],
+    ['::ffff:127.0.0.1', true],
+    ['::ffff:7f00:1', true],
+    ['64:ff9b::1.2.3.4', true],
+    ['fe80::1%eth0', false],
+    ['1:2:3:4:5:6:7', false],
+    ['1:2:3:4:5:6:7:8:9', false],
+    ['1::2::3', false],
+    [':::', false],
+    ['12345::1', false],
+    ['g::1', false],
+    ['::1.2.3', false],
+    ['1.2.3.4', false],
+    ['example.com', false],
+    ['', false],
+  ])('isIPv6(%j) is %s', (value, expected) => {
+    expect(isIPv6(value)).toBe(expected);
+  });
+
+  it('agrees with node:net on every accepted or refused literal above', () => {
+    const samples = [
+      '1.2.3.4',
+      '256.0.0.1',
+      '010.0.0.1',
+      '1.2.3',
+      '::',
+      '::1',
+      '2001:db8::1',
+      '1:2:3:4:5:6:7:8',
+      '::ffff:127.0.0.1',
+      '1::2::3',
+      ':::',
+      '12345::1',
+      'g::1',
+      '1.2.3.4',
+      'example.com',
+      '1:2:3:4:5:6:7',
+    ];
+    for (const sample of samples) {
+      expect(isIPv4(sample), sample).toBe(nodeNet.isIPv4(sample));
+      expect(isIPv6(sample), sample).toBe(nodeNet.isIPv6(sample));
+    }
+  });
+
+  it('classifies garbage, zone ids and v4-mapped v6 through the local check', () => {
+    expect(classifyIpAddress('not an ip')).toBeUndefined();
+    expect(classifyIpAddress('1.2.3.4.5')).toBeUndefined();
+    expect(classifyIpAddress('fe80::1%eth0')).toBe('link-local');
+    expect(classifyIpAddress('::ffff:127.0.0.1')).toBe('loopback');
+    expect(classifyIpAddress('[::1]')).toBe('loopback');
   });
 });

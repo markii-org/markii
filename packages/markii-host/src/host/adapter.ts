@@ -62,14 +62,18 @@ export type HostIsolate =
   | {
       readonly kind: 'node';
       /**
-       * The worker entry on disk. Returning `undefined` means "I have no
-       * built worker here", which happens in a development or test run
-       * before `dist/` exists; the run path then falls back to its own
-       * development entry. A host does not need to know that fallback
-       * exists, which is why this may be undefined rather than forcing
-       * every host to import it.
+       * The worker entry on disk. A host with a packaged worker resolves it
+       * here; a development or test run falls back to
+       * `defaultWorkerPath()` from `@markii/host/node`, in the host's own
+       * adapter (the shared run path has no Node dependency to do it).
        */
-      workerPath(): string | undefined;
+      workerPath(): string;
+      /**
+       * Creates the worker-thread isolate. Always `workerThreadIsolate`
+       * from `@markii/host/node`; injected so the shared run path imports
+       * nothing from `node:*`.
+       */
+      readonly spawnIsolate: IsolateSpawner;
     }
   | {
       readonly kind: 'browser';
@@ -125,11 +129,12 @@ export interface HostEditor {
 export interface HostPackSource {
   /**
    * The renderer engine this host runs packs for (`@markii/pack`'s
-   * per-component `sources` keys). Absent means `react`. The terminal host
-   * declares `ansi`. Discovery, completion and insert keep only packs and
-   * components that have a source for it.
+   * per-component `sources` keys): `react` for the GUI hosts, `ansi` for
+   * the terminal host. Required: the host layer names no engine itself.
+   * Discovery, completion and insert keep only packs and components that
+   * have a source for it.
    */
-  readonly engine?: string;
+  readonly engine: string;
   /**
    * Folders this host currently AUTHORIZES: VS Code's resolved
    * `markii.packs` setting plus bundled packs; Obsidian's trust-filtered

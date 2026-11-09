@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { createHtmlExportEngine } from '@markii/host/node';
 import {
   buildNoteHtmlExport,
   createMarkiiHost,
@@ -164,17 +165,24 @@ describe('createMarkiiHost(createCliHostAdapter(...)).exportNote', () => {
       memento: fakeMemento(),
       exportTarget: 'out.html',
     });
-    const host = createMarkiiHost({
-      ...adapter,
-      writeFile: async (_path, bytes) => {
-        written = bytes;
+    const host = createMarkiiHost(
+      {
+        ...adapter,
+        writeFile: async (_path, bytes) => {
+          written = bytes;
+        },
       },
-    });
+      { htmlEngine: createHtmlExportEngine() },
+    );
 
     const outcome = await host.exportNote({ format: 'html', notePath, text });
 
     expect(outcome.kind).toBe('exported');
-    const expected = buildNoteHtmlExport({ text, fileName: notePath });
+    const expected = buildNoteHtmlExport({
+      engine: createHtmlExportEngine(),
+      text,
+      fileName: notePath,
+    });
     expect(new TextDecoder().decode(written)).toBe(expected);
   });
 

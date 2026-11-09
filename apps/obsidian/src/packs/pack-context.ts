@@ -30,22 +30,26 @@
  * module only takes already-resolved, absolute pack folders and a base
  * `Registry`, all as plain values.
  */
+import {
+  createNodeDirectoryLister,
+  createNodePackScriptsReader,
+} from '@markii/host/node';
 import { existsSync } from 'node:fs';
 import * as path from 'node:path';
 import { readFile as nodeReadFile } from 'node:fs/promises';
 import type { Registry } from '@markii/react';
 import type { UnavailableComponent } from '@markii/stdlib';
-import { REACT_ENGINE_ID } from '@markii/react';
+import { REACT_ENGINE_ID, reactPackEngine } from '@markii/react';
 import {
   buildRenderRegistry,
   componentsWithoutEngineView,
-  createNodeFileReader,
   declaredPackComponents,
   discoverPacks,
   installedNamespaces,
   loadPackModules,
   resolvePrebuiltPack,
 } from '@markii/host';
+import { createNodeFileReader } from '@markii/host/node';
 import type {
   DiscoveredPack,
   PackModulesMap,
@@ -257,7 +261,7 @@ export async function loadPackContext(
   const discovery = await discoverPacks(
     installedFolders,
     createNodeFileReader(),
-    undefined,
+    createNodeDirectoryLister(),
     REACT_ENGINE_ID,
   );
   skipped.push(...discovery.skipped);
@@ -299,7 +303,10 @@ export async function loadPackContext(
     installedPacks.push(pack);
   }
 
-  const installedPackModules = await loadPackModules(installedPacks);
+  const installedPackModules = await loadPackModules(
+    installedPacks,
+    createNodePackScriptsReader(),
+  );
   const packModules: PackModulesMap = {
     ...Object.fromEntries(
       bundledResolved.map((entry) => [
@@ -373,7 +380,7 @@ export async function loadPackContext(
   ];
 
   const { registry, invalidReasons, collisions, duplicateComposedNames } =
-    buildRenderRegistry(registrations, defaultRegistry);
+    buildRenderRegistry(registrations, defaultRegistry, reactPackEngine);
 
   const packs: DiscoveredPack[] = [
     ...bundledResolved.map((entry) => entry.pack),

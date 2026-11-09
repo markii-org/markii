@@ -23,9 +23,8 @@
  * markdown still rendered inside it. Nothing crashes and no content is
  * dropped either way; see `@markii/html`'s `render.ts`.
  */
-import { escapeHtml, exportHtmlDocument, renderMarkToHtml } from '@markii/html';
-import { defaultHtmlRegistry } from '@markii/html/components';
 import { createValueStore } from '@markii/runtime';
+import type { ValueStore } from '@markii/runtime';
 import { EMPTY_IMAGE_REPORT, embedImagesInHtml } from './image-embed.js';
 import type { EmbeddedImageReport, ExportImageReader } from './image-embed.js';
 import type { StoredValue } from '@markii/runtime';
@@ -111,7 +110,7 @@ export function exportDocumentTitle(fileName: string): string {
  * do not own. A standalone exported file has no host to supply the page
  * around it, so this is that page: a ground color, a readable measure, and
  * print rules, all of them host-authored and trusted (they are passed to
- * `exportHtmlDocument` as `extraCss`, which is inserted verbatim).
+ * the engine's `composeDocument` as `extraCss`, which is inserted verbatim).
  *
  * The print block matters more than it looks: the Obsidian PDF command
  * prints exactly this document, so the paper layout is decided here rather
@@ -183,8 +182,38 @@ body {
 }
 `;
 
+/**
+ * The static HTML engine, injected so this module imports no renderer.
+ * A host passes `createHtmlExportEngine()` from `@markii/host/node`, which
+ * wraps `@markii/html`; a test may pass a stub.
+ */
+export interface HtmlExportEngine {
+  /** Renders one note's source to a body string with the standard component set, last-run values bound through `store`. Never throws. */
+  renderBody(
+    text: string,
+    store: ValueStore | undefined,
+    diagnostics: {
+      readonly unavailableComponents?: readonly UnavailableComponent[];
+      readonly onDiagnostic?: OnDiagnostic;
+    },
+  ): string;
+  /** Wraps a body in the full-page shell (`doc.css` embedded). */
+  composeDocument(
+    bodyHtml: string,
+    options: {
+      readonly title: string;
+      readonly extraCss: string;
+      readonly docClassName?: string;
+    },
+  ): string;
+  /** The one HTML-escaping primitive. */
+  escapeHtml(value: string): string;
+}
+
 /** What `buildNoteHtmlExport` needs to turn one note into a standalone file. */
 export interface NoteHtmlExportOptions {
+  /** The static HTML engine. */
+  readonly engine: HtmlExportEngine;
   /** The note's full source text. */
   readonly text: string;
   /** The note's file name, used for the document title. A path is accepted; only the last segment is read. */
@@ -220,7 +249,13 @@ export interface NoteHtmlExportOptions {
  */
 export function buildNoteHtmlExport(options: NoteHtmlExportOptions): string {
   return composeNoteHtmlExport({
-    bodyHtml: renderStaticBody(options.text, options.values ?? {}, options),
+    bodyHtml: renderStaticBody(
+      options.engine,
+      options.text,
+      options.values ?? {},
+      options,
+    ),
+    engine: options.engine,
     fileName: options.fileName,
     ...(options.extraCss !== undefined ? { extraCss: options.extraCss } : {}),
     ...(options.hideScriptBlocks !== undefined
@@ -236,6 +271,7 @@ export function buildNoteHtmlExport(options: NoteHtmlExportOptions): string {
  * and every React path's fallback produce the identical body.
  */
 function renderStaticBody(
+  engine: HtmlExportEngine,
   text: string,
   values: Record<string, StoredValue>,
   diagnostics: {
@@ -245,7 +281,7 @@ function renderStaticBody(
 ): string {
   const store =
     Object.keys(values).length > 0 ? createValueStore(values) : undefined;
-  return renderMarkToHtml(text, defaultHtmlRegistry, store, undefined, {
+  return engine.renderBody(text, store, {
     ...(diagnostics.unavailableComponents !== undefined
       ? { unavailableComponents: diagnostics.unavailableComponents }
       : {}),
@@ -377,6 +413,8 @@ export function packStylesheetsCss(
 
 /** What `composeNoteHtmlExport` needs to wrap an already-rendered body in the export shell. */
 export interface ComposeNoteHtmlExportOptions {
+  /** The static HTML engine. */
+  readonly engine: HtmlExportEngine;
   /** The rendered body markup that goes inside the `.doc` wrapper. Inserted verbatim; it is expected to be renderer output, already escaped. */
   readonly bodyHtml: string;
   /** The note's file name, used for the document title. A path is accepted; only the last segment is read. */
@@ -405,7 +443,7 @@ export function composeNoteHtmlExport(
   const parts = [EXPORT_PAGE_CSS];
   if (options.extraCss) parts.push(options.extraCss);
   if (packCss) parts.push(packCss);
-  return exportHtmlDocument(options.bodyHtml, {
+  return options.engine.composeDocument(options.bodyHtml, {
     title: exportDocumentTitle(options.fileName),
     extraCss: parts.join('\n'),
     ...(options.hideScriptBlocks
@@ -416,6 +454,8 @@ export function composeNoteHtmlExport(
 
 /** What `buildNoteExport` needs. Everything except `text`/`fileName` is optional; omitting `renderBody` is the plain static export. */
 export interface NoteExportBuildRequest {
+  /** The static HTML engine. */
+  readonly engine: HtmlExportEngine;
   /** The note's full source text. */
   readonly text: string;
   /** The note's file name, used for the document title. A path is accepted; only the last segment is read. */
@@ -504,6 +544,7 @@ export async function buildNoteExport(
       : { html: bodyHtml, report: EMPTY_IMAGE_REPORT };
     return {
       html: composeNoteHtmlExport({
+        engine: request.engine,
         bodyHtml: embedded.html,
         fileName: request.fileName,
         packStylesheets,
@@ -524,7 +565,11 @@ export async function buildNoteExport(
   const staticDocument = (
     render: ExportRenderInfo,
   ): Promise<NoteExportDocument> =>
-    finish(renderStaticBody(request.text, values, request), render, []);
+    finish(
+      renderStaticBody(request.engine, request.text, values, request),
+      render,
+      [],
+    );
 
   if (!request.renderBody) {
     return staticDocument({
@@ -608,7 +653,9 @@ const CASCADE_INDEX_TITLE = 'Markii export';
  */
 export function buildCascadeIndexHtml(
   entries: readonly CascadeIndexEntry[],
+  engine: HtmlExportEngine,
 ): string {
+  const { escapeHtml } = engine;
   const items = entries
     .map(
       (entry) =>
@@ -617,6 +664,7 @@ export function buildCascadeIndexHtml(
     .join('\n');
   const body = `<ul class="mk-cascade-index">\n${items}\n</ul>`;
   return composeNoteHtmlExport({
+    engine,
     bodyHtml: body,
     fileName: CASCADE_INDEX_TITLE,
   });

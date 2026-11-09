@@ -26,6 +26,7 @@
  * Electron surface at all" to "printing threw", degrades to writing the
  * HTML file instead — the user always ends up with an exported note.
  */
+import { createHtmlExportEngine } from '@markii/host/node';
 import {
   noteHasScripts,
   MAX_EMBEDDED_IMAGE_BYTES,
@@ -197,6 +198,9 @@ export interface NotePdfExportRequest extends NoteExportRequest {
   readonly baseDir: string | undefined;
 }
 
+/** The static HTML engine this plugin exports with. */
+const htmlEngine = createHtmlExportEngine();
+
 /**
  * Builds the standalone document for one note, over `@markii/host`'s
  * shared `buildExportDocument` (batch 11: the same pure composition
@@ -212,6 +216,7 @@ async function buildDocument(request: NoteExportRequest): Promise<{
   images: EmbeddedImageReport;
 }> {
   const document = await buildExportDocument({
+    engine: htmlEngine,
     notePath: request.notePath,
     text: request.text,
     ...(request.values !== undefined ? { values: request.values } : {}),

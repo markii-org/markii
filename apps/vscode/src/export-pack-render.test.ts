@@ -11,6 +11,7 @@
  * stylesheet, and does not fall back to the unknown-component box — the
  * whole point of this slice.
  */
+import { createHtmlExportEngine } from '@markii/host/node';
 import { describe, expect, it } from 'vitest';
 import * as React from 'react';
 import { createRegistry, mergeRegistries } from '@markii/react';
@@ -50,6 +51,7 @@ describe('React export path (GitHub issue #28 slice 2)', () => {
     };
 
     const document = composeNoteHtmlExport({
+      engine: createHtmlExportEngine(),
       bodyHtml,
       fileName: 'status.mk.md',
       packStylesheets: [stylesheet],

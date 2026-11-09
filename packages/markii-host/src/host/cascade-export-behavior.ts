@@ -36,6 +36,7 @@ import {
   exportDocumentTitle,
 } from '../export/note-export.js';
 import type {
+  HtmlExportEngine,
   ExportBodyRenderer,
   ExportPackStylesheet,
   ExportRenderInfo,
@@ -95,6 +96,8 @@ export type CascadeExportOutcome =
 
 /** What building one cascade archive needs beyond a single note's export inputs. */
 export interface CascadeArchiveRequest {
+  /** The static HTML engine every note and the index page render with. */
+  readonly engine: HtmlExportEngine;
   /** The root note's path, in whatever form `readNote` and `resolveLink` understand. */
   readonly rootPath: string;
   readonly readNote: CascadeNoteReader;
@@ -180,6 +183,7 @@ export async function buildCascadeArchive(
     for (const note of walk.notes) {
       const text = rewriteCascadeLinks(note, fileNames, request.resolveLink);
       const document = await buildNoteExport({
+        engine: request.engine,
         text,
         fileName: note.path,
         values: request.readValues(note.path),
@@ -228,6 +232,7 @@ export async function buildCascadeArchive(
           title: exportDocumentTitle(note.path),
           fileName: note.entryName,
         })),
+        request.engine,
       ),
     });
 

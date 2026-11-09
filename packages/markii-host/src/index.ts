@@ -1,7 +1,10 @@
 // @markii/host: the shared, host-neutral script-running layer for Markii
 // hosts (`apps/vscode`, and any future host such as an Obsidian plugin).
-// Plain Node — no `vscode`, no React — so it stays reusable and
-// unit-testable across hosts. Private workspace package: never published,
+// Environment-neutral: nothing reachable from this entry imports `node:*`,
+// `esbuild-wasm`, `@markii/react` or `@markii/html` at runtime
+// (`apps/vscode/src/browser-entry.probe.test.ts` bundles it for a browser to
+// prove it). What needs Node lives in `./node.ts`, published as
+// `@markii/host/node`. Private workspace package: never published,
 // never added to `build:dist`. See AGENTS.md's repo-layout entry for
 // `packages/markii-host` for the module-by-module breakdown.
 //
@@ -19,13 +22,10 @@ export type {
   RunFailure,
   RunProgress,
   SpawnRunOptions,
+  SpawnRunRequest,
 } from './run/run-host.js';
 export { isRunProgress } from './run/run-progress.js';
-export {
-  defaultWorkerPath,
-  spawnRun,
-  workerThreadIsolate,
-} from './run/run-host.js';
+export { spawnRun } from './run/run-host.js';
 export type {
   IsolateSpawner,
   RunIsolate,
@@ -36,7 +36,6 @@ export type {
   BrowserIsolateOptions,
   WorkerLike,
 } from './run/browser-isolate.js';
-export { createNetProvider } from './run/net-provider.js';
 export { isNetBridgeRequest, serveNetRequest } from './run/net-bridge.js';
 export type { NetBridgeReply, NetBridgeRequest } from './run/net-bridge.js';
 
@@ -120,6 +119,7 @@ export { staleValuesForRehydration } from './run/stale-values.js';
 // a self-contained HTML document, via `@markii/html`. Host-neutral: both
 // apps build the same file and name it the same way.
 export type {
+  HtmlExportEngine,
   CascadeIndexEntry,
   ComposeNoteHtmlExportOptions,
   ExportBodyRenderer,
@@ -232,18 +232,6 @@ export {
 export type { PackModulesMap } from './run/lua-resolver.js';
 export { createPackModuleResolver } from './run/lua-resolver.js';
 
-export type {
-  PackBuildOptions,
-  PackBuildOutcome,
-  PackBuildSource,
-  PackFileReader,
-} from './packs/pack-build.js';
-export {
-  buildPackRegistrationScript,
-  buildPackTerminalScript,
-  computeCacheKey,
-} from './packs/pack-build.js';
-
 export {
   lintPackCss,
   lintPackCssColors,
@@ -268,18 +256,13 @@ export type {
 } from './packs/discover.js';
 export {
   componentsWithoutEngineView,
-  createNodeDirectoryLister,
-  createNodeFileReader,
   declaredPackComponents,
   discoverPacks,
   installedNamespaces,
 } from './packs/discover.js';
 
 export type { PackScriptsReader } from './packs/pack-scripts.js';
-export {
-  createNodeReader as createNodePackScriptsReader,
-  loadPackModules,
-} from './packs/pack-scripts.js';
+export { loadPackModules } from './packs/pack-scripts.js';
 
 export { relativePackEntries, resolvePackPaths } from './packs/pack-paths.js';
 
@@ -310,29 +293,10 @@ export {
   resolvePrebuiltPack,
 } from './packs/prebuilt.js';
 
-// "Export pack" (issue #16): compiles a pack and writes a clean,
-// distributable folder at a caller-chosen destination — never inside the
-// pack's own source folder. Supersedes issue #15's in-pack-folder
-// "build for distribution" behavior, which this replaces entirely.
-export type {
-  ConfirmPackOverwrite,
-  ExportPackOptions,
-  PackExportBuilder,
-  PackExportFs,
-  PackExportOutcome,
-} from './packs/pack-export.js';
-export { exportPack, resolveExportTarget } from './packs/pack-export.js';
-
-// The archive shape of "export pack" (issue #16): the same build, zipped
-// into a single `.mkp` file's bytes instead of written as a folder.
-export type {
-  ExportPackArchiveOptions,
-  PackExportArchiveOutcome,
-} from './packs/pack-export-archive.js';
-export { exportPackArchive } from './packs/pack-export-archive.js';
-
 export type {
   BuildRenderRegistryResult,
+  DuplicateComposedName,
+  PackRegistryEngine,
   QueuedPackRegistration,
 } from './packs/pack-render-registry.js';
 export { buildRenderRegistry } from './packs/pack-render-registry.js';
@@ -348,6 +312,7 @@ export { buildRenderRegistry } from './packs/pack-render-registry.js';
 // pack's declared components onto the standard-set list.
 export type { ComponentSkeleton, LineColumn } from '@markii/stdlib/editor';
 export { componentSkeleton, offsetToLineColumn } from '@markii/stdlib/editor';
+export { LAYOUT_WRAPPER_NAMES } from '@markii/stdlib/editor';
 export type { InsertableComponent } from '@markii/stdlib/editor';
 // Re-exported so a host reading `InsertableComponent.attributes` names the
 // type through this seam rather than reaching past it into `@markii/pack`.
@@ -446,7 +411,6 @@ export {
 // Batch 11 Phase 1b: packs, export, and the editor seam.
 export type { ArchiveExtractFs } from './host/pack-archive.js';
 export {
-  createNodeArchiveExtractFs,
   describeArchiveError,
   writeArchiveContents,
 } from './host/pack-archive.js';
@@ -461,10 +425,11 @@ export {
   installPackMessage,
   installReplaceConfirmMessage,
 } from './host/pack-install.js';
-export type { LoadPacksResult } from './host/pack-load.js';
+export type { LoadPacksResult, PackDiscoveryIo } from './host/pack-load.js';
 export {
   discoverConfiguredPacks,
   loadPacksViaAdapter,
+  packDiscoveryIoFromAdapter,
 } from './host/pack-load.js';
 export { prebuiltShadowLine } from './packs/pack-diagnostics.js';
 export type {
@@ -542,25 +507,4 @@ export type {
   Unsupported,
 } from './host/create-host.js';
 
-export {
-  ACTION_CAPABILITY,
-  assertHostScenario,
-  containsInOrder,
-  createAnswerQueue,
-  hostConformanceDir,
-  hostDeclaresCapability,
-  listHostScenarioNames,
-  loadHostScenario,
-  outcomeMismatches,
-  runHostScenario,
-  zipArchiveDirectory,
-} from './host/conformance-runner.js';
-export type {
-  HostScenario,
-  HostScenarioAction,
-  HostScenarioCapability,
-  HostScenarioExpected,
-  HostScenarioRunResult,
-  LoadedHostScenario,
-  RunSimulation,
-} from './host/conformance-runner.js';
+export { joinPath, dirnamePath, isAbsolutePath } from './path-util.js';

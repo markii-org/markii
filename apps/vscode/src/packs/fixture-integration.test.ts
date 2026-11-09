@@ -1,12 +1,13 @@
+import {
+  createNodeDirectoryLister,
+  createNodePackScriptsReader,
+} from '@markii/host/node';
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import * as path from 'node:path';
-import {
-  createNodeFileReader,
-  discoverPacks,
-  loadPackModules,
-  spawnRun,
-} from '@markii/host';
+import { discoverPacks, loadPackModules } from '@markii/host';
+import { spawnRunInThread as spawnRun } from '@markii/host/node';
+import { createNodeFileReader } from '@markii/host/node';
 
 /**
  * End-to-end coverage of the pack-loading pieces (GitHub issue #3 slice 5)
@@ -36,7 +37,11 @@ function fence(name: string, body: string): string {
 
 describe('exemplar pack fixture — discovery', () => {
   it('discovers the real demo pack folder and validates its manifest', async () => {
-    const result = await discoverPacks([DEMO_PACK_DIR], createNodeFileReader());
+    const result = await discoverPacks(
+      [DEMO_PACK_DIR],
+      createNodeFileReader(),
+      createNodeDirectoryLister(),
+    );
 
     expect(result.skipped).toEqual([]);
     expect(result.collisions).toEqual([]);
@@ -59,8 +64,9 @@ describe('exemplar pack fixture — Lua module loading + require', () => {
     const { packs } = await discoverPacks(
       [DEMO_PACK_DIR],
       createNodeFileReader(),
+      createNodeDirectoryLister(),
     );
-    const modules = await loadPackModules(packs);
+    const modules = await loadPackModules(packs, createNodePackScriptsReader());
 
     expect(Object.keys(modules)).toEqual(['demo']);
     expect(modules.demo?.['util.lua']).toContain('greet');
@@ -70,8 +76,12 @@ describe('exemplar pack fixture — Lua module loading + require', () => {
     const { packs } = await discoverPacks(
       [DEMO_PACK_DIR],
       createNodeFileReader(),
+      createNodeDirectoryLister(),
     );
-    const packModules = await loadPackModules(packs);
+    const packModules = await loadPackModules(
+      packs,
+      createNodePackScriptsReader(),
+    );
 
     const text = fence(
       'a',

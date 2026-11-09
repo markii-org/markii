@@ -18,7 +18,7 @@
  * matches how a user reads the setting's own description: "this pack
  * folder, relative to my project/vault".
  */
-import * as path from 'node:path';
+import { isAbsolutePath, joinPath } from '../path-util.js';
 
 /**
  * Expands a leading `~` in `entry` against `homeDir` — `~` alone, or
@@ -35,7 +35,7 @@ function expandHome(entry: string, homeDir: string | undefined): string {
   if (homeDir === undefined) return entry;
   if (entry === '~') return homeDir;
   if (entry.startsWith('~/') || entry.startsWith('~\\')) {
-    return path.join(homeDir, entry.slice(2));
+    return joinPath(homeDir, entry.slice(2));
   }
   return entry;
 }
@@ -85,9 +85,9 @@ export function resolvePackPaths(
 ): string[] {
   return packs.map((entry) => {
     const expanded = expandHome(entry, homeDir);
-    if (path.isAbsolute(expanded)) return expanded;
+    if (isAbsolutePath(expanded)) return expanded;
     if (baseDir === undefined) return expanded;
-    return path.join(baseDir, expanded);
+    return joinPath(baseDir, expanded);
   });
 }
 
@@ -108,5 +108,5 @@ export function relativePackEntries(
   packs: readonly string[],
   homeDir?: string,
 ): string[] {
-  return packs.filter((entry) => !path.isAbsolute(expandHome(entry, homeDir)));
+  return packs.filter((entry) => !isAbsolutePath(expandHome(entry, homeDir)));
 }

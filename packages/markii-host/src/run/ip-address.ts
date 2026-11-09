@@ -6,10 +6,57 @@
  * module answers the second half: given an address, is it somewhere a note's
  * script has any business reaching?
  *
- * Pure and dependency-free apart from `node:net`'s address validators, so it
+ * Pure and dependency-free (the address validators are local), so it
  * is exhaustively testable without a socket, a resolver, or a worker.
  */
-import { isIPv4, isIPv6 } from 'node:net';
+
+/**
+ * True for a dotted-quad IPv4 literal: four decimal octets, 0 to 255, with
+ * no leading zeros (`010.0.0.1` is refused, since some SSRF filters
+ * mis-parse it as decimal) and no extra characters.
+ */
+export function isIPv4(value: string): boolean {
+  const parts = value.split('.');
+  if (parts.length !== 4) return false;
+  return parts.every(
+    (part) =>
+      /^(0|[1-9][0-9]{0,2})$/.test(part) && Number.parseInt(part, 10) <= 255,
+  );
+}
+
+/**
+ * True for an IPv6 literal without a zone index: up to eight groups of one
+ * to four hex digits, at most one `::` run, and an optional trailing
+ * dotted-quad standing for the last two groups.
+ */
+export function isIPv6(value: string): boolean {
+  if (value === '' || value.includes('%') || !value.includes(':')) return false;
+  const doubleColon = value.indexOf('::');
+  if (doubleColon !== -1 && value.indexOf('::', doubleColon + 1) !== -1) {
+    return false;
+  }
+  // ':::' is two overlapping '::' runs.
+  if (value.includes(':::')) return false;
+  const head = doubleColon === -1 ? value : value.slice(0, doubleColon);
+  const tail = doubleColon === -1 ? '' : value.slice(doubleColon + 2);
+  const headGroups = head === '' ? [] : head.split(':');
+  const tailGroups = tail === '' ? [] : tail.split(':');
+  const groups = [...headGroups, ...tailGroups];
+  let count = 0;
+  for (let i = 0; i < groups.length; i += 1) {
+    const group = groups[i] ?? '';
+    const isLast = i === groups.length - 1;
+    if (group.includes('.')) {
+      // Only the final group may be a dotted-quad, and it counts as two.
+      if (!isLast || !isIPv4(group)) return false;
+      count += 2;
+    } else {
+      if (!/^[0-9a-fA-F]{1,4}$/.test(group)) return false;
+      count += 1;
+    }
+  }
+  return doubleColon === -1 ? count === 8 : count <= 7;
+}
 
 /**
  * Where an address lives. Everything that is not `'public'` is somewhere a
@@ -53,9 +100,8 @@ export function describeScope(scope: AddressScope): string {
 
 /**
  * Classifies `address`, or returns `undefined` when it is not an IP literal
- * at all (a hostname, or anything malformed). `node:net`'s validators decide
- * what counts as an IP, so this never disagrees with what the runtime itself
- * would accept: notably, they reject the leading-zero octet forms
+ * at all (a hostname, or anything malformed). The local `isIPv4`/`isIPv6`
+ * validators decide what counts as an IP; they reject the leading-zero octet forms
  * (`010.0.0.1`) that some SSRF filters mis-parse as decimal.
  */
 export function classifyIpAddress(address: string): AddressScope | undefined {

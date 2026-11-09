@@ -1,3 +1,4 @@
+import { workerThreadIsolate } from '../run/node-isolate.js';
 import {
   mkdtempSync,
   readFileSync,
@@ -48,7 +49,11 @@ function fakeAdapter(overrides: Partial<HostAdapter> = {}): HostAdapter {
     memento: createMemoryMemento(),
     diagnostics: () => {},
     now: () => 1_000,
-    isolate: { kind: 'node', workerPath: () => undefined },
+    isolate: {
+      kind: 'node',
+      workerPath: () => '/worker.js',
+      spawnIsolate: workerThreadIsolate,
+    },
     ...overrides,
   };
 }
@@ -103,6 +108,7 @@ describe('ACTION_CAPABILITY / hostDeclaresCapability', () => {
   it('installPack additionally requires an installRoot on the packs capability', () => {
     const noInstallRoot = fakeAdapter({
       packs: {
+        engine: 'react',
         authorizedFolders: async () => [],
         reservedNamespaces: () => new Set(),
       },
@@ -262,6 +268,7 @@ describe('runHostScenario: run', () => {
       },
       isolate: {
         kind: 'node',
+        spawnIsolate: workerThreadIsolate,
         workerPath: () => {
           throw new Error(
             'must not build a worker path when scripts are disabled',
@@ -338,6 +345,7 @@ describe('runHostScenario: installPack', () => {
       exists: async () => false,
       writeFile: async () => {},
       packs: {
+        engine: 'react',
         authorizedFolders: async () => [],
         reservedNamespaces: () => new Set(),
         installRoot: () => installRoot,

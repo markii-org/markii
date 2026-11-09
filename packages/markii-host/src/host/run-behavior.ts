@@ -40,7 +40,7 @@ import {
 import {
   spawnRun as spawnRunHost,
   type RunResult,
-  type SpawnRunOptions,
+  type SpawnRunRequest,
 } from '../run/run-host.js';
 import {
   runOnce,
@@ -111,7 +111,7 @@ export function promptsFromAdapter(adapter: HostAdapter): {
  * `'capability-denied'` failure, not a thrown error.
  */
 function noIsolateResult(
-  cacheSnapshot: SpawnRunOptions['cacheSnapshot'],
+  cacheSnapshot: SpawnRunRequest['cacheSnapshot'],
 ): RunResult {
   return {
     values: {},
@@ -136,17 +136,15 @@ function noIsolateResult(
  */
 export async function spawnRunViaAdapter(
   isolate: HostIsolate | undefined,
-  options: Omit<SpawnRunOptions, 'workerPath' | 'spawnIsolate'>,
+  options: SpawnRunRequest,
 ): Promise<RunResult> {
   if (!isolate) return noIsolateResult(options.cacheSnapshot);
 
   if (isolate.kind === 'node') {
-    const workerPath = isolate.workerPath();
-    // An undefined path is forwarded as absent, so `spawnRun` applies its
-    // own development fallback instead of the host having to know about it.
     return spawnRunHost({
       ...options,
-      ...(workerPath === undefined ? {} : { workerPath }),
+      workerPath: isolate.workerPath(),
+      spawnIsolate: isolate.spawnIsolate,
     });
   }
 
@@ -156,10 +154,8 @@ export async function spawnRunViaAdapter(
       ...options,
       spawnIsolate: spawner,
       // A blob-URL Web Worker has no entry path, but `spawnRun` still
-      // labels the entry it handed out, and its only fallback for an
-      // unset one is the dev/Vitest path, which throws in a packaged
-      // host. Naming the label here keeps that fallback out of the
-      // browser branch entirely.
+      // labels the entry it handed out. Naming the label here keeps a
+      // meaningless path out of the browser branch.
       workerPath: isolate.entryLabel ?? BROWSER_ISOLATE_ENTRY,
     });
   } finally {
@@ -195,12 +191,12 @@ export type RunViaAdapterResult = RunOnceResult & { readonly trace: RunTrace };
 export async function runViaAdapter(
   adapter: HostAdapter,
   request: RunViaAdapterRequest,
-  overrideSpawnRun?: (options: SpawnRunOptions) => Promise<RunResult>,
+  overrideSpawnRun?: (options: SpawnRunRequest) => Promise<RunResult>,
 ): Promise<RunViaAdapterResult> {
   const prompts = promptsFromAdapter(adapter);
   const spawn =
     overrideSpawnRun ??
-    ((options: SpawnRunOptions): Promise<RunResult> =>
+    ((options: SpawnRunRequest): Promise<RunResult> =>
       spawnRunViaAdapter(adapter.isolate, options));
 
   let result: RunOnceResult;

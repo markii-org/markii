@@ -28,14 +28,14 @@ import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { createRegistry } from '@markii/react';
+import { createRegistry, reactPackEngine } from '@markii/react';
 import {
   collectPackRegistrations,
   evaluatePackScript,
   installPackRuntime,
 } from './pack-runtime.js';
 import { buildRenderRegistry } from '@markii/host';
-import type { PackBuildOutcome } from '@markii/host';
+import type { PackBuildOutcome } from '@markii/host/node';
 
 const FIXTURE_DIR = path.resolve(
   import.meta.dirname,
@@ -129,6 +129,7 @@ describe('demo fixture pack — the real build, evaluated the way a preview open
     const { registry, invalidReasons, collisions } = buildRenderRegistry(
       registrations,
       createRegistry(),
+      reactPackEngine,
     );
     expect(invalidReasons).toEqual([]);
     expect(collisions).toEqual([]);

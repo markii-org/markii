@@ -70,7 +70,11 @@ describe('a module-only pack (components: {}) contributes shared Lua through req
     const discoverReader: PackFileReader = async (absolutePath) =>
       absolutePath === `${folder}/pack.json` ? manifest : undefined;
 
-    const discovered = await discoverPacks([folder], discoverReader);
+    const discovered = await discoverPacks(
+      [folder],
+      discoverReader,
+      async () => [],
+    );
     expect(discovered.skipped).toEqual([]);
     expect(discovered.packs).toHaveLength(1);
     const pack = discovered.packs[0]!;
@@ -110,7 +114,11 @@ describe('a module-only pack (components: {}) contributes shared Lua through req
     const discoverReader: PackFileReader = async (absolutePath) =>
       absolutePath === `${folder}/pack.json` ? manifest : undefined;
 
-    const discovered = await discoverPacks([folder], discoverReader);
+    const discovered = await discoverPacks(
+      [folder],
+      discoverReader,
+      async () => [],
+    );
     const pack = discovered.packs[0]!;
 
     // No scripts/ directory at all — the "components-only-shaped pack with

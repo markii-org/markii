@@ -1,3 +1,4 @@
+import { createHtmlExportEngine } from '../html-engine.js';
 import { describe, expect, it } from 'vitest';
 import { strFromU8, unzipSync } from 'fflate';
 import type {
@@ -35,6 +36,7 @@ function request(
 ): CascadeArchiveRequest {
   const ws = workspace(notes);
   return {
+    engine: createHtmlExportEngine(),
     rootPath: '/ws/index.mk.md',
     readNote: ws.readNote,
     resolveLink: ws.resolveLink,

@@ -15,6 +15,9 @@ import {
   packStylesheetsCss,
   noteHasScripts,
 } from './note-export.js';
+import { createHtmlExportEngine } from '../html-engine.js';
+
+const engine = createHtmlExportEngine();
 
 describe('exportBaseName', () => {
   it('drops a .mk.md extension', () => {
@@ -123,6 +126,7 @@ describe('EXPORT_PAGE_CSS', () => {
 describe('buildNoteHtmlExport', () => {
   it('produces a self-contained document with the shared stylesheet embedded', () => {
     const html = buildNoteHtmlExport({
+      engine,
       text: '# Hello\n\nSome text.\n',
       fileName: 'notes.mk.md',
     });
@@ -140,6 +144,7 @@ describe('buildNoteHtmlExport', () => {
 
   it('renders a standard component through the static engine', () => {
     const html = buildNoteHtmlExport({
+      engine,
       text: ':::callout{type=warning}\nHeads up\n:::\n',
       fileName: 'notes.mk.md',
     });
@@ -152,6 +157,7 @@ describe('buildNoteHtmlExport', () => {
       total: { value: 42, status: 'fresh' },
     };
     const html = buildNoteHtmlExport({
+      engine,
       text: 'Total: :value[total]\n',
       fileName: 'notes.mk.md',
       values,
@@ -162,6 +168,7 @@ describe('buildNoteHtmlExport', () => {
 
   it('shows the standard empty state for a note that has never been run', () => {
     const html = buildNoteHtmlExport({
+      engine,
       text: 'Total: :value[total]\n',
       fileName: 'notes.mk.md',
     });
@@ -171,6 +178,7 @@ describe('buildNoteHtmlExport', () => {
 
   it('falls back cleanly for a pack component the static engine cannot load', () => {
     const html = buildNoteHtmlExport({
+      engine,
       text: ':::ana_timeline{from=2024}\nInner **markdown**\n:::\n',
       fileName: 'notes.mk.md',
     });
@@ -183,6 +191,7 @@ describe('buildNoteHtmlExport', () => {
 
   it('appends a host extraCss after the page CSS', () => {
     const html = buildNoteHtmlExport({
+      engine,
       text: 'hi\n',
       fileName: 'notes.mk.md',
       extraCss: '.custom { color: red; }',
@@ -195,6 +204,7 @@ describe('buildNoteHtmlExport', () => {
 
   it('escapes a hostile note title rather than emitting it as markup', () => {
     const html = buildNoteHtmlExport({
+      engine,
       text: 'hi\n',
       // No slash in the name: a path separator would be split off as a
       // folder before the title is ever built, which is a different rule.
@@ -206,6 +216,7 @@ describe('buildNoteHtmlExport', () => {
 
   it('carries the hide-script-blocks class onto .doc when hideScriptBlocks is on', () => {
     const html = buildNoteHtmlExport({
+      engine,
       text: '```lua {name=refresh}\nreturn 1\n```\n',
       fileName: 'notes.mk.md',
       hideScriptBlocks: true,
@@ -215,6 +226,7 @@ describe('buildNoteHtmlExport', () => {
 
   it('leaves .doc plain when hideScriptBlocks is omitted, matching the default preview', () => {
     const html = buildNoteHtmlExport({
+      engine,
       text: '```lua {name=refresh}\nreturn 1\n```\n',
       fileName: 'notes.mk.md',
     });
@@ -264,6 +276,7 @@ describe('packStylesheetsCss', () => {
 describe('composeNoteHtmlExport', () => {
   it('embeds the body inside the shared doc shell', () => {
     const html = composeNoteHtmlExport({
+      engine,
       bodyHtml: '<p>hello</p>',
       fileName: 'week.mk.md',
     });
@@ -275,6 +288,7 @@ describe('composeNoteHtmlExport', () => {
 
   it('places pack CSS after doc.css and the page CSS, per the pack load order', () => {
     const html = composeNoteHtmlExport({
+      engine,
       bodyHtml: '<p>hello</p>',
       fileName: 'week.mk.md',
       packStylesheets: [
@@ -288,6 +302,7 @@ describe('composeNoteHtmlExport', () => {
 
   it('puts host extra CSS before the pack stylesheets', () => {
     const html = composeNoteHtmlExport({
+      engine,
       bodyHtml: '',
       fileName: 'week.mk.md',
       extraCss: '.host-layer { color: green; }',
@@ -300,6 +315,7 @@ describe('composeNoteHtmlExport', () => {
 
   it('leaves exactly one style block, even with hostile pack CSS', () => {
     const html = composeNoteHtmlExport({
+      engine,
       bodyHtml: '',
       fileName: 'week.mk.md',
       packStylesheets: [
@@ -311,6 +327,7 @@ describe('composeNoteHtmlExport', () => {
 
   it('carries the hide-script-blocks class onto .doc when hideScriptBlocks is on', () => {
     const html = composeNoteHtmlExport({
+      engine,
       bodyHtml: '<p>hello</p>',
       fileName: 'week.mk.md',
       hideScriptBlocks: true,
@@ -321,10 +338,13 @@ describe('composeNoteHtmlExport', () => {
 
 describe('buildCascadeIndexHtml', () => {
   it('lists every entry by title, linking to its file', () => {
-    const html = buildCascadeIndexHtml([
-      { title: 'week', fileName: 'week.html' },
-      { title: 'notes-2', fileName: 'notes-2.html' },
-    ]);
+    const html = buildCascadeIndexHtml(
+      [
+        { title: 'week', fileName: 'week.html' },
+        { title: 'notes-2', fileName: 'notes-2.html' },
+      ],
+      engine,
+    );
     expect(html).toContain('<a href="week.html">week</a>');
     expect(html).toContain('<a href="notes-2.html">notes-2</a>');
     // The root note (walked first) stays first in the list.
@@ -334,21 +354,25 @@ describe('buildCascadeIndexHtml', () => {
   });
 
   it('is a complete, self-contained document with the shared stylesheet embedded', () => {
-    const html = buildCascadeIndexHtml([{ title: 'a', fileName: 'a.html' }]);
+    const html = buildCascadeIndexHtml(
+      [{ title: 'a', fileName: 'a.html' }],
+      engine,
+    );
     expect(html.startsWith('<!doctype html>')).toBe(true);
     expect(html).toContain('.doc > * + *');
   });
 
   it('escapes a hostile note title rather than emitting it as markup', () => {
-    const html = buildCascadeIndexHtml([
-      { title: '<script>alert(1)</script>', fileName: 'a.html' },
-    ]);
+    const html = buildCascadeIndexHtml(
+      [{ title: '<script>alert(1)</script>', fileName: 'a.html' }],
+      engine,
+    );
     expect(html).not.toContain('<script>alert(1)</script>');
     expect(html).toContain('&lt;script&gt;');
   });
 
   it('renders an empty list rather than throwing when there is nothing to link to', () => {
-    expect(() => buildCascadeIndexHtml([])).not.toThrow();
+    expect(() => buildCascadeIndexHtml([], engine)).not.toThrow();
   });
 });
 
@@ -358,6 +382,7 @@ describe('buildNoteExport', () => {
 
   it('renders through the host renderer and embeds the pack CSS', async () => {
     const result = await buildNoteExport({
+      engine,
       text,
       fileName: 'week.mk.md',
       renderBody: () => ({
@@ -384,6 +409,7 @@ describe('buildNoteExport', () => {
   it('hands the renderer the note text and its values', async () => {
     const seen: { text?: string; values?: Record<string, StoredValue> } = {};
     await buildNoteExport({
+      engine,
       text: 'body',
       fileName: 'week.mk.md',
       values: { total: { value: 3, status: 'fresh' } },
@@ -399,6 +425,7 @@ describe('buildNoteExport', () => {
 
   it('counts the values it baked in', async () => {
     const result = await buildNoteExport({
+      engine,
       text: 'body',
       fileName: 'week.mk.md',
       values: {
@@ -411,13 +438,18 @@ describe('buildNoteExport', () => {
   });
 
   it('falls back to the static engine when no renderer is offered', async () => {
-    const result = await buildNoteExport({ text, fileName: 'week.mk.md' });
+    const result = await buildNoteExport({
+      engine,
+      text,
+      fileName: 'week.mk.md',
+    });
     expect(result.render).toEqual({ engine: 'static', reason: 'no-packs' });
     expect(result.html).toContain('unknown component');
   });
 
   it('keeps the caller reason for a host with no renderer at all', async () => {
     const result = await buildNoteExport({
+      engine,
       text,
       fileName: 'week.mk.md',
       staticReason: 'no-renderer',
@@ -427,6 +459,7 @@ describe('buildNoteExport', () => {
 
   it('classifies a renderer that reports a timeout', async () => {
     const result = await buildNoteExport({
+      engine,
       text,
       fileName: 'week.mk.md',
       renderBody: () => ({
@@ -450,6 +483,7 @@ describe('buildNoteExport', () => {
 
   it('classifies a renderer that throws, rather than propagating', async () => {
     const result = await buildNoteExport({
+      engine,
       text,
       fileName: 'week.mk.md',
       renderBody: () => {
@@ -465,14 +499,19 @@ describe('buildNoteExport', () => {
   });
 
   it('produces the same document as the slice 1 builder on every static path', async () => {
-    const result = await buildNoteExport({ text, fileName: 'week.mk.md' });
+    const result = await buildNoteExport({
+      engine,
+      text,
+      fileName: 'week.mk.md',
+    });
     expect(result.html).toBe(
-      buildNoteHtmlExport({ text, fileName: 'week.mk.md' }),
+      buildNoteHtmlExport({ engine, text, fileName: 'week.mk.md' }),
     );
   });
 
   it('carries the hide-script-blocks class through the React path too', async () => {
     const result = await buildNoteExport({
+      engine,
       text,
       fileName: 'week.mk.md',
       renderBody: () => ({ ok: true, html: '<p>x</p>' }),
@@ -487,6 +526,7 @@ describe('buildNoteExport image embedding', () => {
 
   it('embeds through the React path', async () => {
     const result = await buildNoteExport({
+      engine,
       text: 'ignored, the renderer supplies the body',
       fileName: 'week.mk.md',
       renderBody: () => ({ ok: true, html: '<img src="nice.png">' }),
@@ -499,6 +539,7 @@ describe('buildNoteExport image embedding', () => {
 
   it('embeds through the static path too', async () => {
     const result = await buildNoteExport({
+      engine,
       text: '![a](nice.png)\n',
       fileName: 'week.mk.md',
       embedImages: () => ({ kind: 'bytes', bytes: PIXEL }),
@@ -509,6 +550,7 @@ describe('buildNoteExport image embedding', () => {
 
   it('reports an empty image report when no reader is offered', async () => {
     const result = await buildNoteExport({
+      engine,
       text: '![a](nice.png)\n',
       fileName: 'week.mk.md',
     });
@@ -523,6 +565,7 @@ describe('buildNoteExport image embedding', () => {
 
   it('still embeds when the React render failed and the static engine took over', async () => {
     const result = await buildNoteExport({
+      engine,
       text: '![a](nice.png)\n',
       fileName: 'week.mk.md',
       renderBody: () => {

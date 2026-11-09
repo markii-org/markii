@@ -48,7 +48,7 @@
         "packages/platforms/markii-ansi/src/components/index.ts"
       ],
       "@markii/host": ["packages/markii-host/src/index.ts"],
-      "@markii/host/browser": ["packages/markii-host/src/browser.ts"]
+      "@markii/host/node": ["packages/markii-host/src/node.ts"]
     }
   }
 }

@@ -196,3 +196,14 @@ export function installPacks(
   });
   return { ok: true, registry: mergeRegistries(base, ...loaded), dropped };
 }
+
+/**
+ * The renderer-specific pieces a host layer needs to build a pack-aware
+ * registry without importing this package itself (`@markii/host`'s
+ * `PackRegistryEngine`, which this object satisfies structurally).
+ */
+export const reactPackEngine = {
+  loadPack,
+  createRegistry,
+  mergeRegistries,
+} as const;

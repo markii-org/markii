@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { discoverConfiguredPacks, loadPacksViaAdapter } from './pack-load.js';
 import type { HostPackSource } from './adapter.js';
+import { createNodePackDiscoveryIo } from '../node-fs.js';
 
-// `discoverConfiguredPacks` reads through `createNodeFileReader()`
-// internally (matching both apps' prior identical body), so these tests
+const io = createNodePackDiscoveryIo();
+
+// `discoverConfiguredPacks` reads through an injected
+// file reader (here the real Node one), so these tests
 // exercise it against real temp directories rather than an injected
 // reader — the same posture `discover.test.ts` already takes for the
 // underlying `discoverPacks`.
@@ -27,7 +30,7 @@ describe('discoverConfiguredPacks', () => {
       engine: 'react',
       components: { widget: './Widget.tsx' },
     });
-    const result = await discoverConfiguredPacks([folder]);
+    const result = await discoverConfiguredPacks([folder], io, 'react');
     expect(result.namespaces).toEqual(['ana']);
     expect(result.packs).toHaveLength(1);
     expect(result.skipped).toEqual([]);
@@ -39,7 +42,7 @@ describe('discoverConfiguredPacks', () => {
       engine: 'some-other-engine',
       components: { widget: './Widget.x' },
     });
-    const result = await discoverConfiguredPacks([folder]);
+    const result = await discoverConfiguredPacks([folder], io, 'react');
     expect(result.packs).toEqual([]);
     expect(result.namespaces).toEqual([]);
     expect(result.skipped).toHaveLength(1);
@@ -52,7 +55,7 @@ describe('discoverConfiguredPacks', () => {
       engine: 'some-other-engine',
       components: {},
     });
-    const result = await discoverConfiguredPacks([folder]);
+    const result = await discoverConfiguredPacks([folder], io, 'react');
     expect(result.namespaces).toEqual(['lua-only']);
     expect(result.skipped).toEqual([]);
   });
@@ -60,7 +63,7 @@ describe('discoverConfiguredPacks', () => {
   it('a missing folder is skipped quietly, never thrown', async () => {
     const dir = await mkdtemp(path.join(tmpdir(), 'markii-pack-load-empty-'));
     const missing = path.join(dir, 'does-not-exist');
-    const result = await discoverConfiguredPacks([missing]);
+    const result = await discoverConfiguredPacks([missing], io, 'react');
     expect(result.packs).toEqual([]);
     expect(result.namespaces).toEqual([]);
   });
@@ -69,7 +72,7 @@ describe('discoverConfiguredPacks', () => {
   // An empty list is the ordinary state of a host that loads no packs, so
   // it resolves to nothing without reaching the filesystem at all.
   it('resolves an empty folder list to no packs, without touching the filesystem', async () => {
-    const result = await discoverConfiguredPacks([]);
+    const result = await discoverConfiguredPacks([], io, 'react');
     expect(result.packs).toEqual([]);
     expect(result.namespaces).toEqual([]);
     expect(result.skipped).toEqual([]);
@@ -84,19 +87,21 @@ describe('loadPacksViaAdapter', () => {
       components: { card: './Card.tsx' },
     });
     const source: HostPackSource = {
+      engine: 'react',
       authorizedFolders: async () => [folder],
       reservedNamespaces: () => new Set(),
     };
-    const result = await loadPacksViaAdapter(source);
+    const result = await loadPacksViaAdapter(source, io);
     expect(result.namespaces).toEqual(['cat']);
   });
 
   it('an empty authorized-folder list discovers nothing', async () => {
     const source: HostPackSource = {
+      engine: 'react',
       authorizedFolders: async () => [],
       reservedNamespaces: () => new Set(),
     };
-    const result = await loadPacksViaAdapter(source);
+    const result = await loadPacksViaAdapter(source, io);
     expect(result.packs).toEqual([]);
     expect(result.namespaces).toEqual([]);
   });

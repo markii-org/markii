@@ -1,3 +1,4 @@
+import { createHtmlExportEngine } from '@markii/host/node';
 import * as vscode from 'vscode';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
@@ -73,7 +74,6 @@ import {
   decodeBundleCacheFromStorage,
   encodeBundleCacheForStorage,
   withPersistedCache,
-  buildPackRegistrationScript,
   buildNoteExport,
   noteHasScripts,
   MAX_EMBEDDED_IMAGE_BYTES,
@@ -83,6 +83,7 @@ import {
   scriptsDisabledNotice,
   VSCODE_LABELS,
 } from '@markii/host';
+import { buildPackRegistrationScript } from '@markii/host/node';
 import type {
   CascadeArchiveRequest,
   CascadeExportOutcome,
@@ -118,6 +119,9 @@ import {
  * classification, bundle resolution, HTML/CSP construction) already lives
  * in the plain modules imported above; this file is wiring and I/O only.
  */
+
+/** The static HTML engine every export path in this panel renders with. */
+const htmlEngine = createHtmlExportEngine();
 
 const VIEW_TYPE = 'markii.preview';
 
@@ -1938,6 +1942,7 @@ export async function exportHtml(
         (path) => readFile(path, 'utf8'),
       );
       exportRequest = {
+        engine: htmlEngine,
         text: document.getText(),
         fileName: defaultName,
         values,
@@ -1958,6 +1963,7 @@ export async function exportHtml(
           ? 'no-renderer'
           : 'no-packs';
       exportRequest = {
+        engine: htmlEngine,
         text: document.getText(),
         fileName: defaultName,
         values,
@@ -2150,6 +2156,7 @@ export async function exportHtmlCascade(
       );
       request = {
         ...common,
+        engine: htmlEngine,
         renderBody: (text, vals) => requestExportBody(preview, text, vals),
         packStylesheets,
         packCount: preview.packContext.webviewPacks.length,
@@ -2159,7 +2166,7 @@ export async function exportHtmlCascade(
         preview === undefined && configuredPackFolders().length > 0
           ? 'no-renderer'
           : 'no-packs';
-      request = { ...common, staticReason };
+      request = { ...common, engine: htmlEngine, staticReason };
     }
 
     const archive = await buildCascadeArchive(request);

@@ -184,7 +184,7 @@ describe('buildRenderRegistry — surfacing a duplicate-composed-name skip', () 
     const stubbedRegistry = createRegistry({
       demo_badge: { component: () => null },
     });
-    vi.doMock('@markii/host/browser', () => ({
+    vi.doMock('@markii/host', () => ({
       buildRenderRegistry: () => ({
         registry: stubbedRegistry,
         invalidReasons: [],
@@ -201,7 +201,7 @@ describe('buildRenderRegistry — surfacing a duplicate-composed-name skip', () 
       expect(result.duplicateComposedNames).toEqual([duplicate]);
       expect(result.registry).toBe(stubbedRegistry);
     } finally {
-      vi.doUnmock('@markii/host/browser');
+      vi.doUnmock('@markii/host');
       vi.resetModules();
     }
   });

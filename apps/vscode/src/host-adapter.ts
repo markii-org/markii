@@ -20,6 +20,12 @@
  * cleanly (`Unsupported`, with a diagnostics line) when a capability is
  * absent.
  */
+import { readFile } from 'node:fs/promises';
+import {
+  createNodeDirectoryLister,
+  defaultWorkerPath,
+  workerThreadIsolate,
+} from '@markii/host/node';
 import {
   VSCODE_LABELS,
   type GrantMemento,
@@ -84,10 +90,6 @@ export interface VSCodeHostAdapterDeps {
   ) => Promise<boolean>;
 }
 
-async function unavailableRead(path: string): Promise<Uint8Array> {
-  throw new Error(`no file reader configured for "${path}"`);
-}
-
 async function unavailableWrite(path: string): Promise<void> {
   throw new Error(`no file writer configured for "${path}"`);
 }
@@ -105,13 +107,15 @@ export function createVSCodeHostAdapter(
     // May be undefined in a development or test run with no `dist/` built
     // yet. The shared run path owns that fallback, so this host does not
     // have to know it exists.
-    workerPath: (): string | undefined => deps.workerPath?.(),
+    workerPath: (): string => deps.workerPath?.() ?? defaultWorkerPath(),
+    spawnIsolate: workerThreadIsolate,
   };
 
   const packs: HostPackSource | undefined =
     deps.authorizedFolders === undefined
       ? undefined
       : {
+          engine: 'react',
           authorizedFolders: deps.authorizedFolders,
           reservedNamespaces: () => new Set<string>(),
           ...(deps.installRoot !== undefined
@@ -145,10 +149,12 @@ export function createVSCodeHostAdapter(
   return {
     id: 'vscode',
     labels: VSCODE_LABELS,
-    readFile: deps.readFile ?? unavailableRead,
+    // The extension host is Node, so the defaults read the real file system;
+    // pack discovery reads through these.
+    readFile: deps.readFile ?? ((p) => readFile(p)),
     exists: deps.exists ?? (async () => false),
     writeFile: deps.writeFile ?? unavailableWrite,
-    listFolder: deps.listFolder ?? (async () => []),
+    listFolder: deps.listFolder ?? createNodeDirectoryLister(),
     prompt: deps.prompt,
     memento: deps.memento,
     diagnostics: deps.diagnostics,

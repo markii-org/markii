@@ -24,10 +24,9 @@ describe('createVSCodeHostAdapter', () => {
     expect(adapter.labels).toBe(VSCODE_LABELS);
   });
 
-  // Reporting "no built worker here" is this adapter's whole job in a
-  // development or test run: which fallback applies then belongs to the
-  // shared run path, so this host does not have to know one exists.
-  it('reports an undefined worker path when none is injected, leaving the fallback to the shared run path', () => {
+  // The shared run path has no Node dependency, so this adapter resolves the
+  // development fallback itself when no built worker is injected.
+  it("falls back to the shared package's development worker entry when no path is injected", () => {
     const adapter = createVSCodeHostAdapter({
       memento: fakeMemento(),
       prompt: async () => true,
@@ -39,7 +38,7 @@ describe('createVSCodeHostAdapter', () => {
       adapter.isolate?.kind === 'node'
         ? adapter.isolate.workerPath()
         : 'unreachable',
-    ).toBeUndefined();
+    ).toMatch(/worker-entry\.ts$/);
   });
 
   it('uses the injected workerPath when it resolves to a real path', () => {

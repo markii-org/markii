@@ -35,12 +35,8 @@ import { discoverConfiguredPacks } from './packs/discover-configured-packs.js';
 import { createVSCodeHostAdapter } from './host-adapter.js';
 import {
   buildComponentCatalog,
-  buildPackRegistrationScript,
-  buildPackTerminalScript,
   createMarkiiHost,
-  createNodeArchiveExtractFs,
   isContainerCompletionItem,
-  exportPackArchive,
   installPackDiagnosticLines,
   installPackFromArchive,
   installPackMessage,
@@ -52,6 +48,12 @@ import {
   scriptsEnabledConfirmationText,
   VSCODE_LABELS,
 } from '@markii/host';
+import {
+  buildPackRegistrationScript,
+  buildPackTerminalScript,
+  createNodeArchiveExtractFs,
+  exportPackArchive,
+} from '@markii/host/node';
 import type { DiscoveredPack, HostPromptRequest } from '@markii/host';
 import type { CompletionItem as MarkCompletionItem } from '@markii/stdlib/editor';
 import {

@@ -29,7 +29,7 @@ import {
   manifestNetHosts,
   netDeclarationDiagnostics,
 } from './bundle-run.js';
-import type { RunResult, SpawnRunOptions } from './run-host.js';
+import type { RunResult, SpawnRunRequest } from './run-host.js';
 import type { ValuesFailure } from '../values-failure.js';
 import type { RunTrigger, StoredValue } from '@markii/runtime';
 import type { BundleManifest } from '@markii/bundle';
@@ -239,14 +239,14 @@ export interface RunOnceOptions {
    * deployment-level opt-in `markii.allowPrivateNetworkAddresses` maps to
    * (`preview-panel.ts`), never something a note can set for itself.
    */
-  netPolicy?: SpawnRunOptions['netPolicy'];
+  netPolicy?: SpawnRunRequest['netPolicy'];
   memento: GrantMemento;
   promptHost: PromptHost;
   promptUnknownHosts: PromptUnknownHosts;
   /** PROMPT-STORM guard's consolidated gate — see `./grant-flow.ts`'s `MAX_HOST_PROMPTS`. */
   promptManyHosts: PromptManyHosts;
   /** Injected so this function is testable with a fake worker runner — the real adapter passes `./run-host.ts`'s `spawnRun`. */
-  spawnRun: (options: SpawnRunOptions) => Promise<RunResult>;
+  spawnRun: (options: SpawnRunRequest) => Promise<RunResult>;
   /**
    * Called once per script as its value arrives, while the run is still
    * going (GitHub issue #35) — a host uses it to un-stale one bound
@@ -450,7 +450,7 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
     ...(options.netPolicy !== undefined
       ? { netPolicy: options.netPolicy }
       : {}),
-    cacheSnapshot: cacheSnapshot as SpawnRunOptions['cacheSnapshot'],
+    cacheSnapshot: cacheSnapshot as SpawnRunRequest['cacheSnapshot'],
     timeoutMs: options.timeoutMs,
     ...(options.packModules !== undefined
       ? { packModules: options.packModules }

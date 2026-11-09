@@ -1,3 +1,4 @@
+import { workerThreadIsolate } from '../run/node-isolate.js';
 import { describe, expect, it } from 'vitest';
 import type { RunResult } from '../run/run-host.js';
 import { readLastRunTrace } from '../run/run-trace.js';
@@ -99,6 +100,7 @@ describe('spawnRunViaAdapter', () => {
     const isolate = {
       kind: 'node' as const,
       workerPath: () => '/nonexistent/worker.js',
+      spawnIsolate: workerThreadIsolate,
     };
     const result = await spawnRunViaAdapter(isolate, {
       text: '',

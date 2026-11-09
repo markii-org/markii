@@ -19,7 +19,7 @@
  * only then write anything to disk. Nothing is written until every
  * applicable step has already said yes.
  */
-import * as path from 'node:path';
+import { joinPath } from '../path-util.js';
 import { openPackArchive } from '@markii/pack';
 import { describeArchiveError, writeArchiveContents } from './pack-archive.js';
 import type { ArchiveExtractFs } from './pack-archive.js';
@@ -120,7 +120,7 @@ export async function installPackFromArchive(
     return { kind: 'declined', step: 'consent', packName };
   }
 
-  const targetDir = path.join(installRoot, packName);
+  const targetDir = joinPath(installRoot, packName);
   let alreadyInstalled: boolean;
   try {
     alreadyInstalled = await exists(targetDir);

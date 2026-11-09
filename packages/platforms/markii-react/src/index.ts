@@ -35,6 +35,7 @@ export {
 } from './registry.js';
 export {
   REACT_ENGINE_ID,
+  reactPackEngine,
   loadPack,
   installPacks,
   type PackComponentModules,

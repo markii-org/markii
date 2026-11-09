@@ -15,12 +15,13 @@
  * render registry already treats one (`@markii/react`'s `loadPack`):
  * skipped, not silently accepted.
  */
+import { createNodeDirectoryLister } from '@markii/host/node';
 import {
-  createNodeFileReader,
   discoverPacks,
   type DiscoveredPack,
   type SkippedPackFolder,
 } from '@markii/host';
+import { createNodeFileReader } from '@markii/host/node';
 
 /** This extension's own renderer engine — matches `@markii/react`'s `REACT_ENGINE_ID`. */
 const SUPPORTED_ENGINE = 'react';
@@ -45,7 +46,7 @@ export async function validatePackFolder(
   const result = await discoverPacks(
     [folderPath],
     createNodeFileReader(),
-    undefined,
+    createNodeDirectoryLister(),
     SUPPORTED_ENGINE,
   );
   return { packs: result.packs, skipped: result.skipped };

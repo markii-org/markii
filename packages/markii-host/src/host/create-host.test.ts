@@ -1,3 +1,7 @@
+import { createNodeDirectoryLister } from '../node-fs.js';
+import { createHtmlExportEngine } from '../html-engine.js';
+import { createNodeArchiveExtractFs } from '../node-fs.js';
+import { workerThreadIsolate } from '../run/node-isolate.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   access,
@@ -82,6 +86,7 @@ const realFs: Partial<HostAdapter> = {
     }
   },
   readFile: async (p) => new Uint8Array(await readFile(p)),
+  listFolder: createNodeDirectoryLister(),
 };
 
 function fakeAdapter(overrides: Partial<HostAdapter> = {}): HostAdapter {
@@ -151,7 +156,11 @@ describe('createMarkiiHost.run', () => {
       cacheSnapshot: {},
     };
     const adapter = fakeAdapter({
-      isolate: { kind: 'node', workerPath: () => '/worker.js' },
+      isolate: {
+        kind: 'node',
+        workerPath: () => '/worker.js',
+        spawnIsolate: workerThreadIsolate,
+      },
     });
     const host = createMarkiiHost(adapter, {
       spawnRun: async () => fakeResult,
@@ -240,7 +249,9 @@ describe('createMarkiiHost.exportNote', () => {
         resolveTarget: async (name) => `/exports/${name}`,
       },
     });
-    const outcome = await createMarkiiHost(adapter).exportNote({
+    const outcome = await createMarkiiHost(adapter, {
+      htmlEngine: createHtmlExportEngine(),
+    }).exportNote({
       format: 'html',
       notePath: '/note.mk.md',
       text: '# hello',
@@ -259,7 +270,9 @@ describe('createMarkiiHost.exportNote', () => {
         resolveTarget: async () => undefined,
       },
     });
-    const outcome = await createMarkiiHost(adapter).exportNote({
+    const outcome = await createMarkiiHost(adapter, {
+      htmlEngine: createHtmlExportEngine(),
+    }).exportNote({
       format: 'html',
       notePath: '/note.mk.md',
       text: '# hello',
@@ -276,12 +289,15 @@ describe('createMarkiiHost.installPack', () => {
       diagnostics: (line) => lines.push(line),
       prompt: async () => true,
       packs: {
+        engine: 'react',
         authorizedFolders: async () => [],
         reservedNamespaces: () => new Set(),
         installRoot: () => installRoot,
       },
     });
-    const outcome = await createMarkiiHost(adapter).installPack({
+    const outcome = await createMarkiiHost(adapter, {
+      archiveExtractFs: createNodeArchiveExtractFs(),
+    }).installPack({
       archiveBytes: validArchiveBytes('ana'),
       archivePath: '/downloads/ana.mkp',
     });
@@ -302,12 +318,15 @@ describe('createMarkiiHost.installPack', () => {
         return true;
       },
       packs: {
+        engine: 'react',
         authorizedFolders: async () => [],
         reservedNamespaces: () => new Set(['read']),
         installRoot: () => installRoot,
       },
     });
-    const outcome = await createMarkiiHost(adapter).installPack({
+    const outcome = await createMarkiiHost(adapter, {
+      archiveExtractFs: createNodeArchiveExtractFs(),
+    }).installPack({
       archiveBytes: validArchiveBytes('read'),
     });
     expect(outcome).toEqual({ kind: 'reserved', namespace: 'read' });
@@ -323,7 +342,9 @@ describe('createMarkiiHost.loadPacks', () => {
       components: {},
     });
     const adapter = fakeAdapter({
+      ...realFs,
       packs: {
+        engine: 'react',
         authorizedFolders: async () => [folder],
         reservedNamespaces: () => new Set(),
       },
@@ -354,6 +375,7 @@ describe('createMarkiiHost.loadTerminalPacks', () => {
     const adapter = fakeAdapter({
       diagnostics: (line) => lines.push(line),
       packs: {
+        engine: 'react',
         authorizedFolders: async () => [],
         reservedNamespaces: () => new Set(),
       },
@@ -398,6 +420,7 @@ describe('createMarkiiHost.loadTerminalPacks', () => {
       components: { a: './A.tsx' },
     });
     const adapter = fakeAdapter({
+      ...realFs,
       packs: {
         engine: 'ansi',
         authorizedFolders: async () => [folder],
@@ -428,6 +451,7 @@ describe('createMarkiiHost.loadTerminalPacks', () => {
       },
     });
     const adapter = fakeAdapter({
+      ...realFs,
       packs: {
         engine: 'ansi',
         authorizedFolders: async () => [folder],
@@ -456,6 +480,7 @@ describe('createMarkiiHost.removePack', () => {
     const adapter = fakeAdapter({
       ...realFs,
       packs: {
+        engine: 'react',
         authorizedFolders: async () => [],
         reservedNamespaces: () => new Set(['read']),
         installRoot: () => installRoot,
@@ -477,6 +502,7 @@ describe('createMarkiiHost.removePack', () => {
   it('refuses a namespace that is not a plain pack name, before building any path', async () => {
     const adapter = fakeAdapter({
       packs: {
+        engine: 'react',
         authorizedFolders: async () => [],
         reservedNamespaces: () => new Set(),
         installRoot: () => '/store',
@@ -494,6 +520,7 @@ describe('createMarkiiHost.removePack', () => {
   it('is unsupported without removeFolder', async () => {
     const adapter = fakeAdapter({
       packs: {
+        engine: 'react',
         authorizedFolders: async () => [],
         reservedNamespaces: () => new Set(),
         installRoot: () => '/store',

@@ -28,7 +28,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { runOnce } from './run-flow';
 import { runGrantFlow, resolveStoredGrant } from './grant-flow';
 import type { GrantMemento, Thenable } from './grant-flow';
-import { spawnRun } from './run-host';
+import { spawnRunInThread as spawnRun } from './node-isolate';
 
 function fence(name: string, body: string, attrs = ''): string {
   const attrGroup = attrs ? ` ${attrs}` : '';

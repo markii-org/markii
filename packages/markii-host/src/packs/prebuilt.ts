@@ -21,7 +21,7 @@
  * so this module is testable with plain in-memory fakes — matching every
  * other module in this directory.
  */
-import * as path from 'node:path';
+import { dirnamePath, joinPath } from '../path-util.js';
 import type { DiscoveredPack } from './discover.js';
 
 export const PREBUILT_SCRIPT_FILENAME = 'webview.js';
@@ -31,7 +31,7 @@ export const PREBUILT_TERMINAL_SCRIPT_FILENAME = 'terminal.js';
 
 /** Absolute path of a pack folder's prebuilt terminal script. No existence check. */
 export function prebuiltTerminalScriptPathFor(folder: string): string {
-  return path.join(folder, PREBUILT_TERMINAL_SCRIPT_FILENAME);
+  return joinPath(folder, PREBUILT_TERMINAL_SCRIPT_FILENAME);
 }
 
 /**
@@ -51,12 +51,12 @@ export function emptyWebviewScript(manifestJson: string): string {
 
 /** Absolute path of a pack folder's prebuilt registration script. No existence check. */
 export function prebuiltScriptPathFor(folder: string): string {
-  return path.join(folder, PREBUILT_SCRIPT_FILENAME);
+  return joinPath(folder, PREBUILT_SCRIPT_FILENAME);
 }
 
 /** Absolute path of a pack folder's prebuilt sibling stylesheet. No existence check. */
 export function prebuiltStylesheetPathFor(folder: string): string {
-  return path.join(folder, PREBUILT_STYLESHEET_FILENAME);
+  return joinPath(folder, PREBUILT_STYLESHEET_FILENAME);
 }
 
 /** Whether an absolute path exists. Injected so this module needs no real disk to test; may be sync or async. */
@@ -112,8 +112,8 @@ export async function resolvePrebuiltPack(
   const scriptExists = await existsQuietly(exists, pack.scriptPath);
   if (!scriptExists) return undefined;
 
-  const stylesheetPath = path.join(
-    path.dirname(pack.scriptPath),
+  const stylesheetPath = joinPath(
+    dirnamePath(pack.scriptPath),
     PREBUILT_STYLESHEET_FILENAME,
   );
   const stylesheetExists = await existsQuietly(exists, stylesheetPath);

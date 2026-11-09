@@ -35,11 +35,8 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import type {
-  DiscoveredPack,
-  PackExportArchiveOutcome,
-  PackExportFs,
-} from '@markii/host';
+import type { DiscoveredPack } from '@markii/host';
+import type { PackExportArchiveOutcome, PackExportFs } from '@markii/host/node';
 
 /**
  * A Node-backed `PackExportFs`. `exists`/`readFile`/`listDirectory` never

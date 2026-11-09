@@ -26,14 +26,49 @@
 import type { UnavailableComponent } from '@markii/stdlib';
 import {
   componentsWithoutEngineView,
-  createNodeFileReader,
   declaredPackComponents,
   discoverPacks,
   installedNamespaces,
 } from '../packs/discover.js';
-import type { DiscoveredPack, SkippedPackFolder } from '../packs/discover.js';
-import { REACT_ENGINE_ID } from '@markii/react';
-import type { HostPackSource } from './adapter.js';
+import type {
+  DiscoveredPack,
+  PackDirectoryLister,
+  PackFileReader,
+  SkippedPackFolder,
+} from '../packs/discover.js';
+import type { HostAdapter, HostPackSource } from './adapter.js';
+
+/** The two file-system reads pack discovery needs, injected so this module has no Node dependency. */
+export interface PackDiscoveryIo {
+  readonly readFile: PackFileReader;
+  readonly listDirectory: PackDirectoryLister;
+}
+
+/**
+ * Discovery reads derived from the adapter's own `readFile` and
+ * `listFolder`. Both are held to discovery's never-rejects contract: an
+ * unreadable file is `undefined`, an unreadable folder is `[]`.
+ */
+export function packDiscoveryIoFromAdapter(
+  adapter: Pick<HostAdapter, 'readFile' | 'listFolder'>,
+): PackDiscoveryIo {
+  return {
+    readFile: async (absolutePath) => {
+      try {
+        return new TextDecoder().decode(await adapter.readFile(absolutePath));
+      } catch {
+        return undefined;
+      }
+    },
+    listDirectory: async (absoluteDir) => {
+      try {
+        return [...(await adapter.listFolder(absoluteDir))];
+      } catch {
+        return [];
+      }
+    },
+  };
+}
 
 export interface LoadPacksResult {
   readonly packs: readonly DiscoveredPack[];
@@ -56,18 +91,20 @@ export interface LoadPacksResult {
 
 /**
  * Discovers every pack under `folders`, engine-gated against
- * `REACT_ENGINE_ID` — the same posture `@markii/react`'s `loadPack`
- * already takes for an unsupported `engine`, so neither Insert Component
- * nor completion ever offers a component this renderer could not render.
+ * `engine` (the host's renderer engine id, given by the caller) — the same
+ * posture a renderer's pack loader takes for an unsupported `engine`, so
+ * neither Insert Component nor completion ever offers a component this
+ * renderer could not render.
  */
 export async function discoverConfiguredPacks(
   folders: readonly string[],
-  engine: string = REACT_ENGINE_ID,
+  io: PackDiscoveryIo,
+  engine: string,
 ): Promise<LoadPacksResult> {
   const result = await discoverPacks(
     folders,
-    createNodeFileReader(),
-    undefined,
+    io.readFile,
+    io.listDirectory,
     engine,
   );
   const components = [
@@ -93,7 +130,8 @@ export async function discoverConfiguredPacks(
  */
 export async function loadPacksViaAdapter(
   source: HostPackSource,
+  io: PackDiscoveryIo,
 ): Promise<LoadPacksResult> {
   const folders = await source.authorizedFolders();
-  return discoverConfiguredPacks(folders, source.engine);
+  return discoverConfiguredPacks(folders, io, source.engine);
 }

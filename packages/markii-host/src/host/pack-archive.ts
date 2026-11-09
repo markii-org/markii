@@ -14,17 +14,11 @@
  * needs: extracting a validated archive's contents onto disk, under
  * whichever install root the calling host names (`HostPackSource.installRoot`).
  *
- * Node-free at the type level (`ArchiveExtractFs` is an injected seam), but
- * `createNodeArchiveExtractFs` itself uses `node:fs/promises`, so this
- * module stays main-entry only — a Node host's `HostAdapter.packs` wires
- * the real one in.
+ * Environment-free (`ArchiveExtractFs` is an injected seam). The real
+ * Node-backed one, `createNodeArchiveExtractFs`, lives in `../node-fs.ts`
+ * and is exported from `@markii/host/node`.
  */
-import * as path from 'node:path';
-import {
-  mkdir as nodeMkdir,
-  rm as nodeRm,
-  writeFile as nodeWriteFile,
-} from 'node:fs/promises';
+import { dirnamePath, joinPath } from '../path-util.js';
 import type { PackArchiveContents, PackArchiveError } from '@markii/pack';
 
 /** One line describing why `openPackArchive` rejected an archive, for a host's install-diagnostics wording. Passes `kind: 'zip'`'s and `kind: 'missing-entry'`'s message through verbatim (already specific); summarizes a manifest failure plainly. */
@@ -44,26 +38,6 @@ export interface ArchiveExtractFs {
     absolutePath: string,
     bytes: Uint8Array,
   ) => Promise<void>;
-}
-
-/** The real, Node-backed `ArchiveExtractFs`. */
-export function createNodeArchiveExtractFs(): ArchiveExtractFs {
-  return {
-    removeDirectory: async (absolutePath) => {
-      try {
-        await nodeRm(absolutePath, { recursive: true, force: true });
-      } catch {
-        // Quiet: the write that follows fails loudly on its own if the
-        // path is genuinely unusable.
-      }
-    },
-    makeDirectory: async (absolutePath) => {
-      await nodeMkdir(absolutePath, { recursive: true });
-    },
-    writeFile: async (absolutePath, bytes) => {
-      await nodeWriteFile(absolutePath, bytes);
-    },
-  };
 }
 
 /**
@@ -92,31 +66,31 @@ export async function writeArchiveContents(
   await fs.makeDirectory(destinationDir);
   const encoder = new TextEncoder();
   await fs.writeFile(
-    path.join(destinationDir, 'pack.json'),
+    joinPath(destinationDir, 'pack.json'),
     encoder.encode(JSON.stringify(archive.manifest, null, 2) + '\n'),
   );
   await fs.writeFile(
-    path.join(destinationDir, 'webview.js'),
+    joinPath(destinationDir, 'webview.js'),
     archive.scriptBytes,
   );
   if (archive.stylesheetBytes !== undefined) {
     await fs.writeFile(
-      path.join(destinationDir, 'webview.css'),
+      joinPath(destinationDir, 'webview.css'),
       archive.stylesheetBytes,
     );
   }
   if (archive.terminalScriptBytes !== undefined) {
     await fs.writeFile(
-      path.join(destinationDir, 'terminal.js'),
+      joinPath(destinationDir, 'terminal.js'),
       archive.terminalScriptBytes,
     );
   }
   const moduleNames = Object.keys(archive.scriptModules);
   if (moduleNames.length > 0) {
-    const scriptsDir = path.join(destinationDir, 'scripts');
+    const scriptsDir = joinPath(destinationDir, 'scripts');
     for (const name of moduleNames) {
-      const target = path.join(scriptsDir, name);
-      await fs.makeDirectory(path.dirname(target));
+      const target = joinPath(scriptsDir, name);
+      await fs.makeDirectory(dirnamePath(target));
       await fs.writeFile(target, archive.scriptModules[name]!);
     }
   }

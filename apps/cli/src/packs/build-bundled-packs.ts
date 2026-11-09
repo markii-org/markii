@@ -15,16 +15,16 @@
  * The React views are not built: the CLI never runs them, and the
  * `webview.js` stub keeps the folder a valid pack.
  */
+import { createNodeDirectoryLister } from '@markii/host/node';
 import * as path from 'node:path';
+import { discoverPacks, packHasTerminalViews } from '@markii/host';
 import {
   buildPackTerminalScript,
   createNodeFileReader,
-  discoverPacks,
   exportPack,
-  packHasTerminalViews,
   type PackBuildOutcome,
   type PackExportFs,
-} from '@markii/host';
+} from '@markii/host/node';
 import {
   access,
   mkdir,
@@ -97,7 +97,11 @@ export async function buildBundledPacks(
 
   for (const name of BUNDLED_PACK_NAMES) {
     const folder = path.join(repoRoot, 'packs', name);
-    const result = await discoverPacks([folder], readText);
+    const result = await discoverPacks(
+      [folder],
+      readText,
+      createNodeDirectoryLister(),
+    );
     const pack = result.packs[0];
     if (pack === undefined) {
       const reasons = result.skipped.map((entry) => entry.reason).join('; ');

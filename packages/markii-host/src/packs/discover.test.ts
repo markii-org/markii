@@ -30,7 +30,7 @@ describe('discoverPacks', () => {
       [path.join(folder, 'pack.json')]: VALID_MANIFEST,
     });
 
-    const result = await discoverPacks([folder], reader);
+    const result = await discoverPacks([folder], reader, async () => []);
 
     expect(result.collisions).toEqual([]);
     expect(result.skipped).toEqual([]);
@@ -53,7 +53,7 @@ describe('discoverPacks', () => {
       }),
     });
 
-    const result = await discoverPacks([folder], reader);
+    const result = await discoverPacks([folder], reader, async () => []);
 
     expect(result.skipped).toEqual([]);
     expect(result.packs).toHaveLength(1);
@@ -65,7 +65,11 @@ describe('discoverPacks', () => {
 
   it('quietly skips a folder with no pack.json', async () => {
     const reader = readerFor({});
-    const result = await discoverPacks(['/packs/missing'], reader);
+    const result = await discoverPacks(
+      ['/packs/missing'],
+      reader,
+      async () => [],
+    );
     expect(result.packs).toEqual([]);
     expect(result.skipped).toEqual([
       { folder: '/packs/missing', reason: 'no readable pack.json' },
@@ -77,7 +81,7 @@ describe('discoverPacks', () => {
     const reader = readerFor({
       [path.join(folder, 'pack.json')]: '{not json',
     });
-    const result = await discoverPacks([folder], reader);
+    const result = await discoverPacks([folder], reader, async () => []);
     expect(result.packs).toEqual([]);
     expect(result.skipped).toHaveLength(1);
     expect(result.skipped[0]!.folder).toBe(folder);
@@ -88,7 +92,7 @@ describe('discoverPacks', () => {
     const reader = readerFor({
       [path.join(folder, 'pack.json')]: JSON.stringify({ name: 'demo' }),
     });
-    const result = await discoverPacks([folder], reader);
+    const result = await discoverPacks([folder], reader, async () => []);
     expect(result.packs).toEqual([]);
     expect(result.skipped).toHaveLength(1);
   });
@@ -101,7 +105,11 @@ describe('discoverPacks', () => {
       [path.join(folderB, 'pack.json')]: VALID_MANIFEST,
     });
 
-    const result = await discoverPacks([folderA, folderB], reader);
+    const result = await discoverPacks(
+      [folderA, folderB],
+      reader,
+      async () => [],
+    );
 
     expect(result.packs).toEqual([]);
     expect(result.collisions).toEqual(['demo']);
@@ -114,7 +122,11 @@ describe('discoverPacks', () => {
       [path.join(folder, 'pack.json')]: VALID_MANIFEST,
     });
 
-    const result = await discoverPacks([folder, folder], reader);
+    const result = await discoverPacks(
+      [folder, folder],
+      reader,
+      async () => [],
+    );
 
     expect(result.packs).toHaveLength(1);
     expect(result.collisions).toEqual([]);
@@ -124,7 +136,7 @@ describe('discoverPacks', () => {
     const reader: PackFileReader = async () => {
       throw new Error('boom');
     };
-    const result = await discoverPacks(['/packs/x'], reader);
+    const result = await discoverPacks(['/packs/x'], reader, async () => []);
     expect(result.packs).toEqual([]);
     expect(result.skipped).toHaveLength(1);
   });
@@ -307,7 +319,7 @@ describe('discoverPacks — supportedEngine gating (batch 7 #46)', () => {
       [path.join(folder, 'pack.json')]: OTHER_ENGINE_MANIFEST,
     });
 
-    const result = await discoverPacks([folder], reader);
+    const result = await discoverPacks([folder], reader, async () => []);
 
     expect(result.skipped).toEqual([]);
     expect(result.packs).toHaveLength(1);
@@ -319,7 +331,12 @@ describe('discoverPacks — supportedEngine gating (batch 7 #46)', () => {
       [path.join(folder, 'pack.json')]: OTHER_ENGINE_MANIFEST,
     });
 
-    const result = await discoverPacks([folder], reader, undefined, 'react');
+    const result = await discoverPacks(
+      [folder],
+      reader,
+      async () => [],
+      'react',
+    );
 
     expect(result.packs).toEqual([]);
     expect(result.skipped).toHaveLength(1);
@@ -334,7 +351,12 @@ describe('discoverPacks — supportedEngine gating (batch 7 #46)', () => {
       [path.join(folder, 'pack.json')]: VALID_MANIFEST,
     });
 
-    const result = await discoverPacks([folder], reader, undefined, 'react');
+    const result = await discoverPacks(
+      [folder],
+      reader,
+      async () => [],
+      'react',
+    );
 
     expect(result.skipped).toEqual([]);
     expect(result.packs).toHaveLength(1);

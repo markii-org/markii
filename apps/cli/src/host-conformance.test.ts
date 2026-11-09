@@ -18,6 +18,7 @@ import type { Terminal } from './terminal.js';
 import { createCliHostAdapter } from './host-adapter.js';
 import { BUNDLED_PACK_NAMESPACES } from './pack-store.js';
 import { renderMarkToAnsi } from '@markii/ansi';
+import { type GrantMemento, type Thenable } from '@markii/host';
 import {
   assertHostScenario,
   createAnswerQueue,
@@ -25,9 +26,7 @@ import {
   listHostScenarioNames,
   loadHostScenario,
   runHostScenario,
-  type GrantMemento,
-  type Thenable,
-} from '@markii/host';
+} from '@markii/host/node';
 
 function createMemoryMemento(): GrantMemento {
   const store = new Map<string, unknown>();

@@ -20,8 +20,10 @@
  * bundled pack always wins: a same-namespace user pack is dropped and
  * reported in `skipped`, never the reverse.
  */
+import { createNodeDirectoryLister } from '@markii/host/node';
 import * as path from 'node:path';
-import { createNodeFileReader, discoverPacks } from '@markii/host';
+import { discoverPacks } from '@markii/host';
+import { createNodeFileReader } from '@markii/host/node';
 import type { DiscoveredPack, SkippedPackFolder } from '@markii/host';
 
 /** `dist/packs`, relative to the extension's own install directory (`ExtensionContext.extensionUri.fsPath`). */
@@ -41,6 +43,7 @@ export async function discoverBundledPacks(
   const result = await discoverPacks(
     [bundledPacksFolder(extensionPath)],
     createNodeFileReader(),
+    createNodeDirectoryLister(),
   );
   return result.packs;
 }

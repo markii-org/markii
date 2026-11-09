@@ -4,11 +4,8 @@ import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { zipSync } from 'fflate';
 import { openPackArchive } from '@markii/pack';
-import {
-  createNodeArchiveExtractFs,
-  describeArchiveError,
-  writeArchiveContents,
-} from './pack-archive.js';
+import { createNodeArchiveExtractFs } from '../node-fs.js';
+import { describeArchiveError, writeArchiveContents } from './pack-archive.js';
 
 const tempDirs: string[] = [];
 

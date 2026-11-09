@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm, access } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { zipSync } from 'fflate';
-import { createNodeArchiveExtractFs } from './pack-archive.js';
+import { createNodeArchiveExtractFs } from '../node-fs.js';
 import {
   installConsentMessage,
   installPackDiagnosticLines,

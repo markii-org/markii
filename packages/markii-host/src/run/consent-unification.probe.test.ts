@@ -32,8 +32,8 @@ import { describe, expect, it } from 'vitest';
 import type { BundleManifest, BundleFsGrant } from '@markii/bundle';
 import { runOnce } from './run-flow';
 import type { GrantMemento, Thenable } from './grant-flow';
-import { spawnRun } from './run-host';
-import type { RunResult, SpawnRunOptions } from './run-host';
+import { spawnRunInThread as spawnRun } from './node-isolate';
+import type { RunResult, SpawnRunRequest } from './run-host';
 
 const WORKER_PATH = path.join(__dirname, 'worker-entry.ts');
 
@@ -59,7 +59,7 @@ function manifestWith(overrides: Partial<BundleManifest> = {}): BundleManifest {
 }
 
 /** The real `spawnRun`, wired to the real Node worker isolate — the same shape `runOnce`'s injected `spawnRun` expects. */
-function realSpawnRun(options: SpawnRunOptions): Promise<RunResult> {
+function realSpawnRun(options: SpawnRunRequest): Promise<RunResult> {
   return spawnRun({ ...options, workerPath: WORKER_PATH });
 }
 

@@ -4,7 +4,10 @@ import http from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { defaultWorkerPath, spawnRun } from './run-host';
+import {
+  defaultWorkerPath,
+  spawnRunInThread as spawnRun,
+} from './node-isolate';
 
 /**
  * Every test in this file spawns a REAL `worker_thread` running the REAL

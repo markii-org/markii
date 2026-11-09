@@ -11,6 +11,10 @@
  * Exit codes: 0 ok, 1 a render/parse failure or an unreadable file, 2 a
  * script failure, 3 a usage error.
  */
+import {
+  createHtmlExportEngine,
+  createNodeArchiveExtractFs,
+} from '@markii/host/node';
 import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import * as path from 'node:path';
@@ -508,7 +512,10 @@ async function runExportCommand(
       if (command.verbose) terminal.writeError(`markii: ${line}\n`);
     },
   });
-  const host = createMarkiiHost(adapter, { renderAnsi });
+  const host = createMarkiiHost(adapter, {
+    renderAnsi,
+    htmlEngine: createHtmlExportEngine(),
+  });
 
   const outcome = await host.exportNote({
     format: command.format,
@@ -581,7 +588,12 @@ function packCommandHost(
     assumeYes: options.assumeYes,
     diagnostics: (line) => lines.push(line),
   });
-  return { host: createMarkiiHost(adapter), lines };
+  return {
+    host: createMarkiiHost(adapter, {
+      archiveExtractFs: createNodeArchiveExtractFs(),
+    }),
+    lines,
+  };
 }
 
 /** The diagnostics lines of a command whose outcome is the whole point: always on failure, only under `--verbose` on success. */

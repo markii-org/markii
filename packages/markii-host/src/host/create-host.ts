@@ -15,7 +15,7 @@
  * not silent": a decline is never a silent no-op.
  */
 import type { HostAdapter, HostExportFormat, HostTextEdit } from './adapter.js';
-import type { RunResult, SpawnRunOptions } from '../run/run-host.js';
+import type { RunResult, SpawnRunRequest } from '../run/run-host.js';
 import type { StoredValue } from '@markii/runtime';
 import type { OnDiagnostic, UnavailableComponent } from '@markii/stdlib';
 import type {
@@ -29,15 +29,17 @@ import {
   type RunViaAdapterRequest,
   type RunViaAdapterResult,
 } from './run-behavior.js';
-import {
-  createNodeArchiveExtractFs,
-  type ArchiveExtractFs,
-} from './pack-archive.js';
+import { type ArchiveExtractFs } from './pack-archive.js';
 import {
   installPackDiagnosticLines,
   installPackFromArchive,
 } from './pack-install.js';
-import { loadPacksViaAdapter } from './pack-load.js';
+import {
+  loadPacksViaAdapter,
+  packDiscoveryIoFromAdapter,
+  type PackDiscoveryIo,
+} from './pack-load.js';
+import type { HtmlExportEngine } from '../export/note-export.js';
 import { buildComponentCatalog } from '../insert/component-catalog.js';
 import {
   formatPackDiagnosticLines,
@@ -294,9 +296,13 @@ export interface MarkiiHost {
  * host.
  */
 export interface MarkiiHostOptions {
-  readonly spawnRun?: (options: SpawnRunOptions) => Promise<RunResult>;
-  /** The `.mkp` extraction filesystem `installPack` writes through. Defaults to the real, Node-backed one. Injected for a test that wants to observe or fail a write. */
+  readonly spawnRun?: (options: SpawnRunRequest) => Promise<RunResult>;
+  /** The `.mkp` extraction filesystem `installPack` writes through. Required for a host that installs packs (`createNodeArchiveExtractFs()` from `@markii/host/node`); without it `installPack` is `Unsupported`. */
   readonly archiveExtractFs?: ArchiveExtractFs;
+  /** The static HTML engine behind the `html` and `pdf` exports (`createHtmlExportEngine()` from `@markii/host/node`). Without it those formats decline, like `renderAnsi` for `ansi`. */
+  readonly htmlEngine?: HtmlExportEngine;
+  /** Pack discovery's file reads. Defaults to reads through the adapter's own `readFile` and `listFolder`. */
+  readonly packDiscoveryIo?: PackDiscoveryIo;
   /** `@markii/ansi`'s renderer, injected because this package never depends on `@markii/ansi` (a platform renderer, never a `@markii/host` dependency). A host declaring `'ansi'` in `adapter.exports.formats` without supplying this gets `Unsupported` at export time. */
   readonly renderAnsi?: (text: string) => Promise<string>;
   /** Composes a pack-aware render registry (webview registration, in-process evaluation, ...). Reserved for a future slice that renders through `exportNote`'s `html` path with packs; unused today, since `buildExportDocument`'s default (no `renderBody`) already produces a correct, pack-free static export. */
@@ -307,13 +313,15 @@ export function createMarkiiHost(
   adapter: HostAdapter,
   options: MarkiiHostOptions = {},
 ): MarkiiHost {
+  const packIo = options.packDiscoveryIo ?? packDiscoveryIoFromAdapter(adapter);
+
   /** The pack-aware insert/completion catalog, built fresh from this host's currently authorized folders. Not cached here: `./editor-behavior.js`'s `createCatalogCache` is the caching seam, and a caller wiring a live editor (repeated completion/hover calls per keystroke) is expected to wrap this call in one. */
   async function currentCatalog(): Promise<readonly InsertableComponent[]> {
     if (!adapter.packs) return buildComponentCatalog([]);
-    const { packs } = await loadPacksViaAdapter(adapter.packs);
+    const { packs } = await loadPacksViaAdapter(adapter.packs, packIo);
     return buildComponentCatalog(
       [...(adapter.packs.bundledPacks?.() ?? []), ...packs],
-      adapter.packs.engine ?? 'react',
+      adapter.packs.engine,
     );
   }
 
@@ -387,6 +395,9 @@ export function createMarkiiHost(
         adapter,
         request.format,
         {
+          ...(options.htmlEngine !== undefined
+            ? { engine: options.htmlEngine }
+            : {}),
           notePath: request.notePath,
           text: request.text,
           ...(request.values !== undefined ? { values: request.values } : {}),
@@ -428,8 +439,14 @@ export function createMarkiiHost(
         );
       }
       const archivePath = request.archivePath ?? 'the selected archive';
-      const extractFs =
-        options.archiveExtractFs ?? createNodeArchiveExtractFs();
+      const extractFs = options.archiveExtractFs;
+      if (extractFs === undefined) {
+        return unsupported(
+          adapter,
+          'packs',
+          'this host was given no archive extraction filesystem.',
+        );
+      }
 
       const outcome = await installPackFromArchive(adapter, {
         archiveBytes: request.archiveBytes,
@@ -474,11 +491,11 @@ export function createMarkiiHost(
         );
       }
       catalogCache.invalidate();
-      const result = await loadPacksViaAdapter(adapter.packs);
+      const result = await loadPacksViaAdapter(adapter.packs, packIo);
       for (const line of formatPackDiagnosticLines({
         packs: result.packs,
         skipped: result.skipped,
-        engine: adapter.packs.engine ?? 'react',
+        engine: adapter.packs.engine,
         cssWarnings: [],
       })) {
         adapter.diagnostics(line);
@@ -509,7 +526,7 @@ export function createMarkiiHost(
         );
       }
       catalogCache.invalidate();
-      const result = await loadPacksViaAdapter(adapter.packs);
+      const result = await loadPacksViaAdapter(adapter.packs, packIo);
       const read = await readTerminalPackScripts(adapter, result.packs);
       for (const line of formatPackDiagnosticLines({
         packs: result.packs,

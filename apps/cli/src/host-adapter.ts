@@ -33,17 +33,18 @@
  * silently wondering why nothing was granted (AGENTS.md's "clean is not
  * silent").
  */
+import { workerThreadIsolate } from '@markii/host/node';
 import { access, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import {
   CLI_LABELS,
-  defaultWorkerPath,
   type GrantMemento,
   type HostAdapter,
   type HostDirEntry,
   type HostExportFormat,
   type HostPromptRequest,
 } from '@markii/host';
+import { defaultWorkerPath } from '@markii/host/node';
 import type { Terminal } from './terminal.js';
 import { resolveWorkerPath } from './worker-path.js';
 
@@ -200,6 +201,7 @@ export function createCliHostAdapter(
     isolate: {
       kind: 'node',
       workerPath: (): string => resolveWorkerPath() ?? defaultWorkerPath(),
+      spawnIsolate: workerThreadIsolate,
     },
 
     exports: {

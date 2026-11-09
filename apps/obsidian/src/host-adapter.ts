@@ -68,7 +68,8 @@ export interface ObsidianHostAdapterDeps {
   /** Defaults to `Date.now`. Injectable so a test's clock is fixed. */
   readonly now?: () => number;
   readonly isolate?: HostIsolate;
-  readonly packs?: HostPackSource;
+  /** The pack source, minus the engine: the plugin renders with React, so the adapter fills `engine: 'react'` itself. */
+  readonly packs?: Omit<HostPackSource, 'engine'>;
   readonly exports?: HostExportCapabilities;
   /**
    * The live editor surface, built at the call site from the Obsidian
@@ -133,7 +134,9 @@ export function createObsidianHostAdapter(
     now: deps.now ?? (() => Date.now()),
 
     ...(deps.isolate !== undefined ? { isolate: deps.isolate } : {}),
-    ...(deps.packs !== undefined ? { packs: deps.packs } : {}),
+    ...(deps.packs !== undefined
+      ? { packs: { ...deps.packs, engine: 'react' } }
+      : {}),
     ...(deps.exports !== undefined ? { exports: deps.exports } : {}),
     ...(deps.editor !== undefined ? { editor: deps.editor } : {}),
   };

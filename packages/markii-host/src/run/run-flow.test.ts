@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { BundleManifest } from '@markii/bundle';
 import type { GrantMemento, Thenable } from './grant-flow';
-import type { RunResult, SpawnRunOptions } from './run-host';
+import type { RunResult, SpawnRunRequest } from './run-host';
 import {
   MAX_CACHE_SNAPSHOT_BYTES,
   cacheStorageKeyFor,
@@ -47,7 +47,7 @@ function fakeRunResult(overrides: Partial<RunResult> = {}): RunResult {
 describe('runOnce', () => {
   it('runs the grant flow, spawns with the resulting allowlist, and reshapes the result', async () => {
     const memento = fakeMemento();
-    const spawnRun = vi.fn((_options: SpawnRunOptions): Promise<RunResult> =>
+    const spawnRun = vi.fn((_options: SpawnRunRequest): Promise<RunResult> =>
       Promise.resolve(fakeRunResult()),
     );
 
@@ -145,7 +145,7 @@ describe('runOnce', () => {
         k: { value: 'cached', storedAtMs: 0 },
       },
     });
-    const spawnRun = vi.fn((_options: SpawnRunOptions): Promise<RunResult> =>
+    const spawnRun = vi.fn((_options: SpawnRunRequest): Promise<RunResult> =>
       Promise.resolve(fakeRunResult()),
     );
 
@@ -219,7 +219,7 @@ describe('runOnce', () => {
     const memento = fakeMemento({
       [cacheStorageKeyFor(documentKey)]: 'not-an-object',
     });
-    const spawnRun = vi.fn((_options: SpawnRunOptions): Promise<RunResult> =>
+    const spawnRun = vi.fn((_options: SpawnRunRequest): Promise<RunResult> =>
       Promise.resolve(fakeRunResult()),
     );
 
@@ -246,7 +246,7 @@ describe('runOnce — bundle-backed run', () => {
   it('SECURITY: prompts only for scanned hosts, never merging in the manifest declaration', async () => {
     const memento = fakeMemento();
     const promptHost = vi.fn(() => Promise.resolve(true));
-    const spawnRun = vi.fn((_options: SpawnRunOptions): Promise<RunResult> =>
+    const spawnRun = vi.fn((_options: SpawnRunRequest): Promise<RunResult> =>
       Promise.resolve(fakeRunResult()),
     );
 
@@ -280,7 +280,7 @@ describe('runOnce — bundle-backed run', () => {
 
   it('surfaces a declared-but-unused and a used-but-undeclared host as diagnostics, never as a prompt change', async () => {
     const memento = fakeMemento();
-    const spawnRun = vi.fn((_options: SpawnRunOptions): Promise<RunResult> =>
+    const spawnRun = vi.fn((_options: SpawnRunRequest): Promise<RunResult> =>
       Promise.resolve(fakeRunResult()),
     );
 
@@ -381,7 +381,7 @@ describe('runOnce — bundle-backed run', () => {
   it('a declared `permissions` host never widens or narrows what is actually granted', async () => {
     const memento = fakeMemento();
     const promptHost = vi.fn(() => Promise.resolve(true));
-    const spawnRun = vi.fn((_options: SpawnRunOptions): Promise<RunResult> =>
+    const spawnRun = vi.fn((_options: SpawnRunRequest): Promise<RunResult> =>
       Promise.resolve(fakeRunResult()),
     );
 
@@ -414,7 +414,7 @@ describe('runOnce — bundle-backed run', () => {
 
   it('forwards the manifest-declared bundle-fs grants to spawnRun with no prompt at all', async () => {
     const memento = fakeMemento();
-    const spawnRun = vi.fn((_options: SpawnRunOptions): Promise<RunResult> =>
+    const spawnRun = vi.fn((_options: SpawnRunRequest): Promise<RunResult> =>
       Promise.resolve(fakeRunResult()),
     );
 
@@ -449,7 +449,7 @@ describe('runOnce — bundle-backed run', () => {
 
   it('a manifest declaring no bundle-fs grants forwards none, still with no prompt', async () => {
     const memento = fakeMemento();
-    const spawnRun = vi.fn((_options: SpawnRunOptions): Promise<RunResult> =>
+    const spawnRun = vi.fn((_options: SpawnRunRequest): Promise<RunResult> =>
       Promise.resolve(fakeRunResult()),
     );
 
@@ -477,7 +477,7 @@ describe('runOnce — bundle-backed run', () => {
     const memento = fakeMemento();
     const promptHost = vi.fn(() => Promise.resolve(true));
     const promptUnknownHosts = vi.fn(() => Promise.resolve(true));
-    const spawnRun = vi.fn((_options: SpawnRunOptions): Promise<RunResult> =>
+    const spawnRun = vi.fn((_options: SpawnRunRequest): Promise<RunResult> =>
       Promise.resolve(fakeRunResult()),
     );
 
@@ -678,7 +678,7 @@ describe('runOnce — bundle-backed run', () => {
 
   it('a bare .mk.md run (no bundle option) never calls buildSnapshot or sends a bundle field to spawnRun', async () => {
     const memento = fakeMemento();
-    const spawnRun = vi.fn((_options: SpawnRunOptions): Promise<RunResult> =>
+    const spawnRun = vi.fn((_options: SpawnRunRequest): Promise<RunResult> =>
       Promise.resolve(fakeRunResult()),
     );
 
@@ -728,7 +728,7 @@ describe('serializeCacheSnapshotIfSmallEnough', () => {
 describe('runOnce packModules forwarding', () => {
   it('forwards packModules to spawnRun verbatim when present', async () => {
     const memento = fakeMemento();
-    const spawnRun = vi.fn((_options: SpawnRunOptions): Promise<RunResult> =>
+    const spawnRun = vi.fn((_options: SpawnRunRequest): Promise<RunResult> =>
       Promise.resolve(fakeRunResult()),
     );
     const packModules = { demo: { 'http.lua': 'return {}' } };
@@ -750,7 +750,7 @@ describe('runOnce packModules forwarding', () => {
 
   it('omits packModules from the spawnRun call when not configured', async () => {
     const memento = fakeMemento();
-    const spawnRun = vi.fn((_options: SpawnRunOptions): Promise<RunResult> =>
+    const spawnRun = vi.fn((_options: SpawnRunRequest): Promise<RunResult> =>
       Promise.resolve(fakeRunResult()),
     );
 
@@ -772,7 +772,7 @@ describe('runOnce packModules forwarding', () => {
 describe('runOnce — trigger tiers (issue #11)', () => {
   it('forwards trigger to spawnRun (manual by default)', async () => {
     const memento = fakeMemento();
-    const spawnRun = vi.fn((_o: SpawnRunOptions) =>
+    const spawnRun = vi.fn((_o: SpawnRunRequest) =>
       Promise.resolve(fakeRunResult()),
     );
     await runOnce({
@@ -791,7 +791,7 @@ describe('runOnce — trigger tiers (issue #11)', () => {
   it('an auto/scheduled run never prompts, even for an ungranted host', async () => {
     const memento = fakeMemento();
     const promptHost = vi.fn(() => Promise.resolve(true));
-    const spawnRun = vi.fn((_o: SpawnRunOptions) =>
+    const spawnRun = vi.fn((_o: SpawnRunRequest) =>
       Promise.resolve(fakeRunResult()),
     );
     const out = await runOnce({
@@ -831,7 +831,7 @@ describe('runOnce — trigger tiers (issue #11)', () => {
     });
 
     const promptHost = vi.fn(() => Promise.resolve(true));
-    const spawnRun = vi.fn((_o: SpawnRunOptions) =>
+    const spawnRun = vi.fn((_o: SpawnRunRequest) =>
       Promise.resolve(fakeRunResult()),
     );
     await runOnce({
@@ -912,7 +912,7 @@ describe('runOnce — per-script values (GitHub issue #35)', () => {
   it('forwards onValue to spawnRun, so each value reaches the host as it lands', async () => {
     const memento = fakeMemento();
     const seen: Array<[string, unknown]> = [];
-    const spawnRun = (options: SpawnRunOptions): Promise<RunResult> => {
+    const spawnRun = (options: SpawnRunRequest): Promise<RunResult> => {
       options.onValue?.('a', { value: 1, status: 'fresh' }, 0);
       options.onValue?.('b', { value: 2, status: 'fresh' }, 1);
       return Promise.resolve(
@@ -946,7 +946,7 @@ describe('runOnce — per-script values (GitHub issue #35)', () => {
   it('scrubs the raw executor message off a failed value before it is reported (D-1)', async () => {
     const memento = fakeMemento();
     const seen: Array<Record<string, unknown>> = [];
-    const spawnRun = (options: SpawnRunOptions): Promise<RunResult> => {
+    const spawnRun = (options: SpawnRunRequest): Promise<RunResult> => {
       options.onValue?.(
         'a',
         {
@@ -983,7 +983,7 @@ describe('runOnce — per-script values (GitHub issue #35)', () => {
 
   it('does not pass onValue through when the caller supplied none', async () => {
     const memento = fakeMemento();
-    const spawnRun = vi.fn((_options: SpawnRunOptions): Promise<RunResult> =>
+    const spawnRun = vi.fn((_options: SpawnRunRequest): Promise<RunResult> =>
       Promise.resolve(fakeRunResult()),
     );
 
@@ -1017,7 +1017,7 @@ describe('runOnce — per-script values (GitHub issue #35)', () => {
         return memento.update(key, value);
       },
     };
-    const spawnRun = (options: SpawnRunOptions): Promise<RunResult> => {
+    const spawnRun = (options: SpawnRunRequest): Promise<RunResult> => {
       options.onValue?.('a', { value: 1, status: 'fresh' }, 0);
       return Promise.resolve({
         values: { a: { value: 1, status: 'fresh' } },

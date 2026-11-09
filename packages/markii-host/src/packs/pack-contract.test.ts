@@ -1,6 +1,6 @@
 import vm from 'node:vm';
 import { describe, expect, it } from 'vitest';
-import { createRegistry } from '@markii/react';
+import { createRegistry, reactPackEngine } from '@markii/react';
 import { buildRenderRegistry } from './pack-render-registry.js';
 
 /**
@@ -165,6 +165,7 @@ describe('the prebuilt webview.js contract, against a hand-written script', () =
         componentModules: entry.componentModules,
       })),
       createRegistry({}),
+      reactPackEngine,
     );
 
     expect(result.invalidReasons).toEqual([]);

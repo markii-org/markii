@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { spawnRun } from './run-host';
+import { spawnRunInThread as spawnRun } from './node-isolate';
 
 /**
  * Executed probe for the note-scoped `doc` view (GitHub issue #33) on the

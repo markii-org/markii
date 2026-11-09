@@ -26,11 +26,9 @@
  * developer-facing detail (a host's own diagnostics surface), never
  * something shown as page content.
  */
-import * as path from 'node:path';
-import { readdir, readFile as nodeReadFile } from 'node:fs/promises';
+import { joinPath } from '../path-util.js';
 import { parsePackManifest } from '@markii/pack';
 import type { PackManifest } from '@markii/pack';
-import { REACT_ENGINE_ID } from '@markii/react';
 import type { UnavailableComponent } from '@markii/stdlib';
 import {
   composeDirectiveName,
@@ -91,23 +89,14 @@ export type PackDirectoryLister = (
   absoluteDir: string,
 ) => Promise<ReadonlyArray<{ name: string; isDirectory: boolean }>>;
 
-/** The real, Node-backed `PackDirectoryLister` — what a host's own pack-loading composition (e.g. `apps/vscode/src/packs/pack-context.ts`, `apps/obsidian/src/packs/pack-context.ts`) supplies in production. Never rejects: an unreadable/missing/non-directory path resolves `[]`. */
-export function createNodeDirectoryLister(): PackDirectoryLister {
-  return async (absoluteDir) => {
-    try {
-      const entries = await readdir(absoluteDir, { withFileTypes: true });
-      return entries.map((entry) => ({
-        name: entry.name,
-        isDirectory: entry.isDirectory(),
-      }));
-    } catch {
-      return [];
-    }
-  };
-}
-
 /** A sane upper bound on how many immediate children of one configured folder the one-level parent-folder scan (`discoverPacks`) will probe for a `pack.json` — defense in depth against a pathological folder (thousands of entries, a symlink farm) turning "load the installed packs" into an unbounded scan. Matches the spirit of `./pack-scripts.ts`'s `MAX_SCRIPT_FILES_PER_PACK`. */
 const MAX_CHILD_FOLDERS_PER_PARENT = 200;
+
+/**
+ * The engine whose source paths fill `DiscoveredPack.componentPaths`. A
+ * data-field name from the pack contract, not a renderer dependency.
+ */
+const COMPONENT_PATHS_ENGINE = 'react';
 
 /** One successfully discovered, validated pack. */
 export interface DiscoveredPack {
@@ -176,20 +165,9 @@ export interface DiscoverPacksResult {
   readonly skipped: readonly SkippedPackFolder[];
 }
 
-/** The real, Node-backed `PackFileReader` — what a host's own pack-loading composition supplies in production. Never rejects: an unreadable/missing path resolves `undefined`, matching `PackFileReader`'s contract. */
-export function createNodeFileReader(): PackFileReader {
-  return async (absolutePath) => {
-    try {
-      return await nodeReadFile(absolutePath, 'utf8');
-    } catch {
-      return undefined;
-    }
-  };
-}
-
 /** `folder`/`pack.json`, joined with the host path separator. */
 function manifestPathFor(folder: string): string {
-  return path.join(folder, 'pack.json');
+  return joinPath(folder, 'pack.json');
 }
 
 /** One attempt to load a pack manifest at exactly `folder` (no scanning). `'missing'` distinguishes "no readable pack.json here" (the case that triggers the one-level parent-folder scan in `discoverPacks`) from `'invalid'` (a pack.json existed but failed validation — scanning never triggers for this case, matching "if a configured folder has no pack.json of its own": one WAS found here, it was just malformed). */
@@ -232,15 +210,15 @@ async function tryLoadPackAt(
   const componentPaths: Record<string, string> = {};
   for (const listing of packComponentsForEngine(
     result.manifest,
-    REACT_ENGINE_ID,
+    COMPONENT_PATHS_ENGINE,
   )) {
-    componentPaths[listing.localName] = path.join(folder, listing.source);
+    componentPaths[listing.localName] = joinPath(folder, listing.source);
   }
   const componentPathsByEngine: Record<string, Record<string, string>> = {};
   for (const listing of packComponents(result.manifest)) {
     for (const [engine, source] of Object.entries(listing.sources)) {
       const slice = (componentPathsByEngine[engine] ??= {});
-      slice[listing.localName] = path.join(folder, source);
+      slice[listing.localName] = joinPath(folder, source);
     }
   }
 
@@ -251,8 +229,8 @@ async function tryLoadPackAt(
       manifest: result.manifest,
       componentPaths,
       componentPathsByEngine,
-      scriptsDir: path.join(folder, 'scripts'),
-      scriptPath: path.join(folder, 'webview.js'),
+      scriptsDir: joinPath(folder, 'scripts'),
+      scriptPath: joinPath(folder, 'webview.js'),
     },
   };
 }
@@ -345,7 +323,7 @@ function checkEngine(
 export async function discoverPacks(
   folders: readonly string[],
   readFile: PackFileReader,
-  listDirectory: PackDirectoryLister = createNodeDirectoryLister(),
+  listDirectory: PackDirectoryLister,
   supportedEngine?: string,
 ): Promise<DiscoverPacksResult> {
   const uniqueFolders = [...new Set(folders)];
@@ -386,7 +364,7 @@ export async function discoverPacks(
     let anyChildManifest = false;
     for (const entry of entries.slice(0, MAX_CHILD_FOLDERS_PER_PARENT)) {
       if (!entry.isDirectory) continue;
-      const childFolder = path.join(folder, entry.name);
+      const childFolder = joinPath(folder, entry.name);
       const rawChildAttempt = await tryLoadPackAt(childFolder, readFile);
       const childAttempt =
         rawChildAttempt.kind === 'found'

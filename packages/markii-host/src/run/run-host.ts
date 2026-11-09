@@ -14,10 +14,6 @@
  * worker is compromised or wedged, because `terminate()` acts on the
  * thread from outside it.
  */
-import { Worker } from 'node:worker_threads';
-import { existsSync } from 'node:fs';
-import * as path from 'node:path';
-
 import type { CacheEntry } from '@markii/lua';
 import type { RunTrigger, StoredValue } from '@markii/runtime';
 import type { RunJob, RunResult } from './worker-entry.js';
@@ -26,7 +22,7 @@ import type { RunJob, RunResult } from './worker-entry.js';
 // engine into every host bundle that runs a job (the Obsidian plugin's
 // renderer bundle above all, which never executes Lua itself).
 import { isRunProgress } from './run-progress.js';
-import type { IsolateSpawner, RunIsolate } from './isolate.js';
+import type { IsolateSpawner } from './isolate.js';
 
 export type {
   IsolateSpawner,
@@ -36,6 +32,12 @@ export type {
 
 export type { RunJob, RunResult, RunFailure } from './worker-entry.js';
 export type { RunProgress } from './run-progress.js';
+
+/** What a caller of the shared run path supplies; the host adds the isolate (`SpawnRunOptions.spawnIsolate`, `.workerPath`). */
+export type SpawnRunRequest = Omit<
+  SpawnRunOptions,
+  'workerPath' | 'spawnIsolate'
+>;
 
 export interface SpawnRunOptions {
   text: string;
@@ -69,20 +71,20 @@ export interface SpawnRunOptions {
   /** Forwarded verbatim to the worker's `RunJob.packModules` (pre-read pack Lua modules) — see `./worker-entry.ts`. Absent when no packs are configured. */
   packModules?: RunJob['packModules'];
   /**
-   * Overrides the KIND of isolate this run spawns. Defaults to
-   * `workerThreadIsolate` (`node:worker_threads`), which is correct for
-   * every Node host. A host whose runtime cannot create worker threads —
-   * an Electron renderer, which is what an Obsidian plugin runs in —
-   * supplies its own; see `./isolate.ts` for the constraints an
-   * implementation must meet, and for what a Web Worker cannot bound that
-   * a worker thread can.
+   * The KIND of isolate this run spawns. Required: this module has no
+   * default so it stays free of `node:*`. A Node host passes
+   * `workerThreadIsolate` from `@markii/host/node` (the only kind that
+   * accepts a V8 heap cap); a host whose runtime cannot create worker
+   * threads, such as an Electron renderer, supplies a Web Worker one. See
+   * `./isolate.ts` for the constraints an implementation must meet, and
+   * for what a Web Worker cannot bound that a worker thread can.
    *
    * The watchdog, the exactly-once settlement, and the never-rejects
    * contract are NOT part of what this overrides: they stay in `spawnRun`
    * for every host, so a new isolate kind cannot accidentally ship without
    * a kill switch.
    */
-  spawnIsolate?: IsolateSpawner;
+  spawnIsolate: IsolateSpawner;
   /**
    * Called once per script as its value arrives from the isolate, in
    * document order, while the run is still going (GitHub issue #35). This
@@ -97,45 +99,13 @@ export interface SpawnRunOptions {
    */
   onValue?: (name: string, value: StoredValue, index: number) => void;
   /**
-   * Overrides the worker entry file this run spawns. This package cannot
-   * know how a given host bundles or lays out its own `dist/` (that is
-   * host-specific — see e.g. `apps/vscode/esbuild.config.mjs`'s worker
-   * build and `apps/vscode/src/worker-path.ts`), so a real host is
-   * expected to always pass this explicitly. Left unset, `defaultWorkerPath`
-   * falls back to the sibling `worker-entry.ts` run straight from source
-   * via `tsx` — a convenience for this package's own dev/Vitest runs, not
-   * a general-purpose default for a packaged host.
+   * The entry the isolate loads. This package cannot know how a given host
+   * bundles or lays out its own `dist/` (see e.g.
+   * `apps/vscode/src/worker-path.ts`), so the host always passes it. The
+   * Node-only dev/Vitest fallback lives in `@markii/host/node`
+   * (`defaultWorkerPath`).
    */
-  workerPath?: string;
-}
-
-/** `execArgv` needed to run a `.ts` worker entry directly (dev/Vitest only) — see `./worker-entry.ts`'s doc comment on why a plain `node` `.ts` import can't resolve this repo's `@markii/*` bare specifiers or its `./foo.js` -> `./foo.ts` import convention on its own. `--require tsx/cjs` (rather than `tsx/esm`) is deliberate: empirically, the ESM loader hook deadlocks Node's CJS/ESM interop translator for a worker thread requiring `.js`-suffixed relative imports that resolve to `.ts` files (this repo's convention throughout `@markii/*`), while the CJS `require` hook has no such issue. */
-const TSX_DEV_EXEC_ARGV = ['--require', 'tsx/cjs'];
-
-/**
- * The ONLY fallback this shared package supplies for an unset `workerPath`:
- * the sibling `worker-entry.ts`, run straight from source via `tsx`
- * (`TSX_DEV_EXEC_ARGV`, above). That is correct for this package's own
- * dev/Vitest runs — `__dirname` at that point is this real source
- * directory — but it says nothing about where a packaged host's bundled
- * worker lives, because this package does not know that host's `dist/`
- * layout. A packaged host (e.g. `apps/vscode`) MUST resolve its own bundled
- * worker path itself and pass it as `SpawnRunOptions.workerPath`; see
- * `apps/vscode/src/worker-path.ts` for that host's resolution and
- * `apps/vscode/esbuild.config.mjs`'s worker build for where it bundles to.
- */
-export function defaultWorkerPath(): string {
-  const devSource = path.join(__dirname, 'worker-entry.ts');
-  if (existsSync(devSource)) return devSource;
-
-  throw new Error(
-    'spawnRun: could not resolve the worker entry file (looked for ' +
-      `${devSource}) — pass workerPath explicitly`,
-  );
-}
-
-function execArgvFor(workerPath: string): string[] | undefined {
-  return workerPath.endsWith('.ts') ? TSX_DEV_EXEC_ARGV : undefined;
+  workerPath: string;
 }
 
 /**
@@ -168,71 +138,6 @@ const WORKER_MAX_OLD_GENERATION_SIZE_MB = 128;
  */
 const MAX_PROGRESS_VALUES = 1000;
 
-/**
- * Dev/Vitest only: point `tsx` at the repo's `tsconfig.dev.json` so a
- * `.ts` worker entry resolves `@markii/*` to each package's SOURCE.
- *
- * Without this the worker is a plain Node resolution: a bare `@markii/lua`
- * goes through `node_modules` to that package's `exports`, which name the
- * built `dist/`. `npm run build` only type-checks (`tsc --noEmit`); the
- * emitting script is `build:dist`, which runs at release. So `dist/` is
- * whatever a past release left behind, and a real-isolate probe would
- * silently exercise that stale code instead of the source it is written to
- * test. A capability added since the last `build:dist` simply would not
- * exist inside the worker.
- *
- * Gated on a `.ts` entry, the same signal `execArgvFor` already uses for
- * the tsx hook, so a packaged host passing its own bundled `.js` worker is
- * never touched by this.
- */
-function devTsconfigEnv(
-  entryPath: string,
-): { env: NodeJS.ProcessEnv } | undefined {
-  if (!entryPath.endsWith('.ts')) return undefined;
-  const tsconfig = path.resolve(__dirname, '../../../..', 'tsconfig.dev.json');
-  if (!existsSync(tsconfig)) return undefined;
-  return { env: { ...process.env, TSX_TSCONFIG_PATH: tsconfig } };
-}
-
-/**
- * The default isolate: a `node:worker_threads` worker, which is what every
- * Node host (the VS Code extension host, this package's own tests) uses. It
- * is the only kind that accepts `resourceLimits`, so it is also the only
- * kind whose V8 heap is bounded — see `./isolate.ts` for why a host might
- * still have to supply the other one.
- */
-export const workerThreadIsolate: IsolateSpawner = (options): RunIsolate => {
-  const worker = new Worker(options.entryPath, {
-    ...(options.execArgv ? { execArgv: options.execArgv } : {}),
-    ...(devTsconfigEnv(options.entryPath) ?? {}),
-    resourceLimits: {
-      maxOldGenerationSizeMb: options.maxOldGenerationSizeMb,
-    },
-  });
-  return {
-    send: (job) => {
-      worker.postMessage(job);
-    },
-    kill: () => {
-      void worker.terminate();
-    },
-    onMessage: (listener) => {
-      // `on`, not `once`: a run now sends one progress message per script
-      // (GitHub issue #35) ahead of its single result message, and
-      // `spawnRun` is what tells the two apart. Messages arriving after
-      // the run settles are harmless — `settled` guards every path — and
-      // the worker is terminated on settle anyway.
-      worker.on('message', listener);
-    },
-    onError: (listener) => {
-      worker.once('error', listener);
-    },
-    onExit: (listener) => {
-      worker.once('exit', listener);
-    },
-  };
-};
-
 function describeThrown(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
@@ -251,8 +156,7 @@ function describeThrown(err: unknown): string {
  * produces its own `exit` event).
  */
 export async function spawnRun(options: SpawnRunOptions): Promise<RunResult> {
-  const workerPath = options.workerPath ?? defaultWorkerPath();
-  const execArgv = execArgvFor(workerPath);
+  const workerPath = options.workerPath;
 
   const job: RunJob = {
     text: options.text,
@@ -296,10 +200,8 @@ export async function spawnRun(options: SpawnRunOptions): Promise<RunResult> {
       return Object.fromEntries(progressValues);
     }
 
-    const spawnIsolate = options.spawnIsolate ?? workerThreadIsolate;
-    const worker = spawnIsolate({
+    const worker = options.spawnIsolate({
       entryPath: workerPath,
-      ...(execArgv ? { execArgv } : {}),
       maxOldGenerationSizeMb: WORKER_MAX_OLD_GENERATION_SIZE_MB,
     });
 

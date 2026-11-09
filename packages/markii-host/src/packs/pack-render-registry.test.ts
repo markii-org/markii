@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createRegistry } from '@markii/react';
+import { createRegistry, reactPackEngine } from '@markii/react';
 import { buildRenderRegistry } from './pack-render-registry.js';
 import type { QueuedPackRegistration } from './pack-render-registry.js';
 
@@ -23,7 +23,11 @@ describe('buildRenderRegistry', () => {
         },
       },
     ];
-    const result = buildRenderRegistry(queued, createRegistry());
+    const result = buildRenderRegistry(
+      queued,
+      createRegistry(),
+      reactPackEngine,
+    );
     expect(result.invalidReasons).toEqual([]);
     expect(result.collisions).toEqual([]);
     expect(result.registry['demo_badge']).toBeDefined();
@@ -31,7 +35,7 @@ describe('buildRenderRegistry', () => {
 
   it('an empty queue returns the base registry unchanged', () => {
     const base = createRegistry({ callout: { component: fakeComponent } });
-    const result = buildRenderRegistry([], base);
+    const result = buildRenderRegistry([], base, reactPackEngine);
     expect(result.registry).toBe(base);
   });
 
@@ -39,7 +43,11 @@ describe('buildRenderRegistry', () => {
     const queued: QueuedPackRegistration[] = [
       { manifestJson: 42, componentModules: {} },
     ];
-    const result = buildRenderRegistry(queued, createRegistry());
+    const result = buildRenderRegistry(
+      queued,
+      createRegistry(),
+      reactPackEngine,
+    );
     expect(result.invalidReasons).toHaveLength(1);
     expect(result.invalidReasons[0]).toContain('manifest JSON string');
     expect(Object.keys(result.registry)).toEqual([]);
@@ -49,7 +57,11 @@ describe('buildRenderRegistry', () => {
     const queued: QueuedPackRegistration[] = [
       { manifestJson: '{not json', componentModules: {} },
     ];
-    const result = buildRenderRegistry(queued, createRegistry());
+    const result = buildRenderRegistry(
+      queued,
+      createRegistry(),
+      reactPackEngine,
+    );
     expect(result.invalidReasons).toHaveLength(1);
     expect(result.invalidReasons[0]).toContain('manifest is invalid');
   });
@@ -61,7 +73,11 @@ describe('buildRenderRegistry', () => {
         componentModules: { badge: { component: 'not a function' } },
       },
     ];
-    const result = buildRenderRegistry(queued, createRegistry());
+    const result = buildRenderRegistry(
+      queued,
+      createRegistry(),
+      reactPackEngine,
+    );
     expect(result.invalidReasons).toHaveLength(1);
     expect(result.invalidReasons[0]).toContain('malformed');
   });
@@ -78,7 +94,7 @@ describe('buildRenderRegistry', () => {
       },
     ];
     const base = createRegistry({ callout: { component: fakeComponent } });
-    const result = buildRenderRegistry(queued, base);
+    const result = buildRenderRegistry(queued, base, reactPackEngine);
     expect(result.collisions).toEqual(['demo']);
     expect(result.registry['demo_badge']).toBeUndefined();
     // Falls back to the base registry's own entries, not an empty one.
@@ -93,7 +109,11 @@ describe('buildRenderRegistry', () => {
     const queued: QueuedPackRegistration[] = [
       { manifestJson: VALID_MANIFEST, componentModules: hostile },
     ];
-    const result = buildRenderRegistry(queued, createRegistry());
+    const result = buildRenderRegistry(
+      queued,
+      createRegistry(),
+      reactPackEngine,
+    );
     expect(result.invalidReasons).toHaveLength(1);
     expect(result.registry['demo_badge']).toBeUndefined();
   });
@@ -107,7 +127,11 @@ describe('buildRenderRegistry', () => {
     const queued: QueuedPackRegistration[] = [
       { manifestJson: vueManifest, componentModules: {} },
     ];
-    const result = buildRenderRegistry(queued, createRegistry());
+    const result = buildRenderRegistry(
+      queued,
+      createRegistry(),
+      reactPackEngine,
+    );
     expect(result.invalidReasons).toEqual([]);
     expect(result.collisions).toEqual([]);
     expect(Object.keys(result.registry)).toEqual([]);
@@ -121,12 +145,16 @@ describe('buildRenderRegistry', () => {
         componentModules: { badge: { component: fakeComponent } },
       },
     ];
-    const result = buildRenderRegistry(queued, createRegistry());
+    const result = buildRenderRegistry(
+      queued,
+      createRegistry(),
+      reactPackEngine,
+    );
     expect(result.droppedEngines).toEqual([]);
   });
 
   it('an empty queue returns droppedEngines: []', () => {
-    const result = buildRenderRegistry([], createRegistry());
+    const result = buildRenderRegistry([], createRegistry(), reactPackEngine);
     expect(result.droppedEngines).toEqual([]);
   });
 });

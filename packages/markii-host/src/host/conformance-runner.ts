@@ -39,6 +39,8 @@
  * Every OTHER action runs through the real, unmocked shared behavior code.
  */
 import { readFileSync, readdirSync } from 'node:fs';
+import { createHtmlExportEngine } from '../html-engine.js';
+import { createNodeArchiveExtractFs } from '../node-fs.js';
 import { join, relative, sep } from 'node:path';
 import { zipSync } from 'fflate';
 import { conformanceDir } from '@markii/core/corpus';
@@ -48,7 +50,7 @@ import {
   type ExportOutcome,
   type MarkiiHost,
 } from './create-host.js';
-import type { RunResult, SpawnRunOptions } from '../run/run-host.js';
+import type { RunResult, SpawnRunRequest } from '../run/run-host.js';
 import type {
   HostAdapter,
   HostExportFormat,
@@ -273,7 +275,7 @@ export function createAnswerQueue(scenario: HostScenario): {
 
 function simulatedRunResult(
   sim: RunSimulation | undefined,
-  options: SpawnRunOptions,
+  options: SpawnRunRequest,
 ): RunResult {
   const name = sim?.name ?? 'value';
   if (sim?.requiresManualTier === true && options.trigger !== 'manual') {
@@ -375,7 +377,11 @@ export async function runHostScenario(
 
   let currentSimulation: RunSimulation | undefined;
   const host: MarkiiHost = createMarkiiHost(recording, {
-    spawnRun: (spawnOptions: SpawnRunOptions): Promise<RunResult> =>
+    // The runner is Node-only test tooling, so it supplies the real Node
+    // implementations of the seams the host layer takes by injection.
+    htmlEngine: createHtmlExportEngine(),
+    archiveExtractFs: createNodeArchiveExtractFs(),
+    spawnRun: (spawnOptions: SpawnRunRequest): Promise<RunResult> =>
       Promise.resolve(simulatedRunResult(currentSimulation, spawnOptions)),
     ...(options.renderAnsi ? { renderAnsi: options.renderAnsi } : {}),
   });

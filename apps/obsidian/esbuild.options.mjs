@@ -288,7 +288,7 @@ const bundledPacksEntrySource = `
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import * as path from 'node:path';
 import { parsePackManifest, packComponentsForEngine } from '@markii/pack';
-import { buildPackRegistrationScript } from '@markii/host';
+import { buildPackRegistrationScript } from '@markii/host/node';
 
 function collectLuaModules(scriptsDir) {
   const modules = {};

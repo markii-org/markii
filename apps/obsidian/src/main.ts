@@ -41,8 +41,6 @@ import {
   OBSIDIAN_LABELS,
   buildComponentCatalog,
   createMarkiiHost,
-  createNetProvider,
-  createNodeArchiveExtractFs,
   discoverConfiguredPacks,
   installConsentMessage,
   installPackDiagnosticLines,
@@ -56,6 +54,11 @@ import {
   cascadeDiagnosticLines,
   cascadeResultMessage,
 } from '@markii/host';
+import {
+  createNetProvider,
+  createNodeArchiveExtractFs,
+  createNodePackDiscoveryIo,
+} from '@markii/host/node';
 import type {
   CascadeExportOutcome,
   CascadeLinkResolver,
@@ -916,7 +919,11 @@ export default class MarkiiPlugin extends Plugin {
     let packs: readonly DiscoveredPack[] = [];
     try {
       packs = (
-        await discoverConfiguredPacks(loadable.map((entry) => entry.folder))
+        await discoverConfiguredPacks(
+          loadable.map((entry) => entry.folder),
+          createNodePackDiscoveryIo(),
+          'react',
+        )
       ).packs;
     } catch {
       packs = [];

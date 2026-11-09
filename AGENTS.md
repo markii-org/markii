@@ -241,9 +241,10 @@ packages/markii-host    PRIVATE, never published (no npm presence, absent from
                         and the terminatable-isolate watchdog:
   src/run/run-host.ts  spawnRun + the EXTERNAL wall-clock watchdog. Knows
                      nothing about any app's bundle layout: a host passes
-                     `workerPath` (see apps/vscode/src/worker-path.ts); the
-                     only fallback here is the dev/Vitest one for this
-                     package's own tests. The watchdog, exactly-once
+                     `workerPath` (see apps/vscode/src/worker-path.ts) and
+                     its `spawnIsolate`; no node:* import here. The Node
+                     isolate and the dev/Vitest worker fallback live in
+                     src/run/node-isolate.ts. The watchdog, exactly-once
                      settlement, and the never-rejects contract live HERE
                      for every host, never behind the isolate seam
   src/run/isolate.ts   the IsolateSpawner seam: which KIND of isolate a
@@ -303,18 +304,26 @@ packages/markii-host    PRIVATE, never published (no npm presence, absent from
                      carries packs a host embeds in memory;
                      conformance-runner.ts drives
                      conformance/host/ against any adapter under a fake
-                     editor. adapter.ts, labels.ts, script-execution.ts,
-                     refresh-interval.ts and editor-behavior.ts are
-                     Node-free and re-exported from src/browser.ts;
-                     everything else is main-entry only
-  src/browser.ts     the environment-free subpath entry (@markii/host/browser,
-                     issue #20): registry building/keep-first merge, insert
-                     catalog/skeletons, and the other pure logic a browser
-                     bundle (the VS Code webview) may import. Nothing
-                     reachable from it may import node:* even transitively;
-                     apps/vscode/src/browser-entry.probe.test.ts makes that
-                     executable. Node-dependent run/fs machinery stays behind
-                     the main entry
+                     editor. Engine-specific pieces are injected, never
+                     imported: the pack registry engine (`reactPackEngine`
+                     from @markii/react), `htmlEngine` for HTML/PDF export,
+                     `archiveExtractFs` for pack install, and
+                     `HostPackSource.engine`. Pack discovery reads through
+                     the adapter's readFile/listFolder
+  src/index.ts       the MAIN entry (@markii/host), environment-neutral:
+                     nothing reachable imports node:*, esbuild-wasm,
+                     @markii/react or @markii/html at runtime.
+                     apps/vscode/src/browser-entry.probe.test.ts bundles it
+                     for a browser and checks the module inputs
+  src/node.ts        @markii/host/node: the worker_threads isolate
+                     (run/node-isolate.ts), the pinned net provider, the
+                     Node fs seams (node-fs.ts), the @markii/html export
+                     engine (html-engine.ts), pack compile/export, and the
+                     conformance runner. The /browser subpath is reserved
+                     for the browser platform entry
+  src/path-util.ts   adapter-path helpers (join, dirname, isAbsolute); the
+                     separator comes from the base path, so Windows paths
+                     from VS Code survive
   src/lua-resolver.ts      the pure worker-side PackModuleResolver
   src/packs/pack-build.ts  compiles a pack's component sources (and imported
                      CSS) with esbuild-wasm's in-process wasm path, cached
@@ -344,9 +353,8 @@ packages/markii-host    PRIVATE, never published (no npm presence, absent from
                      @markii/pack
   src/diagnostics/   render-diagnostics.ts: one DiagnosticEvent from either
                      renderer's onDiagnostic option becomes the one line both
-                     hosts write, deduped per note. Node-free, exported from
-                     @markii/host/browser too, since the React render runs in
-                     the VS Code webview
+                     hosts write, deduped per note. Node-free, so the VS Code
+                     webview imports it from the main entry
   src/export/        note export (issue #28): buildNoteHtmlExport renders a
                      note into a self-contained HTML document (doc.css
                      embedded, last-run values baked in). A host with a
@@ -404,7 +412,7 @@ apps/vscode          the "Markii" VS Code extension (preview + Run + packs) — 
                      without forking it (theme-coverage.test.ts guards drift);
                      webview/pack-registry.ts is the webview half of pack
                      loading: normalizes window.__markiiPackRegistrations and
-                     merges via @markii/host/browser's buildRenderRegistry,
+                     merges via @markii/host's buildRenderRegistry,
                      sharing one merge + keep-first duplicate guard with the
                      Obsidian host, and posts diagnostics to the extension
                      host for the output channel
@@ -856,9 +864,11 @@ same commit as the change that triggers them:
   (every pack's components, README, and example note; its CI consumes
   published `@markii/pack`/`@markii/react`, so like the vault it updates
   after the npm release).
-- **New export from `@markii/host/browser`** → it must stay Node-free
-  transitively; `apps/vscode/src/browser-entry.probe.test.ts` is the gate.
-  A module needing `node:*` stays behind the main entry.
+- **New export from `@markii/host`'s main entry** → it must stay
+  environment-neutral transitively (no `node:*`, `esbuild-wasm`,
+  `@markii/react` or `@markii/html` at runtime);
+  `apps/vscode/src/browser-entry.probe.test.ts` is the gate. A module
+  needing any of those goes behind `@markii/host/node`.
 - **Editor-seam change** (completion, hover, the insert skeleton or catalog,
   fence lengthening) → it lives in `@markii/stdlib/editor`, a PUBLISHED
   subpath, so it needs a CHANGELOG entry and the editor-support section of
@@ -896,10 +906,11 @@ same commit as the change that triggers them:
   must all pass from the repo root. Report actual command output, not claims.
 - Do not edit the `docs/` pages or AGENTS.md; propose changes in your report
   instead. (The orchestrator owns spec and docs edits.)
-- Workers get a brief on disk (`tmp/BRIEF-*.md`, gitignored) and write
-  their report beside it (`tmp/REPORT-*.md`): files changed, decisions and
-  why, what was not done and why, actual gate output, proposed docs and
-  CHANGELOG text.
+- Workers get a brief on disk (`tmp/BRIEF-*.md`, gitignored) and return
+  their report as their final message (the harness refuses report files
+  from subagents); the orchestrator saves it as `tmp/REPORT-*.md`. A report
+  covers files changed, decisions and why, what was not done and why,
+  actual gate output, proposed docs and CHANGELOG text.
 
 ## Orchestrator rules (user-set 2026-11-09)
 

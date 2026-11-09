@@ -17,14 +17,15 @@
  * `createNodePackExportFs` is imported directly: it has no `vscode`
  * dependency of its own, so this module stays clean of one too.
  */
+import { createNodeDirectoryLister } from '@markii/host/node';
 import * as path from 'node:path';
 import { mkdir, rm } from 'node:fs/promises';
+import { discoverPacks } from '@markii/host';
 import {
   buildPackRegistrationScript,
   createNodeFileReader,
-  discoverPacks,
   exportPack,
-} from '@markii/host';
+} from '@markii/host/node';
 import { createNodePackExportFs } from './export-pack.js';
 
 /**
@@ -65,7 +66,11 @@ export async function buildBundledPacks(
 
   for (const name of BUNDLED_PACK_NAMES) {
     const folder = path.join(repoRoot, 'packs', name);
-    const result = await discoverPacks([folder], readFile);
+    const result = await discoverPacks(
+      [folder],
+      readFile,
+      createNodeDirectoryLister(),
+    );
     const pack = result.packs[0];
     if (pack === undefined) {
       const reasons = result.skipped.map((entry) => entry.reason).join('; ');

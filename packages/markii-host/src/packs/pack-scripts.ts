@@ -6,16 +6,11 @@
  * host, rather than inside the worker.
  *
  * Filesystem access is injected (`PackScriptsReader`) so this module is
- * testable with an in-memory fake; `createNodeReader` below is the real
- * `node:fs/promises`-backed implementation a host's own pack-loading
- * composition (e.g. `apps/vscode/src/packs/pack-context.ts`,
- * `apps/obsidian/src/packs/pack-context.ts`) wires up, kept in this file
- * only because it needs no host-UI API at all — plain `node:fs` is fine
- * here (AGENTS.md's file-scope split is about `vscode`/`obsidian`
- * specifically, not Node builtins).
+ * testable with an in-memory fake; `createNodeReader` in `../node-fs.ts`
+ * (exported from `@markii/host/node`) is the real `node:fs/promises`-backed
+ * implementation a Node host's pack-loading composition wires up.
  */
-import { readdir, readFile as nodeReadFile } from 'node:fs/promises';
-import * as path from 'node:path';
+import { joinPath } from '../path-util.js';
 import { normalizeBundlePath } from '@markii/bundle';
 import type { DiscoveredPack } from './discover.js';
 import type { PackModulesMap } from '../run/lua-resolver.js';
@@ -27,30 +22,6 @@ export interface PackScriptsReader {
   ): Promise<ReadonlyArray<{ name: string; isDirectory: boolean }>>;
   /** Reads one file's UTF-8 text, or `undefined` if it cannot be read. */
   readFile(absolutePath: string): Promise<string | undefined>;
-}
-
-/** The real, Node-backed `PackScriptsReader` — what a host's own pack-loading composition supplies in production. */
-export function createNodeReader(): PackScriptsReader {
-  return {
-    async readDirectory(absoluteDir) {
-      try {
-        const entries = await readdir(absoluteDir, { withFileTypes: true });
-        return entries.map((entry) => ({
-          name: entry.name,
-          isDirectory: entry.isDirectory(),
-        }));
-      } catch {
-        return [];
-      }
-    },
-    async readFile(absolutePath) {
-      try {
-        return await nodeReadFile(absolutePath, 'utf8');
-      } catch {
-        return undefined;
-      }
-    },
-  };
 }
 
 /** A sane upper bound on how many `.lua` files one pack's `scripts/` tree may contribute — defense in depth against a pathological pack folder (a symlink cycle a directory walk would otherwise never terminate on, or simply an absurd number of files) turning "load the installed packs" into an unbounded scan. */
@@ -92,7 +63,7 @@ async function collectPackModules(
   async function walk(relativeDir: string, depth: number): Promise<void> {
     if (depth > MAX_SCRIPT_DIR_DEPTH) return;
     const absoluteDir = relativeDir
-      ? path.join(pack.scriptsDir, relativeDir)
+      ? joinPath(pack.scriptsDir, relativeDir)
       : pack.scriptsDir;
     const entries = await reader.readDirectory(absoluteDir);
 
@@ -111,13 +82,14 @@ async function collectPackModules(
       const normalized = normalizeBundlePath(relativePath);
       if (!normalized.ok) continue;
 
-      const absolutePath = path.join(pack.scriptsDir, relativePath);
+      const absolutePath = joinPath(pack.scriptsDir, relativePath);
       const source = await reader.readFile(absolutePath);
       if (source === undefined) continue;
       // H-2: skip a file whose UTF-8 size exceeds the per-file cap, same as an
-      // unreadable one. `Buffer.byteLength` measures the encoded bytes (what
+      // unreadable one. `TextEncoder` measures the encoded bytes (what
       // actually crosses into the worker), not the JS string's UTF-16 length.
-      if (Buffer.byteLength(source, 'utf8') > MAX_SCRIPT_FILE_BYTES) continue;
+      if (new TextEncoder().encode(source).length > MAX_SCRIPT_FILE_BYTES)
+        continue;
 
       result[normalized.path] = source;
       fileCount += 1;
@@ -138,7 +110,7 @@ async function collectPackModules(
  */
 export async function loadPackModules(
   packs: readonly DiscoveredPack[],
-  reader: PackScriptsReader = createNodeReader(),
+  reader: PackScriptsReader,
 ): Promise<PackModulesMap> {
   const map: Record<string, Record<string, string>> = Object.create(null);
   for (const pack of packs) {

@@ -53,12 +53,13 @@
  * `loadPack` (an empty contribution, never a crash), not bring down the
  * rest of the preview.
  */
+import { reactPackEngine } from '@markii/react';
 import type { Registry } from '@markii/react';
-import { buildRenderRegistry as buildRenderRegistryShared } from '@markii/host/browser';
+import { buildRenderRegistry as buildRenderRegistryShared } from '@markii/host';
 import type {
   BuildRenderRegistryResult,
   QueuedPackRegistration,
-} from '@markii/host/browser';
+} from '@markii/host';
 
 declare global {
   interface Window {
@@ -140,7 +141,11 @@ export function buildRenderRegistry(
 ): BuildRenderRegistryResult {
   const queued = window.__markiiPackRegistrations ?? [];
   const normalized = queued.map(toQueuedPackRegistration);
-  const result = buildRenderRegistryShared(normalized, defaultRegistry);
+  const result = buildRenderRegistryShared(
+    normalized,
+    defaultRegistry,
+    reactPackEngine,
+  );
 
   // Kept for developers with devtools open; the output channel (wired in
   // `./main.tsx`) is the surface that actually matters per AGENTS.md's

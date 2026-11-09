@@ -17,6 +17,7 @@
  * NO PDF. A cascade export is HTML only; issue #29 covers a cascade PDF,
  * and nothing in this module or `main.ts`'s wiring of it produces one.
  */
+import { createHtmlExportEngine } from '@markii/host/node';
 import {
   buildCascadeArchive,
   cascadeReasonOf,
@@ -25,8 +26,14 @@ import {
 import type { CascadeArchiveRequest, CascadeExportOutcome } from '@markii/host';
 import type { NoteExportFs } from '../export-note.js';
 
+/** The static HTML engine every note in the cascade renders with. */
+const htmlEngine = createHtmlExportEngine();
+
 /** What the cascade command needs: the shared archive request plus where to write it. */
-export interface CascadeExportRequest extends CascadeArchiveRequest {
+export interface CascadeExportRequest extends Omit<
+  CascadeArchiveRequest,
+  'engine'
+> {
   readonly fs: NoteExportFs;
 }
 
@@ -48,7 +55,10 @@ export async function exportNoteCascade(
 ): Promise<CascadeExportOutcome> {
   try {
     const { fs, ...archiveRequest } = request;
-    const archive = await buildCascadeArchive(archiveRequest);
+    const archive = await buildCascadeArchive({
+      ...archiveRequest,
+      engine: htmlEngine,
+    });
     if (archive.kind === 'failed') return archive;
 
     const path = cascadeArchivePath(request.rootPath);

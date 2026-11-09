@@ -35,6 +35,7 @@ import {
   noteHasScripts,
 } from '../export/note-export.js';
 import type {
+  HtmlExportEngine,
   ExportBodyRenderer,
   ExportPackStylesheet,
   ExportRenderInfo,
@@ -205,6 +206,8 @@ export function exportDiagnosticLines(
 
 /** What `exportHtmlDocumentViaAdapter` needs beyond the note's own text and path. */
 export interface ExportHtmlDocumentRequest {
+  /** The static HTML engine. Required for the `html` and `pdf` formats; `exportNoteFileViaAdapter` declines those without it. */
+  readonly engine?: HtmlExportEngine;
   readonly notePath: string;
   readonly text: string;
   readonly values?: Record<string, StoredValue>;
@@ -222,7 +225,7 @@ export interface ExportHtmlDocumentRequest {
 
 /** Builds the standalone HTML document `html` and `pdf` both export, via the shared, already-host-neutral `buildNoteExport`. Never throws: a failing `renderBody` degrades to the static engine rather than propagating. */
 export async function buildExportDocument(
-  request: ExportHtmlDocumentRequest,
+  request: ExportHtmlDocumentRequest & { readonly engine: HtmlExportEngine },
 ): Promise<{
   html: string;
   valueCount: number;
@@ -232,6 +235,7 @@ export async function buildExportDocument(
 }> {
   const values = request.values ?? {};
   const document = await buildNoteExport({
+    engine: request.engine,
     text: request.text,
     fileName: request.notePath,
     values,
@@ -296,8 +300,10 @@ export async function exportNoteFileViaAdapter(
   if (formats === undefined || !formats.has(format)) return undefined;
 
   if (format === 'html' || format === 'pdf') {
+    const engine = request.engine;
+    if (engine === undefined) return undefined;
     try {
-      const built = await buildExportDocument(request);
+      const built = await buildExportDocument({ ...request, engine });
       if (format === 'html') {
         const bytes = new TextEncoder().encode(built.html).byteLength;
         const path = await adapter.exports?.resolveTarget(

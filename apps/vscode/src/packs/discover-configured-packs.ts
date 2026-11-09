@@ -20,6 +20,7 @@
  * `vscode`-free (plain paths and strings in, `DiscoveredPack[]` out) so it
  * stays unit-testable without a real workspace.
  */
+import { createNodePackDiscoveryIo } from '@markii/host/node';
 import { homedir } from 'node:os';
 import {
   discoverConfiguredPacks as discoverConfiguredPacksShared,
@@ -51,7 +52,11 @@ export async function discoverConfiguredPacks(
     workspaceRoot,
     homeDir,
   );
-  const result = await discoverConfiguredPacksShared(resolvedPaths);
+  const result = await discoverConfiguredPacksShared(
+    resolvedPaths,
+    createNodePackDiscoveryIo(),
+    'react',
+  );
   if (extensionPath === undefined) {
     return result.packs;
   }
