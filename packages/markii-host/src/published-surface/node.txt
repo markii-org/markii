@@ -1,0 +1,11 @@
+NodeHostIsolateOptions
+SpawnRunOptions
+createHtmlExportEngine
+createNetProvider
+createNodeArchiveExtractFs
+createNodeDirectoryLister
+createNodeFileReader
+createNodeHostIsolate
+createNodePackDiscoveryIo
+createNodePackScriptsReader
+workerThreadIsolate

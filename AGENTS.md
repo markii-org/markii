@@ -372,7 +372,7 @@ packages/markii-host    PUBLISHED (user-approved 2026-11-09; in build:dist and
   src/path-util.ts   adapter-path helpers (join, dirname, isAbsolute); the
                      separator comes from the base path, so Windows paths
                      from VS Code survive
-  src/lua-resolver.ts      the pure worker-side PackModuleResolver
+  src/run/lua-resolver.ts  the pure worker-side PackModuleResolver
   src/packs/pack-contract.test.ts  loads a hand-written webview.js built only
                      from docs/packs.md's registration contract, so the docs
                      cannot drift from the loader (markii-packs builds its
@@ -442,6 +442,9 @@ packs/                  the bundled packs (read, dash, prep): plain component
                         typecheck:packs script (in the build chain) typecheck
                         them. Everything else pack-shaped lives in the
                         markii-packs repo
+guards/              repo-wide rule checks (NOT a workspace; root Vitest):
+                     development artifacts in source, the sentence rules
+                     in docs and READMEs, the paths this file names
 e2e/browser-host     a STANDALONE Vite fixture (not a workspace) that installs
                      the packed @markii/* tarballs (scripts/setup.mjs runs
                      build:dist + npm pack) and runs a Playwright suite in
@@ -476,12 +479,12 @@ apps/vscode          the "Markii" VS Code extension (preview + Run + packs) — 
                      sharing one merge + keep-first duplicate guard with the
                      Obsidian host, and posts diagnostics to the extension
                      host for the output channel
-  src/packs/         pack loading (issue #3 slice 5, docs/packs.md): discover.ts
-                     reads/validates pack.json per configured folder;
-                     resolve-pack-paths.ts resolves the markii.packs setting
-                     (user-scope) against the workspace root; pack-scripts.ts
-                     pre-reads each pack's scripts/*.lua; lua-resolver.ts is the
-                     pure worker-side PackModuleResolver; pack-context.ts
+  src/packs/         pack loading (docs/packs.md): discovery, the
+                     markii.packs path resolution, the scripts/*.lua
+                     pre-read and the worker-side resolver all live in
+                     packages/markii-host/src/packs/ and
+                     packages/markii-host/src/run/lua-resolver.ts;
+                     pack-context.ts
                      composes them; export-pack.ts backs the
                      markii.exportPack command (issue #16), which
                      writes a .mkp through a save dialog and nothing else;
@@ -887,9 +890,15 @@ would notice: behavior, features, breaking and visual changes. Process
 changes (CI, agent rules, repo tooling) never go in it. A released
 section is history and is not edited afterwards.
 
-Prefer a check over a paragraph: a rule a script can hold (em dashes, the
-word list, absolute paths, `tmp/` references, commit hashes in docs/)
-belongs in a test that fails, and the rule here then points at it.
+Prefer a check over a paragraph: a rule a script can hold belongs in a
+test that fails, and the rule here then points at it. Repo-wide guards
+live in `guards/` and run first in root `npm test` (`npm run test:guards`):
+
+- `guards/dev-artifacts.test.ts`: no scratch-file, work-round, machine-path
+  or chat-link reference in source.
+- `guards/prose-rules.test.ts`: em dashes, the word list, machine paths,
+  hashes, issue numbers and dates in docs/ and the READMEs.
+- `guards/agents-paths.test.ts`: every path this file names exists.
 
 ## Maintenance map (what to update when something changes)
 
@@ -1008,6 +1017,14 @@ same commit as the change that triggers them:
   never removed or weakened to make a suite pass. Pass 1's probe suite was
   lost as an untracked file; committing these suites makes that class of
   evidence loss impossible.
+- **A path named in this file** (a file moved, renamed or removed, a new
+  layout entry) → `guards/agents-paths.test.ts` fails until this file names
+  the real path. A generated file goes in its `ALLOWLIST` with the reason.
+- **A change to the exported names of `@markii/host`** (any of its four
+  entries) → `packages/markii-host/src/published-surface.test.ts` fails
+  until the snapshot in `src/published-surface/` is regenerated with
+  `UPDATE_HOST_SURFACE=1 npm test -w @markii/host`. The change needs a
+  CHANGELOG entry.
 - **Rename/move of any top-level doc** → fix every cross-reference in the
   same commit: `README.md`, this file, `TODO.md`, `docs/`, and source
   comments (grep for the old name).

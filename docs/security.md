@@ -733,9 +733,9 @@ application-scope declaration is pinned by a test so it cannot be silently
 removed, and pre-reading a pack's shared Lua applies a per-file size cap,
 matching the bundle snapshot's posture.
 
-Scheduled and auto-run execution then shipped in the reference extension (issue
-#11): a note can refresh on an interval or run once when its preview opens, both
-at the read-only tier. The two rules under "Triggers cap capabilities" are what
+Scheduled and auto-run execution then shipped in the reference extension: a
+note can refresh on an interval or run once when its preview opens, both at
+the read-only tier. The two rules under "Triggers cap capabilities" are what
 make this sound: the tier is enforced in the worker regardless of grants (a real
 worker probe confirms an effectful call is refused under the auto and scheduled
 triggers while the same call succeeds under manual), and grants for these
