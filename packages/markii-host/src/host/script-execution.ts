@@ -1,7 +1,7 @@
 /**
  * The device-level script-execution switch and every sentence it can
  * produce, merged from `apps/vscode/src/script-execution.ts` and
- * `apps/obsidian/src/script-execution.ts` (survey finding A4: same file
+ * `apps/obsidian/src/script-execution.ts` (same file
  * name, same four exports, doc comments sharing the same "WHAT IT IS /
  * WHY DEVICE-LOCAL / WHY THE WORDING LIVES HERE" structure, differing
  * only in a handful of words).

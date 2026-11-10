@@ -15,8 +15,7 @@
  * `paths.ts`: no filesystem, no registry, just the string rules a later
  * slice (registry loading, install-time rejection) builds on.
  *
- * Design decision (orchestrator sign-off requested — see the slice-0
- * report): the charset chosen for both a pack namespace and a pack's local
+ * Design decision: the charset chosen for both a pack namespace and a pack's local
  * component names is lowercase-kebab, matching spec.md §1's "SHOULD be
  * lowercase-kebab" guidance for directive names generally: a leading
  * lowercase letter, then lowercase letters/digits, with single internal

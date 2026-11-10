@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
  * `preview-panel.ts` imports `vscode` and so cannot be unit-tested here
  * directly. What CAN be pinned, the same way `script-execution.test.ts`
  * pinned it before the `markii.scriptsDisabled` gate's wording moved to
- * `@markii/host` (batch 11): the device-level script-execution switch
+ * `@markii/host`: the device-level script-execution switch
  * sits at the ONE choke point every trigger (`manual`/`auto`/`scheduled`)
  * passes through, ahead of any grant prompt or `runOnce` call, rather than
  * being repeated per command where a fourth trigger could later miss it.

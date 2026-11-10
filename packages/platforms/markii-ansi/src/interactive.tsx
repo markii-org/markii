@@ -17,7 +17,7 @@ import { style } from './style.js';
 import { cutToWidth } from './text-grid.js';
 
 /**
- * The interactive-mode focus manager (batch 10's live-viewer support): a
+ * The interactive-mode focus manager: a
  * document-order list of FOCUSABLE components (currently `tabs` and
  * `details`) that up/down/j/k step through, and `q` to quit. Focus itself
  * needs no runtime registration effect: `render.tsx`'s walk already knows
@@ -180,7 +180,7 @@ export interface FocusableDescriptor {
 export interface InteractiveRootProps {
   /** Every focusable component the walk assigned a `focusId` to, in `focusId` order (empty for none). */
   focusables: readonly FocusableDescriptor[];
-  /** Called when the reader presses `q`. The engine owns no process state: it never calls `process.exit` itself (AGENTS.md, batch-10 brief). */
+  /** Called when the reader presses `q`. The engine owns no process state: it never calls `process.exit` itself. */
   onExit?: () => void;
   color: ColorLevel;
   theme: AnsiTheme;
@@ -201,7 +201,7 @@ export interface InteractiveRootProps {
 /**
  * The root of an interactive render: owns which `focusId` is focused, moves
  * it on up/down/j/k, calls `onExit` on `q`, and renders the one-line status
- * bar (batch 10.1) naming the focused block and the key legend. Rendered
+ * bar naming the focused block and the key legend. Rendered
  * only when the caller actually wants a live, keyboard-driven view:
  * `buildMarkElement` mounts this when `interactive` is true, but the
  * render-ONCE string path (`ink-string.ts`, `renderRootToString`) never

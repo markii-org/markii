@@ -118,7 +118,7 @@ describe('buildRenderRegistry', () => {
     expect(result.registry['demo_badge']).toBeUndefined();
   });
 
-  it('a validated pack whose engine is not react is named in droppedEngines, never silently dropped (batch 7 #46)', () => {
+  it('a validated pack whose engine is not react is named in droppedEngines, never silently dropped', () => {
     const vueManifest = JSON.stringify({
       name: 'vega',
       engine: 'vue',

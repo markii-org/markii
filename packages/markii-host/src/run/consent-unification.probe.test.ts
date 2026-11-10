@@ -32,7 +32,7 @@ import { describe, expect, it } from 'vitest';
 import type { BundleManifest, BundleFsGrant } from '@markii/bundle';
 import { runOnce } from './run-flow';
 import type { GrantMemento, Thenable } from './grant-flow';
-import { spawnRunInThread as spawnRun } from './node-isolate';
+import { spawnRunInThread as spawnRun } from '../dev-isolate';
 import type { RunResult, SpawnRunRequest } from './run-host';
 
 const WORKER_PATH = path.join(__dirname, 'worker-entry.ts');

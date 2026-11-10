@@ -2,7 +2,7 @@
  * The `exportNote` behavior: outcome shape, wording, and format gating,
  * merged from `apps/vscode/src/export-html.ts`, the host-neutral half of
  * `apps/obsidian/src/export-note.ts`, and `apps/cli/src/export-note.ts`'s
- * `exportHtml` (survey finding A10, table rows 22/26).
+ * `exportHtml`.
  *
  * `html` and `md-plain` are fully implemented here, over `../export/note-export.js`'s
  * `buildNoteExport` (already host-neutral, already shared) and
@@ -12,20 +12,18 @@
  * AGENTS.md's package boundaries), so it is rendered through the injected
  * `renderAnsi` option; a host that omits it gets `Unsupported`.
  *
- * PDF stays a seam, never an implementation here, exactly as
- * `tmp/W11-adapter-design.md` specifies: this module builds the same HTML
+ * PDF stays a seam, never an implementation here, this module builds the same HTML
  * document `html` would have written and hands it to
  * `adapter.exports.htmlToPdf`, but the DEGRADE-TO-HTML-ON-FAILURE product
  * behavior Obsidian's own `exportNoteAsPdf` layers on top (falling back to
  * writing the HTML file when printing is unavailable or fails, and
  * reporting which of the two happened) is Obsidian-specific policy about
  * what to do with a seam's failure, not the seam itself — it stays
- * app-side. See `tmp/W11-phase1b.md` for this call.
+ * app-side.
  *
  * Cascade orchestration (multi-note export, `walkNoteCascade` +
  * `assignCascadeFileNames` + `rewriteCascadeLinks` + `zipExportArchive`)
- * is NOT moved in this pass — see `tmp/W11-phase1b.md`'s deviations
- * section for why, and what Phase 2 (or a follow-up) still needs to do.
+ * is not part of this module: it stays with each host.
  */
 import type { StoredValue } from '@markii/runtime';
 import type { OnDiagnostic, UnavailableComponent } from '@markii/stdlib';

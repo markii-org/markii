@@ -334,9 +334,9 @@ export function buildCapabilities(config: CapabilityConfig): {
   // this function nested POST/PATCH wiring inside "if GET is granted",
   // which silently produced no `net.post` at all for a POST-only grant.
   //
-  // The `net` table itself, and every one of its three methods, is now
-  // ALWAYS wired, regardless of grants, provider wiring, or tier (GitHub
-  // capability-stub finding, batch 7 #47). Before this, an ungranted
+  // The `net` table itself, and every one of its three methods, is
+  // ALWAYS wired, regardless of grants, provider wiring, or tier. Were it
+  // not, an ungranted
   // script saw a missing global (`net` itself omitted when nothing was
   // granted, or a missing method when a specific host/verb wasn't) and
   // failed with an ordinary Lua "attempt to index/call a nil value" —
@@ -406,8 +406,8 @@ local __smd_net_get = __smd_net_get_raw
 -- a dynamic global lookup inside \`net.fetch_json\`'s own body. Otherwise a
 -- script could do \`__smd_json_decode = function(t) return t end\` before a
 -- LATER \`net.fetch_json\` call and neuter the decoder's own depth guard and
--- array-marker stripping entirely (adversarial finding A2) -- the same
--- rebinding risk \`./json-decode\`'s own doc comment (finding A1) already
+-- array-marker stripping entirely -- the same
+-- rebinding risk \`./json-decode\`'s own doc comment already
 -- closes for the primitives the decoder uses internally.
 local __smd_net_get_json_decode = __smd_json_decode
 __smd_net_get_raw = nil
@@ -555,7 +555,7 @@ end
       if (entry === undefined) return undefined;
       // Depth/node budget, checked BEFORE the stored value is ever encoded
       // to text and handed to Lua — mirrors `net.fetch_json`'s own
-      // pre-check exactly (adversarial finding B2). A host-stored value is
+      // pre-check exactly. A host-stored value is
       // exactly as untrusted as a remote fetch body — a bundle's
       // `.cache/*.json` file, for instance, can be edited by anything with
       // write access to the bundle, not just this sandbox's own WRITE side
@@ -564,16 +564,14 @@ end
       // already capped.
       //
       // An entry that fails the budget check, isn't a plain object at all,
-      // or carries a missing/non-finite `storedAtMs` (adversarial finding:
-      // a poisoned host snapshot like `{value: 'x'}` with no `storedAtMs`,
+      // or carries a missing/non-finite `storedAtMs` (a poisoned host snapshot like `{value: 'x'}` with no `storedAtMs`,
       // or `storedAtMs: 'abc'`, would otherwise reach the Lua-side
       // `now - storedAtMs` arithmetic in `cache.get` below and throw a
       // script-error, wedging the note permanently instead of self-healing)
       // — or that cannot be `JSON.stringify`'d at all (cyclic, or
       // BigInt-bearing — something other than this sandbox's own WRITE
       // side must have written it, since that side already rejects both) —
-      // is SELF-HEALED rather than denied (orchestrator decision, #6
-      // verification notes): it is treated as a cache MISS, exactly as if
+      // is SELF-HEALED rather than denied (by design): it is treated as a cache MISS, exactly as if
       // `key` had never been stored. `cache.get`'s Lua body (below) then
       // calls `fn()` and writes the fresh, already-capped result back
       // through `__smd_cache_set_raw`, which quietly repairs the stored
@@ -581,7 +579,7 @@ end
       // capability denial is reserved for the fresh recompute itself
       // failing the WRITE side's own caps, which is unchanged.
       //
-      // Finiteness alone isn't enough (pentest finding N-1): a poisoned
+      // Finiteness alone isn't enough: a poisoned
       // snapshot with a huge FUTURE `storedAtMs` (e.g.
       // `Number.MAX_SAFE_INTEGER * 1000`) is finite, so it used to pass
       // straight through to the Lua-side `(now - storedAtMs) < ttl*1000`
@@ -647,10 +645,10 @@ local __smd_cache_get = __smd_cache_get_raw
 local __smd_cache_set = __smd_cache_set_raw
 local __smd_now_ms = __smd_now_ms_raw
 -- Captured into locals HERE, at prelude-definition time -- NOT resolved as
--- dynamic globals inside cache.get's own body (adversarial findings A2 and
--- D1). Without this, a script could do \`__smd_json_decode = function(t)
--- return t end\` (A2) or, more seriously, \`__smd_marshal_root = function(v)
--- return v end\` (D1) before a LATER cache.get call: the marshal-root
+-- dynamic globals inside cache.get's own body. Without this, a script
+-- could do \`__smd_json_decode = function(t)
+-- return t end\` or, more seriously, \`__smd_marshal_root = function(v)
+-- return v end\` before a LATER cache.get call: the marshal-root
 -- rebind would send an UNBOUNDED, uncapped table straight through
 -- wasmoon's own eager table->JS conversion into the store the moment the
 -- rebound "identity" function handed it back, since the write side

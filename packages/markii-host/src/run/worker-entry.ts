@@ -62,6 +62,7 @@ import { isRunJob, resultForInternalError, runJob } from './run-job.js';
  * pass here.
  */
 function resolveWasmUri(): string | undefined {
+  if (typeof __dirname === 'undefined') return undefined;
   const candidate = path.join(__dirname, 'glue.wasm');
   return existsSync(candidate) ? candidate : undefined;
 }

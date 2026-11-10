@@ -181,7 +181,7 @@ export interface RunDocumentScriptsOptions {
    * because it writes beyond the note"). ITS PRESENCE IS THE GRANT — there
    * is no separate flag to enable publishing, and no per-script grant
    * check; a host that hands in a `vault` is thereby authorizing every
-   * `publish`-flagged block in this batch to write to it. Absent =>
+   * `publish`-flagged block in the document to write to it. Absent =>
    * publish-flagged blocks simply do not publish (`publish: 'not-granted'`
    * on their `RunSummaryEntry`); this is NOT an error and the run still
    * succeeds.

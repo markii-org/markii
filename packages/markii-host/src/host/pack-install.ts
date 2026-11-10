@@ -1,11 +1,9 @@
 /**
  * The `.mkp` pack-install decision logic, merged from
  * `apps/vscode/src/packs/install-pack.ts` and
- * `apps/obsidian/src/packs/install-pack.ts` (survey finding A2: the single
- * biggest duplication finding in the survey — identical function names,
- * identical types, near-identical wording, differing only in that
- * Obsidian refuses a bundled-namespace archive before the consent prompt
- * and VS Code has no such concept).
+ * `apps/obsidian/src/packs/install-pack.ts`. Obsidian refuses a
+ * bundled-namespace archive before the consent prompt and VS Code has no
+ * such concept.
  *
  * `reservedNamespaces` generalizes Obsidian's `bundledNamespaces`: it
  * defaults to empty, so VS Code's behavior is byte-identical to before
@@ -188,8 +186,7 @@ export function installConsentMessage(
 /**
  * The collision confirmation's wording: a namespace already installed,
  * asked before replacing it. CANONICAL WORDING: "removes" (VS Code's prior
- * wording) over Obsidian's prior "deletes" — see `tmp/W11-phase1b.md`'s
- * before/after table for the exact strings this replaces.
+ * wording) over Obsidian's prior "deletes".
  */
 export function installReplaceConfirmMessage(packName: string): string {
   return `A pack named "${packName}" is already installed. Replacing it removes the installed copy and cannot be undone.`;

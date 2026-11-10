@@ -99,12 +99,12 @@ export function confirmModal(app: App, message: string): Promise<boolean> {
 }
 
 /**
- * This plugin's `HostAdapter.prompt` implementation (batch 11): one
+ * This plugin's `HostAdapter.prompt` implementation: one
  * `ConfirmModal`, shown with exactly the message and button labels the
  * request already carries. Every grant prompt, pack-install consent, and
  * pack-replace confirmation routes through this single function —
  * collapsing the three modal-building functions this file used to export
- * (survey finding A1).
+ *.
  */
 export function createObsidianPrompt(
   app: App,

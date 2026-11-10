@@ -14,9 +14,9 @@
  * import from `@markii/lua` — the brand that marks a policy refusal — is
  * injected as `denial` instead. Types are `import type` and erase.
  *
- * The security properties are unchanged by the move, and one improves: an
- * isolate that has no network stack cannot bypass the allowlist enforced
- * here, because it has nothing to bypass it with.
+ * A Web Worker isolate asks this provider through the net bridge. The
+ * worker entry removes its own network globals after startup, so the
+ * allowlist enforced here is the only path to the network.
  */
 import * as http from 'node:http';
 import * as https from 'node:https';
@@ -106,6 +106,7 @@ function issueRequest(
   maxFetchBytes: number,
   /** See `createNetProvider`'s own `denial` parameter — injected for the same reason. */
   denial: (message: string) => Error,
+  signal?: AbortSignal,
 ): Promise<HopResponse> {
   return new Promise((resolve, reject) => {
     const mod = url.protocol === 'https:' ? https : http;
@@ -201,6 +202,15 @@ function issueRequest(
       settleReject(denial(`request failed: ${describeThrown(err)}`));
     });
 
+    if (signal !== undefined) {
+      const onAbort = (): void => {
+        req.destroy();
+        settleReject(denial('the run has ended'));
+      };
+      if (signal.aborted) onAbort();
+      else signal.addEventListener('abort', onAbort, { once: true });
+    }
+
     if (bodyBuffer) req.write(bodyBuffer);
     req.end();
   });
@@ -270,6 +280,8 @@ export function createNetProvider(
    */
   denial: (message: string) => Error,
   lookup: HostLookup = defaultHostLookup,
+  /** Aborted when the run ends: an in-flight request is destroyed and no further hop is made. */
+  signal?: AbortSignal,
 ): NetProvider {
   const allowed = new Set(allowlist.map((host) => host.toLowerCase()));
 
@@ -297,6 +309,7 @@ export function createNetProvider(
         );
       }
 
+      if (signal?.aborted) throw denial('the run has ended');
       const host = parsed.hostname.toLowerCase();
       if (!allowed.has(host)) {
         throw denial(`host "${host}" is not on the run's allowlist`);
@@ -316,6 +329,7 @@ export function createNetProvider(
         pinResult.pinned,
         maxFetchBytes,
         denial,
+        signal,
       );
 
       if (response.status >= 300 && response.status < 400) {

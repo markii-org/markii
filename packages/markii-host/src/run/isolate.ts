@@ -48,10 +48,12 @@ export interface RunIsolate {
 }
 
 export interface SpawnIsolateOptions {
-  /** The entry the isolate loads — resolved by the host, never guessed here (see `./run-host.ts`'s `defaultWorkerPath`). */
+  /** The entry the isolate loads — resolved by the host, never guessed here (`createNodeHostIsolate` supplies the packaged one). */
   entryPath: string;
   /** Node `execArgv` for a worker-thread isolate; meaningless to a Web Worker, which ignores it. */
   execArgv?: string[];
+  /** Environment for a worker-thread isolate; a Web Worker ignores it. */
+  env?: Record<string, string | undefined>;
   /** V8 old-space cap in MB. A worker thread honors it; a Web Worker cannot, and says so in its own doc comment. */
   maxOldGenerationSizeMb: number;
 }

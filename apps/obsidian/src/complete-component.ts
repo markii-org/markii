@@ -25,7 +25,7 @@ import { filterSuggestionsByLabel } from './insert-component.js';
  * `attribute` or `value` item, which has no catalog group of its own.
  *
  * Re-exported, not re-implemented: `apps/vscode/src/completion.ts` had the
- * identical function body (survey finding A5), and it now lives once in
+ * identical function body, and it now lives once in
  * `@markii/host`'s `host/editor-behavior.ts`.
  */
 export { completionOriginTag };

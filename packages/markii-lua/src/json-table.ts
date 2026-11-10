@@ -86,8 +86,8 @@ export interface JsonTableConfig {
  * PRELUDE-DEFINITION TIME -- before any untrusted script code runs -- so a
  * later script reassigning any of those globals (or `json` itself) cannot
  * neuter the type check or reach past the reused decoder/marshal walk. This
- * is the same discipline `./json-decode` (finding A1) and `./capabilities`
- * (findings A2/D1) already apply to their own internal calls into these
+ * is the same discipline `./json-decode` and `./capabilities`
+ * already apply to their own internal calls into these
  * exact two functions.
  */
 export function buildJsonTable(config: JsonTableConfig): {

@@ -37,9 +37,8 @@ describe('layout wrappers', () => {
     // center always centers regardless of an align attribute written on it:
     // "hi" sits with leading padding roughly half the line width, not flush
     // right. Ink drops a plain (unbordered) line's TRAILING whitespace when
-    // it renders the frame (SPIKE-10-findings.md item 1's documented rule:
-    // trailing padding on a plain line is invisible in a terminal either
-    // way), so only the leading padding is asserted here.
+    // it renders the frame (trailing padding on a plain line is invisible in a
+    // terminal either way), so only the leading padding is asserted here.
     const line = out.split('\n')[0] ?? '';
     expect(line.startsWith(' '.repeat(19))).toBe(true);
     expect(line.trimStart()).toBe('hi');

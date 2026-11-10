@@ -101,9 +101,9 @@ export interface SpawnRunOptions {
   /**
    * The entry the isolate loads. This package cannot know how a given host
    * bundles or lays out its own `dist/` (see e.g.
-   * `apps/vscode/src/worker-path.ts`), so the host always passes it. The
-   * Node-only dev/Vitest fallback lives in `@markii/host/node`
-   * (`defaultWorkerPath`).
+   * `apps/vscode/src/worker-path.ts`), so the host always passes it.
+   * `createNodeHostIsolate` from `@markii/host/node` supplies the packaged
+   * worker's path.
    */
   workerPath: string;
 }

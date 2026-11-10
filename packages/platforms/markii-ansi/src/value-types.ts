@@ -1,7 +1,7 @@
 /**
  * `@markii/ansi`'s own structural view of `@markii/runtime`'s value-store
  * contract. This package's dependency list is deliberately minimal (exactly
- * `@markii/core` and `@markii/stdlib`; see AGENTS.md and the batch brief),
+ * `@markii/core` and `@markii/stdlib`; see AGENTS.md),
  * so it never imports `@markii/runtime` at runtime: declaring the shapes it
  * needs here, rather than importing them, keeps a terminal render usable in
  * a context that never pulled in the runtime package at all (a CLI that

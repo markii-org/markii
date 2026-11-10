@@ -165,7 +165,7 @@ describe('extractRunRequirements — grantScripts / computeGrantKey stability', 
   });
 });
 
-describe('scriptDeclaredHosts — display-only, mirrors manifestNetHosts (batch 7 #47)', () => {
+describe('scriptDeclaredHosts — display-only, mirrors manifestNetHosts', () => {
   it('collects each script block’s declared hosts, deduplicated, in first-seen order', () => {
     const { scripts } = extractRunRequirements(
       '```lua {name=a permissions=b.example.com,a.example.com}\nreturn 1\n```\n' +

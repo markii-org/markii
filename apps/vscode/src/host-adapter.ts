@@ -1,13 +1,12 @@
 /**
- * VS Code's `HostAdapter` (batch 11, `tmp/W11-adapter-design.md`): the
+ * VS Code's `HostAdapter`: the
  * primitives `@markii/host`'s shared behaviors (`runViaAdapter`,
  * `installPackFromArchive`, and friends) need, built from injected
  * dependencies rather than reaching for `vscode` itself.
  *
  * Deliberately `vscode`-FREE: nothing here imports `vscode` or names a
  * `vscode` type, so this module stays unit-testable with Vitest (which
- * cannot resolve `vscode`) and so a future conformance test (batch 11
- * Phase 3) can construct the REAL adapter over fakes. `extension.ts` and
+ * cannot resolve `vscode`) and so the conformance corpus can construct the REAL adapter over fakes. `extension.ts` and
  * `preview-panel.ts` — the only two files this extension allows to import
  * `vscode` — are the ones that build the `vscode`-touching closures
  * (`showPrompt`, file I/O, the worker path, the save dialog) and pass them
@@ -23,7 +22,6 @@
 import { readFile } from 'node:fs/promises';
 import {
   createNodeDirectoryLister,
-  defaultWorkerPath,
   workerThreadIsolate,
 } from '@markii/host/node';
 import {
@@ -34,6 +32,7 @@ import {
   type HostEditor,
   type HostExportCapabilities,
   type HostExportFormat,
+  type HostIsolate,
   type HostPackSource,
   type HostPromptRequest,
   type HostTextEdit,
@@ -49,8 +48,10 @@ export interface VSCodeHostAdapterDeps {
   readonly diagnostics: (line: string) => void;
   /** Defaults to `Date.now`; a test fake overrides this so a `RunTrace` write is byte-stable. */
   readonly now?: () => number;
-  /** This extension's bundled worker path (`./worker-path.ts`'s `resolveWorkerPath`), or `undefined` in a development or test run before `dist/` is built, in which case the shared run path applies its own development fallback. */
+  /** This extension's bundled worker path (`./worker-path.ts`'s `resolveWorkerPath`), or `undefined` before `dist/` is built, in which case a run reports that the worker is missing. */
   readonly workerPath?: () => string | undefined;
+  /** Replaces the packaged worker isolate. A test passes the source-run isolate here. */
+  readonly isolate?: Extract<HostIsolate, { kind: 'node' }>;
   readonly readFile?: (path: string) => Promise<Uint8Array>;
   readonly exists?: (path: string) => Promise<boolean>;
   readonly writeFile?: (path: string, bytes: Uint8Array) => Promise<void>;
@@ -102,12 +103,18 @@ async function unavailableWrite(path: string): Promise<void> {
 export function createVSCodeHostAdapter(
   deps: VSCodeHostAdapterDeps,
 ): HostAdapter {
-  const isolate = {
-    kind: 'node' as const,
-    // May be undefined in a development or test run with no `dist/` built
-    // yet. The shared run path owns that fallback, so this host does not
-    // have to know it exists.
-    workerPath: (): string => deps.workerPath?.() ?? defaultWorkerPath(),
+  const isolate: Extract<HostIsolate, { kind: 'node' }> = deps.isolate ?? {
+    kind: 'node',
+    // Absent only when no `dist/` is built; a test injects `deps.isolate`.
+    workerPath: (): string => {
+      const bundled = deps.workerPath?.();
+      if (bundled === undefined) {
+        throw new Error(
+          'the extension has no bundled worker (dist/run/worker.js)',
+        );
+      }
+      return bundled;
+    },
     spawnIsolate: workerThreadIsolate,
   };
 

@@ -6,7 +6,7 @@ import { renderMarkToAnsi } from './render.js';
 import { defaultAnsiRegistry } from './components/index.js';
 
 /**
- * The nesting-regression acceptance test (post-phase-2 review): a card
+ * The nesting-regression acceptance test a card
  * nested in a card, a row nested in a card, a card nested in a callout, and
  * a plain paragraph inside a card must all lay out exactly as the
  * PUBLISHED, pre-Ink 0.15.0 engine laid them out — the known-good behavior
@@ -43,7 +43,7 @@ describe('nesting regression: byte-identical to the pre-Ink engine at each width
 });
 
 /**
- * The tabs/details regression (a second post-phase-2 review round): the
+ * The tabs/details regression the
  * string-mode `tabs` heading and `tab.ts`'s own component were BOTH
  * printing a tab's label — `tabs` draws the heading itself
  * (`render.tsx`'s `extractTabPanels`/`extractTabPanelsElement`), so a `tab`

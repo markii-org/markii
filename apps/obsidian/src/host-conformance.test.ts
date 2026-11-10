@@ -1,5 +1,5 @@
 /**
- * Batch 11 Phase 3/2b: runs the whole `conformance/host/` corpus through
+ * Runs the whole `conformance/host/` corpus through
  * this plugin's REAL `HostAdapter` (`./host-adapter.js`'s
  * `createObsidianHostAdapter`), wrapped in an in-memory local-storage map
  * and temp-directory-backed pack/export capabilities instead of real
@@ -7,8 +7,8 @@
  * `host-adapter.ts` itself (so it is not on
  * `src/obsidian-import-guard.test.ts`'s allowlist).
  *
- * Phase 2b gave `createObsidianHostAdapter` an `editor` capability, so this
- * test now supplies a fake in-memory editor (`fakeObsidianEditor` below)
+ * `createObsidianHostAdapter` has an `editor` capability, so this
+ * test supplies a fake in-memory editor (`fakeObsidianEditor` below)
  * instead of leaving `editor` absent: scenarios 07 (`completeAt`), 08
  * (`hoverAt`), and 09 (`insertComponent`) exercise the real
  * `completeAtViaEditor`/`hoverAtViaEditor`/`insertComponentPlan` path over

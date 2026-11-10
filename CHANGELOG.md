@@ -6,6 +6,38 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **`createNodeHostIsolate()` in `@markii/host/node`.** It starts the
+  packaged worker, so a Node host runs scripts with no worker of its own.
+  `@markii/host/node-worker` exports the self-contained worker file for a
+  host that bundles it.
+- **Requests end with the run.** Killing or disposing an isolate aborts
+  its in-flight requests. `BrowserNetProviderFactory` and
+  `createNetProvider` take an optional `AbortSignal`.
+- `runHostScenario` takes `archiveExtractFs`, so the conformance corpus
+  runs against an adapter that does not store files on disk.
+
+### Changed
+
+- **Breaking: `HostPackSource.trust` is required.** A host states
+  `'device-list'` or `'none'`; an absent value used to mean `'none'`.
+- **Breaking: `defaultWorkerPath` and `spawnRunInThread` are removed from
+  `@markii/host/node`.** Use `createNodeHostIsolate()`.
+  `workerThreadIsolate` no longer adds development loader arguments.
+- `PackRegistryEngine`, `buildRenderRegistry` and
+  `BuildRenderRegistryResult` are generic over the registry type. The main
+  entry's type declarations no longer import `@markii/react`.
+
+### Fixed
+
+- **The Web Worker isolate removes its own network globals** before the
+  first script runs. `fetch` inside the worker serves only the Lua
+  engine's WebAssembly file.
+- A Node host whose worker file cannot be found reports a failed run. It
+  used to reject.
+- `@markii/host/conformance` runs from the installed package.
+
 ## [0.17.0-next.2] - 2026-11-10
 
 A third prerelease on the npm `next` dist-tag, and the first release of

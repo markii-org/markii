@@ -10,7 +10,8 @@
     "dev": "vite --port 5301 --strictPort --host 127.0.0.1",
     "typecheck": "tsc --noEmit",
     "test": "playwright test",
-    "e2e": "npm run setup && npm run build && playwright test"
+    "e2e": "npm run setup && npm run test:node && npm run build && playwright test",
+    "test:node": "node --test node-tests/*.test.ts"
   },
   "dependencies": {
     "react": "^19.2.0",

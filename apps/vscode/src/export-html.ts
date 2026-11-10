@@ -6,8 +6,7 @@
  * so they stay here rather than moving with the shared behavior.
  *
  * The exported file's default name, the outcome shape, and the wording for
- * a result message or a diagnostics line moved to `@markii/host` (batch
- * 11): `exportDefaultFileName`, `NoteFileExportOutcome`,
+ * a result message or a diagnostics line moved to `@markii/host`: `exportDefaultFileName`, `NoteFileExportOutcome`,
  * `exportResultMessage`, `renderEngineDiagnosticLine`,
  * `imageEmbedDiagnosticLines`, and `exportDiagnosticLines`, matching the
  * same functions `apps/obsidian` and `apps/cli` now call for their own

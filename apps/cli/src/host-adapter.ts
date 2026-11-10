@@ -1,5 +1,5 @@
 /**
- * The CLI's `HostAdapter` (batch 11): built from injected dependencies
+ * The CLI's `HostAdapter`: built from injected dependencies
  * only — the terminal IO seam, the device-local grant store, and
  * (optionally) a clock and an export destination — never reading
  * `process`/`env`/argv itself. `main.ts` and `terminal.ts` stay the only
@@ -8,9 +8,8 @@
  *
  * Capabilities declared, and why:
  * - `isolate`: the `'node'` kind. `./worker-path.ts`'s `resolveWorkerPath`
- *   resolves the packaged CLI's bundled worker; `@markii/host`'s
- *   `defaultWorkerPath` is the dev/Vitest fallback, exactly as this app's
- *   old `run-note.ts:spawnRun` wrapper already relied on.
+ *   resolves the packaged CLI's bundled worker. A run before `dist/` is
+ *   built reports the missing worker; a test injects `options.isolate`.
  * - `exports`: `html`, `ansi`, and `md-plain`. Never `pdf` — there is no
  *   `BrowserWindow` in a terminal process to print through.
  * - `editor`: declared only when the caller passes one, which `markii lsp`
@@ -44,9 +43,9 @@ import {
   type HostDirEntry,
   type HostEditor,
   type HostExportFormat,
+  type HostIsolate,
   type HostPromptRequest,
 } from '@markii/host';
-import { defaultWorkerPath } from '@markii/host/node';
 import type { Terminal } from './terminal.js';
 import { resolveWorkerPath } from './worker-path.js';
 
@@ -130,7 +129,7 @@ export interface CliHostAdapterOptions {
    * Where an export should be written, when this adapter is built for an
    * export command. `resolveTarget` falls back to the suggested file name
    * when this is omitted, matching "the CLI returns the path it was
-   * given" (`tmp/W11-adapter-design.md`, `HostExportCapabilities`).
+   * given" (`HostExportCapabilities`).
    */
   readonly exportTarget?: string;
   /** Declares the `packs` capability (engine `ansi`) when given. */
@@ -142,6 +141,8 @@ export interface CliHostAdapterOptions {
    * behaviors stay `Unsupported`.
    */
   readonly editor?: HostEditor;
+  /** Replaces the packaged worker isolate. A test passes the source-run isolate here. */
+  readonly isolate?: Extract<HostIsolate, { kind: 'node' }>;
   /** The explicit `--yes` flag: answers yes to the pack install and replace consent only. */
   readonly assumeYes?: boolean;
 }
@@ -207,9 +208,15 @@ export function createCliHostAdapter(
 
     now: options.now ?? ((): number => Date.now()),
 
-    isolate: {
+    isolate: options.isolate ?? {
       kind: 'node',
-      workerPath: (): string => resolveWorkerPath() ?? defaultWorkerPath(),
+      workerPath: (): string => {
+        const bundled = resolveWorkerPath();
+        if (bundled === undefined) {
+          throw new Error('the CLI has no bundled worker (dist/run/worker.js)');
+        }
+        return bundled;
+      },
       spawnIsolate: workerThreadIsolate,
     },
 

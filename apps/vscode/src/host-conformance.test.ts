@@ -1,12 +1,12 @@
 /**
- * Batch 11 Phase 3/2b: runs the whole `conformance/host/` corpus through
+ * Runs the whole `conformance/host/` corpus through
  * this extension's REAL `HostAdapter` (`./host-adapter.js`'s
  * `createVSCodeHostAdapter`), wrapped in fake/temp-directory-backed
  * dependencies instead of real `vscode` objects — this module stays
  * `vscode`-free, exactly like `host-adapter.ts` itself.
  *
- * Phase 2b gave `createVSCodeHostAdapter` an `editor` capability, so this
- * test now supplies a fake in-memory editor (`fakeVscodeEditor` below)
+ * `createVSCodeHostAdapter` has an `editor` capability, so this
+ * test supplies a fake in-memory editor (`fakeVscodeEditor` below)
  * instead of leaving `editor` absent: scenarios 07 (`completeAt`), 08
  * (`hoverAt`), and 09 (`insertComponent`) exercise the real
  * `completeAtViaEditor`/`hoverAtViaEditor`/`insertComponentPlan` path over
@@ -15,6 +15,7 @@
  */
 import { mkdtempSync, readFile, rmSync, writeFile } from 'node:fs';
 import { access, rm } from 'node:fs/promises';
+import { devNodeHostIsolate } from '@markii/host/dev-isolate';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { promisify } from 'node:util';
@@ -109,6 +110,7 @@ describe('conformance/host/ corpus via the real VS Code HostAdapter', () => {
         diagnostics: () => {},
         now: () => scenario.clock,
         workerPath: () => undefined,
+        isolate: devNodeHostIsolate(),
         readFile: (p) => readFileAsync(p).then((b) => new Uint8Array(b)),
         exists: async (p) => {
           try {

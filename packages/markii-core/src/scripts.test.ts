@@ -243,7 +243,7 @@ describe('isBareAttribute', () => {
   });
 });
 
-describe('extractScripts — permissions (display-only, batch 7 #47)', () => {
+describe('extractScripts — permissions (display-only)', () => {
   it('parses a single declared host', () => {
     const tree = parse(
       '```lua {name=stars permissions=api.github.com}\nreturn 1\n```',

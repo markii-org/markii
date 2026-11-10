@@ -12,8 +12,7 @@
  * host concern — reading the setting itself, and naming what "relative"
  * means in a diagnostic message, stays in each host's own app code.
  *
- * DECISION (per orchestrator direction, carried over from the original VS
- * Code module this was hoisted from): a relative entry is resolved against
+ * DECISION: a relative entry is resolved against
  * `baseDir` as given by the caller; an absolute entry is used as-is. This
  * matches how a user reads the setting's own description: "this pack
  * folder, relative to my project/vault".

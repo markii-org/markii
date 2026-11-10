@@ -32,6 +32,9 @@
       "import": "./dist/node.js",
       "default": "./dist/node.js"
     },
+    "./node-worker": {
+      "default": "./dist/node-worker.js"
+    },
     "./browser": {
       "types": "./dist/browser.d.ts",
       "import": "./dist/browser.js",

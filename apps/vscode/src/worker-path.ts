@@ -1,8 +1,7 @@
 /**
  * This extension's own resolution of the Run path's worker entry file —
- * the layout-specific half `@markii/host`'s `defaultWorkerPath` (`run-host.ts`)
- * deliberately does NOT know, because that package is shared with other
- * hosts (e.g. a future Obsidian plugin) that bundle differently. Plain
+ * the layout-specific half `@markii/host` deliberately does NOT know, because
+ * that package is shared with other hosts that bundle differently. Plain
  * Node — no `vscode` import — so it stays unit-testable with Vitest.
  *
  * Resolves in the same two environments this extension itself runs in:
@@ -15,10 +14,8 @@
  *   `dist/run/worker.js` is exactly `path.join(__dirname, 'run', 'worker.js')`.
  * - dev/Vitest: this file runs unbundled from `src/`, so `__dirname` is
  *   this real source directory and no bundled worker exists yet —
- *   `resolveWorkerPath` returns `undefined`, and the caller is expected to
- *   fall back to `@markii/host`'s own `defaultWorkerPath` (the sibling
- *   `worker-entry.ts` run via `tsx`), exactly as it did before this file
- *   existed.
+ *   `resolveWorkerPath` returns `undefined`, and the adapter reports
+ *   a missing worker. A test injects the source-run isolate instead.
  */
 import { existsSync } from 'node:fs';
 import * as path from 'node:path';

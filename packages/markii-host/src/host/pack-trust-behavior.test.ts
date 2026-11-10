@@ -69,7 +69,7 @@ function trustAdapter(options: {
     now: () => 0,
     packs: {
       engine: 'react',
-      ...(options.trust !== undefined ? { trust: options.trust } : {}),
+      trust: options.trust ?? 'none',
       authorizedFolders: async () => [],
       reservedNamespaces: () => new Set(options.reserved ?? []),
       installRoot: () => ROOT,

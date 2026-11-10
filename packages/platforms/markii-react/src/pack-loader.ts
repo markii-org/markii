@@ -72,7 +72,7 @@ export interface LoadPackResult {
   registry: Registry;
   /**
    * Present exactly when `manifest.engine` is not `REACT_ENGINE_ID`
-   * (batch 7 #46): this pack was dropped, contributing an empty registry,
+   *: this pack was dropped, contributing an empty registry,
    * rather than silently discarded with no record at all. Before this
    * field existed, a caller had no way to tell "this pack's engine is
    * unsupported" apart from "this pack declares zero components" —
@@ -172,7 +172,7 @@ export type InstallPacksResult =
  * Each pack that survives the collision check is loaded with `loadPack`
  * (so a non-react-engine pack among the set still contributes an empty
  * registry, never an error, and names itself in the returned `dropped`
- * list — batch 7 #46, never a silent drop) and merged left-to-right with
+ * list, never a silent drop) and merged left-to-right with
  * `mergeRegistries`, `base` first.
  */
 export function installPacks(

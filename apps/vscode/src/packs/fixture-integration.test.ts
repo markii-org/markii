@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import * as path from 'node:path';
 import { discoverPacks, loadPackModules } from '@markii/host';
-import { spawnRunInThread as spawnRun } from '@markii/host/node';
+import { spawnRunInThread as spawnRun } from '@markii/host/dev-isolate';
 import { createNodeFileReader } from '@markii/host/node';
 
 /**

@@ -202,8 +202,8 @@ const htmlEngine = createHtmlExportEngine();
 
 /**
  * Builds the standalone document for one note, over `@markii/host`'s
- * shared `buildExportDocument` (batch 11: the same pure composition
- * `apps/vscode`'s and `apps/cli`'s export paths use now too, so the
+ * shared `buildExportDocument` (the same pure composition
+ * `apps/vscode`'s and `apps/cli`'s export paths use, so the
  * three hosts cannot build a differently-shaped document from the same
  * inputs). Never throws: a failing `renderBody` degrades to the static
  * engine rather than propagating.

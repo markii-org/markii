@@ -1,13 +1,7 @@
 /**
  * `.mkp` pack archive handling, merged from `apps/vscode/src/packs/archive-packs.ts`
- * and `apps/obsidian/src/packs/archive-packs.ts` (survey finding A8). The
- * orchestrator diffed the two files directly (not through the survey's
- * earlier, unverified guess) and found them functionally byte-identical:
- * the same three exports (`describeArchiveError`, `writeArchiveContents`,
- * `ArchiveExtractFs`), the same implementation, the same path-jail
- * reasoning. They differed only in doc-comment wording (which host's
- * install command they described) and one em dash in a comment, which
- * carries no behavior. See `tmp/W11-phase1b.md` for the exact diff output.
+ * and `apps/obsidian/src/packs/archive-packs.ts`. It exports
+ * `describeArchiveError`, `writeArchiveContents` and `ArchiveExtractFs`.
  *
  * This module bridges `@markii/pack`'s in-memory archive reader
  * (`openPackArchive`, never modified here) into the write a pack install

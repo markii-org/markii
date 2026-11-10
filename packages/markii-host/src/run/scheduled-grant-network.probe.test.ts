@@ -2,15 +2,15 @@
  * ISSUE #12 PENTEST — dedicated adversarial pass on the auto-run/scheduled
  * surface (GitHub issue #11).
  *
- * This file attacks items 2 and 3 of the issue-12 brief:
+ * This file attacks two properties:
  *
- * 2. Non-interactive grant integrity: no auto/scheduled path may open a
+ * 1. Non-interactive grant integrity: no auto/scheduled path may open a
  *    prompt, persist a new grant, or reach a host beyond the exact stored
  *    closure. Closure-key edge cases: whitespace-only edits, comment edits,
  *    a script renamed, and a `src=` file's content changed between the
  *    manual grant and the later scheduled run must all fail closed (empty
  *    allowlist, no network), never silently reuse the old grant.
- * 3. No silent new network on a schedule, end to end: a real local HTTP
+ * 2. No silent new network on a schedule, end to end: a real local HTTP
  *    server stands in for "the ungranted host", and the assertion is on the
  *    server's own hit counter, not on a returned error string.
  *
@@ -18,8 +18,8 @@
  * pipeline (`./run-flow.ts`, `./grant-flow.ts`) end to end with REAL script
  * TEXT (not synthetic `GrantClosure` objects), so `extractRunRequirements`'s
  * own static analysis and `computeGrantKey`'s real hashing are exercised —
- * and, for item 3, a REAL `spawnRun` through a real `worker_thread` and a
- * REAL `node:http` server bound to 127.0.0.1, exactly as the brief requires.
+ * and, for the second, a REAL `spawnRun` through a real `worker_thread` and a
+ * REAL `node:http` server bound to 127.0.0.1.
  * A "prompt was never called" assertion is the non-interactive half; the
  * server's `hits()` counter is the network half.
  */
@@ -28,7 +28,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { runOnce } from './run-flow';
 import { runGrantFlow, resolveStoredGrant } from './grant-flow';
 import type { GrantMemento, Thenable } from './grant-flow';
-import { spawnRunInThread as spawnRun } from './node-isolate';
+import { spawnRunInThread as spawnRun } from '../dev-isolate';
 
 function fence(name: string, body: string, attrs = ''): string {
   const attrGroup = attrs ? ` ${attrs}` : '';
@@ -344,9 +344,8 @@ describe('issue #12 / item 3: a scheduled/auto run never contacts an ungranted h
       expect(server.hits()).toBe(0);
       expect(result.values.a?.status).toBe('error');
       // With NO host ever granted for GET (empty allowlist), @markii/lua's
-      // `net.fetch_json` is always wired as a real Lua function (batch 7
-      // #47: the `net` table and every one of its methods now always
-      // exist, so a script that feature-detects with `if net then` sees a
+      // `net.fetch_json` is always wired as a real Lua function (the `net` table and every
+      // one of its methods always exist, so a script that feature-detects with `if net then` sees a
       // table regardless of grants) -- but calling it with an ungranted
       // host classifies as a proper capability denial, exactly like the
       // two-host test below, never an ordinary "attempt to call a nil
@@ -514,10 +513,10 @@ describe('issue #12 / item 3: a scheduled/auto run never contacts an ungranted h
 describe('issue #12 / item 4 (data point): two genuinely CONCURRENT runOnce calls for the same document, sharing one memento', () => {
   // `preview-panel.ts`'s `running` boolean is what stops a real
   // `refreshTimer` tick from overlapping an in-flight run (it cannot be
-  // exercised here — see the issue-12 findings report's item-4 section:
+  // exercised here:
   // that file imports `vscode` and is deliberately outside this repo's
   // vitest surface). This probe answers a narrower, EXECUTED question the
-  // reasoning in that report leans on: if two runs for the SAME document
+  // reasoning above leans on: if two runs for the SAME document
   // ever did race on the SAME `Memento` (the `running` guard's failure
   // mode, or a future bug that removed it), would the shared grant/value
   // persistence state be corrupted, or merely resolve to one run's own

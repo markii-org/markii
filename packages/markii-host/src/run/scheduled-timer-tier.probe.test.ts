@@ -3,15 +3,15 @@
  * surface (GitHub issue #11: run-on-open + interval refresh, the first time
  * script execution moves off an explicit click).
  *
- * This file attacks item 1 of the issue-12 brief: "Tier gate under a timer,
- * not a single call" — repeated real-worker ticks at the 'scheduled' and
+ * This file attacks the tier gate under a timer, not a single call:
+ * repeated real-worker ticks at the 'scheduled' and
  * 'auto' triggers, trying to reach an effectful capability (POST, PATCH,
  * bundle write outside `.cache/`, ANY bundle write under read-only,
  * cache-write abuse), and trying to make an early tick poison state a later
- * tick escalates through. It also covers item 7's pack-under-schedule slice
- * (a pack's Lua module required under a scheduled run).
+ * tick escalates through. It also covers a pack's Lua module required
+ * under a scheduled run.
  *
- * `worker-trigger.test.ts` (the starting point named in the brief) already
+ * `worker-trigger.test.ts` already
  * proves ONE call each of manual/auto/scheduled against `bundle.write`. This
  * file goes further: it fires the SAME probe repeatedly (simulating what a
  * `setInterval`-driven `refreshTimer` actually does — many ticks over a
@@ -35,7 +35,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { RunTrigger } from '@markii/runtime';
 import type { BundleManifest } from '@markii/bundle';
-import { spawnRunInThread as spawnRun } from './node-isolate';
+import { spawnRunInThread as spawnRun } from '../dev-isolate';
 
 const WORKER_PATH = path.join(__dirname, 'worker-entry.ts');
 
@@ -261,7 +261,7 @@ describe('issue #12 / item 1: an early scheduled/auto tick cannot poison state t
 });
 
 /**
- * ENVIRONMENT CAVEAT, not a security finding of this pass: every case in
+ * ENVIRONMENT CAVEAT, not a security finding: every case in
  * this `describe` block exercises Lua's `require(...)` from inside a real
  * `spawnRun`-spawned worker. While building these probes we found that
  * `require()` already fails deterministically in THIS Vitest environment —
@@ -273,15 +273,13 @@ describe('issue #12 / item 1: an early scheduled/auto tick cannot poison state t
  * with `Cannot ... attempt to call a nil value (global 'require')`). A
  * standalone `tsx` script running the identical `spawnRun` call OUTSIDE
  * Vitest succeeds, so this looks like a Vitest/worker-thread environment
- * interaction, not a tier- or trigger-dependent bug — but it means item 7's
+ * interaction, not a tier- or trigger-dependent bug — but it means the
  * "pack Lua module required under a scheduled run" sub-case could not be
- * exercised live in this pass. See the issue-12 findings report (INFO-1)
- * for the full writeup; per the task's constraints this suite must stay
- * green and existing tests must never be modified, so these cases are
+ * exercised live. This suite must stay green, so these cases are
  * marked `.skip` rather than left red or worked around by editing
  * `worker-bundle.test.ts`.
  */
-describe('issue #12 / item 7: a pack Lua module required under a scheduled/auto run is read-only capped like everything else', () => {
+describe('a pack Lua module required under a scheduled/auto run is read-only capped like everything else', () => {
   for (const trigger of NON_MANUAL_TRIGGERS) {
     it(`${trigger}: require()'d pack module attempting net.post is refused exactly like the note's own inline code`, async () => {
       const script = fence(

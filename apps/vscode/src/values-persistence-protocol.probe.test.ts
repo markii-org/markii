@@ -2,7 +2,7 @@
  * ISSUE #12 PENTEST — dedicated adversarial pass on the auto-run/scheduled
  * surface (GitHub issue #11).
  *
- * Attacks item 6 of the issue-12 brief: `markii.runValues:*` persistence.
+ * Attacks `markii.runValues:*` persistence.
  *
  *  - Can the persisted store grow unbounded? (`MAX_VALUES_SNAPSHOT_BYTES`,
  *    `@markii/host`'s `run/run-flow.ts`)
@@ -235,7 +235,7 @@ describe('issue #12 / item 6: a hostile or corrupt markii.runValues:* store degr
     //
     // Not exploitable for escalation or leak — the sandbox/tier/grant gates
     // are untouched — but it IS a "does a corrupt persisted store degrade
-    // safely" failure the brief asked to probe. Suggested fix: guard
+    // safely" failure. Suggested fix: guard
     // `staleValuesForRehydration`'s per-entry transform the same
     // "is this a plain object" way `readPersistedValues`/
     // `isCacheSnapshotShape` already guard their own inputs, and drop (not

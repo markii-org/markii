@@ -5,7 +5,7 @@ import {
 } from './local-settings.js';
 
 // `MIN_REFRESH_INTERVAL_SECONDS`/`refreshIntervalMsFromSeconds` moved to
-// `@markii/host`'s `host/refresh-interval.ts` (batch 11) and are tested
+// `@markii/host`'s `host/refresh-interval.ts` and are tested
 // there. This file keeps only what is genuinely this host's own: the
 // `LocalSettings` shape and its hostile-input normalization.
 

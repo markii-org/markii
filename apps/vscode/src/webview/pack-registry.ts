@@ -137,7 +137,7 @@ function toQueuedPackRegistration(raw: unknown): QueuedPackRegistration {
  */
 export function buildRenderRegistry(
   defaultRegistry: Registry,
-): BuildRenderRegistryResult {
+): BuildRenderRegistryResult<Registry> {
   const queued = window.__markiiPackRegistrations ?? [];
   const normalized = queued.map(toQueuedPackRegistration);
   const result = buildRenderRegistryShared(

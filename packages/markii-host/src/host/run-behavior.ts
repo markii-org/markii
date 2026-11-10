@@ -1,7 +1,6 @@
 /**
  * The `run` behavior's host-shaped seams, built from a `HostAdapter`:
- * this is where survey findings A1 and A6 stop being duplicated three
- * times over.
+ * the grant prompts and the isolate spawn live here once for every host.
  *
  * A1: `apps/vscode/src/preview-panel.ts`'s `promptHostAdapter` /
  * `promptUnknownHostsAdapter` / `promptManyHostsAdapter`,
@@ -24,7 +23,7 @@
  * `runOnce` (the existing, already-shared grant-flow-plus-spawn
  * orchestration) and writes the `RunTrace` through `adapter.now()` rather
  * than `Date.now()`, so a fixed clock in a test fake makes the trace
- * byte-stable (batch 11 Phase 3's requirement).
+ * byte-stable.
  */
 import type { RunTrigger } from '@markii/runtime';
 import {
@@ -126,9 +125,29 @@ function noIsolateResult(
   };
 }
 
+/** A synthetic `RunResult` for a node isolate whose worker file cannot be located. The run never throws. */
+function workerMissingResult(
+  cacheSnapshot: SpawnRunRequest['cacheSnapshot'],
+  error: unknown,
+): RunResult {
+  return {
+    values: {},
+    failures: [
+      {
+        name: '<document>',
+        message: `the script worker could not be located: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        kind: 'capability-denied',
+      },
+    ],
+    cacheSnapshot,
+  };
+}
+
 /**
  * The one `spawnRun` adapter every Node host (`apps/vscode`, `apps/cli`)
- * used to duplicate (survey A6), plus the browser-isolate path Obsidian's
+ * needs, plus the browser-isolate path Obsidian's
  * own `spawnRun` wrapper needed. Dispatches on `HostIsolate`'s
  * discriminated union: a `'node'` host supplies only a worker path; a
  * `'browser'` host supplies an async, disposable `IsolateSpawner` factory,
@@ -141,9 +160,15 @@ export async function spawnRunViaAdapter(
   if (!isolate) return noIsolateResult(options.cacheSnapshot);
 
   if (isolate.kind === 'node') {
+    let workerPath: string;
+    try {
+      workerPath = isolate.workerPath();
+    } catch (error) {
+      return workerMissingResult(options.cacheSnapshot, error);
+    }
     return spawnRunHost({
       ...options,
-      workerPath: isolate.workerPath(),
+      workerPath,
       spawnIsolate: isolate.spawnIsolate,
     });
   }

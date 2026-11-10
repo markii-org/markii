@@ -28,9 +28,6 @@
  */
 import { detectNamespaceCollisions, parsePackManifest } from '@markii/pack';
 import type { PackManifest } from '@markii/pack';
-// Type-only: the renderer's pack machinery is injected as `PackRegistryEngine`
-// (below), so nothing here imports `@markii/react` at runtime.
-import type { PackToInstall, Registry, RegistryEntry } from '@markii/react';
 
 /**
  * The renderer-specific half of building a pack-aware registry: the
@@ -38,13 +35,22 @@ import type { PackToInstall, Registry, RegistryEntry } from '@markii/react';
  * React host passes `@markii/react`'s `reactPackEngine`; the host layer
  * itself names no renderer.
  */
-export interface PackRegistryEngine {
+export interface PackRegistryEngine<
+  TRegistry extends object = object,
+  TEntry = unknown,
+> {
   loadPack(
     manifest: PackManifest,
-    componentModules: Record<string, RegistryEntry>,
-  ): { registry: Registry; dropped?: { name: string; engine: string } };
-  createRegistry(entries?: Record<string, RegistryEntry>): Registry;
-  mergeRegistries(...registries: Registry[]): Registry;
+    componentModules: Record<string, TEntry>,
+  ): { registry: TRegistry; dropped?: { name: string; engine: string } };
+  createRegistry(entries?: Record<string, TEntry>): TRegistry;
+  mergeRegistries(...registries: TRegistry[]): TRegistry;
+}
+
+/** One pack ready to install: its manifest plus its resolved component modules. */
+interface PackToInstall<TEntry> {
+  manifest: PackManifest;
+  componentModules: Record<string, TEntry>;
 }
 
 /** One registration a compiled pack script queued by calling `window.__markiiRegisterPack(manifestJson, componentModules)` (see `./pack-build.ts`'s top doc comment for the full registration convention). Structurally identical across every host that satisfies the convention. */
@@ -62,9 +68,9 @@ function hasOwn(value: object, key: string): boolean {
 }
 
 /** Structurally validates one `componentModules` object: every OWN entry has a function `component` and an optional boolean `inline`. Read with `Object.hasOwn` only — the same hostile-map discipline `@markii/pack`/`@markii/react` use throughout, so a `componentModules` object with a poisoned `__proto__` can't leak an inherited value in as a registered component. */
-function isPackComponentModules(
+function isPackComponentModules<TEntry>(
   value: unknown,
-): value is Record<string, RegistryEntry> {
+): value is Record<string, TEntry> {
   if (!isPlainObject(value)) return false;
   for (const key of Object.keys(value)) {
     if (!hasOwn(value, key)) continue;
@@ -91,10 +97,10 @@ function isPackComponentModules(
  * this module's job, and keeping the per-entry step private means there is
  * one entry point into it rather than two.
  */
-function toPackToInstall(
+function toPackToInstall<TEntry>(
   entry: QueuedPackRegistration,
   index: number,
-): { readonly pack?: PackToInstall; readonly invalidReason?: string } {
+): { readonly pack?: PackToInstall<TEntry>; readonly invalidReason?: string } {
   if (typeof entry.manifestJson !== 'string') {
     return {
       invalidReason: `pack registration #${String(index)} did not provide a manifest JSON string; ignored.`,
@@ -106,7 +112,7 @@ function toPackToInstall(
       invalidReason: `pack registration #${String(index)}'s manifest is invalid (${parsed.errors.join('; ')}); ignored.`,
     };
   }
-  if (!isPackComponentModules(entry.componentModules)) {
+  if (!isPackComponentModules<TEntry>(entry.componentModules)) {
     return {
       invalidReason: `pack "${parsed.manifest.name}"'s registered components are malformed; ignored.`,
     };
@@ -136,8 +142,8 @@ export interface DuplicateComposedName {
 }
 
 /** What `buildRenderRegistry` reports alongside the merged registry — developer-facing diagnostics for a caller to fold into its own surface, never shown as page content. */
-export interface BuildRenderRegistryResult {
-  readonly registry: Registry;
+export interface BuildRenderRegistryResult<TRegistry extends object = object> {
+  readonly registry: TRegistry;
   /** One line per malformed registration, dropped rather than installed. */
   readonly invalidReasons: readonly string[];
   /** Non-empty only when two or more validated registrations shared a namespace — the WHOLE install was then rejected (docs/packs.md's install-time rejection rule) and `registry` falls back to `defaultRegistry` alone. */
@@ -146,7 +152,7 @@ export interface BuildRenderRegistryResult {
   readonly duplicateComposedNames: readonly DuplicateComposedName[];
   /**
    * One entry per validated, non-colliding pack whose manifest declares an
-   * engine `@markii/react`'s `loadPack` cannot run (batch 7 #46). Before
+   * engine `@markii/react`'s `loadPack` cannot run. Before
    * this field existed, such a pack installed as an empty contribution
    * with no record anywhere that it had even been attempted — every
    * directive under its namespace fell through to the ordinary
@@ -168,16 +174,16 @@ export interface BuildRenderRegistryResult {
  * unrelated `base` entry is ordinary last-wins behavior, the same as
  * `installPacks` already gives it.
  */
-function mergePacksKeepingFirstClaim(
-  packs: readonly PackToInstall[],
-  base: Registry,
-  engine: PackRegistryEngine,
+function mergePacksKeepingFirstClaim<TRegistry extends object, TEntry>(
+  packs: readonly PackToInstall<TEntry>[],
+  base: TRegistry,
+  engine: PackRegistryEngine<TRegistry, TEntry>,
 ): {
-  registry: Registry;
+  registry: TRegistry;
   duplicateComposedNames: DuplicateComposedName[];
   droppedEngines: { name: string; engine: string }[];
 } {
-  const merged: Record<string, RegistryEntry> = { ...base };
+  const merged = { ...base } as Record<string, TEntry>;
   const owner = new Map<string, string>();
   const duplicateComposedNames: DuplicateComposedName[] = [];
   const droppedEngines: { name: string; engine: string }[] = [];
@@ -200,7 +206,7 @@ function mergePacksKeepingFirstClaim(
         continue;
       }
       owner.set(composedName, pack.manifest.name);
-      merged[composedName] = loaded[composedName]!;
+      merged[composedName] = (loaded as Record<string, TEntry>)[composedName]!;
     }
   }
 
@@ -226,16 +232,16 @@ function mergePacksKeepingFirstClaim(
  *   (see `DuplicateComposedName`) drops only the later claimant's
  *   component, not the whole pack.
  */
-export function buildRenderRegistry(
+export function buildRenderRegistry<TRegistry extends object, TEntry>(
   queued: readonly QueuedPackRegistration[],
-  defaultRegistry: Registry,
-  engine: PackRegistryEngine,
-): BuildRenderRegistryResult {
-  const packs: PackToInstall[] = [];
+  defaultRegistry: TRegistry,
+  engine: PackRegistryEngine<TRegistry, TEntry>,
+): BuildRenderRegistryResult<TRegistry> {
+  const packs: PackToInstall<TEntry>[] = [];
   const invalidReasons: string[] = [];
 
   queued.forEach((entry, index) => {
-    const { pack, invalidReason } = toPackToInstall(entry, index);
+    const { pack, invalidReason } = toPackToInstall<TEntry>(entry, index);
     if (pack) packs.push(pack);
     if (invalidReason) invalidReasons.push(invalidReason);
   });

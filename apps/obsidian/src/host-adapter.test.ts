@@ -9,7 +9,7 @@ describe('createObsidianHostAdapter', () => {
   it('is built entirely from injected dependencies (no module-scope global)', () => {
     // Two adapters built from independent dependency sets must never share
     // state — this is what makes the adapter constructible over fakes
-    // (batch 11 Phase 3's requirement).
+    //.
     const linesA: string[] = [];
     const linesB: string[] = [];
     const adapterA = createObsidianHostAdapter({

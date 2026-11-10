@@ -707,7 +707,7 @@ export default class MarkiiPlugin extends Plugin {
    * picker still reads `completionCatalog` (kept fresh by `reloadPacks`),
    * but the skeleton build, the fence-lengthening edits, and the actual
    * transaction now run through `@markii/host`'s
-   * `createMarkiiHost(adapter).insertComponent` (batch 11 Phase 2b) — the
+   * `createMarkiiHost(adapter).insertComponent` — the
    * same shared path the VS Code extension drives — over an `editor`
    * capability built from this method's own `view.editor` closures.
    *
@@ -763,7 +763,7 @@ export default class MarkiiPlugin extends Plugin {
   }
 
   /**
-   * This plugin's `HostAdapter` (batch 11), for the behaviors this file
+   * This plugin's `HostAdapter`, for the behaviors this file
    * drives directly (pack install today). Built fresh per call, like
    * `src/view.tsx`'s own `adapter()` — see that method's doc comment for
    * why every key it touches is device-local, never `saveData`.
@@ -1110,13 +1110,16 @@ export default class MarkiiPlugin extends Plugin {
     // all. The plain-Error denial is deliberate: the brand that classifies
     // a refusal is re-applied inside the worker, which is where
     // `@markii/lua` lives (see `@markii/host`'s `net-bridge.ts`).
-    return createBrowserWorkerSetup((allowlist, maxFetchBytes, policy) =>
-      createNetProvider(
-        allowlist,
-        maxFetchBytes,
-        policy as Parameters<typeof createNetProvider>[2],
-        (message) => new Error(message),
-      ),
+    return createBrowserWorkerSetup(
+      (allowlist, maxFetchBytes, policy, signal) =>
+        createNetProvider(
+          allowlist,
+          maxFetchBytes,
+          policy as Parameters<typeof createNetProvider>[2],
+          (message) => new Error(message),
+          undefined,
+          signal,
+        ),
     );
   }
 
@@ -1184,8 +1187,7 @@ export default class MarkiiPlugin extends Plugin {
  * (every accessor closes over `editor`, never over a value captured once),
  * so `MarkiiPlugin.insertComponent`'s adapter always reflects the live
  * document even though the adapter itself is built fresh per invocation.
- * `cursor()` reads `'from'` (the selection START), matching the pre-batch-11
- * wiring: for a selection made backwards, `'from'` is the earlier position,
+ * `cursor()` reads `'from'` (the selection START), so that for a selection made backwards, `'from'` is the earlier position,
  * and a transaction's `from` writes starting there.
  */
 function obsidianHostEditor(editor: Editor): HostEditor {

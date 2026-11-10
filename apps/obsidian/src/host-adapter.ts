@@ -1,5 +1,5 @@
 /**
- * This plugin's `HostAdapter` (batch 11: `tmp/W11-adapter-design.md`),
+ * This plugin's `HostAdapter`,
  * feeding `@markii/host`'s `createMarkiiHost` (run, pack install, pack
  * load, export). Deliberately `obsidian`-free: it takes every Obsidian
  * primitive it needs as an INJECTED dependency (a prompt function, the
@@ -7,8 +7,7 @@
  * pack folder policy, export capabilities) rather than importing
  * `obsidian` or reaching for a module-scope global. That is what lets
  * `src/obsidian-import-guard.test.ts` leave this file off its allowlist,
- * and what lets a future test build the REAL adapter over fakes (batch
- * 11 Phase 3's stated requirement).
+ * and what lets a future test build the REAL adapter over fakes (the host conformance corpus drives it that way).
  *
  * `main.ts`/`view.tsx` (both already on the import-guard allowlist, since
  * they need real Obsidian types) construct the actual dependencies —
@@ -75,8 +74,7 @@ export interface ObsidianHostAdapterDeps {
    * The live editor surface, built at the call site from the Obsidian
    * `Editor` API (`view.editor`): `documentText`/`documentPath` from
    * `editor.getValue()`/the active file's path, `cursor` from
-   * `editor.getCursor('from')` (the selection start, matching the
-   * pre-batch-11 `insertComponent` wiring), and `applyEdits` from
+   * `editor.getCursor('from')` (the selection start), and `applyEdits` from
    * `editor.transaction`. Absent when a caller builds an adapter with no
    * active editor (a Run-only or export-only call site).
    */

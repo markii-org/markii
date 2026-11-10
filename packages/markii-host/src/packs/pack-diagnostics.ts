@@ -60,7 +60,7 @@ export interface PackDiagnosticsContext {
   /**
    * One entry per validated, non-colliding pack whose declared engine
    * `@markii/react`'s `loadPack` cannot run (`./pack-render-registry.ts`'s
-   * `BuildRenderRegistryResult.droppedEngines`, batch 7 #46). Omitted (or
+   * `BuildRenderRegistryResult.droppedEngines`). Omitted (or
    * empty) contributes nothing — the ordinary case where every registered
    * pack's engine is supported.
    */
@@ -109,7 +109,7 @@ function duplicateComposedNameLines(context: PackDiagnosticsContext): string[] {
   );
 }
 
-/** One line per pack dropped because this renderer cannot run its declared engine (batch 7 #46) — `[]` when there was none. */
+/** One line per pack dropped because this renderer cannot run its declared engine — `[]` when there was none. */
 function droppedEngineLines(context: PackDiagnosticsContext): string[] {
   const dropped = context.droppedEngines ?? [];
   return dropped.map(
@@ -153,13 +153,11 @@ export function skippedPackCount(context: {
 
 /**
  * One informational line for a pack whose prebuilt `webview.js` shadows
- * component sources still present in the same folder — survey finding A9:
- * `apps/vscode/src/packs/pack-diagnostics.ts` and
- * `apps/obsidian/src/packs/pack-diagnostics.ts` each defined this exact
- * sentence shape, differing only in the tail clause naming how a user
- * would rebuild the prebuilt artifact from those sources (VS Code's own
- * Export Pack command versus, from Obsidian, VS Code's Export Pack command
- * by name, since Obsidian has no build command of its own).
+ * component sources still present in the same folder.
+ * The tail clause names how a user would rebuild the prebuilt artifact
+ * from those sources: VS Code's own Export Pack command, or, from
+ * Obsidian, VS Code's Export Pack command by name, since Obsidian has no
+ * build command of its own.
  *
  * Never a failure: shipping both the built artifact and its sources is a
  * supported distribution shape. `rebuildInstruction` is the one thing that

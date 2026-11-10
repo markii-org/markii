@@ -3,9 +3,8 @@
  * handful of STANDARD COMPONENTS that draw their own fixed-width glyphs
  * (`card`, `callout`, `divider`, `chart`, `table`, and the plain-markdown
  * table grid in `render.tsx`). Everything else in this engine wraps prose
- * through Ink's own layout (`ink-string.ts`'s doc comment and AGENTS.md's
- * batch-10 brief: "Drop wrap/pad/columns/frame/rule: Ink's layout replaces
- * them").
+ * through Ink's own layout (`ink-string.ts`'s doc comment): Ink's layout replaces
+ * wrap, pad, columns, frame and rule.
  *
  * A self-drawing component cannot lean on Ink for this: the string it builds
  * (a box-drawing frame, a sparkline, a table grid) is a fixed block of
@@ -13,9 +12,8 @@
  * `<Text>` renders it verbatim rather than reflowing pre-drawn glyphs. This
  * module is therefore kept as a small, PRIVATE (not exported from
  * `src/index.ts`) implementation detail of those few components, replacing
- * the old public `measure.ts`/`box.ts` modules the batch-10 brief has this
- * engine delete. The width-measurement approximation is unchanged from the
- * old `measure.ts`: Latin/CJK/emoji/combining-mark ranges, not a full
+ * the old public `measure.ts`/`box.ts` modules. The width-measurement
+ * approximation covers Latin/CJK/emoji/combining-mark ranges, not a full
  * Unicode grapheme-segmentation table (see the doc comment below for the one
  * documented limitation).
  */

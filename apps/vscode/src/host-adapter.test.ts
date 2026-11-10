@@ -24,9 +24,7 @@ describe('createVSCodeHostAdapter', () => {
     expect(adapter.labels).toBe(VSCODE_LABELS);
   });
 
-  // The shared run path has no Node dependency, so this adapter resolves the
-  // development fallback itself when no built worker is injected.
-  it("falls back to the shared package's development worker entry when no path is injected", () => {
+  it('throws a clear error when no bundled worker exists', () => {
     const adapter = createVSCodeHostAdapter({
       memento: fakeMemento(),
       prompt: async () => true,
@@ -34,11 +32,9 @@ describe('createVSCodeHostAdapter', () => {
       workerPath: () => undefined,
     });
     expect(adapter.isolate?.kind).toBe('node');
-    expect(
-      adapter.isolate?.kind === 'node'
-        ? adapter.isolate.workerPath()
-        : 'unreachable',
-    ).toMatch(/worker-entry\.ts$/);
+    expect(() =>
+      adapter.isolate?.kind === 'node' ? adapter.isolate.workerPath() : '',
+    ).toThrow(/no bundled worker/);
   });
 
   it('uses the injected workerPath when it resolves to a real path', () => {

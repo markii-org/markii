@@ -1,7 +1,7 @@
 import { createNodeDirectoryLister } from '../node-fs.js';
 import { createHtmlExportEngine } from '../html-engine.js';
 import { createNodeArchiveExtractFs } from '../node-fs.js';
-import { workerThreadIsolate } from '../run/node-isolate.js';
+import { devWorkerIsolate } from '../dev-isolate.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   access,
@@ -159,7 +159,7 @@ describe('createMarkiiHost.run', () => {
       isolate: {
         kind: 'node',
         workerPath: () => '/worker.js',
-        spawnIsolate: workerThreadIsolate,
+        spawnIsolate: devWorkerIsolate,
       },
     });
     const host = createMarkiiHost(adapter, {
@@ -178,7 +178,7 @@ describe('createMarkiiHost.run', () => {
   });
 });
 
-describe('createMarkiiHost Phase 1b placeholders never throw and always write a diagnostics line', () => {
+describe('createMarkiiHost behaviors that decline never throw and always write a diagnostics line', () => {
   it.each([
     [
       'exportNote',
@@ -289,6 +289,7 @@ describe('createMarkiiHost.installPack', () => {
       diagnostics: (line) => lines.push(line),
       prompt: async () => true,
       packs: {
+        trust: 'none',
         engine: 'react',
         authorizedFolders: async () => [],
         reservedNamespaces: () => new Set(),
@@ -318,6 +319,7 @@ describe('createMarkiiHost.installPack', () => {
         return true;
       },
       packs: {
+        trust: 'none',
         engine: 'react',
         authorizedFolders: async () => [],
         reservedNamespaces: () => new Set(['read']),
@@ -344,6 +346,7 @@ describe('createMarkiiHost.loadPacks', () => {
     const adapter = fakeAdapter({
       ...realFs,
       packs: {
+        trust: 'none',
         engine: 'react',
         authorizedFolders: async () => [folder],
         reservedNamespaces: () => new Set(),
@@ -375,6 +378,7 @@ describe('createMarkiiHost.loadTerminalPacks', () => {
     const adapter = fakeAdapter({
       diagnostics: (line) => lines.push(line),
       packs: {
+        trust: 'none',
         engine: 'react',
         authorizedFolders: async () => [],
         reservedNamespaces: () => new Set(),
@@ -393,6 +397,7 @@ describe('createMarkiiHost.loadTerminalPacks', () => {
       ...realFs,
       diagnostics: (line) => lines.push(line),
       packs: {
+        trust: 'none',
         engine: 'ansi',
         authorizedFolders: async () => [ok, missing],
         reservedNamespaces: () => new Set(),
@@ -422,6 +427,7 @@ describe('createMarkiiHost.loadTerminalPacks', () => {
     const adapter = fakeAdapter({
       ...realFs,
       packs: {
+        trust: 'none',
         engine: 'ansi',
         authorizedFolders: async () => [folder],
         reservedNamespaces: () => new Set(),
@@ -453,6 +459,7 @@ describe('createMarkiiHost.loadTerminalPacks', () => {
     const adapter = fakeAdapter({
       ...realFs,
       packs: {
+        trust: 'none',
         engine: 'ansi',
         authorizedFolders: async () => [folder],
         reservedNamespaces: () => new Set(),
@@ -480,6 +487,7 @@ describe('createMarkiiHost.removePack', () => {
     const adapter = fakeAdapter({
       ...realFs,
       packs: {
+        trust: 'none',
         engine: 'react',
         authorizedFolders: async () => [],
         reservedNamespaces: () => new Set(['read']),
@@ -502,6 +510,7 @@ describe('createMarkiiHost.removePack', () => {
   it('refuses a namespace that is not a plain pack name, before building any path', async () => {
     const adapter = fakeAdapter({
       packs: {
+        trust: 'none',
         engine: 'react',
         authorizedFolders: async () => [],
         reservedNamespaces: () => new Set(),
@@ -520,6 +529,7 @@ describe('createMarkiiHost.removePack', () => {
   it('is unsupported without removeFolder', async () => {
     const adapter = fakeAdapter({
       packs: {
+        trust: 'none',
         engine: 'react',
         authorizedFolders: async () => [],
         reservedNamespaces: () => new Set(),

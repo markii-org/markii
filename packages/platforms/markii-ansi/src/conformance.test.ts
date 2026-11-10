@@ -7,7 +7,7 @@ import { defaultAnsiRegistry } from './components/index.js';
 
 /**
  * Mirrors `@markii/html`'s `conformance.test.ts` for the terminal engine
- * (batch 9, phase 2's success criterion): the L1 conformance corpus
+ * the L1 conformance corpus
  * (`conformance/*.mk.md`) renders through `renderMarkToAnsi` without
  * throwing, and produces a non-empty string. The corpus is PARSER-level,
  * not renderer-level, so there is no renderer-agnostic expected-text

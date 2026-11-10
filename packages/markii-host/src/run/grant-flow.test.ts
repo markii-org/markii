@@ -590,7 +590,7 @@ describe('prompt wording', () => {
     expect(DONT_ALLOW_LABEL).toBe("Don't allow");
   });
 
-  it('appends the declared-hosts list, display-only, when given (batch 7 #47); omits it entirely when absent or empty', () => {
+  it('appends the declared-hosts list, display-only, when given; omits it entirely when absent or empty', () => {
     expect(hostPromptMessage('api.example.com', ['api.example.com'])).toBe(
       "This note's scripts can send data to api.example.com. The note declares api.example.com. Allow?",
     );

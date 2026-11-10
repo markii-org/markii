@@ -8,11 +8,11 @@
  * host to perform it, and the host, which still has Node, runs exactly the
  * same `createNetProvider` the worker-thread isolate always used.
  *
- * This is a security improvement, not a compromise. The allowlist and the
- * pinning policy now live somewhere the sandboxed code cannot reach at
- * all: an isolate with no network stack has nothing to bypass them with.
- * What the worker can do is ask, and every ask is answered by the host's
- * own provider, against the host's own allowlist.
+ * The allowlist and the pinning policy live somewhere the sandboxed code
+ * cannot reach: Lua has no path to JavaScript, and the worker entry removes
+ * its network globals after startup (`./worker-entry-browser.ts`). What the
+ * worker can do is ask, and every ask is answered by the host's own
+ * provider, against the host's own allowlist.
  *
  * This file is the protocol and the HOST half. The worker half lives in
  * `./net-bridge-worker.ts` because it needs `@markii/lua`'s denial brand,

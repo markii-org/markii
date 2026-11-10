@@ -26,7 +26,7 @@ afterEach(async () => {
   );
 });
 
-describe('validatePackFolder (batch 7 #61)', () => {
+describe('validatePackFolder', () => {
   it('finds a valid react-engine pack directly in the folder', async () => {
     const folder = await makeTempDir();
     await writeFile(

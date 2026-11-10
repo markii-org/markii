@@ -3,9 +3,7 @@
  * merged from `apps/vscode/src/refresh-interval.ts` (the input-box
  * parse/validate half) and `apps/obsidian/src/local-settings.ts`'s
  * `refreshIntervalMsFromSeconds`/`MIN_REFRESH_INTERVAL_SECONDS` (the
- * read-side clamp half) — survey finding A7: the constant was duplicated
- * verbatim, with Obsidian's own comment noting it mirrors VS Code's, and
- * the clamp-not-reject policy was duplicated as both prose and behavior.
+ * read-side clamp half).
  *
  * The policy: a positive value under `MIN_REFRESH_INTERVAL_SECONDS` is
  * still ACCEPTED as typed (a host's own settings UI must not silently

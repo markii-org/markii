@@ -18,7 +18,10 @@ import {
 } from '@markii/host';
 import { openDirBundle } from '@markii/bundle/fs';
 import type { ResolvedNote } from './read-note.js';
-import { createCliHostAdapter } from './host-adapter.js';
+import {
+  createCliHostAdapter,
+  type CliHostAdapterOptions,
+} from './host-adapter.js';
 import type { Terminal } from './terminal.js';
 
 function bundleOptionsFor(
@@ -69,6 +72,8 @@ export interface RunNoteOptions {
   readonly memento: GrantMemento;
   /** Called for anything worth telling the user about that isn't a run failure itself — the non-interactive-prompt notice and the read-only-bundle notice. */
   readonly onDiagnosticLine?: (line: string) => void;
+  /** Replaces the packaged worker isolate. A test passes the source-run isolate here. */
+  readonly isolate?: CliHostAdapterOptions['isolate'];
 }
 
 /**
@@ -99,6 +104,7 @@ export async function runNote(options: RunNoteOptions): Promise<RunOnceResult> {
     terminal,
     memento,
     diagnostics: onDiagnosticLine,
+    ...(options.isolate !== undefined ? { isolate: options.isolate } : {}),
   });
   const host = createMarkiiHost(adapter);
 

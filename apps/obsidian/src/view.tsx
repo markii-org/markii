@@ -53,7 +53,7 @@ export const MARKII_PREVIEW_VIEW_TYPE = 'markii-preview';
  *
  * STORAGE: every persisted value this view touches (network grants, the
  * run cache, last-known values) goes through this view's `HostAdapter`
- * (`this.adapter()` below, batch 11), whose `memento` is
+ * (`this.adapter()` below), whose `memento` is
  * `createLocalStorageMemento`, backed by `app.saveLocalStorage`/
  * `loadLocalStorage` — device-local, never `saveData`. See
  * `src/run/local-storage-memento.ts`'s top comment and
@@ -279,7 +279,7 @@ export class MarkiiPreviewView extends ItemView {
   }
 
   /**
-   * This view's `HostAdapter` (batch 11: `tmp/W11-adapter-design.md`),
+   * This view's `HostAdapter`,
    * built fresh per call so a stale reference is never reused across an
    * `await`. Every persisted key it touches (grants, the run cache,
    * last-known values) is device-local — see this class's top comment on

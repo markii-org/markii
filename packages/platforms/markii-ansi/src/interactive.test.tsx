@@ -7,10 +7,9 @@ import type { BoxStyle } from './glyphs.js';
 
 /**
  * Interactive-mode tests, feeding real keys through Ink's own input pipeline
- * (a fake stdin, the same collecting-stdout pattern phase 1's spike proved
- * for the render-once path) and asserting the next captured frame — the
- * brief's "every interactive behavior gets a test that feeds keys through
- * Ink's testing pattern and asserts the next frame."
+ * (a fake stdin and a collecting stdout, as the render-once path uses)
+ * and asserting the next captured frame. Every interactive behavior gets a
+ * test that feeds keys through Ink and asserts the next frame.
  *
  * Unlike `ink-string.ts` (always `interactive: false`, unmounted after one
  * frame), these tests mount with Ink's default interactive render loop,
@@ -245,9 +244,8 @@ describe('quit and focus movement own no process state', () => {
 });
 
 /**
- * Batch 10.1: focus was silently invisible (`useFocusMarker` had no call
- * site). These tests mount at color level '256' (the level `FORCE_COLOR=2`
- * resolves to, per the batch's repro) and assert the accent SGR is present
+ * Focus must be visible. These tests mount at color level '256' (the level `FORCE_COLOR=2`
+ * resolves to, ) and assert the accent SGR is present
  * around the focused heading, moves with focus, and that a glyph marks
  * focus too so a theme with no perceptible accent still shows it.
  */
@@ -420,7 +418,7 @@ describe('a tabs/details nested inside a card is focusable; so is one nested ins
   });
 });
 
-describe('card moved onto an Ink Box border (batch 11): its body keeps real focus', () => {
+describe('card moved onto an Ink Box border: its body keeps real focus', () => {
   it('enter toggles a details block nested directly inside a card', async () => {
     const doc =
       ':::::card{title="Holder"}\n::::details{title="Nested"}\nhidden body\n::::\n:::::\n';
@@ -512,7 +510,7 @@ describe('callout is an Ink subtree: its body keeps real focus and its bar', () 
   });
 });
 
-describe('figure gained ELEMENT-mode children (batch 11): a caption details block keeps real focus', () => {
+describe('figure gained ELEMENT-mode children: a caption details block keeps real focus', () => {
   it('enter toggles a details block nested in a figure caption', async () => {
     const doc =
       ':::::figure{alt="x"}\n::::details{title="Nested"}\nhidden body\n::::\n:::::\n';

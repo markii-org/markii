@@ -46,6 +46,12 @@ jobs:
         working-directory: e2e/browser-host
         run: npm run setup
 
+      # Node, no browser: the shipped host corpus against the fixture
+      # adapter, and the packaged worker via createNodeHostIsolate().
+      - name: Host corpus and Node worker from the installed tarballs
+        working-directory: e2e/browser-host
+        run: npm run test:node
+
       - name: Install the browser and its system libraries
         working-directory: e2e/browser-host
         run: npx playwright install --with-deps ${{ matrix.browser }}

@@ -40,7 +40,7 @@ import {
   CLI_STATE_FILE_NAME,
 } from './grant-store.js';
 import { buildViewElement, renderNote, resolveWidth } from './render-note.js';
-import { runNote } from './run-note.js';
+import { runNote, type RunNoteOptions } from './run-note.js';
 import { createCliHostAdapter } from './host-adapter.js';
 import { resolveViewMode } from './view-mode.js';
 import { resolveCliPackOptions } from './pack-store.js';
@@ -256,6 +256,7 @@ async function runViewCommand(
   command: Extract<ParsedCommand, { kind: 'view' }>,
   terminal: Terminal,
   deps: ViewDeps = defaultViewDeps,
+  isolate?: RunNoteOptions['isolate'],
 ): Promise<number> {
   // A static redraw clears the screen, which only makes sense on a
   // terminal; into a pipe or a file it would be a stream of escapes.
@@ -307,6 +308,7 @@ async function runViewCommand(
       note,
       terminal,
       memento,
+      ...(isolate !== undefined ? { isolate } : {}),
       onDiagnosticLine: (line) => {
         if (command.verbose) writeError(`markii: ${line}\n`);
       },
@@ -558,6 +560,7 @@ async function runExportCommand(
 async function runRunCommand(
   command: Extract<ParsedCommand, { kind: 'run' }>,
   terminal: Terminal,
+  isolate?: RunNoteOptions['isolate'],
 ): Promise<number> {
   const absolutePath = path.resolve(command.file);
   const read = await readNote(absolutePath);
@@ -573,6 +576,7 @@ async function runRunCommand(
     note,
     terminal,
     memento,
+    ...(isolate !== undefined ? { isolate } : {}),
     onDiagnosticLine: (line) => terminal.writeError(`markii: ${line}\n`),
   });
 
@@ -773,13 +777,17 @@ async function runPackRemoveCommand(
  * `deps` is an internal seam, not part of the CLI's real usage: it lets
  * tests replace `markii view`'s live-viewer mount with a fake so a test run
  * never spawns a real Ink instance or touches a real TTY (see `view-deps.ts`
- * and `main.test.ts`'s "view: live viewer" tests). `main()` below always
- * calls this with the default, real implementation.
+ * and `main.test.ts`'s "view: live viewer" tests), or run scripts through
+ * the source-run isolate. `main()` below always calls this with the
+ * defaults.
  */
 export async function run(
   argv: readonly string[],
   terminal: Terminal,
-  deps: { readonly view?: ViewDeps } = {},
+  deps: {
+    readonly view?: ViewDeps;
+    readonly isolate?: RunNoteOptions['isolate'];
+  } = {},
 ): Promise<number> {
   const command = parseArgs(argv);
 
@@ -794,11 +802,16 @@ export async function run(
       terminal.writeError(`markii: ${command.message}\n`);
       return 3;
     case 'view':
-      return runViewCommand(command, terminal, deps.view ?? defaultViewDeps);
+      return runViewCommand(
+        command,
+        terminal,
+        deps.view ?? defaultViewDeps,
+        deps.isolate,
+      );
     case 'export':
       return runExportCommand(command, terminal);
     case 'run':
-      return runRunCommand(command, terminal);
+      return runRunCommand(command, terminal, deps.isolate);
     case 'lsp':
       return runLspCommand(terminal, {
         serverVersion: resolveCliVersion(),

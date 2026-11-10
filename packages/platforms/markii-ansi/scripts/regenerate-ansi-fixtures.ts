@@ -17,7 +17,7 @@
  * for `@markii/ansi`.
  *
  * DELIBERATE, MANUAL ONLY: this script is never wired into `pretest`,
- * `prebuild`, or any other automatic hook (AGENTS.md's batch-9 brief). A
+ * `prebuild`, or any other automatic hook. A
  * fixture is regenerated on purpose, by a person who has just read the diff
  * and confirmed it is a real improvement, not a side effect of running
  * tests or a build. Run it with `npm run regenerate:fixtures` from this

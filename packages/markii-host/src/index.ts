@@ -4,8 +4,7 @@
 // `esbuild-wasm`, `@markii/react` or `@markii/html` at runtime
 // (`apps/vscode/src/browser-entry.probe.test.ts` bundles it for a browser to
 // prove it). What needs Node lives in `./node.ts`, published as
-// `@markii/host/node`. Private workspace package: never published,
-// never added to `build:dist`. See AGENTS.md's repo-layout entry for
+// `@markii/host/node`. See AGENTS.md's repo-layout entry for
 // `packages/markii-host` for the module-by-module breakdown.
 //
 // This is the security-critical layer (tier gating, the grant model,
@@ -361,8 +360,8 @@ export {
   renderDiagnosticLine,
 } from './diagnostics/render-diagnostics.js';
 
-// Batch 11: the HostAdapter contract, createMarkiiHost, and the Phase 1a
-// shared behavior modules (docs pending — see tmp/W11-adapter-design.md).
+// The HostAdapter contract, createMarkiiHost, and the shared run behavior
+// modules (docs/integration.md, "Writing a host").
 export type {
   HostAdapter,
   HostDirEntry,
@@ -411,7 +410,7 @@ export {
   runDiagnosticLines,
 } from './host/run-diagnostics.js';
 
-// Batch 11 Phase 1b: packs, export, and the editor seam.
+// Packs, export, and the editor seam.
 export type { ArchiveExtractFs } from './host/pack-archive.js';
 export {
   describeArchiveError,

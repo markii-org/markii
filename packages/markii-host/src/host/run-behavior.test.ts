@@ -1,4 +1,4 @@
-import { workerThreadIsolate } from '../run/node-isolate.js';
+import { devWorkerIsolate } from '../dev-isolate.js';
 import { describe, expect, it } from 'vitest';
 import type { RunResult } from '../run/run-host.js';
 import { readLastRunTrace } from '../run/run-trace.js';
@@ -92,6 +92,24 @@ describe('spawnRunViaAdapter', () => {
     expect(result.values).toEqual({});
   });
 
+  it('reports a failure, never a throw, when the node worker path cannot be resolved', async () => {
+    const isolate = {
+      kind: 'node' as const,
+      workerPath: (): string => {
+        throw new Error('no worker here');
+      },
+      spawnIsolate: devWorkerIsolate,
+    };
+    const result = await spawnRunViaAdapter(isolate, {
+      text: '',
+      netAllowlist: [],
+      cacheSnapshot,
+      timeoutMs: 1000,
+    });
+    expect(result.failures[0]?.kind).toBe('capability-denied');
+    expect(result.failures[0]?.message).toContain('no worker here');
+  });
+
   it('calls the node isolate workerPath and forwards it to spawnRun', async () => {
     // Uses a hostile workerPath that does not exist; the real spawnRun's
     // own worker-spawn failure is caught as an ordinary RunResult failure
@@ -100,7 +118,7 @@ describe('spawnRunViaAdapter', () => {
     const isolate = {
       kind: 'node' as const,
       workerPath: () => '/nonexistent/worker.js',
-      spawnIsolate: workerThreadIsolate,
+      spawnIsolate: devWorkerIsolate,
     };
     const result = await spawnRunViaAdapter(isolate, {
       text: '',

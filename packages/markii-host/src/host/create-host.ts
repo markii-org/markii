@@ -3,13 +3,11 @@
  * its own run/export/pack/editor wiring. Everything it touches (files, prompts,
  * the isolate) arrives through the adapter, so the main entry stays
  * environment-neutral. VS Code's webview imports only the pure pieces and
- * never calls this function (`tmp/W11-adapter-design.md`, section 1).
+ * never calls this function.
  *
- * Phase 1a implemented `run`, `diagnostics`, and `open`. This phase
- * (1b) fills in `exportNote`, `installPack`, `loadPacks`, `completeAt`,
- * `hoverAt`, and `insertComponent`, over the behavior modules built in
- * this same pass (`./export-behavior.js`, `./pack-install.js`,
- * `./pack-load.js`, `./editor-behavior.js`). Every one of them still
+ * It provides `run`, `diagnostics`, `open`, `exportNote`, `installPack`, `loadPacks`, `completeAt`,
+ * `hoverAt`, and `insertComponent`, over the behavior modules (`./export-behavior.js`, `./pack-install.js`,
+ * `./pack-load.js`, `./editor-behavior.js`). Every one of them
  * returns the shared `Unsupported` outcome, with one diagnostics line,
  * when the adapter lacks the capability it needs — AGENTS.md's "clean is
  * not silent": a decline is never a silent no-op.

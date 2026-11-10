@@ -70,8 +70,7 @@ import { ARRAY_MARKER, type MarshalLimits } from './marshal.js';
  * cap that already bounds the JS-side parse.
  *
  * ## Every Lua primitive this decoder uses is pinned at PRELUDE-DEFINITION
- * ## time, not resolved as a dynamic global at call time (adversarial
- * ## finding A1)
+ * ## time, not resolved as a dynamic global at call time
  *
  * `string.byte`/`sub`/`find`/`char`, `table.concat`, `tonumber`,
  * `math.floor`, and `error` are all captured into locals ONCE, at the top
@@ -86,7 +85,7 @@ import { ARRAY_MARKER, type MarshalLimits } from './marshal.js';
  * the depth guard entirely, since `fail()` would then no longer actually
  * raise). This mirrors `./marshal`'s own `buildMarshalPrelude`, which
  * already does exactly this for the same reason (see that module's doc
- * comment referencing sandbox-audit finding F-1).
+ * comment).
  */
 export function buildJsonDecodePrelude(limits: MarshalLimits): string {
   return `
@@ -247,7 +246,7 @@ function __smd_json_decode(__smd_json_text)
       -- \`{"${ARRAY_MARKER}":true,"1":"a","2":"b","x":"kept"}\` would decode
       -- to a Lua table carrying that same key, and later marshal to the
       -- host as a JS ARRAY -- silently reshaping attacker-controlled data
-      -- and dropping its real keys (adversarial finding A4). Dropping
+      -- and dropping its real keys (see marshal.ts). Dropping
       -- (rather than rejecting the whole response) keeps an otherwise
       -- ordinary API response usable even if it happens to use this exact
       -- field name for something unrelated.
@@ -282,7 +281,7 @@ function __smd_json_decode(__smd_json_text)
       local value = decode_value(depth + 1)
       n = n + 1
       -- A JSON null ARRAY ELEMENT decodes to Lua \`false\`, not an absent
-      -- slot (orchestrator decision, adversarial finding C2): an absent
+      -- slot (by design): an absent
       -- slot would leave a hole (\`#\`/\`ipairs\` stop early, and returning
       -- the table to the host fails \`MARK_MARSHAL:key-type\` since the walk
       -- no longer sees sequential \`1..n\` keys) -- reproducing issue #6's

@@ -12,8 +12,10 @@ Entries:
 - `@markii/host`: environment-neutral; safe to bundle for a browser.
 - `@markii/host/browser`: a Web Worker isolate and a `fetch` network
   provider bound to an origin allowlist.
-- `@markii/host/node`: a worker-thread isolate, the address-pinning
-  network provider, and the Node file system seams.
+- `@markii/host/node`: a worker-thread isolate (`createNodeHostIsolate`),
+  the address-pinning network provider, and the Node file system seams.
+- `@markii/host/node-worker`: the self-contained worker file, for a host
+  that bundles the worker itself.
 - `@markii/host/conformance`: the host scenario corpus and its runner, to
   prove an adapter behaves like the reference apps.
 

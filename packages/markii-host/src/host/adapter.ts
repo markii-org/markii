@@ -3,8 +3,7 @@
  * the CLI, or a future one) provides so `createMarkiiHost` can run every
  * shared behavior once. Nothing in this file names a `vscode`, `obsidian`,
  * Electron or TTY type — an adapter is built from injected dependencies,
- * so a test can construct the REAL adapter over fakes (batch 11's
- * `tmp/W11-adapter-design.md`, section 2).
+ * so a test can construct the REAL adapter over fakes.
  *
  * A capability group (`isolate`, `editor`, `packs`, `exports`) is absent
  * when a host does not offer it. `createMarkiiHost` never assumes one is
@@ -25,9 +24,7 @@ export interface HostDirEntry {
 
 /**
  * One yes/no question. Every grant, consent, and replace prompt in the
- * whole app surface routes through this single method (survey finding A1:
- * nine near-identical prompt adapters across three apps collapse to one
- * call each). `message`, `allowLabel`, and `denyLabel` are already fully
+ * whole app surface routes through this single method. `message`, `allowLabel`, and `denyLabel` are already fully
  * built by `@markii/host`; the adapter only has to show them.
  */
 export interface HostPromptRequest {
@@ -53,7 +50,7 @@ export interface HostPromptRequest {
 
 /**
  * A discriminated union: `workerPath` and `workerBytes` are mutually
- * exclusive per host (survey section C). A Node host (VS Code, the CLI)
+ * exclusive per host. A Node host (VS Code, the CLI)
  * gives a synchronous path lookup; a host whose runtime cannot create
  * worker threads (an Electron renderer, which is what the Obsidian plugin
  * runs in) gives an async, disposable Web Worker spawner instead.
@@ -62,15 +59,14 @@ export type HostIsolate =
   | {
       readonly kind: 'node';
       /**
-       * The worker entry on disk. A host with a packaged worker resolves it
-       * here; a development or test run falls back to
-       * `defaultWorkerPath()` from `@markii/host/node`, in the host's own
-       * adapter (the shared run path has no Node dependency to do it).
+       * The worker entry on disk. A host with its own bundled worker
+       * resolves it here. `createNodeHostIsolate()` from
+       * `@markii/host/node` supplies the packaged one.
        */
       workerPath(): string;
       /**
-       * Creates the worker-thread isolate. Always `workerThreadIsolate`
-       * from `@markii/host/node`; injected so the shared run path imports
+       * Creates the worker-thread isolate: `workerThreadIsolate` from
+       * `@markii/host/node`. Injected so the shared run path imports
        * nothing from `node:*`.
        */
       readonly spawnIsolate: IsolateSpawner;
@@ -122,7 +118,7 @@ export interface HostEditor {
 
 /**
  * Pack POLICY (which folders are even candidates) is irreducibly
- * host-specific (survey section D); everything after the list exists is
+ * host-specific; everything after the list exists is
  * already shared in `../packs/discover.ts` and friends. The adapter
  * supplies only the list and the install destination.
  */
@@ -140,12 +136,13 @@ export interface HostPackSource {
    * `'device-list'`: a folder in `installRoot` loads only when the trust
    * list in the adapter's `memento` names its namespace, and the host
    * gains `installedPacks`, `enablePack` and `disablePack`. An install
-   * trusts the pack it installs. Requires `installRoot`. `'none'` (or
-   * absent): every folder this host's own policy authorizes loads, which
-   * is right for a host that trusts its own install store (VS Code, the
-   * CLI). A host states its choice explicitly.
+   * trusts the pack it installs. Requires `installRoot`. `'none'`: every
+   * folder this host's own policy authorizes loads, which is right for a
+   * host that trusts its own install store (VS Code, the CLI). A web host
+   * that installs packs from users picks `'device-list'`. Required: a
+   * host states its choice explicitly.
    */
-  readonly trust?: 'device-list' | 'none';
+  readonly trust: 'device-list' | 'none';
   /**
    * Folders this host currently AUTHORIZES. Under `trust: 'device-list'`
    * these are the folders beyond the install root (the host adds the
@@ -189,10 +186,8 @@ export interface HostExportCapabilities {
 
 /**
  * The wording nouns every shared behavior's message templates interpolate
- * (`./labels.ts`). This is the one answer to the survey's wording-drift
- * risk: near-identical copy across the three apps collapses into one
- * template plus these per-host nouns, instead of a per-host
- * reimplementation of the sentence itself.
+ * (`./labels.ts`). One template plus these per-host nouns
+ * replaces a per-host copy of each sentence.
  */
 export interface HostLabels {
   /** "extension" | "plugin" | "command line tool" */
@@ -219,7 +214,7 @@ export interface HostLabels {
  * Everything an adapter provides. An adapter is constructible from
  * injected dependencies (no module-scope global reads), which is what
  * lets a conformance test build the REAL adapter over a fake editor
- * (batch 11 Phase 3).
+ *.
  */
 export interface HostAdapter {
   readonly id: 'vscode' | 'obsidian' | 'cli' | (string & {});

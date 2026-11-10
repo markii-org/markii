@@ -1,8 +1,7 @@
 /**
  * This CLI's own resolution of the Run path's worker entry file, modelled
- * exactly on `apps/vscode/src/worker-path.ts` — `@markii/host`'s
- * `defaultWorkerPath` deliberately does not know a host's bundle layout,
- * since that differs per host.
+ * exactly on `apps/vscode/src/worker-path.ts` — `@markii/host` does
+ * not know a host's bundle layout, since that differs per host.
  *
  * Resolves in the same two environments this CLI runs in:
  * - the PACKAGED CLI: `esbuild.config.mjs`'s worker build bundles
@@ -11,12 +10,12 @@
  *   at runtime, `dist/run/worker.js` is exactly
  *   `path.join(here, 'run', 'worker.js')`. `here` is computed from
  *   `import.meta.url` rather than `__dirname`, which does not exist in the
- *   ESM output the CLI bundle uses (batch 10: the bundle moved to `format:
+ *   ESM output the CLI bundle uses (the bundle moved to `format:
  *   'esm'` for the Ink engine's top-level await).
  * - dev/Vitest: this file runs unbundled from `src/`, so `here` is this
  *   real source directory and no bundled worker exists yet —
- *   `resolveWorkerPath` returns `undefined`, and the caller falls back to
- *   `@markii/host`'s own `defaultWorkerPath` dev fallback.
+ *   `resolveWorkerPath` returns `undefined`, and the adapter reports a
+ *   missing worker. A test injects the source-run isolate instead.
  */
 import { existsSync } from 'node:fs';
 import * as path from 'node:path';

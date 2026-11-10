@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { BundleManifest } from '@markii/bundle';
-import { spawnRunInThread as spawnRun } from './node-isolate';
+import { spawnRunInThread as spawnRun } from '../dev-isolate';
 import { withPersistedCache } from './bundle-run';
 
 /**

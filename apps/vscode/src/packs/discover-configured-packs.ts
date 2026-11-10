@@ -5,7 +5,7 @@
  * extension's own bundled packs. Everything AFTER that folder list exists —
  * read each folder's `pack.json`, validate it, drop a namespace collision,
  * engine-gate against this renderer — is `@markii/host`'s shared
- * `discoverConfiguredPacks` (batch 11, survey finding A3); this module no
+ * `discoverConfiguredPacks`; this module no
  * longer duplicates that half.
  *
  * Shared by two commands that both only need "what packs are configured":

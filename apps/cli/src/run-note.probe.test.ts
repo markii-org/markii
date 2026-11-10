@@ -6,18 +6,16 @@
  * shared run path actually spawns a working isolate, not just that the
  * types line up.
  *
- * `runNote` is exercised with no `workerPath` override at all: dev/Vitest
- * runs unbundled, so `./worker-path.ts`'s `resolveWorkerPath` correctly
- * returns `undefined` (no `dist/run/worker.js` built yet), and
- * `@markii/host`'s own `spawnRun` falls back to its `defaultWorkerPath` —
- * the real `worker-entry.ts` run from source via `tsx`. That fallback
- * chain is itself part of what this probe proves works.
+ * `runNote` is given the package's source-run isolate: Vitest runs
+ * unbundled, so there is no `dist/run/worker.js`, and the real
+ * `worker-entry.ts` runs from source via `tsx`.
  *
  * A real worker plus wasmoon's WASM Lua engine takes real wall-clock time
  * to start; both tests below get a generous per-test timeout.
  */
 import { describe, expect, it } from 'vitest';
 import type { GrantMemento, Thenable } from '@markii/host';
+import { devNodeHostIsolate } from '@markii/host/dev-isolate';
 import { runNote, scriptsFailed } from './run-note.js';
 import { createFakeTerminal } from './test-terminal.js';
 import type { ResolvedNote } from './read-note.js';
@@ -59,6 +57,7 @@ describe('run-note probe: the real isolate', () => {
         note,
         terminal,
         memento,
+        isolate: devNodeHostIsolate(),
       });
 
       expect(result.failures).toEqual([]);
@@ -92,6 +91,7 @@ describe('run-note probe: the real isolate', () => {
         note,
         terminal,
         memento,
+        isolate: devNodeHostIsolate(),
       });
 
       expect(result.failures).toEqual([

@@ -4,12 +4,9 @@ import { render as inkRender } from 'ink';
 
 /**
  * The ONE place Ink's `render()` is called for the render-ONCE (string)
- * path. Reuses exactly the mechanism batch 10's phase-1 spike proved
- * (`spike/item1-render-once.mjs`, `SPIKE-10-findings.md`'s "Item 1"): mount
- * against a `Writable` that never touches a real TTY, reports the requested
- * `columns`, collect every chunk written to it, unmount immediately after
- * `render()` returns (no further ticks are needed for the collecting-stream
- * setup the spike used), and join the chunks.
+ * path. It mounts against a `Writable` that never touches a real TTY and
+ * reports the requested `columns`, collects every chunk written to it,
+ * unmounts immediately after `render()` returns, and joins the chunks.
  *
  * `interactive: false` in the render OPTIONS below is Ink's own render
  * option, and it is load-bearing: without it Ink 7 unconditionally emits
@@ -17,7 +14,7 @@ import { render as inkRender } from 'ink';
  * (`CSI ?2026h`/`CSI ?2026l`) whenever `stdout.isTTY` is true, which is
  * exactly the escape noise a static render must never produce.
  *
- * NAME COLLISION, documented per the batch-10 brief: this is a DIFFERENT
+ * NAME COLLISION: this is a DIFFERENT
  * `interactive` from the `interactive` flag on this engine's own render
  * CONTEXT (`registry.ts`'s `AnsiRenderContext.interactive`, documented at
  * its own declaration). Ink's flag controls which ESCAPE SEQUENCES Ink
@@ -61,8 +58,7 @@ function makeCollectingStream(columns: number): CollectingStream {
  * Mounts `element` with Ink at `columns` wide, captures the first (and only)
  * frame as a plain string, and unmounts. `ink` is imported dynamically
  * because `yoga-layout` (Ink's layout engine) resolves its WASM module via a
- * top-level `await` at ES-module-evaluation time (`SPIKE-10-findings.md`'s
- * "Item 3"): the first call to this function pays that one-time cost, and
+ * top-level `await` at ES-module-evaluation time: the first call to this function pays that one-time cost, and
  * every exported entry point that reaches here is therefore `async`. A
  * later call in the same process reuses the already-evaluated module graph,
  * the ordinary ESM module-cache guarantee.

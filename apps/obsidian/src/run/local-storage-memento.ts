@@ -1,5 +1,5 @@
 /**
- * THE RULE THAT MATTERS MOST (task brief, "Storage"): `Plugin.saveData`
+ * THE RULE THAT MATTERS MOST (storage): `Plugin.saveData`
  * writes into `.obsidian/plugins/markii/data.json`, which lives INSIDE the
  * vault. It therefore travels with Obsidian Sync and with any vault someone
  * shares, clones, or hands to a colleague. Anything that authorizes

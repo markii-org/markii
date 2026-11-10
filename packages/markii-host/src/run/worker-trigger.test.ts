@@ -2,7 +2,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { RunTrigger } from '@markii/runtime';
 import type { BundleManifest } from '@markii/bundle';
-import { spawnRunInThread as spawnRun } from './node-isolate';
+import { spawnRunInThread as spawnRun } from '../dev-isolate';
 
 /**
  * GitHub issue #11: end-to-end proof, through a REAL `worker_thread` running

@@ -14,7 +14,7 @@ import { composeNoteHtmlExport, embedImagesInHtml } from '@markii/host';
 // message, and every diagnostics-line builder (`exportDefaultFileName`,
 // `NoteFileExportOutcome`, `exportResultMessage`, `renderEngineDiagnosticLine`,
 // `imageEmbedDiagnosticLines`, `exportDiagnosticLines`) moved to
-// `@markii/host` (batch 11) and are covered there by
+// `@markii/host` and are covered there by
 // `packages/markii-host/src/host/export-behavior.test.ts`. What remains
 // worth testing here is this extension's own UI constants (the save
 // dialog's title, labels, and filter) and the image-embedding pipeline

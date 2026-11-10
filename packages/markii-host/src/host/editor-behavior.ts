@@ -2,16 +2,16 @@
  * The `completeAt`/`hoverAt`/`insertComponent` behaviors' shared half,
  * merged from `apps/vscode/src/completion.ts` + `completion-catalog.ts`,
  * `apps/obsidian/src/complete-component.ts`, and both apps'
- * `insert-component.ts` (survey finding A5, plus table rows 31/33).
+ * `insert-component.ts`.
  *
- * NODE-FREE by design (`tmp/W11-adapter-design.md`, section 1): re-exported
+ * NODE-FREE by design: re-exported
  * from `../browser.ts` as well as `../index.ts`, so VS Code's webview
  * bundle can read the origin-tag vocabulary and the pure completion math
  * directly if a future slice needs to. `CatalogCache.get`'s injected
  * `load` is the one thing that reaches disk, and it is always supplied by
  * the caller (a main-entry-only pack-discovery call), never imported here.
  *
- * What stays app-side (deliberately, per the survey's section D): VS
+ * What stays app-side (deliberately): VS
  * Code's sectioned quick-pick presentation (`Standard`/`Layout`/`<pack>
  * pack` separators) and Obsidian's flat fuzzy list are a genuine product
  * difference, not duplication — this module returns the catalog and the
@@ -45,12 +45,8 @@ export const STANDARD_ORIGIN_TAG = 'standard';
 export const LAYOUT_ORIGIN_TAG = 'layout';
 
 /**
- * Survey finding A5: `apps/vscode/src/completion.ts:completionOriginTag`
- * and `apps/obsidian/src/complete-component.ts:completionOriginTag` had
- * IDENTICAL function bodies, differing only in which locally-defined
- * constant stood in for the standard/layout tag string. Both apps'
- * constants held the same lower-case values (`'standard'`/`'layout'`),
- * so there was never a wording difference to preserve.
+ * The origin tag a completion item carries: the lower-case
+ * `'standard'`/`'layout'` strings above, or the pack name.
  */
 export function completionOriginTag(item: CompletionItem): string {
   if (item.kind !== 'component') return '';

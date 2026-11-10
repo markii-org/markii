@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { spawnRunInThread as spawnRun } from './node-isolate';
+import { spawnRunInThread as spawnRun } from '../dev-isolate';
 
 /**
  * Executed probe for the note-scoped `doc` view (GitHub issue #33) on the
@@ -107,7 +107,7 @@ describe('doc probe (host) — a script reads the note it runs in', () => {
     });
 
     expect(result.failures).toEqual([]);
-    // `net` is always a table now (batch 7 #47: a denial stub, never
+    // `net` is always a table (a denial stub, never
     // omitted, so a script that feature-detects with `if net then` sees a
     // table with zero grants); `bundle` stays nil with no bundle wired.
     expect(result.values.read?.value).toEqual({

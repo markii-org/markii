@@ -4,10 +4,7 @@ import http from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  defaultWorkerPath,
-  spawnRunInThread as spawnRun,
-} from './node-isolate';
+import { devWorkerPath, spawnRunInThread as spawnRun } from '../dev-isolate';
 
 /**
  * Every test in this file spawns a REAL `worker_thread` running the REAL
@@ -15,7 +12,7 @@ import {
  * runtime) — see `run-host.ts`'s doc comment and `worker-entry.ts`'s. That
  * makes each case slower than an ordinary unit test (wasmoon boot is
  * ~100ms) but is what actually proves the isolate/watchdog/capability
- * wiring works end to end, matching this slice's brief.
+ * wiring works end to end.
  */
 
 const WORKER_PATH = path.join(__dirname, 'worker-entry.ts');
@@ -24,9 +21,9 @@ function fence(name: string, body: string): string {
   return '```lua {name=' + name + '}\n' + body + '\n```\n';
 }
 
-describe('defaultWorkerPath', () => {
+describe('devWorkerPath', () => {
   it('resolves to the sibling worker-entry.ts source file in dev (no dist/ built)', () => {
-    const resolved = defaultWorkerPath();
+    const resolved = devWorkerPath();
     expect(resolved.endsWith(path.join('run', 'worker-entry.ts'))).toBe(true);
     expect(existsSync(resolved)).toBe(true);
   });

@@ -120,7 +120,7 @@ describe('json.encode — happy path, reusing the existing marshal walk', () => 
   });
 });
 
-describe('json table — rebinding safety (mirrors ./json-decode finding A1 and ./capabilities findings A2/D1)', () => {
+describe('json table — rebinding safety (mirrors ./json-decode and ./capabilities)', () => {
   it('rebinding the global `json` table after the prelude runs does not affect a call already captured by another local, and a fresh call still works after restoring it', async () => {
     const r = await run(`
       local realDecode = json.decode

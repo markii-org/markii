@@ -87,6 +87,7 @@ describe('loadPacksViaAdapter', () => {
       components: { card: './Card.tsx' },
     });
     const source: HostPackSource = {
+      trust: 'none',
       engine: 'react',
       authorizedFolders: async () => [folder],
       reservedNamespaces: () => new Set(),
@@ -97,6 +98,7 @@ describe('loadPacksViaAdapter', () => {
 
   it('an empty authorized-folder list discovers nothing', async () => {
     const source: HostPackSource = {
+      trust: 'none',
       engine: 'react',
       authorizedFolders: async () => [],
       reservedNamespaces: () => new Set(),

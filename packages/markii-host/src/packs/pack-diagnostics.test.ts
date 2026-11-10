@@ -153,7 +153,7 @@ describe('formatPackDiagnosticLines', () => {
     expect(lines).toHaveLength(1);
   });
 
-  it('one line per pack dropped for an unsupported engine, after duplicate-composed-name lines (batch 7 #46)', () => {
+  it('one line per pack dropped for an unsupported engine, after duplicate-composed-name lines', () => {
     const lines = formatPackDiagnosticLines({
       packs: [pack('ana', 1)],
       skipped: [],

@@ -3,8 +3,7 @@
  * (`./script-execution.ts`, `./refresh-interval.ts`) interpolates, and the
  * one concrete record per app this repo ships. Each app's `HostAdapter`
  * imports its record rather than inventing its own strings, which is what
- * collapses the survey's near-identical wording pairs (`tmp/W11-survey.md`,
- * section A4) into one template.
+ * lets one template serve every host.
  *
  * Pure and dependency-free: re-exported from `../browser.ts` as well as
  * `../index.ts` so VS Code's Node-free webview bundle can read it too.

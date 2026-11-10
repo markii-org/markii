@@ -4,6 +4,7 @@ import { createBrowserIsolate, type WorkerLike } from './browser-isolate';
 import { serveNetRequest, type NetBridgeRequest } from './net-bridge';
 import { createNetBridge } from './net-bridge-worker';
 import type { NetProvider } from '@markii/lua';
+import { createFetchNetProvider } from '../browser';
 
 /** A Web Worker stand-in: no exit event, terminate is immediate and silent. */
 function fakeWorker() {
@@ -192,5 +193,67 @@ describe('the net bridge', () => {
     expect(() =>
       bridge.handleMessage({ kind: 'markii:net-reply', id: 999, ok: true }),
     ).not.toThrow();
+  });
+});
+
+describe('requests end with the run', () => {
+  it('aborts the signal handed to the provider when the isolate is killed', () => {
+    const fake = fakeWorker();
+    let seen: AbortSignal | undefined;
+    const spawnIsolate = createBrowserIsolate({
+      createWorker: () => fake.worker,
+      netProvider: (_allowlist, _max, _policy, signal) => {
+        seen = signal;
+        return noNet;
+      },
+    });
+    const isolate = spawnIsolate({
+      entryPath: 'x',
+      maxOldGenerationSizeMb: 1,
+    });
+    isolate.send({ ...job });
+    expect(seen).toBeDefined();
+    expect(seen?.aborted).toBe(false);
+    isolate.kill();
+    expect(seen?.aborted).toBe(true);
+    expect(fake.terminated).toBe(1);
+  });
+
+  it('cancels a fetch still in flight when the isolate is killed', async () => {
+    const fake = fakeWorker();
+    let fetchSignal: AbortSignal | undefined;
+    const hangingFetch = ((_url: string, init?: RequestInit) => {
+      fetchSignal = init?.signal ?? undefined;
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          reject(new DOMException('aborted', 'AbortError'));
+        });
+      });
+    }) as typeof fetch;
+    const factory = createFetchNetProvider({
+      allowedOrigins: ['https://api.example.com'],
+      fetch: hangingFetch,
+    });
+    const spawnIsolate = createBrowserIsolate({
+      createWorker: () => fake.worker,
+      netProvider: factory,
+    });
+    const isolate = spawnIsolate({
+      entryPath: 'x',
+      maxOldGenerationSizeMb: 1,
+    });
+    isolate.send({ ...job });
+    // The worker asks the host for a request through the bridge.
+    fake.emit('message', {
+      kind: 'markii:net-request',
+      id: 1,
+      method: 'get',
+      url: 'https://api.example.com/x',
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(fetchSignal?.aborted).toBe(false);
+    isolate.kill();
+    expect(fetchSignal?.aborted).toBe(true);
   });
 });

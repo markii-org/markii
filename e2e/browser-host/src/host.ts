@@ -11,7 +11,7 @@ import {
   createBrowserHostIsolate,
   createFetchNetProvider,
 } from '@markii/host/browser';
-import { MemoryFs } from './memory-fs';
+import { MemoryFs } from './memory-fs.ts';
 
 const PACK_ROOT = '/packs';
 
@@ -19,7 +19,7 @@ const LABELS: HostLabels = {
   appNoun: 'page',
   previewNoun: 'the rendered note',
   diagnosticsSurface: 'the diagnostics list',
-  deviceNoun: 'this browser',
+  deviceNoun: 'this device',
 };
 
 /** A localStorage-backed memento: device-local, JSON, never throws. */
@@ -50,7 +50,15 @@ export interface PromptBridge {
   ask: ((request: HostPromptRequest) => Promise<boolean>) | undefined;
 }
 
+export interface FixtureHostOptions {
+  /** Replaces the localStorage-backed memento (a Node run has no localStorage). */
+  readonly memento?: GrantMemento;
+  /** Replaces the Web Worker isolate (a Node run uses the worker-thread one). */
+  readonly isolate?: HostAdapter['isolate'];
+}
+
 export interface FixtureHost {
+  readonly adapter: HostAdapter;
   readonly host: MarkiiHost;
   readonly fs: MemoryFs;
   readonly packRoot: string;
@@ -61,6 +69,7 @@ export interface FixtureHost {
 export function createFixtureHost(
   prompts: PromptBridge,
   allowedOrigins: readonly string[],
+  options: FixtureHostOptions = {},
 ): FixtureHost {
   const fs = new MemoryFs();
   const diagnostics: string[] = [];
@@ -75,22 +84,24 @@ export function createFixtureHost(
     listFolder: (p) => fs.listFolder(p),
     // A denial is the safe answer when no dialog is mounted.
     prompt: (request) => prompts.ask?.(request) ?? Promise.resolve(false),
-    memento: createLocalStorageMemento(),
+    memento: options.memento ?? createLocalStorageMemento(),
     diagnostics: (line) => {
       diagnostics.push(line);
       for (const listener of listeners) listener();
     },
     now: () => Date.now(),
-    isolate: createBrowserHostIsolate({
-      netProvider: createFetchNetProvider({ allowedOrigins }),
-    }),
+    isolate:
+      options.isolate ??
+      createBrowserHostIsolate({
+        netProvider: createFetchNetProvider({ allowedOrigins }),
+      }),
     packs: {
       engine: 'react',
-      trust: 'none',
-      authorizedFolders: async () =>
-        (await fs.listFolder(PACK_ROOT))
-          .filter((entry) => entry.isDirectory)
-          .map((entry) => `${PACK_ROOT}/${entry.name}`),
+      // A web page installs packs the user picks: only a folder this
+      // device trusts loads, and an install trusts what it installs.
+      trust: 'device-list',
+      // The host adds the trusted installed folders itself.
+      authorizedFolders: async () => [],
       reservedNamespaces: () => new Set<string>(),
       installRoot: () => PACK_ROOT,
       removeFolder: (p) => fs.removeDirectory(p),
@@ -102,6 +113,7 @@ export function createFixtureHost(
   });
 
   return {
+    adapter,
     host,
     fs,
     packRoot: PACK_ROOT,

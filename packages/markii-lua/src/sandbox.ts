@@ -566,8 +566,7 @@ export async function runScript(
     // throws synchronously inside the try — e.g. `finalizeMarshaledValue`
     // recursing deep enough to overflow the JS call stack, which today is
     // safe only INCIDENTALLY because wasmoon's own `getValue` conversion
-    // overflows first on sufficiently deep input (see the sandbox audit's
-    // finding F-1 "also recommended" note) — so that guarantee no longer
+    // overflows first on sufficiently deep input — so that guarantee no longer
     // depends on that ordering holding forever. Classified the same as any
     // other unclassified failure: a plain `'runtime'` failure, never a raw
     // throw out of `runScript`.

@@ -19,10 +19,9 @@ import type { AnsiRegistry } from './registry.js';
 
 /**
  * Interactive-mode tests, feeding real keys through Ink's own input pipeline
- * (a fake stdin, the same collecting-stdout pattern phase 1's spike proved
- * for the render-once path) and asserting the next captured frame — the
- * brief's "every interactive behavior gets a test that feeds keys through
- * Ink's testing pattern and asserts the next frame."
+ * (a fake stdin and a collecting stdout, as the render-once path uses)
+ * and asserting the next captured frame. Every interactive behavior gets a
+ * test that feeds keys through Ink and asserts the next frame.
  *
  * Unlike `ink-string.ts` (always `interactive: false`, unmounted after one
  * frame), these tests mount with Ink's default interactive render loop,

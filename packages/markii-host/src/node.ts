@@ -9,9 +9,9 @@
 // A Node host imports from both entries. No browser bundle imports this one.
 
 export type { SpawnRunOptions } from './run/run-host.js';
+export type { NodeHostIsolateOptions } from './run/node-isolate.js';
 export {
-  defaultWorkerPath,
-  spawnRunInThread,
+  createNodeHostIsolate,
   workerThreadIsolate,
 } from './run/node-isolate.js';
 export { createNetProvider } from './run/net-provider.js';

@@ -1,8 +1,7 @@
 /**
  * The shared discovery path behind `loadPacks`, merged from
  * `apps/vscode/src/packs/discover-configured-packs.ts` and
- * `apps/obsidian/src/packs/discover-configured-packs.ts` (survey finding
- * A3) plus the discovery-and-namespace-collection half both apps'
+ * `apps/obsidian/src/packs/discover-configured-packs.ts` plus the discovery-and-namespace-collection half both apps'
  * `packs/pack-context.ts` also duplicate on top of it.
  *
  * Pack POLICY — which folders are even candidates before any content is

@@ -1,6 +1,5 @@
 /**
- * Executes one `conformance/host/<scenario>` case (batch 11 Phase 3,
- * `tmp/W11-corpus-design.md`) against any real `HostAdapter`, so a single
+ * Executes one `conformance/host/<scenario>` case against any real `HostAdapter`, so a single
  * plain-data corpus proves the three apps' adapters behave the same.
  *
  * `conformance/host/` itself stays plain data (no TypeScript, matching the
@@ -26,8 +25,7 @@
  * pre-check here, over the same shared functions and the SAME
  * `adapter.labels` a real call site would use, so the scenario proves
  * wording parity across hosts without inventing a capability the contract
- * does not have. See `tmp/W11-phase3.md` for why this is a reported
- * finding, not a silent workaround.
+ * does not have. The scenario `10-scripts-disabled` holds the behavior.
  *
  * SIMULATED EXECUTION. A `run` action's `simulate` field (plain data) tells
  * this module what the isolate would have produced, instead of spawning a
@@ -44,6 +42,7 @@ import { fileURLToPath } from 'node:url';
 import { createHtmlExportEngine } from '../html-engine.js';
 import { createNodeArchiveExtractFs } from '../node-fs.js';
 import { usesPackTrust } from './pack-trust-behavior.js';
+import type { ArchiveExtractFs } from './pack-archive.js';
 import { join, relative, sep } from 'node:path';
 import { zipSync } from 'fflate';
 import { conformanceDir } from '@markii/core/corpus';
@@ -294,7 +293,7 @@ export function hostDeclaresCapability(
  * `next()` THROWS once exhausted rather than returning a default: an
  * unanswered prompt means the scenario and the implementation disagree
  * about how many questions get asked, which must never be silently read
- * as a deny (`tmp/W11-corpus-design.md`, "The prompt policy").
+ * as a deny.
  */
 export function createAnswerQueue(scenario: HostScenario): {
   next(): boolean;
@@ -404,7 +403,11 @@ export async function runHostScenario(
   scenario: HostScenario,
   noteText: string,
   scenarioDir: string,
-  options: { readonly renderAnsi?: (text: string) => Promise<string> } = {},
+  options: {
+    readonly renderAnsi?: (text: string) => Promise<string>;
+    /** Where an installed pack archive is extracted. Defaults to the Node file system, which is right for an adapter that reads and writes real files. An adapter over another store (memory, a virtual file system) passes the matching writer. */
+    readonly archiveExtractFs?: ArchiveExtractFs;
+  } = {},
 ): Promise<HostScenarioRunResult> {
   const diagnostics: string[] = [];
   const prompts: string[] = [];
@@ -433,7 +436,7 @@ export async function runHostScenario(
     // The runner is Node-only test tooling, so it supplies the real Node
     // implementations of the seams the host layer takes by injection.
     htmlEngine: createHtmlExportEngine(),
-    archiveExtractFs: createNodeArchiveExtractFs(),
+    archiveExtractFs: options.archiveExtractFs ?? createNodeArchiveExtractFs(),
     spawnRun: (spawnOptions: SpawnRunRequest): Promise<RunResult> =>
       Promise.resolve(simulatedRunResult(currentSimulation, spawnOptions)),
     ...(options.renderAnsi ? { renderAnsi: options.renderAnsi } : {}),

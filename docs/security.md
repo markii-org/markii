@@ -145,6 +145,16 @@ redirect is refused, since a page cannot see where a redirect leads before
 following it. The response size cap applies as in every host. What a script
 can read back is then also bounded by the browser's own CORS rules.
 
+CORS bounds what a script reads, not what it sends. The provider sends a
+POST body as `text/plain`, which a browser delivers without a preflight.
+An origin on the allowlist therefore receives a script's POST even when it
+has not opted into CORS, so the allowlist should name only origins that
+are safe to post to.
+
+A request still in flight when a run ends is aborted. The watchdog killing
+a run, or the host disposing its isolate, cancels the request in the
+browser provider and in the pinning provider alike.
+
 A page that needs reach into private networks it does not control should
 not offer scripts network access at all, or should send requests through a
 server of its own that resolves and pins as described above.
@@ -295,8 +305,13 @@ either: pinning needs a DNS resolver and a socket the caller chooses the
 address for, and a Web Worker has neither. The reference Obsidian plugin
 therefore performs the request in its host, using the same pinning code the
 worker-thread host runs, and the isolate asks for it over a message. The
-protection is unchanged, and the boundary gets stronger rather than weaker:
-an isolate with no network stack has nothing to bypass the allowlist with.
+protection is unchanged. A Web Worker does have network globals of its
+own, so the worker entry removes them before the first script runs:
+`XMLHttpRequest`, `WebSocket`, `EventSource`, `WebTransport`, `indexedDB`,
+`caches`, `BroadcastChannel` and the `Worker` constructors are gone,
+`importScripts` throws, and `fetch` serves only the Lua engine's own
+WebAssembly file. Lua cannot reach JavaScript in the first place; the
+removal is a second wall behind that one.
 A refusal made in the host is marked as a policy denial on the wire, so it
 still reaches the script as a capability error rather than as an ordinary
 failure.

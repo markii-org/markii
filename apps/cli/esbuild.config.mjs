@@ -2,9 +2,9 @@
  * Two bundles, one build script, modelled on `apps/vscode/esbuild.config.mjs`:
  *
  *   1. `dist/markii.mjs` — the CLI entry (`src/main.ts`). Platform `node`,
- *      format `esm` (batch 10: the Ink engine's dependency chain carries a
- *      top-level `await` that the `cjs` output format cannot represent —
- *      see `SPIKE-10-findings.md`'s item 6), everything bundled in, with a
+ *      format `esm` (the Ink engine's dependency chain carries a
+ *      top-level `await` that the `cjs` output format cannot represent),
+ *      everything bundled in, with a
  *      combined shebang + `createRequire` banner and made executable
  *      (0o755) after every build so the `bin` entry in `package.json` runs
  *      directly. The file is named `.mjs` (not `.js`) because
@@ -103,8 +103,7 @@ const cliVersion = JSON.parse(
  * at startup on every run, `DEV` unset or not. `define`-ing
  * `process.env.DEV` does not fix this either: esbuild does not eliminate
  * code across a dynamic `import()` boundary just because the surrounding
- * condition is statically false (confirmed with and without `minify`,
- * `SPIKE-10-findings.md`'s item 6). The fix is to resolve the bare
+ * condition is statically false, with or without `minify`. The fix is to resolve the bare
  * specifier to an in-memory empty module instead.
  */
 const stubReactDevtoolsCore = {
@@ -128,8 +127,7 @@ const stubReactDevtoolsCore = {
  * become esbuild's `__require` helper, defined as `typeof require !==
  * 'undefined' ? require : (throws)`. Plain ESM run by `node` has no global
  * `require`, so this throws the first time such a call executes
- * (`signal-exit`'s `require('assert')` was the concrete, reproduced
- * trigger in the spike). esbuild does not inject a `createRequire` shim for
+ * (`signal-exit`'s `require('assert')` is a concrete trigger). esbuild does not inject a `createRequire` shim for
  * `format: 'esm'` automatically, so this banner does it by hand. It must be
  * combined with the shebang banner below into one string: esbuild's
  * `banner.js` accepts only one.
@@ -143,8 +141,7 @@ const requireShimBanner =
  * (`packages/platforms/markii-ansi/node_modules/react`, `.../ink`) — two
  * physically separate installs of the identical version, since npm has no
  * shared ancestor `node_modules` to hoist them to while the repo's other
- * workspaces still pin React 18 at the root (`SPIKE-10-findings.md`'s item
- * 0). `src/live-view.ts` importing `ink` from its own location and
+ * workspaces still pin React 18 at the root. `src/live-view.ts` importing `ink` from its own location and
  * `@markii/ansi`'s source importing `ink`/`react` from ITS location would
  * therefore bundle two separate copies of React into one process — the
  * exact "Invalid hook call" / "more than one copy of React" failure React

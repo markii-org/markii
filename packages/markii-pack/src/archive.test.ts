@@ -191,7 +191,7 @@ describe('openPackArchive: required entries', () => {
   });
 });
 
-describe('openPackArchive: single-wrapping-folder detection (batch 7 #61)', () => {
+describe('openPackArchive: single-wrapping-folder detection', () => {
   it('an archive that is a zipped FOLDER (every file nested one level down) names the folder and tells the user to zip the contents instead', async () => {
     const nested: Record<string, Uint8Array> = {};
     for (const [name, data] of Object.entries(wellFormedFiles())) {

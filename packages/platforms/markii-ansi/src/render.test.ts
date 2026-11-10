@@ -555,7 +555,7 @@ describe('thematic break and table', () => {
   });
 
   it('renders a GFM table as a box-drawn grid with a header row', async () => {
-    // Phase 2: renderTable now shares `./components/table-grid.js`'s
+    // renderTable shares `./components/table-grid.js`'s
     // `drawTableGrid` with the data-bound `::table` component, so an
     // ordinary markdown table draws real box-drawing glyphs at the real
     // available width instead of the earlier `+---+` ASCII stopgap.

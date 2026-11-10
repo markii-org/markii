@@ -314,8 +314,7 @@ export interface RunOnceResult {
   /**
    * Consent unification (SECURITY-RELEVANT): lines describing any mismatch
    * between what is DECLARED (a bundle manifest's `permissions.net`, and/or
-   * an individual script's own `permissions` fence attribute — batch 7
-   * #47) and the hosts this run's scripts actually reach, from
+   * an individual script's own `permissions` fence attribute) and the hosts this run's scripts actually reach, from
    * `./bundle-run.ts`'s `netDeclarationDiagnostics`. `[]` when there is
    * nothing to compare against (no bundle manifest and no script declares
    * `permissions`) or every declared host agrees with the scan. For the

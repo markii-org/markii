@@ -45,8 +45,7 @@ export function resolveCardBoxWidth(
  * children are built ONCE, directly at the correct inner width, and never
  * built wide and re-wrapped narrower afterward.
  *
- * That re-wrap-afterward shape was a real, shipped regression (caught
- * post-phase-2 review): re-wrapping an ALREADY-RENDERED child block with a
+ * That re-wrap-afterward shape was a real, shipped regression: re-wrapping an ALREADY-RENDERED child block with a
  * word-based wrapper corrupts anything in it that draws its own fixed-width
  * glyphs (a nested `card`/`callout`'s frame, a nested `row`'s columns) — the
  * word-wrapper has no notion that a run of box-drawing characters is not

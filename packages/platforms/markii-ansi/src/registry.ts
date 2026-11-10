@@ -9,14 +9,11 @@ import type { ResolveImageSrc } from './image-resolve.js';
 import type { ResolveHref } from './href-resolve.js';
 
 /**
- * The registry contract for the terminal engine, batch-10 (the Ink
- * rewrite): a component is a React function component receiving
+ * The registry contract for the terminal engine: a component is a React function component receiving
  * `{ attributes, children, ctx }`, where `children` is ALREADY a built Ink
  * element tree (a `ReactNode`) rather than the lazy string-producing
  * `AnsiChildren` handle the pre-Ink engine used. Building children eagerly
- * is the batch-10 brief's own instruction (`AGENTS.md`'s architecture
- * section is silent on this; the brief is explicit: "Delete... the lazy-
- * children machinery"): Ink/Yoga lays a tree out AFTER it is built, exactly
+ * is how this engine works: Ink/Yoga lays a tree out AFTER it is built, exactly
  * like a browser reflows HTML, so a component no longer needs to ask for a
  * narrower re-render of its own body the way the old string engine did —
  * the one standard component that still needs a per-cell WIDTH NUMBER before
@@ -361,7 +358,7 @@ export function resolveDirectiveAlias(
  * top comment on why those three are the only ones that get a real Ink
  * element tree instead. `children` is still typed `ReactNode` on
  * `AnsiComponentProps` (the honest public contract: "an Ink element tree",
- * per the batch-10 brief, and a string IS a valid `ReactNode`), so a
+ * and a string IS a valid `ReactNode`), so a
  * component that needs its body AS TEXT (to measure it, frame it, indent
  * it, or check whether it is empty) reads it through this helper rather
  * than assuming the type; a non-string `children` degrades to `''` rather

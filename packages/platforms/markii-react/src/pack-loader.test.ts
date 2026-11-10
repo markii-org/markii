@@ -38,7 +38,7 @@ describe('loadPack', () => {
     expect(Object.getPrototypeOf(registry)).toBeNull();
   });
 
-  it('returns an empty registry and names the pack/engine in `dropped` when the manifest engine is not react (batch 7 #46)', () => {
+  it('returns an empty registry and names the pack/engine in `dropped` when the manifest engine is not react', () => {
     const manifest = anaManifest({ engine: 'vue' });
     const { registry, dropped } = loadPack(manifest, { timeline: entry() });
     expect(Object.keys(registry)).toHaveLength(0);
@@ -210,7 +210,7 @@ describe('installPacks', () => {
     expect(result.ok).toBe(false);
   });
 
-  it('a non-react-engine pack among the set contributes an empty registry, not an error, and is named in `dropped` (batch 7 #46)', () => {
+  it('a non-react-engine pack among the set contributes an empty registry, not an error, and is named in `dropped`', () => {
     const reactPack = {
       manifest: anaManifest({ name: 'ana' }),
       componentModules: { timeline: entry() },

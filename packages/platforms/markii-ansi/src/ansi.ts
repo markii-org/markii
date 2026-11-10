@@ -99,8 +99,7 @@ const SGR_TOKEN = /\x1b\[([0-9;]*)m/g;
  * at a line boundary are closed with a reset before the `\n` and reopened
  * at the start of the next line.
  *
- * This is the SYSTEMATIC fix for a real Ink behavior discovered during
- * batch 10's post-phase-2 review: Ink's `<Text>` does not treat an embedded
+ * This is the systematic fix for an Ink behavior: Ink's `<Text>` does not treat an embedded
  * raw ANSI escape as transparent across an embedded newline the way a
  * terminal receiving the same bytes directly would — it resets SGR state
  * at every line boundary within one `<Text>` value and does not reopen it.

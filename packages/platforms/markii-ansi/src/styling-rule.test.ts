@@ -6,12 +6,11 @@ import { renderMarkToAnsi } from './render.js';
 import { defaultAnsiRegistry } from './components/index.js';
 
 /**
- * Proves the batch-10 styling rule (AGENTS.md, this batch's binding
- * orchestrator decision): this engine never touches Ink's own color/style
+ * Proves the styling rule (AGENTS.md, terminal engine layout): this engine never touches Ink's own color/style
  * props or `chalk.level` — every escape it emits comes from `./ansi.js`'s
  * own SGR helpers, applied to a plain string BEFORE that string ever
  * reaches a `<Text>` node. Two consequences are directly testable and are
- * the two tests the brief asks for:
+ * two tests:
  *
  * 1. A `color: 'never'` render carries NO ESC byte (0x1b) at all, for every
  *    committed render-level fixture — not just "no SGR", literally no ESC
@@ -20,7 +19,7 @@ import { defaultAnsiRegistry } from './components/index.js';
  * 2. Two renders at different color levels, in the SAME process, each get
  *    their own correct escapes with no cross-talk — proving this engine
  *    carries no hidden global color state (unlike `chalk.level`, a
- *    module-level singleton the brief forbids touching for exactly this
+ *    module-level singleton this engine never touches, for exactly this
  *    reason: a shared mutable level cannot serve two callers at different
  *    levels correctly).
  */

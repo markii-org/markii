@@ -2,7 +2,7 @@
  * ISSUE #12 PENTEST — dedicated adversarial pass on the auto-run/scheduled
  * surface (GitHub issue #11).
  *
- * Attacks item 5 of the issue-12 brief: whether a WORKSPACE-scoped
+ * Attacks whether a WORKSPACE-scoped
  * `markii.runOnOpen` (a repo's own `.vscode/settings.json`) can turn on
  * unattended script execution for someone who merely opens that repo, on a
  * fresh clone with no persisted grant of their own.
@@ -28,7 +28,7 @@
  * depending on it, exactly the kind of declaration that is silently lost in a
  * later edit.
  *
- * ## Why this matters (see also item 5's own framing in the brief)
+ * ## Why this matters
  *
  * `markii.runOnOpen`'s own `markdownDescription` says an auto-run "never
  * prompts and never adds network access — it reuses only the hosts you

@@ -306,7 +306,7 @@ describe('discoverPacks — one-level parent-folder scan', () => {
   });
 });
 
-describe('discoverPacks — supportedEngine gating (batch 7 #46)', () => {
+describe('discoverPacks — supportedEngine gating', () => {
   const OTHER_ENGINE_MANIFEST = JSON.stringify({
     name: 'demo',
     engine: 'vue',

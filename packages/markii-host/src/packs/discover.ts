@@ -257,7 +257,7 @@ async function tryLoadPackAt(
  */
 /**
  * When a `ManifestAttempt` succeeded (`kind: 'found'`) but the manifest's
- * `engine` does not match `supportedEngine` (batch 7 #46), downgrades it to
+ * `engine` does not match `supportedEngine`, downgrades it to
  * a `SkippedPackFolder` instead of a `DiscoveredPack` — same effect
  * `@markii/react`'s `loadPack` already has for an unsupported engine
  * (nothing registered for that namespace, unknown-component fallback for

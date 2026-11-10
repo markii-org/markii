@@ -14,7 +14,7 @@ import {
  * `@markii/html`'s `failure-presentation.ts` is the wording this engine's
  * copy is required to match byte for byte (this module's own top comment).
  * Rather than import `@markii/html` (this package's dependency list is
- * exactly `@markii/core` and `@markii/stdlib`; see the batch brief), this
+ * exactly `@markii/core` and `@markii/stdlib`), this
  * suite reads the HTML engine's source file as TEXT and extracts its
  * phrase table and title templates with regular expressions, so a wording
  * change in one engine that is not mirrored in the other fails a test

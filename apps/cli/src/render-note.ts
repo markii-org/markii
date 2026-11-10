@@ -106,7 +106,7 @@ export interface RenderNoteOptions {
 /**
  * Renders `text` to a plain string for the terminal, resolving width and
  * color from `terminal` and `options`. `async` since `@markii/ansi` itself
- * is (batch 10: the terminal engine moved to Ink, which pays a one-time
+ * is (the terminal engine moved to Ink, which pays a one-time
  * module-evaluation cost the first time any render happens in a process —
  * see `@markii/ansi`'s `ink-string.ts`).
  */

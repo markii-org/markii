@@ -1,5 +1,5 @@
 /**
- * Batch 11 Phase 3: runs the whole `conformance/host/` corpus through this
+ * Runs the whole `conformance/host/` corpus through this
  * app's REAL `HostAdapter` (`./host-adapter.js`'s `createCliHostAdapter`),
  * wrapped in a fake terminal and an in-memory memento instead of a real
  * TTY and a real state file. The adapter's own logic is real: the TTY
@@ -15,6 +15,7 @@ import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { Terminal } from './terminal.js';
+import { devNodeHostIsolate } from '@markii/host/dev-isolate';
 import { createCliHostAdapter } from './host-adapter.js';
 import { BUNDLED_PACK_NAMESPACES } from './pack-store.js';
 import { renderMarkToAnsi } from '@markii/ansi';
@@ -88,6 +89,7 @@ describe('conformance/host/ corpus via the real CLI HostAdapter', () => {
         memento: createMemoryMemento(),
         diagnostics: (line) => diagnosticsLines.push(line),
         now: () => scenario.clock,
+        isolate: devNodeHostIsolate(),
         exportTarget: path.join(exportDir, 'export-output'),
         packs: {
           installRoot: path.join(exportDir, 'packs'),

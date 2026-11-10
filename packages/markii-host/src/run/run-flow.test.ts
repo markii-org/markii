@@ -333,7 +333,7 @@ describe('runOnce — bundle-backed run', () => {
     expect(result.netDeclarationDiagnostics).toEqual([]);
   });
 
-  it('surfaces a mismatch between a script-declared `permissions` host and the scanned host, for a bare .mk.md document with no bundle (batch 7 #47)', async () => {
+  it('surfaces a mismatch between a script-declared `permissions` host and the scanned host, for a bare .mk.md document with no bundle', async () => {
     const memento = fakeMemento();
     const spawnRun = () => Promise.resolve(fakeRunResult());
 

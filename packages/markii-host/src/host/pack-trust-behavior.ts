@@ -12,7 +12,7 @@
  * already asked), enabling a present folder asks the same prompt, and
  * disabling or removing withdraws the entry.
  *
- * A host that declares `trust: 'none'` (or omits the field) trusts every
+ * A host that declares `trust: 'none'` trusts every
  * folder its own policy authorizes, and every function here is inert for
  * it. Neutral on purpose: only the adapter's file and state primitives
  * are used.

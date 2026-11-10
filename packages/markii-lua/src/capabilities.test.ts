@@ -70,7 +70,7 @@ function fixtureBundle() {
   return { storage, view };
 }
 
-describe('buildCapabilities — net always exists as a stub (batch 7 #47)', () => {
+describe('buildCapabilities — net always exists as a stub', () => {
   // `net` used to be omitted entirely whenever nothing was granted, which
   // made a denied capability indistinguishable from a plain typo (calling
   // an ungranted `net.fetch_json` and calling a global that never existed

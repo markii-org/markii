@@ -590,8 +590,7 @@ function quickPickItemFromEntry(
  * skeleton at the cursor. The quick-pick item shape and every user-facing
  * string live in `./insert-component.ts`; the skeleton build, the
  * fence-lengthening edits, and the actual edit application now run through
- * `@markii/host`'s `createMarkiiHost(adapter).insertComponent` (batch 11
- * Phase 2b) — the same shared path the Obsidian plugin drives — over an
+ * `@markii/host`'s `createMarkiiHost(adapter).insertComponent` — the same shared path the Obsidian plugin drives — over an
  * `editor` capability built from this function's own `vscode` closures.
  * This function is `vscode` wiring and picker presentation only.
  *

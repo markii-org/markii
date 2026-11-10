@@ -446,7 +446,10 @@ Pick the entry that matches the environment:
   the entry and found through `import.meta.url`.
 - Node, or an Electron main process: `@markii/host/node` for a worker
   thread isolate with a heap cap and the address-pinning network provider.
-  The host bundles its own worker entry and passes its path.
+  `createNodeHostIsolate()` starts the packaged worker, which carries the
+  Lua engine and needs nothing from the host's own dependencies. A host
+  that bundles everything into one file bundles `@markii/host/node-worker`
+  as a second output and passes its path as `workerPath`.
 - An Electron renderer: the browser entry's isolate (pass
   `workerType: 'classic'` for an embedded classic worker), with the pinned
   network provider served from the renderer's Node side, as the Obsidian
@@ -479,6 +482,16 @@ against: notes, actions, scripted prompt answers and the exact outcomes
 expected. Run it against your adapter in your own test suite. A scenario
 your host cannot support reports `unsupported` because the adapter left
 that capability out, which is a pass, not a failure.
+
+The runner itself runs in Node and needs `@markii/html` installed, because
+the export scenarios render through it. An adapter that keeps its files
+somewhere other than the disk passes `archiveExtractFs` to
+`runHostScenario`, so the install scenarios write into the same store the
+adapter reads.
+
+`HostPackSource.trust` has no default. A host that installs packs a user
+picks, as a web page does, declares `'device-list'`. A host that owns a
+private install store declares `'none'`.
 
 ### Limits to know
 

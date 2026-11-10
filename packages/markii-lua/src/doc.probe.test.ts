@@ -509,7 +509,7 @@ describe('doc probe — nothing beyond the three documented names', () => {
     });
   });
 
-  it('the note reaches Lua with no clock, no bundle and no cache behind it; `net` is always present as a denial stub (batch 7 #47)', async () => {
+  it('the note reaches Lua with no clock, no bundle and no cache behind it; `net` is always present as a denial stub', async () => {
     const result = await run(
       `return tostring(os) .. "," .. tostring(io) .. "," .. type(net) ..
        "," .. tostring(bundle) .. "," .. tostring(cache)`,

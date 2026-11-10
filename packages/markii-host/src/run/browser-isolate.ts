@@ -13,10 +13,10 @@
  * there is no `__dirname` inside a worker to find it beside the bundle.
  *
  * Network is served by the HOST, not the worker: `serveNetRequests` wires
- * every `markii:net-request` to the caller's own `NetProvider`, which is
- * the same pinned one a worker-thread isolate runs. The isolate has no
- * network stack of its own, so the allowlist cannot be bypassed from
- * inside it.
+ * every `markii:net-request` to the caller's own `NetProvider`. Lua cannot
+ * reach JavaScript, and the worker entry removes its own network globals
+ * before the first script runs (`./worker-entry-browser.ts`), so the
+ * provider's allowlist is the only path to the network.
  *
  * What this CANNOT do, stated plainly because it is a real difference: a
  * Web Worker takes no `maxOldGenerationSizeMb`, so `options`'s heap cap is
@@ -51,6 +51,7 @@ export interface BrowserIsolateOptions {
     netAllowlist: string[],
     maxFetchBytes: number,
     netPolicy: unknown,
+    signal?: AbortSignal,
   ) => NetProvider;
   /** Where the worker should fetch wasmoon's `glue.wasm`; sent along with the job. */
   wasmUri?: string;
@@ -88,6 +89,9 @@ export function createBrowserIsolate(
     const worker = options.createWorker(spawn.entryPath);
     let provider: NetProvider | undefined;
     let alive = true;
+    // Aborted by `kill()`: a request still in flight when the run ends is
+    // cancelled rather than left running in the host.
+    const requests = new AbortController();
 
     const messageListeners: ((message: unknown) => void)[] = [];
     const errorListeners: ((error: unknown) => void)[] = [];
@@ -125,7 +129,12 @@ export function createBrowserIsolate(
     return {
       send: (job) => {
         const { allowlist, maxFetchBytes, policy } = netArgsFrom(job);
-        provider = options.netProvider(allowlist, maxFetchBytes, policy);
+        provider = options.netProvider(
+          allowlist,
+          maxFetchBytes,
+          policy,
+          requests.signal,
+        );
         worker.postMessage({
           ...(job as Record<string, unknown>),
           ...(options.wasmUri !== undefined
@@ -136,6 +145,7 @@ export function createBrowserIsolate(
       kill: () => {
         if (!alive) return;
         alive = false;
+        requests.abort();
         worker.terminate();
       },
       onMessage: (listener) => {

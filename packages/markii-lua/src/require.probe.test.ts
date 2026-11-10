@@ -140,7 +140,7 @@ describe('require probe — no bytecode, ever', () => {
 });
 
 describe('require probe — network/filesystem escape attempts', () => {
-  it('a required module has no `bundle`/`io`/`os` surface beyond what the run itself already grants, and sees `net` only as an always-present denial stub (batch 7 #47)', async () => {
+  it('a required module has no `bundle`/`io`/`os` surface beyond what the run itself already grants, and sees `net` only as an always-present denial stub', async () => {
     const view = bundleWithScripts({
       'probe.lua': `
         return {

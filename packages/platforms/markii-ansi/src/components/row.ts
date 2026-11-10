@@ -12,7 +12,7 @@ function isTextAlign(value: string): value is RowTextAlign {
   return (TEXT_ALIGNS as readonly string[]).includes(value);
 }
 
-/** Below this width, cells stack vertically instead of sitting side by side — a named constant per the batch brief, not a magic number. */
+/** Below this width, cells stack vertically instead of sitting side by side — a named constant, not a magic number. */
 export const ROW_COLUMN_THRESHOLD = 60;
 
 /** The blank columns between two cells of a grid row. Shared by both emitters (the Ink flex `Box` and the flattened string). */

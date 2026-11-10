@@ -89,9 +89,9 @@ export function buildMarshalPrelude(limits: MarshalLimits): string {
 -- once per engine, before any untrusted user code runs), so the walk below
 -- closes over these as upvalues fixed to the genuine primitives -- immune to
 -- a later script doing e.g. \`error = function() end\` in the shared globals
--- table before this walk runs. See finding F-1 in the sandbox audit: the
--- walk previously resolved error/type/pairs/math.floor as DYNAMIC GLOBAL
--- lookups, which a script could rebind to neuter its own caps.
+-- table before this walk runs. Resolving error/type/pairs/math.floor as
+-- DYNAMIC GLOBAL lookups would let a script rebind them to neuter its own
+-- caps.
 local error, type, pairs, floor, sfind = error, type, pairs, math.floor, string.find
 
 local function __smd_marshal(value, seen, depth, budget)
@@ -241,8 +241,7 @@ export function checkJsonWithinLimits(
  * True array marker set by the Lua-side marshal walk (see
  * `buildMarshalPrelude`). Exported (not just module-private) so
  * `./json-decode`'s JSON decoder can recognize and DROP this exact key if
- * it ever appears as an object key in attacker-controlled JSON (adversarial
- * finding A4): without that, a remote response body like
+ * it ever appears as an object key in attacker-controlled JSON: without that, a remote response body like
  * `{"__smd_is_array":true,"1":"a","2":"b","x":"kept"}` would decode to an
  * ordinary Lua table carrying this same marker key, and `finalizeMarshaledValue`
  * below — which has no way to tell "the trusted marshal walk set this" apart

@@ -268,7 +268,7 @@ describe('runScript — async wall-clock guard classification is identity-based,
 });
 
 describe('runScript — capabilities: net', () => {
-  it('with net not granted, net is a stub table and any use fails as a classified capability denial, not a runtime error (batch 7 #47)', async () => {
+  it('with net not granted, net is a stub table and any use fails as a classified capability denial, not a runtime error', async () => {
     const r = await run('return net.fetch_json("https://x.example.com")');
     expect(r.ok).toBe(false);
     expect(!r.ok && r.error.kind).toBe('capability');
@@ -919,7 +919,7 @@ describe('runScript — adversarial verification pass fixes', () => {
     expect(r.ok && Array.isArray(r.value)).toBe(false);
   });
 
-  it('B2: a cache-hit value exceeding the node cap self-heals as a MISS — fn runs once, the fresh value comes back, and the stored entry is overwritten (orchestrator decision, #6 verification notes)', async () => {
+  it('B2: a cache-hit value exceeding the node cap self-heals as a MISS — fn runs once, the fresh value comes back, and the stored entry is overwritten', async () => {
     const bigArray = Array.from({ length: 50 }, (_, i) => i);
     const store = new Map<string, { value: unknown; storedAtMs: number }>([
       ['k', { value: bigArray, storedAtMs: Date.now() }],

@@ -27,8 +27,8 @@
  * writes anything anywhere, so "nothing is written outside the pack
  * directory" holds structurally for every rejection path — there is no
  * write side to leak from. A host that wants to install a `.mkp` (unzip it
- * into its own pack directory) is a separate, host-specific concern (the
- * brief's "Install pack from file" command) and is out of this module's
+ * into its own pack directory) is a separate, host-specific concern (an
+ * "Install pack from file" command) and is out of this module's
  * scope entirely.
  */
 import {
@@ -98,7 +98,7 @@ export interface PackArchiveContents {
   readonly ignoredEntries: readonly string[];
 }
 
-/** macOS's zip metadata folder — never a real pack file, and never counted toward "is this archive a single wrapped folder" detection below (batch 7 #61). */
+/** macOS's zip metadata folder — never a real pack file, and never counted toward "is this archive a single wrapped folder" detection below. */
 const MACOSX_PREFIX = '__MACOSX/';
 
 /** Every entry in `paths` that isn't macOS's `__MACOSX` metadata folder or its bare directory entry. */
@@ -193,7 +193,7 @@ export async function openPackArchive(
     // pack.json anywhere", and sends a user who zipped a FOLDER instead of
     // its CONTENTS looking for a file that plainly exists one level down),
     // check whether this archive is exactly that shape: every entry
-    // wrapped under one common top-level folder (batch 7 #61).
+    // wrapped under one common top-level folder.
     const wrappingFolder = singleWrappingFolder(paths);
     if (
       wrappingFolder !== undefined &&

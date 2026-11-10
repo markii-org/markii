@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 /**
- * THE RULE THAT MATTERS MOST (task brief, "Storage"): `saveData`/`loadData`
+ * THE RULE THAT MATTERS MOST (storage): `saveData`/`loadData`
  * write into `.obsidian/plugins/markii/data.json`, INSIDE the vault — it
  * travels with Obsidian Sync and with any vault someone shares, clones, or
  * hands to a colleague. Anything that authorizes execution or network
@@ -64,8 +64,8 @@ describe('device-local storage boundary', () => {
       ...collectSourceFiles(join(here, 'packs')),
       join(here, 'view.tsx'),
       join(here, 'run-modals.ts'),
-      // batch 11: `host-adapter.ts` is where `createLocalStorageMemento`
-      // is now WIRED (its `deps.loadLocalStorage`/`deps.saveLocalStorage`
+      // `host-adapter.ts` is where `createLocalStorageMemento`
+      // is WIRED (its `deps.loadLocalStorage`/`deps.saveLocalStorage`
       // parameters), even though the real `app.loadLocalStorage`/
       // `app.saveLocalStorage` bindings are still built in `view.tsx`/
       // `main.ts` (both `obsidian`-import files this test cannot see

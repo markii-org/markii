@@ -24,6 +24,8 @@ export type BrowserNetProviderFactory = (
   netAllowlist: string[],
   maxFetchBytes: number,
   netPolicy: unknown,
+  /** Aborted when the isolate is killed or disposed. A provider cancels its in-flight requests on it. */
+  signal?: AbortSignal,
 ) => NetProvider;
 
 export interface FetchNetProviderOptions {
@@ -103,7 +105,9 @@ async function readCapped(
  * manual redirect's target, so it cannot be checked against the allowlist,
  * and a redirect is therefore a denial.
  *
- * Returns a factory because the byte cap arrives per job.
+ * Returns a factory because the byte cap arrives per job. Every request
+ * carries the run's `AbortSignal`, so killing the isolate cancels requests
+ * still in flight.
  */
 export function createFetchNetProvider(
   options: FetchNetProviderOptions = {},
@@ -115,7 +119,7 @@ export function createFetchNetProvider(
   );
   const denial = options.denial ?? ((message: string) => new Error(message));
 
-  return (netAllowlist, maxFetchBytes) => {
+  return (netAllowlist, maxFetchBytes, _policy, signal) => {
     // The run's granted hosts, re-checked here on the page side: the worker
     // checks them too, but the worker is the isolate a hostile script runs
     // in, so the page is the boundary (the same rule the Node provider
@@ -146,6 +150,7 @@ export function createFetchNetProvider(
       if (!allowed.has(url.origin)) {
         throw denial(`origin "${url.origin}" is not on the host's allowlist`);
       }
+      if (signal?.aborted) throw denial('the run has ended');
       const doFetch = options.fetch ?? fetch;
       let response: Response;
       try {
@@ -157,6 +162,7 @@ export function createFetchNetProvider(
           redirect: 'manual',
           credentials: 'omit',
           referrerPolicy: 'no-referrer',
+          ...(signal !== undefined ? { signal } : {}),
         });
       } catch (error) {
         throw denial(

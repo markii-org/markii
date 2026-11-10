@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { runScript } from './sandbox';
 
 /**
- * Executed probe against the real wasmoon VM (no mocks) for batch 7 #47:
+ * Executed probe against the real wasmoon VM (no mocks):
  * the `net` capability table must always exist as a stub whose calls
  * record a denial through the non-spoofable `CapabilityDenials` handle, so
  * `runScript`'s outcome is `kind: 'capability'`, never a runtime
@@ -16,7 +16,7 @@ import { runScript } from './sandbox';
  * throw crosses into Lua — never from the error message text, which a
  * script can forge with a plain `error("MARK_CAPABILITY: ...")` call.
  */
-describe('capability-stub probe — net (batch 7 #47), real wasmoon', () => {
+describe('capability-stub probe — net, real wasmoon', () => {
   it('zero grants, no provider at all: net.fetch_json is a classified capability denial, not a runtime error', async () => {
     const r = await runScript({
       code: 'return net.fetch_json("https://api.example.com/x")',

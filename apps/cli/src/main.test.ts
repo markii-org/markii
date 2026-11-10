@@ -1,3 +1,4 @@
+import { devNodeHostIsolate } from '@markii/host/dev-isolate';
 import { describe, expect, it, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -95,12 +96,11 @@ describe('view: scripts-not-run notice', () => {
 });
 
 /**
- * `markii view`'s mode selection (batch 10's live viewer): both streams
+ * `markii view`'s mode selection: both streams
  * being TTYs mounts the live app, `--static` forces the render-once path
  * even then, and either stream not being a TTY keeps today's static
  * behavior. A fake `mountLiveViewer` stands in for the real Ink mount so
- * these tests never touch a real TTY (per AGENTS.md's testability rule and
- * the batch-10 brief's "do not spawn a real TTY" instruction).
+ * these tests never touch a real TTY (AGENTS.md's testability rule).
  */
 describe('view: live/static mode selection', () => {
   const tempDirs: string[] = [];
@@ -144,7 +144,10 @@ describe('view: live/static mode selection', () => {
     });
     const view = fakeViewDeps();
 
-    const exitCode = await run(['view', file], terminal, { view });
+    const exitCode = await run(['view', file], terminal, {
+      view,
+      isolate: devNodeHostIsolate(),
+    });
 
     expect(exitCode).toBe(0);
     expect(view.calls).toHaveLength(1);
@@ -182,7 +185,10 @@ describe('view: live/static mode selection', () => {
     });
     const view = fakeViewDeps();
 
-    const exitCode = await run(['view', file], terminal, { view });
+    const exitCode = await run(['view', file], terminal, {
+      view,
+      isolate: devNodeHostIsolate(),
+    });
 
     expect(exitCode).toBe(0);
     expect(view.calls).toHaveLength(0);
@@ -199,7 +205,10 @@ describe('view: live/static mode selection', () => {
     });
     const view = fakeViewDeps();
 
-    const exitCode = await run(['view', file], terminal, { view });
+    const exitCode = await run(['view', file], terminal, {
+      view,
+      isolate: devNodeHostIsolate(),
+    });
 
     expect(exitCode).toBe(0);
     expect(view.calls).toHaveLength(0);
@@ -222,7 +231,10 @@ describe('view: live/static mode selection', () => {
     });
     const view = fakeViewDeps();
 
-    const exitCode = await run(['view', file], terminal, { view });
+    const exitCode = await run(['view', file], terminal, {
+      view,
+      isolate: devNodeHostIsolate(),
+    });
 
     expect(exitCode).toBe(0);
     expect(view.calls).toHaveLength(1);
@@ -245,7 +257,10 @@ describe('view: live/static mode selection', () => {
     });
     const view = fakeViewDeps();
 
-    const exitCode = await run(['view', file], terminal, { view });
+    const exitCode = await run(['view', file], terminal, {
+      view,
+      isolate: devNodeHostIsolate(),
+    });
 
     expect(exitCode).toBe(2);
     expect(view.calls).toHaveLength(1);

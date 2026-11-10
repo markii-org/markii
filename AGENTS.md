@@ -265,8 +265,7 @@ packages/markii-host    PUBLISHED (user-approved 2026-11-09; in build:dist and
                      nothing about any app's bundle layout: a host passes
                      `workerPath` (see apps/vscode/src/worker-path.ts) and
                      its `spawnIsolate`; no node:* import here. The Node
-                     isolate and the dev/Vitest worker fallback live in
-                     src/run/node-isolate.ts. The watchdog, exactly-once
+                     isolate lives in src/run/node-isolate.ts. The watchdog, exactly-once
                      settlement, and the never-rejects contract live HERE
                      for every host, never behind the isolate seam
   src/run/isolate.ts   the IsolateSpawner seam: which KIND of isolate a
@@ -340,12 +339,17 @@ packages/markii-host    PUBLISHED (user-approved 2026-11-09; in build:dist and
                      @markii/react or @markii/html at runtime.
                      apps/vscode/src/browser-entry.probe.test.ts bundles it
                      for a browser and checks the module inputs
-  src/node.ts        @markii/host/node: the worker_threads isolate
-                     (run/node-isolate.ts), the pinned net provider, the
-                     Node fs seams (node-fs.ts), the @markii/html export
-                     engine (html-engine.ts), pack compile/export, and the
-                     conformance runner. The /browser subpath is reserved
-                     for the browser platform entry (src/browser.ts)
+  src/node.ts        @markii/host/node: createNodeHostIsolate (the
+                     worker_threads isolate over the packaged
+                     dist/node-worker.js, run/node-isolate.ts), the pinned
+                     net provider, the Node fs seams (node-fs.ts) and the
+                     @markii/html export engine (html-engine.ts).
+                     @markii/host/node-worker exports the worker file
+  src/dev-isolate.ts TEST-ONLY, excluded from the published build: runs
+                     worker-entry.ts from source through tsx
+                     (spawnRunInThread, devNodeHostIsolate). Tests and
+                     probes import it as @markii/host/dev-isolate; an app
+                     adapter takes it through its `isolate` option
   src/browser.ts     @markii/host/browser, the browser PLATFORM entry (twin
                      of node.ts): createBrowserHostIsolate (a module Web
                      Worker from dist/browser-worker.js, dist/glue.wasm sent
@@ -361,8 +365,10 @@ packages/markii-host    PUBLISHED (user-approved 2026-11-09; in build:dist and
   src/conformance.ts @markii/host/conformance: the host scenario runner;
                      build:dist ships the corpus in dist/conformance/host/
   scripts/build-dist-assets.mjs  finishes build:dist: dist/package.json
-                     (type module), the self-contained browser worker
-                     (esbuild), glue.wasm, the conformance corpus
+                     (type module), the self-contained browser and Node
+                     workers (esbuild), glue.wasm, the conformance
+                     corpus; then fails if a .d.ts reachable from
+                     dist/index.d.ts imports @markii/react or @markii/html
   src/path-util.ts   adapter-path helpers (join, dirname, isAbsolute); the
                      separator comes from the base path, so Windows paths
                      from VS Code survive
@@ -442,7 +448,10 @@ e2e/browser-host     a STANDALONE Vite fixture (not a workspace) that installs
                      Chromium, Firefox and WebKit against a browser
                      HostAdapter: render, Run in the Web Worker, watchdog,
                      grant + origin allowlist, no CDN fetch, renderCode, a
-                     prebuilt .mkp. `npm run e2e` from the root; root
+                     prebuilt .mkp, the worker's removed network globals.
+                     node-tests/ (npm run test:node) runs the shipped
+                     host corpus and createNodeHostIsolate() from the
+                     installed tarball, no browser. `npm run e2e` from the root; root
                      `npm test` never starts a browser. CI:
                      .github/workflows/e2e-browser.yml (path-triggered +
                      weekly)

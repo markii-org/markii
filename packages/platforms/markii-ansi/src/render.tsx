@@ -122,12 +122,12 @@ import { InteractiveTabs } from './components/tabs.js';
 import { InteractiveDetails } from './components/details.js';
 
 /**
- * The hast walk for the terminal engine (batch 10: the Ink rewrite). Every
+ * The hast walk for the terminal engine (the Ink rewrite). Every
  * DECISION this walk makes is unchanged from the pre-Ink engine (alias
  * resolution, layout resolution, data binding, form mismatch, invalid-enum
  * notice, empty-inline notice, never-throw component containment, script-
  * fence markers, link and image handling) — see AGENTS.md's architecture
- * rules and the batch-10 brief. What changed is the OUTPUT shape: instead of
+ * rules. The OUTPUT is a tree of Ink elements: instead of
  * building one big plain string, the walk builds a tree of Ink elements
  * (`Box`/`Text`) and hands it to `ink-string.ts` (the render-once path) or
  * returns it directly (the new live-viewer export, `buildMarkElement`).
@@ -179,7 +179,7 @@ const ROW_NAME = 'row';
 const TABS_NAME = 'tabs';
 const DETAILS_NAME = 'details';
 /**
- * `card` and `figure` join this list (batch 11's Ink-frames phase): both are
+ * `card` and `figure` join this list: both are
  * containers whose body previously only ever reached STRING mode, so a
  * `tabs`/`details` nested inside one could never become focusable. `card`
  * draws its frame with an Ink `Box` border (`renderCardElement`); `figure`
@@ -1324,7 +1324,7 @@ function renderDirectiveString(
   // own attributes (never from the body), so the walk resolves it here,
   // BEFORE building children, and builds children exactly ONCE at that
   // final width — never at the outer width followed by a re-wrap. A
-  // re-wrap-afterward shipped as a real regression (post-phase-2 review):
+  // re-wrap-afterward shipped as a regression:
   // it corrupts anything self-drawing nested inside (a card's frame, a
   // row's columns), since a word-based re-wrapper has no notion that a run
   // of box-drawing characters is not prose. See `resolveCardInnerWidth`'s
@@ -1520,13 +1520,11 @@ function renderAlignedBodyElement(
  * Renders one `row` cell at `cellWidth`. `text=left` (the default) keeps
  * the cell a real Ink element tree (`renderBlockElement`), so anything
  * focusable inside it stays focusable. `text=center`/`text=right` instead
- * falls back to a flattened, pre-justified STRING — batch 11's justification
+ * falls back to a flattened, pre-justified STRING — the justification
  * rule: exactly ONE implementation, `text-grid.ts`'s `padText`, never a
- * second Ink-`alignItems`-based mechanism. Before this batch, `row`'s
- * ELEMENT-mode grid silently ignored `text=` altogether (only the STRING-
- * mode fallback, reached when a `row` is nested inside a self-drawing
- * container, honored it); this closes that gap using the SAME helper the
- * STRING mode already uses, rather than inventing a second mechanism.
+ * second Ink-`alignItems`-based mechanism. The ELEMENT-mode grid and the STRING-mode fallback (reached when a `row`
+ * is nested inside a self-drawing container) both honor `text=` through
+ * that one helper.
  */
 function renderRowCellElement(
   node: RootContent,
@@ -1733,7 +1731,7 @@ function selfLayoutAlignElement(
 
 /**
  * `:::card{title="..." text=left|center|right} ... :::` as a real Ink
- * element (batch 11: card moves off `frameBlock`'s hand-drawn string frame
+ * element (card moves off `frameBlock`'s hand-drawn string frame
  * onto Ink's own `Box` border, so a `tabs`/`details` nested in its body can
  * become a real focusable — this function's `body` is built through
  * `renderBlocksElement`, ELEMENT mode, whenever that is possible).
@@ -1745,9 +1743,7 @@ function selfLayoutAlignElement(
  * `frameGlyphs`'s character set makes byte-identical to `frameBlock`'s own
  * untitled output (proven against the committed fixtures).
  *
- * `text=center`/`text=right` (batch 11's justification rule: exactly ONE
- * implementation, `text-grid.ts`'s `padText`, pre-justifying a STRING before
- * Ink ever sees it, never a second Ink-`alignItems`-based mechanism) falls
+ * `text=center`/`text=right` falls
  * back to building the body as one flattened, pre-justified string, exactly
  * like the pre-Ink engine did — an accepted, documented trade: a `tabs`/
  * `details` nested inside a CENTERED or RIGHT-aligned card body is not
@@ -1924,7 +1920,7 @@ function renderCalloutElement(
 
 /**
  * `:::figure{src="..." alt="..."} caption markdown :::` as a real Ink
- * element (batch 11: `figure` never drew a hand-drawn frame — it is a plain
+ * element (`figure` never drew a hand-drawn frame — it is a plain
  * dim alt/src line followed by its caption body — but its body still only
  * ever reached STRING mode before this change, so a `tabs`/`details` in its
  * caption could never become focusable. `body` here is built through
@@ -2470,7 +2466,7 @@ export interface RenderMarkOptions {
   readonly viewportRows?: number;
 }
 
-/** Builds the root Ink element for `root`, given every resolved render input. Exported for `buildMarkElement` (the live-viewer entry point, phase 3) as well as this module's own three string-producing entry points. */
+/** Builds the root Ink element for `root`, given every resolved render input. Exported for `buildMarkElement` (the live-viewer entry point) as well as this module's own three string-producing entry points. */
 function buildRootElement(
   root: Root,
   registry: AnsiRegistry,
@@ -2548,8 +2544,7 @@ async function renderRootToString(
  * defaults to `defaultAnsiRegistry`.
  *
  * `async` since the first call in a process pays Ink/Yoga's one-time module-
- * evaluation cost (`ink-string.ts`'s doc comment; `SPIKE-10-findings.md`'s
- * "Item 3"). Never throws: parsing is tolerant, unknown names always render
+ * evaluation cost (`ink-string.ts`'s doc comment). Never throws: parsing is tolerant, unknown names always render
  * a fallback, and any unexpected internal error degrades to the "failed to
  * render document" line.
  *
@@ -2660,7 +2655,7 @@ export async function renderMarkInlineToAnsi(
 }
 
 /**
- * The live-viewer entry point (phase 3 consumes this): builds the same Ink
+ * The live-viewer entry point: builds the same Ink
  * element tree `renderMarkToAnsi` would render to a string, but returns the
  * element itself so a host (the CLI's `markii view`) can mount it directly
  * with Ink's own `render()` instead of re-rendering a string on every
