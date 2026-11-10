@@ -6,6 +6,11 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.17.0-next.3] - 2026-11-10
+
+A prerelease on the npm `next` dist-tag that repairs `@markii/host` for
+hosts outside this repository.
+
 ### Added
 
 - **`createNodeHostIsolate()` in `@markii/host/node`.** It starts the
