@@ -236,7 +236,7 @@ export function manifestNetHosts(manifest: BundleManifest): string[] {
  *
  * A mismatch between the two is not silently absorbed: this pure function
  * returns one diagnostics line per mismatched host, in both directions, for
- * the host's diagnostics surface (docs/integration.md) — never the rendered
+ * the host's diagnostics surface (docs/hosts.md) — never the rendered
  * page. Wording lives here, the one place both apps' adapters read it from,
  * so it can never drift between VS Code's output channel and Obsidian's
  * console/notice surface.

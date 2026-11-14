@@ -97,12 +97,12 @@ would have produced:
   and persists exactly what it always does. Only the isolate that would
   execute the script is faked.
 - `requiresManualTier`: the run reports `tier-blocked` under any trigger
-  but `'manual'`, regardless of grants — the same enforcement the real
+  but `'manual'`, regardless of grants, the same enforcement the real
   sandbox applies to an effectful call under a read-only trigger.
 
 Faking the isolate keeps this corpus fast and deterministic. It proves the
-HOST-LEVEL plumbing — grant prompts, wording, capability declarations,
-trigger forwarding — is identical across hosts. Real sandbox enforcement
+HOST-LEVEL plumbing, grant prompts, wording, capability declarations,
+trigger forwarding, is identical across hosts. Real sandbox enforcement
 (the tier gate, the net allowlist, the marshal boundary) is
 `conformance/executor/`'s job and is not duplicated here.
 
@@ -137,7 +137,7 @@ coarse, matching each `kind`:
   taxonomy only, never a raw message or a timing; an optional `traceOk`
   compares the recorded run trace's `ok` flag.
 - `exported`: `contains`/`excludes` are substrings checked against the
-  written file's content, never the whole document — the render corpora
+  written file's content, never the whole document, the render corpora
   already pin bytes. `valueCount` is how many last-run values were baked
   in, and `renderEngine` (`static` or `react`) is which engine drew the body.
 - `installed`: `namespace` and `replaced`, and `installedDirName`, the name
@@ -161,7 +161,7 @@ coarse, matching each `kind`:
 
 An action whose capability the adapter under test does not declare is
 never diffed against `expected.json` at all (see "Capability handling"
-below) — `expected.json` always describes the FULLY CAPABLE host's
+below), `expected.json` always describes the FULLY CAPABLE host's
 correct behavior, even for a scenario where one real host today has
 nothing to compare it to.
 
@@ -173,11 +173,11 @@ difference) without the corpus having to spell out three wordings for
 one behavior. Diagnostics lines written by a capability decline itself
 (`declined (<capability> unsupported on <host>): …`) are filtered out of
 the actual list before this comparison, since that line exists only
-because the capability was ABSENT — it is not part of what
+because the capability was ABSENT, it is not part of what
 `expected.json` describes.
 
 `prompts` is load-bearing: it proves all three hosts ask the same
-questions, worded the same way, in the same order — the single most
+questions, worded the same way, in the same order, the single most
 security-relevant parity property in this batch.
 
 ## Capability handling (the crux)
@@ -218,6 +218,5 @@ rather than a skipped test or a faked empty answer.
 | `15-load-packs-engine-views` | loading packs reports every installed component and, as `unavailable`, the ones this host's engine has no view for |
 | `16-pack-trust` | a folder that arrives without consent is listed as present and never loaded; enable, disable, re-enable and remove move the device trust list; a host without the list reports the whole scenario `unsupported` |
 
-See `tmp/W11-phase3.md` for which capabilities each of the three real
-adapters currently declares, and which scenarios are consequently
-`unsupported` on every host today (a reported gap, not a corpus defect).
+The capabilities an adapter declares decide which scenarios report
+`unsupported` on that host. That is a reported gap and not a corpus defect.

@@ -25,4 +25,31 @@ Entries:
 - `@markii/host/conformance`: the host scenario corpus and its runner, to
   prove an adapter behaves like the reference apps.
 
-See `docs/integration.md` in the repository for how to write a host.
+A minimal browser host is one adapter and one call:
+
+```ts
+import { createMarkiiHost } from '@markii/host';
+import {
+  createBrowserHostIsolate,
+  createFetchNetProvider,
+} from '@markii/host/browser';
+
+const host = createMarkiiHost({
+  id: 'my-app',
+  labels,
+  readFile,
+  exists,
+  writeFile,
+  listFolder,
+  prompt: (request) => showDialog(request),
+  memento,
+  diagnostics: (line) => console.info(line),
+  now: () => Date.now(),
+  isolate: createBrowserHostIsolate({
+    netProvider: createFetchNetProvider({ allowedOrigins }),
+  }),
+});
+```
+
+See `docs/hosts.md` in the repository for the adapter fields, the host
+responsibilities and the reference hosts.

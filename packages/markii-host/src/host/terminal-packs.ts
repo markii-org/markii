@@ -6,7 +6,7 @@
  * discovers the authorized packs and reads each one's `terminal.js` text
  * through this module; the host then hands the text to the engine's own
  * `loadTerminalPackScript`. Everything here is the one home of the wording
- * for the failures in between (docs/integration.md's "clean is not silent":
+ * for the failures in between (docs/hosts.md's "clean is not silent":
  * a failure reaches the diagnostics surface and the note shows the pack's
  * components as a failed pack).
  *

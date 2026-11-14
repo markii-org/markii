@@ -12,6 +12,21 @@ them.
 A `.mk.md` note also renders inline in Obsidian's own Reading view, alongside
 the dedicated preview pane below. A plain `.md` file is never affected.
 
+## How to use it
+
+1. Install the plugin from the zip or with BRAT, as described below, and
+   enable Markii under Community plugins.
+2. Open a note whose file name ends in `.mk.md`. Its components render in
+   Reading view.
+3. To get a separate preview pane, open the command palette and run Open
+   Markii Preview.
+4. To run the note's scripts, run Run Markii scripts. Scripts never run on
+   open unless you turn on run on open in Settings.
+5. To add a pack, run Install Markii pack from file and choose a `.mkp`
+   archive. Settings lists installed packs under Component packs.
+6. When something does not work, run Show Markii diagnostics. The notice
+   Obsidian shows is short, and the developer console holds the detail.
+
 ## Install
 
 Markii is not in the Obsidian community catalogue yet. Two routes install it
@@ -50,36 +65,36 @@ and Obsidian on mobile does not support that.
 
 All of these are in the command palette.
 
-- **Open Markii Preview** renders the active `.mk.md` note in its own pane.
-- **Run Markii scripts** runs the note's named Lua script blocks and feeds the
+- Open Markii Preview renders the active `.mk.md` note in its own pane.
+- Run Markii scripts runs the note's named Lua script blocks and feeds the
   data-bound components.
-- **Insert Markii component** inserts a chosen component's skeleton at the
+- Insert Markii component inserts a chosen component's skeleton at the
   cursor.
-- **Export Markii note as HTML** writes the note as one self-contained
+- Export Markii note as HTML writes the note as one self-contained
   `.html` file beside it in the vault, with the last run's values baked in.
   The file carries its own styles, so it opens anywhere.
-- **Export Markii note as HTML cascade** follows the links out of the
+- Export Markii note as HTML cascade follows the links out of the
   note, exports every note it reaches, and writes one zip beside the root
   note.
-- **Export Markii note as PDF** prints that same file to a `.pdf` beside the
+- Export Markii note as PDF prints that same file to a `.pdf` beside the
   note. If this device cannot print, the command writes the HTML file instead
   and says so.
-- **Toggle Markii script execution** turns script execution on or off for this
+- Toggle Markii script execution turns script execution on or off for this
   device. While it is off, no note runs its scripts, whether you press Run,
   open a note with run on open enabled, or wait for a scheduled refresh. Your
   network and bundle grants are left exactly as they are.
-- **Install Markii pack from file** installs a pack you were given as a single
+- Install Markii pack from file installs a pack you were given as a single
   `.mkp` file, the only way a pack enters this plugin. It checks the archive
   first, then asks before going ahead, because a pack's code runs inside the
   preview. If a pack of the same name is already installed it asks again
   before replacing it, and an archive it cannot read installs nothing. Once
   installed, it loads immediately, in every open preview and every open
   Reading view.
-- **Reload Markii packs** reloads every installed pack on demand and
+- Reload Markii packs reloads every installed pack on demand and
   re-renders every open Markii view. Install, Remove, and Enable already do
   this for you; use this command if a pack folder changed outside the
   plugin, for example after a Sync.
-- **Show Markii diagnostics** prints the plugin's pack diagnostics, and the
+- Show Markii diagnostics prints the plugin's pack diagnostics, and the
   active preview's last run failures, to the developer console.
 
 ## Reading view

@@ -287,7 +287,7 @@ terminates the isolate when a run overruns.**
 
 Which KIND of isolate a host can use is decided by the host's runtime, and
 the two are not equivalent in what they can bound. A worker thread accepts
-a V8 heap cap, so the reference VS Code extension limits each run's worker
+a V8 heap cap, so the shared run path limits each worker-thread run
 to 128 MB and a runaway allocation dies inside that ceiling. A Web Worker
 accepts no such cap. Where a host has only Web Workers available, as an
 Electron renderer does, script memory is still bounded inside the
@@ -335,12 +335,12 @@ executes it.
 
 One Electron-specific finding qualifies the Web Worker picture further.
 Obsidian creates its workers with Node integration enabled, so `process`,
-`require`, and `Buffer` exist inside the isolate's global scope. This had
-two consequences. The first was functional: the Lua runtime's environment
-detection saw `process` and took a Node code path a blob worker cannot
-complete, so every run failed; the worker bundle shadows those
-globals at its top, which restores the browser path and keeps the
-bundle's own code off Node APIs. The second is a boundary statement that
+`require`, and `Buffer` exist inside the isolate's global scope. This has
+two consequences. The first is functional: the Lua runtime's environment
+detection sees `process` and takes a Node code path a blob worker cannot
+complete, so the worker bundle shadows those globals at its top. That
+restores the browser path and keeps the bundle's own code off Node APIs.
+The second is a boundary statement that
 must be made honestly: that shadowing is scoping, not a privilege
 boundary. Sandboxed Lua still cannot reach JavaScript at all, and that
 remains the enforced line. But a hypothetical interpreter escape inside
@@ -356,8 +356,8 @@ because they carry no user gesture: an auto-run note that hangs would freeze
 the host on open. Manual runs share the requirement but at least fail behind
 a deliberate click. The reference isolates live in `@markii/host`: a worker
 thread for Node hosts and a Web Worker for browser and Electron hosts. A host
-that does not use that package supplies its own, and the host checklist in
-[integration.md](integration.md) lists it first.
+that does not use that package supplies its own, and the host responsibilities in
+[hosts.md](hosts.md) list it first.
 
 ## The bundle jail
 
@@ -619,8 +619,8 @@ hang, and both are fixed:
    Lua globals the walk used, degrading a rejection from ~20k instructions
    to the full memory-cap budget. The primitives are captured into
    locals at prelude definition time, immune to rebinding, and the run path
-   gained an unconditional catch so the never-throws guarantee no longer
-   depends on downstream behavior.
+   has an unconditional catch, so the never-throws guarantee does not
+   depend on downstream behavior.
 2. Strings containing NUL bytes were silently truncated by the interpreter's
    string marshaling. They are rejected at the marshal boundary with an
    explicit reason instead of losing data silently.
@@ -746,7 +746,7 @@ application-scope declaration is pinned by a test so it cannot be silently
 removed, and pre-reading a pack's shared Lua applies a per-file size cap,
 matching the bundle snapshot's posture.
 
-Scheduled and auto-run execution then shipped in the reference extension: a
+Scheduled and auto-run execution ship in the reference extension: a
 note can refresh on an interval or run once when its preview opens, both at
 the read-only tier. The two rules under "Triggers cap capabilities" are what
 make this sound: the tier is enforced in the worker regardless of grants (a real

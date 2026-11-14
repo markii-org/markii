@@ -14,8 +14,12 @@ Start with the page that matches what you're doing:
 - [security.md](security.md): the capability model, the sandbox's
   verification status, and what a terminal render is allowed to print.
 - [integration.md](integration.md): embedding the libraries, the React,
-  static HTML and terminal engines, writing your own renderer, writing a
-  host on the published host layer, and what a host application owns.
+  static HTML and terminal engines, theming, and the rendering options.
+  For an application that only shows notes.
+- [hosts.md](hosts.md): writing a host on the published host layer: the
+  adapter contract, running scripts, packs, editor support and export.
+  The three reference hosts are the VS Code extension, the Obsidian plugin
+  and the command line tool.
 - [packs.md](packs.md): sharing components and Lua modules. All three
   reference hosts load packs.
 - [spec.md](spec.md): the rules an implementation must follow, and what

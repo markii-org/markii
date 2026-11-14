@@ -16,6 +16,8 @@ const SCANNED_PROSE = [
   /^packages\/platforms\/[^/]+\/README\.md$/,
   /^apps\/[^/]+\/README\.md$/,
   /^e2e\/.*README\.md$/,
+  /^packs\/[^/]+\/README\.md$/,
+  /^conformance\/.*README\.md$/,
   // Text the VS Code extension ships as its getting-started walkthrough.
   /^apps\/vscode\/walkthrough\/[^/]+\.md$/,
 ];

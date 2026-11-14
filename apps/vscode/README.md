@@ -6,18 +6,27 @@ and more. See the
 [format guide](https://github.com/markii-org/markii/blob/main/docs/format.md)
 for the full picture.
 
-## Getting started
+## How to use it
 
-No setup. After installing the extension:
+No setup is needed after installing the extension.
 
-1. Open any file ending in `.mk.md` (create one if you like; it's an
-   ordinary text file).
+1. Open any file ending in `.mk.md`. You can create one, because it is an
+   ordinary text file.
 2. Press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd>
    (<kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd> on macOS). You can also
    click the preview icon at the right of the editor title bar, or run
-   **Markii: Open Preview** from the command palette.
+   Markii: Open Preview from the command palette.
+3. To run the note's scripts, run Markii: Run Scripts. Scripts never run
+   when a note is only opened. The extension asks before a script contacts
+   a host.
+4. To add a component pack, run Markii: Install Pack from File… and choose
+   a `.mkp` archive. Markii: Add Pack Folder… adds a folder of packs you
+   trust instead.
+5. When something does not work, run Markii: Show Diagnostics. It opens the
+   Markii output channel, which holds the full detail. The preview shows
+   only a quiet marker.
 
-In a `.mk.md` file that shortcut opens the Markii preview; in a plain `.md`
+In a `.mk.md` file that shortcut opens the Markii preview. In a plain `.md`
 file it still opens VS Code's built-in markdown preview, unchanged.
 
 The preview opens beside the editor, follows whichever `.mk.md` file is
@@ -40,11 +49,11 @@ Two more settings are cosmetic and a workspace may set them:
 To reach them:
 
 - Open Settings and search for "Markii".
-- Run **Welcome: Open Walkthrough...** from the Command Palette and pick
+- Run Welcome: Open Walkthrough... from the Command Palette and pick
   "Get Started with Markii" for a short walkthrough that links to each
   setting.
-- If you use profiles and want the raw JSON, run **Preferences: Open
-  Application Settings (JSON)**, not the usual "Open User Settings (JSON)"
+- If you use profiles and want the raw JSON, run Preferences: Open
+  Application Settings (JSON), not the usual "Open User Settings (JSON)"
   command; application-scope settings live there.
 
 A worked example, in that JSON file:
@@ -58,16 +67,16 @@ A worked example, in that JSON file:
 ```
 
 Three commands write these settings without opening the JSON by hand:
-**Markii: Toggle Run On Open** flips `markii.runOnOpen`, **Markii: Enable
-Scheduled Refresh…** prompts for a number of seconds and writes
-`markii.refreshIntervalSeconds`, and **Markii: Toggle Script Execution**
+Markii: Toggle Run On Open flips `markii.runOnOpen`, Markii: Enable
+Scheduled Refresh… prompts for a number of seconds and writes
+`markii.refreshIntervalSeconds`, and Markii: Toggle Script Execution
 flips `markii.scriptsDisabled`.
 
 ### Turning scripts off
 
 Set `markii.scriptsDisabled` to `true` and no note runs its scripts on this
-machine: not **Markii: Run Scripts**, not run on open, not the refresh
-timer. A blocked **Markii: Run Scripts** says so; a blocked automatic run
+machine: not Markii: Run Scripts, not run on open, not the refresh
+timer. A blocked Markii: Run Scripts says so; a blocked automatic run
 is written to the Markii output channel instead of interrupting you on
 every note you open. Notes still preview, still export, and still show
 whatever values their last run produced. Your grants are untouched in both
@@ -85,60 +94,83 @@ need in order to work out what went wrong.
 
 ## Features
 
-- **Components.** Renders the whole format: directives, the standard
-  component set (callouts, cards, tabs, dashboard stats, and more), layout
-  wrappers, tables, and frontmatter.
-- **Live preview.** Opens beside the editor, follows the active `.mk.md`
-  file, updates as you type, matches your VS Code theme, and highlights
-  directive syntax in the editor too.
-- **Scripts, on demand.** Press **Markii: Run Scripts** and each named Lua
-  script block runs in a sandbox, feeding the data-bound components
-  (`stat`, `progress`, `chart`, `:value[...]`). Scripts never run when a note
-  is only opened, and network access is granted one host at a time, with a
-  prompt. Until you run them, script blocks show a collapsed marker and
-  data-bound components show their quiet empty states.
-- **Monitoring notes.** A note's last values are remembered, so reopening it
-  shows its figures immediately, marked stale, before any re-run. Turn on
-  `markii.runOnOpen` to run a note once when its preview opens, or set
-  `markii.refreshIntervalSeconds` to refresh it on an interval. Both run at
-  the read-only tier: they reuse only the hosts you already granted by hand,
-  never prompt on a timer, and never add network access.
-- **Component packs.** Point the `markii.packs` setting, or the **Markii: Add
-  Pack Folder…** command, at folders you trust as installed packs. Their
-  prefixed components (for example `:::ana_timeline`) render in the preview,
-  and their shared Lua is reachable from `require "ana/..."` in a note's
-  scripts. A note that uses a pack you have not installed stays readable: the
-  unknown component shows a labeled fallback. The setting is user-scope only,
-  so opening someone else's project never loads a pack on your behalf.
-  **Markii: Install Pack from File…** installs a `.mkp` archive, **Markii:
-  Remove Installed Pack…** takes one out, and **Markii: Export Pack…**
-  packages a pack you are developing as a `.mkp`. See the
-  [packs guide](https://github.com/markii-org/markii/blob/main/docs/packs.md).
-- **Authoring help.** Typing `:` or `:::` suggests component names; inside a
-  brace it suggests attribute names and, for an attribute with a fixed set
-  of values, the values themselves. Hovering a directive name shows its
-  documentation. The **Markii: Insert Component…** command inserts a
-  chosen component's skeleton at the cursor, with every standard component
-  and any configured pack's components on offer.
-- **Export.** **Markii: Export as HTML…** writes the note as one
-  self-contained `.html` file, styles embedded and the last run's values
-  baked in, at a path you pick. Saving it beside the note keeps its relative
-  images working. Pack components render in the export as they do in the
-  preview, with each loaded pack's stylesheet embedded. If the preview
-  cannot render the note in time, the export falls back to the static
-  engine, and a pack component appears as a labeled fallback box with your
-  content still inside it. For a PDF, open the
-  exported file in a browser and print it. **Markii: Export as HTML
-  cascade…** does the same for a whole set: it follows the markdown links
-  out of the note, exports every note it reaches, and writes one zip
-  archive, with the links between those notes pointing at the exported
-  files so the set browses offline. A link to anything outside your
-  workspace is never followed and stays as you wrote it, and every note
-  left out is named on the Markii output channel.
-- **Images.** Local images resolve relative to the note (`nice.png` beside
-  it, `img/nice.png` in a subfolder) and remote images load over https.
-  Anything outside the note's folder and your workspace is not loaded, the
-  same rule VS Code's own preview uses.
+### Components
+
+Renders the whole format: directives, the standard
+component set (callouts, cards, tabs, dashboard stats, and more), layout
+wrappers, tables, and frontmatter.
+
+### Live preview
+
+Opens beside the editor, follows the active `.mk.md`
+file, updates as you type, matches your VS Code theme, and highlights
+directive syntax in the editor too.
+
+### Scripts, on demand
+
+Press Markii: Run Scripts and each named Lua
+script block runs in a sandbox, feeding the data-bound components
+(`stat`, `progress`, `chart`, `:value[...]`). Scripts never run when a note
+is only opened, and network access is granted one host at a time, with a
+prompt. Until you run them, script blocks show a collapsed marker and
+data-bound components show their quiet empty states.
+
+### Monitoring notes
+
+A note's last values are remembered, so reopening it
+shows its figures immediately, marked stale, before any re-run. Turn on
+`markii.runOnOpen` to run a note once when its preview opens, or set
+`markii.refreshIntervalSeconds` to refresh it on an interval. Both run at
+the read-only tier: they reuse only the hosts you already granted by hand,
+never prompt on a timer, and never add network access.
+
+### Component packs
+
+Point the `markii.packs` setting, or the Markii: Add
+Pack Folder… command, at folders you trust as installed packs. Their
+prefixed components (for example `:::ana_timeline`) render in the preview,
+and their shared Lua is reachable from `require "ana/..."` in a note's
+scripts. A note that uses a pack you have not installed stays readable: the
+unknown component shows a labeled fallback. The setting is user-scope only,
+so opening someone else's project never loads a pack on your behalf.
+Markii: Install Pack from File… installs a `.mkp` archive, **Markii:
+Remove Installed Pack…** takes one out, and Markii: Export Pack…
+packages a pack you are developing as a `.mkp`. See the
+[packs guide](https://github.com/markii-org/markii/blob/main/docs/packs.md).
+
+### Authoring help
+
+Typing `:` or `:::` suggests component names; inside a
+brace it suggests attribute names and, for an attribute with a fixed set
+of values, the values themselves. Hovering a directive name shows its
+documentation. The Markii: Insert Component… command inserts a
+chosen component's skeleton at the cursor, with every standard component
+and any configured pack's components on offer.
+
+### Export
+
+Markii: Export as HTML… writes the note as one
+self-contained `.html` file, styles embedded and the last run's values
+baked in, at a path you pick. Saving it beside the note keeps its relative
+images working. Pack components render in the export as they do in the
+preview, with each loaded pack's stylesheet embedded. If the preview
+cannot render the note in time, the export falls back to the static
+engine, and a pack component appears as a labeled fallback box with your
+content still inside it. For a PDF, open the
+exported file in a browser and print it. Markii: Export as HTML
+cascade… does the same for a whole set: it follows the markdown links
+out of the note, exports every note it reaches, and writes one zip
+archive, with the links between those notes pointing at the exported
+files so the set browses offline. A link to anything outside your
+workspace is never followed and stays as you wrote it, and every note
+left out is named on the Markii output channel.
+
+### Images
+
+Local images resolve relative to the note (`nice.png` beside
+it, `img/nice.png` in a subfolder) and remote images load over https.
+Anything outside the note's folder and your workspace is not loaded, the
+same rule VS Code's own preview uses.
 
 The extension has no rendering logic of its own: it hosts `@markii/react`,
 the format's reference renderer, so the preview shows exactly what the

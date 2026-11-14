@@ -1,6 +1,6 @@
 /**
  * The one place a render-time diagnostic event becomes a line on a host's
- * diagnostics surface (docs/integration.md's host checklist, item 9).
+ * diagnostics surface (docs/hosts.md's host checklist, item 9).
  *
  * Both renderers report a quiet in-page marker through their `onDiagnostic`
  * render option (`@markii/stdlib`'s `DiagnosticEvent`). The marker alone

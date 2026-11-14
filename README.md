@@ -43,31 +43,15 @@ facebook/react has :value[repo.stars] stars.
 > [!TIP]
 > For more details on how Markii works, try the [guided tour](https://markii-org.github.io/markii-vault/#tour) in the vault playground.
 
-Delete every directive and script and a coherent note remains. That is the
-line Markii holds: components and scripts feed the document; they never become
-the document. Unknown components degrade to a labeled box, scripts never run
-on open, and nothing in a note can break the page.
+Delete every directive and script and a coherent note remains. Components and
+scripts feed the document and never become the document. An unknown component
+renders as a labeled box, scripts never run on open, and nothing in a note can
+break the page.
 
-## Identity
-
-Markii is an extensible plain-text document format: CommonMark plus one small
-directive syntax that renders components you define, with packs as the unit
-of sharing them. Its identity is in three refusals.
-
-- The syntax is not a programming language. Directives carry no expressions,
-  conditionals, or loops. Scripting exists, but in a separate sandboxed Lua
-  layer that most files never touch.
-- Nothing stands between you and the note. A `.mk.md` file is valid
-  CommonMark and stays readable in any editor, with or without Markii
-  installed. An unknown component renders as a quiet labeled box, never an
-  error.
-- The target is a living note, not a typeset page. Components render live in
-  the host and can bind to data that refreshes. Static HTML or PDF is an
-  export, not the product.
-
-If you know LaTeX, Markii wants that extensibility without the macro language
-or the compiler. If you know MDX, it wants those custom components without
-putting a program inside the file.
+Directives carry no expressions, conditionals or loops. Scripting lives in a
+separate sandboxed Lua layer that most files never touch. Components render
+live in the host and can bind to data that refreshes. Static HTML or PDF is an
+export. Packs are the unit for sharing components.
 
 ## Getting started
 
@@ -108,13 +92,17 @@ Ways to use Markii with no coding:
       <br>
       <img src="res/icons/terminal.svg" width="40" height="40" alt="" /><br />
       <h4>Command line</h4>
-      View, export and run a note straight in the terminal, plus a language server for Helix, Emacs and Neovim (with a plugin in <code>apps/nvim</code>).
+      View, export and run a note straight in the terminal, plus a language server for Helix, Emacs and Neovim.
       <br /><br />
       <a href="https://www.npmjs.com/package/@markii/cli">Install from npm &rarr;</a>
       <br><br>
     </td>
   </tr>
 </table>
+
+Neovim has a plugin inside this repository, in `apps/nvim`. It is installed
+from a checkout and has no separate plugin repository. See the
+[Neovim README](apps/nvim/README.md).
 
 To render Markii documents in your own React app:
 
@@ -175,20 +163,9 @@ const view = renderMark(source, defaultRegistry);
 
 ## Components
 
-Every Markii app ships the standard set: callout, card, badge, details,
-figure, tabs, kbd, rating, divider, and the data-bound stat, progress, and
-chart.
-They cover everyday notes, and they are defaults, not the ceiling.
-
-When you outgrow them, components travel as a pack: a folder with a manifest
-and ordinary components for your engine, built once and pointed at your app.
-On a machine without the pack, the same note shows a labeled fallback and
-stays readable. The contract lives in [docs/packs.md](docs/packs.md).
-
-The VS Code extension, the Obsidian plugin and the command line tool also ship three packs by default, no configuration needed: `read`
-(citation cards, quotes, inline marks and terms), `dash` (sparklines, gauges,
-status dots, an uptime bar) and `prep` (question cards, topic confidence,
-a self-test quiz). Their sources live at `packs/` in this repository.
+Every Markii app ships a standard set of components, and packs add more.
+[docs/format.md](docs/format.md) lists the set and [docs/packs.md](docs/packs.md)
+describes packs.
 
 ## Integrating and extending
 
@@ -200,24 +177,17 @@ claim support by passing the same fixtures this repo tests against.
   [docs/format.md](docs/format.md) and the [docs index](docs/README.md).
 - Embedding the libraries or writing a new renderer:
   [docs/integration.md](docs/integration.md).
+- Writing a host that runs scripts, installs packs and exports:
+  [docs/hosts.md](docs/hosts.md).
 - Sharing components as packs: [docs/packs.md](docs/packs.md).
 - The normative rules: [docs/spec.md](docs/spec.md).
-
-## Development
-
-```
-npm install
-npm test       # every workspace
-npm run dev    # playground
-```
-
-The repo is an npm-workspaces monorepo: `@markii/*` packages split along
-the format's seams, a conformance corpus, and a thin playground. Read
-[AGENTS.md](AGENTS.md) and the docs before changing parser or renderer
-behavior.
 
 ## License and contributing
 
 MIT. Issues and pull requests are welcome; changes to parser-visible
 behavior need a conformance fixture, and the docs pages are the source of
 truth for what the format is.
+
+To work on the repository, run `npm install`, then `npm test` for every
+workspace and `npm run dev` for the playground. Read [AGENTS.md](AGENTS.md)
+and the docs before changing parser or renderer behavior.

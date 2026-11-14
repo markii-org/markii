@@ -237,7 +237,7 @@ export interface HostAdapter {
    */
   readonly memento: GrantMemento;
 
-  /** One diagnostics line on this host's designated surface (docs/integration.md). */
+  /** One diagnostics line on this host's designated surface (docs/hosts.md). */
   diagnostics(line: string): void;
 
   now(): number;

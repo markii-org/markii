@@ -88,7 +88,7 @@ export class MarkiiPreviewView extends ItemView {
 
   /**
    * The render's own quiet markers, reported once each to the console,
-   * which is this plugin's diagnostics surface (docs/integration.md's host
+   * which is this plugin's diagnostics surface (docs/hosts.md's host
    * checklist). A marker in the page says a value was declined; this says
    * which value and why, without the reader having to hover it.
    */

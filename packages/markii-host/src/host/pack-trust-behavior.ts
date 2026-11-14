@@ -1,5 +1,5 @@
 /**
- * The shared pack-trust behavior (docs/packs.md, docs/integration.md's host
+ * The shared pack-trust behavior (docs/packs.md, docs/hosts.md's host
  * checklist). A host that declares `HostPackSource.trust: 'device-list'`
  * loads an installed pack only when this device's trust list names its
  * namespace. A folder that sits in the install root without being named

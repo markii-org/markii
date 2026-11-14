@@ -2,14 +2,14 @@
 
 An extensible markdown format: CommonMark + generic directives that render the
 author's own components. **The product is the file format and its reference
-library — not an app.** Read the `docs/` pages before writing any code —
+library, not an app.** Read the `docs/` pages before writing any code.
 `docs/spec.md` is the normative core and, with the topic pages beside it, the
 source of truth for syntax, architecture, and scope.
 
 This file is the single project-instruction file for all agents and tools.
-`CLAUDE.md` is a pointer stub — never add content there.
+`CLAUDE.md` is a pointer stub. Never add content there.
 
-Naming policy (user-set 2026-08-22): the product is **Markii** — one name
+Naming policy (user-set 2026-08-22): the product is **Markii**, one name
 everywhere (titles, prose, "a Markii document"); pronounced like marquee.
 The earlier Mark / "Mark II in titles" split is retired. Files are
 `.mk.md`, bundles are `.mkz` (legacy `.mkbundle` still recognized).
@@ -18,7 +18,7 @@ Spec versioning is plain semver; the trailing "ii" is not a version.
 ## Product principles (binding)
 
 Judge every feature and change against three concerns, in this order of
-who they serve — with the third acting as the overriding scope test:
+who they serve, with the third acting as the overriding scope test:
 
 1. **Casual users first.** Most users have single `.mk.md` files, do
    surface-level scripting at most, and mainly enjoy the added components.
@@ -41,660 +41,149 @@ who they serve — with the third acting as the overriding scope test:
    failure that is recorded internally but reachable from neither surface
    is a bug of the same severity as an error dump in the page. Wording
    lives in the failure-presentation module only; the diagnostics surface
-   is the host's, named in `docs/integration.md`'s host checklist. Test
+   is the host's, named in the host responsibilities of `docs/hosts.md`. Test
    for any failure path: could a user, without opening developer tools or
    bisecting the file, discover that this failed and why? If not, the
    change is not clean, it is mute.
 
+   The one exception is a host's `renderCode` callback that throws. All
+   three engines (React, HTML, terminal) then draw the block as plain code
+   with no marker and report a `code-renderer-failed` event through
+   `onDiagnostic` only. The reader sees ordinary code, so the marker home is
+   empty by design and the diagnostics home still receives the failure.
+
 ## Repo layout (npm workspaces)
 
 ```
-docs/                the spec + documentation — source of truth. spec.md is the
-                     normative core; format/scripting/bundles/security/
-                     integration/packs.md carry the full material per topic
-conformance/         language-agnostic corpus: *.mk.md inputs + expected-AST *.json;
-                     render/ holds render-level fixtures (*.mk.md + committed
-                     *.html), byte-diffed by @markii/html's conformance.test.ts
-                     and cross-checked for classes/structure by @markii/react;
-                     host/ holds host SCENARIO fixtures (note.mk.md +
-                     scenario.json + expected.json), run against every app's
-                     HostAdapter by @markii/host's conformance-runner under a
-                     fake editor, so the three hosts cannot drift apart
-packages/markii-core    framework-agnostic reference impl — ZERO React dependency:
-  src/parse.ts       text → mdast AST (unified + remark-parse + remark-directive)
-  src/to-hast.ts     mdast → hast: directive tagging (data.hName) + URL sanitizer
-  src/corpus.ts      conformance-corpus runner (load fixtures, strip positions)
-packages/platforms/markii-react   the reference L1 renderer, a platform adapter
-                        (one consumer of @markii/core among possible many):
-  src/registry.ts    Registry types + createRegistry/mergeRegistries
-  src/render.tsx     hast + registry → React tree (unknown-directive fallback;
-                     folds {name=…} script blocks into a collapsed marker)
-  src/image-resolve.ts  the resolveImageSrc seam: which srcs are offered to a
-                     host resolver, and the dangerous-scheme check on its result
-  src/components/    the @markii/stdlib standard set (callout, card, badge,
-                     details, figure, tabs/tab, kbd, rating, divider; data-bound
-                     dashboard: stat, progress, chart, table; row + cell; layout wrappers
-                     center/right/wide/narrow/full via createLayoutWrapper;
-                     failure-presentation.ts — the ONE home of failure wording)
-  src/pack-loader.ts pack install/namespacing (docs/packs.md, issue #3 slice 1):
-                     loadPack (manifest + host-resolved component modules →
-                     namespaced Registry, engine-gated) and installPacks
-                     (merges packs onto a base Registry, rejects a shared
-                     namespace at install time)
-  src/doc.css        document rhythm + component internals
-packages/platforms/markii-html   the static HTML renderer (issue #2), a second
-                        platform adapter proving renderer-neutrality — zero React,
-                        emits an HTML string for stopped-changing docs (publish/CI/
-                        email/archive):
-  src/render.ts      hast → HTML string walk (hast-util-to-html for plain nodes;
-                     directives/script-fences swapped for raw nodes); same
-                     unknown/form-mismatch fallback markup+classes as @markii/react.
-                     renderMarkToHtml/renderMarkNodeToHtml take optional store/vault;
-                     threads :value[…] + data= binding through the render context
-  src/image-resolve.ts  the resolveImageSrc seam, mirroring @markii/react's
-  src/registry.ts    HtmlRegistry: components are (attrs, childrenHtml, ctx)→string;
-                     same alias/hostile-config rules as the React registry.
-                     HtmlRenderContext carries esc + resolve/valueMarker (shared)
-                     + per-directive data/dataStatus/dataError/dataFailureKind
-  src/resolve.ts     value resolver ported from @markii/react's store-path/safe-data
-                     (dotted walk, @vault scoping, never-throw, hasOwn-guarded)
-  src/value-format.ts stringifyStoredValue (bound value → display text), a thin
-                     plain wrapper around @markii/stdlib's formatValue
-  src/failure-presentation.ts failurePhrase/failureTitle/failureKindClass/
-                     dataStateClassName — the ONE home of failure wording, per engine
-  src/document.ts    exportHtmlDocument(body, options?): full-page shell with
-                     doc.css embedded (from src/doc-css.generated.ts, gitignored,
-                     regenerated from @markii/react's doc.css by scripts/generate-doc-css.ts
-                     at pretest/prebuild/prebuild:dist)
-  src/layout.ts      resolveLayoutAttributes (width/align), mirrors @markii/react
-  src/escape.ts      the one HTML-escaping primitive (ctx.esc)
-  src/conformance.test.ts  runs the L1 corpus through this engine (issue #2 gate)
-  src/components/    the standard set as string emitters (callout, card, badge,
-                     details, figure, tabs/tab, kbd, rating, divider, row, cell, layout
-                     wrappers, and the data-bound stat/progress/chart/table — chart is
-                     dependency-free SVG) + defaultHtmlRegistry; markup/classes
-                     match @markii/react so doc.css is shared
-packages/platforms/markii-ansi   the terminal renderer, a third platform
-                        adapter for a note read in a shell (CLI, CI log,
-                        pager). Ink + React on top of @markii/core +
-                        @markii/stdlib: Ink owns layout, the escapes and
-                        the theme stay this engine's own:
-  src/render.tsx     hast -> Ink element tree; the three entry points are
-                     async (Ink's layout module loads via top-level await).
-                     buildMarkElement returns the tree for a host to mount
-  src/ink-string.ts  the ONE place Ink's render() is called for the string
-                     path: a collecting stream at the requested columns,
-                     interactive:false so no cursor escapes reach a pipe
-  src/interactive.tsx focus (accent + a leading glyph), tab switching,
-                     PackFocusScope + usePackInput (a `focusable` pack
-                     view's keys, only while focused;
-                     pack-focus.probe.test.tsx),
-                     details folding, the dim status line with the key
-                     legend; q calls the host's onExit and r its onRerun, never
-                     process.exit or a run import.
-                     A tabs/details inside a string-framed block (a
-                     callout, or any body drawn as a string) gets no
-                     focus id: read-only
-  src/sanitize.ts    SECURITY CRITICAL: the one place control characters
-                     leave author text. The engine uses NO Ink color/style
-                     props and never sets chalk.level, so the only escapes
-                     in the output are its own (docs/security.md)
-  src/ansi.ts        ColorLevel/AnsiColor, SGR and OSC 8, detectColorLevel,
-                     and carrySgrAcrossLines (Ink drops SGR state at an
-                     embedded newline, so a styled block re-opens per line)
-  src/theme.ts       Tier 1 doc.css token -> {ansi16, ansi256, truecolor};
-                     theme-coverage.test.ts fails on an unmapped token
-  src/glyphs.ts      the ONE glyph table: every frame, rule, bar, marker,
-                     icon and the key legend, as a unicode set and a
-                     7-bit ascii set behind the `box` option (components
-                     read ctx.glyphs, never a literal); glyphs.test.ts
-                     renders the whole corpus in ascii and fails on any
-                     byte above 0x7f
-  src/text-grid.ts   the private measure/pad/wrap/frame helpers the
-                     self-drawing components (card, callout, details) still
-                     need. NOT exported
-  src/value-types.ts the local structural ValueStatus/FailureKind/store
-                     shapes, so nothing imports @markii/runtime at runtime;
-                     value-types.drift.test.ts pins them to the real ones
-  src/registry.ts    AnsiRegistry: a function taking
-                     {attributes, children, ctx} and returning a string or
-                     an Ink element (drawn as a static snapshot)
-  src/pack-loader.ts loadAnsiPack/installAnsiPacks (per-component 'ansi'
-                     gating, namespace collision refusal) and the wrapper
-                     that cleans attributes and stored values before a
-                     pack component sees them
-  src/pack-script.ts SECURITY CRITICAL: loadTerminalPackScript evaluates a
-                     prebuilt terminal.js IN-PROCESS (register global,
-                     React/Ink published as __markiiReactInk/__markiiInk).
-                     Only a host's own store and shipped packs may reach
-                     it; pack-loader.probe.test.ts is the executed probe
-  src/components/    the standard set as Ink components + defaultAnsiRegistry;
-                     card and figure frame with Ink Box borders (so tabs/
-                     details inside them take focus); callout draws its
-                     colored type bar as a one-column left border whose
-                     glyph is pre-styled by the engine's own SGR (no Ink
-                     color prop), so its body takes focus too;
-                     contract-drift.test.ts fails closed
-                     like @markii/react's
-  src/conformance.test.ts + src/nesting.test.ts  the L1 corpus, the
-                     committed conformance/render/*.txt (width 80, color
-                     never) and one *.ansi, and test-fixtures/ (nesting and
-                     tabs at fixed widths, generated from the previously
-                     published engine); scripts/regenerate-ansi-fixtures.ts
-                     is manual
-packages/markii-runtime host-side scripting glue (docs/scripting.md) — neutral, no React,
-                        no wasmoon; stays runtime-agnostic (executor injected):
-  src/store.ts       ValueStore + createValueStore (null-proto, hasOwn-guarded)
-  src/run.ts         runDocumentScripts + trigger→tier gate (auto/scheduled=read-only)
-packages/markii-stdlib  standard component contracts (docs/integration.md) — neutral,
-                        zero deps, no React; the seam every renderer implements against:
-  src/contracts.ts   ComponentKind/AttributeSchema/ComponentContract types,
-                     STANDARD_COMPONENTS (callout/kbd/rating), getContract()
-  src/layout.ts      the layout system as data: LAYOUT_ATTRIBUTE_KEYS,
-                     WIDTH_PRESETS, ALIGN_PRESETS, LAYOUT_ATTRIBUTES. The one
-                     source both renderers' class maps and completion read
-  src/value-format.ts formatValue/isNumericLike + FORMAT_ATTRIBUTE/
-                     DECIMALS_ATTRIBUTE: the format=/decimals= primitive both
-                     renderers share, so the two engines cannot format a value
-                     differently
-  src/table-shape.ts deriveTableShape: the ::table shape logic both renderers
-                     share (array of objects/arrays/primitives, single object)
-  src/interactive.ts INTERACTIVE_ATTRIBUTE (data-mk-interactive): the one
-                     spelling both engines, and packs, mark a real control with
-  src/validate-note.ts validateNote(tree, catalog): the findings that need
-                     no engine (unknown directive, form mismatch, an
-                     attribute value outside its set). The language
-                     server reports from it; the engines share its
-                     predicates, and a wording test in each engine pins
-                     its text to it
-  src/diagnostics.ts DiagnosticEvent/OnDiagnostic/reportDiagnostic: the neutral
-                     envelope behind both renderers' onDiagnostic option; the
-                     wording stays in each engine's failure-presentation module
-  src/editor/        the @markii/stdlib/editor subpath: the pure,
-                     dependency-free editor seam. complete/ (completionAt,
-                     hoverAt, the directive-context scanner, CompletionContext's
-                     replaceStart + tokenStart pair), insert/ (componentSkeleton,
-                     firstSentence, standardComponentCatalog),
-                     fences/container-fences.ts (enclosingContainerFences,
-                     fenceExtensionEdits, closesOpenContainerFence). Nothing
-                     here imports @markii/pack; a pack-aware host composes its
-                     catalog on top of standardComponentCatalog
-packages/markii-bundle  .mkz bundle handling (docs/bundles.md, L2) — no React, no parsing:
-  src/manifest.ts    manifest.json types + hand-rolled validation (no schema deps)
-  src/paths.ts       path-jail: bundle-relative path normalization/rejection
-  src/zip.ts         zip form via fflate (browser-safe main entry)
-  src/fs.ts          directory form via node:fs (Node-only "./fs" subpath export)
-  src/script-view.ts capability-restricted view for future script runtime (§11)
-  src/storage.ts     BundleStorage contract + createMemoryBundleStorage (the
-                     in-memory third form, main entry, jailed like the others)
-packages/markii-pack    component pack contract (docs/packs.md, issue #3) — no React,
-                        no parsing; the seam later slices (registry loading,
-                        uses: surfacing, require) build against:
-  src/archive.ts     the .mkp reader: a zipped prebuilt pack opened through
-                     @markii/bundle's zip reader and path jail (never a
-                     reimplemented jail), size-bounded like a bundle;
-                     packArchiveFileName gives the <name>-<version>.mkp rule
-  src/manifest.ts    pack.json contract: PackManifest (name/engine/components)
-                     + parsePackManifest() hand-rolled validation (no schema deps)
-  src/namespace.ts   namespace/engine rules: pack-name + local-component-name
-                     validation (lowercase-kebab), reserved bundle-segment
-                     rejection, directive-name composition (packName + localName
-                     → "ana_timeline"), collision-detection predicate
-  src/uses.ts        resolveUses(): resolves a note's declared `uses:` list
-                     against installed pack namespaces (missing/satisfied),
-                     host-facing metadata only — no loading, no registry
-packages/markii-pack-build  PUBLISHED (user-approved 2026-11-09). The pack compiler and
-                        exporter, and the ONLY package declaring
-                        esbuild-wasm. It imports @markii/host and
-                        @markii/pack; host never imports it:
-  src/pack-build.ts  compiles a pack's component sources (and imported CSS)
-                     with esbuild-wasm's in-process wasm path, cached outside
-                     the pack's own folder (buildPackRegistrationScript,
-                     buildPackTerminalScript). See the Stack section for why
-                     the in-process path is mandatory
-  src/pack-css-lint.ts  the class-prefix and token lint behind build warnings
-  src/pack-export.ts  the compose-and-write path (issue #16): builds via the
-                     normal cache, then writes the prebuilt form into a
-                     caller-chosen destination behind resolveExportTarget's
-                     path jail. Used by the bundled-pack builds; a pack's
-                     SOURCE folder is never written to
-  src/pack-export-archive.ts  what VS Code's Export Pack produces: the
-                     prebuilt form zipped as <name>-<version>.mkp (no folder
-                     form, user-set 2026-09-02)
-  test-fixtures/packs/  the .tsx pack fixtures the build tests compile
-packages/markii-host    PUBLISHED (user-approved 2026-11-09; in build:dist and
-                        PACKAGE_DIRS). The shared,
-                        host-neutral script-running layer every app consumes,
-                        so there is exactly ONE copy of the security-critical
-                        glue: tier gating, the grant model, address pinning,
-                        and the terminatable-isolate watchdog:
-  src/run/run-host.ts  spawnRun + the EXTERNAL wall-clock watchdog. Knows
-                     nothing about any app's bundle layout: a host passes
-                     `workerPath` (see apps/vscode/src/worker-path.ts) and
-                     its `spawnIsolate`; no node:* import here. The Node
-                     isolate lives in src/run/node-isolate.ts. The watchdog, exactly-once
-                     settlement, and the never-rejects contract live HERE
-                     for every host, never behind the isolate seam
-  src/run/isolate.ts   the IsolateSpawner seam: which KIND of isolate a
-                     host can create. Node hosts get workerThreadIsolate
-                     (the only kind that accepts a V8 heap cap); an
-                     Electron renderer supports neither worker threads nor
-                     forking a Node child, so it gets a Web Worker
-  src/run/browser-isolate.ts  the Web Worker implementation, started from a
-                     blob URL (Chromium refuses file:// workers)
-  src/run/run-job.ts   the engine-neutral half of a run, shared by both
-                     worker entries so the sandbox, tier gate, and failure
-                     classification cannot drift between hosts
-  src/run/net-provider.ts  the pinned request (resolve-then-pin). NO
-                     @markii/lua runtime import: it also runs in the
-                     Obsidian RENDERER on behalf of a Web Worker, and that
-                     bundle must not carry a Lua engine it never runs, so
-                     the denial brand is injected
-  src/run/net-bridge.ts + net-bridge-worker.ts  the protocol that lets a Web
-                     Worker ask its host to perform a pinned fetch; split so
-                     only the worker half imports @markii/lua
-  src/run/worker-entry.ts  the Node isolate entry
-  src/run/worker-entry-browser.ts  the Web Worker isolate entry
-  src/run/grant-flow.ts    prompts and grant storage, both injected
-  src/run/net-pinning.ts, src/run/ip-address.ts  resolve-then-pin (issue #10)
-  src/run/run-trace.ts     last-run outcome, for the host's run marker
-  src/run/bundle-document.ts  where a bundle's note lives
-                     (resolveBundleDocumentPath) and bundle-name recognition
-                     (isBundleName: .mkz and legacy .mkbundle), for every host
-  src/host/          the HOST CONTRACT: adapter.ts defines HostAdapter,
-                     the small set of primitives a host provides
-                     (readFile/exists/writeFile/listFolder, ONE prompt for
-                     every yes-or-no question, the GrantMemento as
-                     device-local state, a diagnostics line, now()) plus
-                     four OPTIONAL capability groups (isolate, editor,
-                     packs, exports). create-host.ts's createMarkiiHost
-                     turns an adapter into the behaviors every app used to
-                     assemble itself: open, run, exportNote, installPack,
-                     loadPacks, completeAt, hoverAt, insertComponent,
-                     diagnostics. A behavior whose capability the adapter
-                     does not declare returns an Unsupported outcome AND
-                     writes one diagnostics line: declining is never a
-                     silent no-op. labels.ts holds the HostLabels type the
-                     shared message templates interpolate; each app owns
-                     its own nouns in a labels module of its own. The
-                     behavior modules beside them (script-execution,
-                     refresh-interval, run-behavior, run-diagnostics,
-                     pack-archive, pack-install, pack-load,
-                     pack-remove, terminal-packs (reads each pack's
-                     terminal.js for an 'ansi' host, one home of its
-                     failure wording),
-                     export-behavior, cascade-export-behavior (the
-                     linked-set walk, archive, index page, outcome and
-                     wording), export/md-plain, editor-behavior)
-                     are each the ONE home of what the three apps used to
-                     duplicate. The shared run path writes every run's
-                     failure and net-declaration lines (run-diagnostics);
-                     no app writes them again. createMarkiiHost owns the
-                     completion/hover catalog cache (completeAtSync for a
-                     synchronous editor, invalidateCatalog, invalidated by
-                     installPack/loadPacks), and HostPackSource.bundledPacks
-                     carries packs a host embeds in memory;
-                     conformance-runner.ts drives
-                     conformance/host/ against any adapter under a fake
-                     editor. Engine-specific pieces are injected, never
-                     imported: the pack registry engine (`reactPackEngine`
-                     from @markii/react), `htmlEngine` for HTML/PDF export,
-                     and `HostPackSource.engine`. Pack install writes
-                     through adapter.writeFile (which creates parent
-                     folders) and packs.removeFolder. Pack discovery reads through
-                     the adapter's readFile/listFolder
-  src/index.ts       the MAIN entry (@markii/host), environment-neutral:
-                     nothing reachable imports node:*, esbuild-wasm,
-                     @markii/react or @markii/html at runtime.
-                     packages/markii-host/src/neutral-entries.probe.test.ts bundles it
-                     for a browser and checks the module inputs
-  src/internal.ts    @markii/host/internal: what this repository's apps
-                     and @markii/pack-build use below the host object.
-                     NO semver promise; environment-neutral like the main
-                     entry. src/neutral-entries.probe.test.ts bundles
-                     both, and ./browser, for a browser
-  src/run/net-refusal.ts  netRefusal/isNetRefusal: a provider marks a
-                     policy refusal; an unmarked failure is transport and
-                     reaches the script as an ordinary error
-  src/node-worker.ts the @markii/host/node-worker entry: loading it starts
-                     the worker_threads isolate; apps bundle it by that
-                     specifier, never by a path inside this package
-  src/node.ts        @markii/host/node: createNodeHostIsolate (the
-                     worker_threads isolate over the packaged
-                     dist/node-worker.js, run/node-isolate.ts), the pinned
-                     net provider and the Node fs seams (node-fs.ts). It
-                     reaches no optional peer (node-entry-peers.test.ts).
-                     @markii/host/html-engine (html-engine.ts) is the one
-                     entry that imports @markii/html.
-                     @markii/host/node-worker exports the worker file
-  src/dev-isolate.ts TEST-ONLY, excluded from the published build: runs
-                     worker-entry.ts from source through tsx
-                     (spawnRunInThread, devNodeHostIsolate). Tests and
-                     probes import it as @markii/host/dev-isolate; an app
-                     adapter takes it through its `isolate` option
-  src/browser.ts     @markii/host/browser, the browser PLATFORM entry (twin
-                     of node.ts): createBrowserHostIsolate (a module Web
-                     Worker from dist/browser-worker.js, dist/glue.wasm sent
-                     as wasmUri on every job) and createFetchNetProvider
-                     (fetch only for a host the run was granted AND an
-                     origin on the page's allowlist; deny-all by default; no
-                     address pinning). workerType 'classic' serves a host
-                     that embeds an IIFE worker behind a blob URL
-                     (Obsidian); the isolate's dispose is a no-op because
-                     the shared run path disposes after every run, so URL
-                     lifetime belongs to the host's unload. Probed Node-free
-                     like the main entry
-  src/conformance.ts @markii/host/conformance: the host scenario runner;
-                     build:dist ships the corpus in dist/conformance/host/
-  scripts/build-dist-assets.mjs  finishes build:dist: dist/package.json
-                     (type module), the self-contained browser workers
-                     (module and classic, one recipe in
-                     scripts/browser-worker-build.mjs that the Obsidian
-                     build also uses) and Node worker, glue.wasm, the conformance
-                     corpus; then fails if a .d.ts reachable from
-                     dist/index.d.ts imports @markii/react or @markii/html
-  src/path-util.ts   adapter-path helpers (join, dirname, isAbsolute); the
-                     separator comes from the base path, so Windows paths
-                     from VS Code survive
-  src/run/lua-resolver.ts  the pure worker-side PackModuleResolver
-  src/packs/pack-contract.test.ts  loads a hand-written webview.js built only
-                     from docs/packs.md's registration contract, so the docs
-                     cannot drift from the loader (markii-packs builds its
-                     archives against that documented contract)
-  src/packs/prebuilt.ts    the prebuilt-pack convention (issue #15): the
-                     sibling webview.css next to webview.js, and detection
-                     of a prebuilt script shadowing on-disk sources. Stays
-                     here (not in pack-build) because the terminal-pack
-                     reader uses it
-  src/packs/pack-trust.ts  the device-local trust list's stored shape
-                     (key markii:installedPacks), normalization, trustPack/
-                     untrustPack. Pure
-  src/host/pack-trust-behavior.ts  the shared trust behavior behind
-                     HostPackSource.trust: 'device-list' (Obsidian): an
-                     installed folder loads only when the list in the
-                     adapter's memento names it, a present-but-untrusted
-                     folder is listed and never read; installedPacks,
-                     enablePack, disablePack; install trusts, remove
-                     withdraws. VS Code and the CLI declare trust: 'none'.
-                     conformance/host/16-pack-trust covers it
-  src/insert/        the PACK-AWARE half of the insert catalog:
-                     buildComponentCatalog composes @markii/stdlib/editor's
-                     standardComponentCatalog() with each discovered pack's
-                     declared components. It stays here because it needs
-                     @markii/pack
-  src/diagnostics/   render-diagnostics.ts: one DiagnosticEvent from either
-                     renderer's onDiagnostic option becomes the one line both
-                     hosts write, deduped per note. Node-free, so the VS Code
-                     webview imports it from the main entry
-  src/export/        note export (issue #28): buildNoteHtmlExport renders a
-                     note into a self-contained HTML document (doc.css
-                     embedded, last-run values baked in). A host with a
-                     React renderer passes renderBody, so pack components
-                     render as in the preview with their stylesheets;
-                     without one (the CLI) @markii/html renders and pack
-                     directives export as the unknown fallback. Plus
-                     the shared file-naming rules, the data-URI image
-                     embedder behind an injected reader seam, and the
-                     cascade walk/link-rewrite/zip logic both hosts can
-                     adopt; main entry only, since it pulls the HTML engine
-packages/markii-lua     Lua sandbox runtime (docs/security.md, L3) — no React, no parsing:
-  src/globals.ts     empty-env whitelist: curated string/table/math only
-  src/capabilities.ts net/cache/bundle tables; two-tier (manual vs auto) gating
-  src/limits.ts      instruction-count hook, wall-clock/memory/fetch-size caps
-  src/require.ts     sandboxed require() (issue #3, slice 3): bundle-local
-                     modules (reuses @markii/bundle's path-jail via the same
-                     ScriptView) + injected PackModuleResolver seam (denies
-                     cleanly with none configured); per-run cache, cycle
-                     detection, bytecode rejection, protected-chunk execution
-                     sharing the run's globals/limits
-  src/marshal.ts     Lua↔JS value conversion (serializable-only, depth/size caps)
-  src/sandbox.ts     runScript(): assemble env + limits + caps, run, marshal result
-  src/json-table.ts  the ungated `json` table (decode/encode), reusing
-                     json-decode's prelude and marshal's walk, never a second copy
-  src/executor.ts    createLuaExecutor(): adapts runScript to @markii/runtime's ScriptExecutor
-packs/                  the bundled packs (read, dash, prep): plain component
-                        sources, NOT an npm workspace. Each component has a
-                        React view and a *.ansi.tsx terminal view over one
-                        shared *.logic.ts; apps/cli's
-                        bundled-packs-terminal.test.ts renders each
-                        example.mk.md against apps/cli/test-fixtures/
-                        bundled-packs/ (UPDATE_PACK_FIXTURES=1 rewrites). Both hosts build them
-                        into their own output and load them ahead of user
-                        packs (a user pack with the same namespace is skipped
-                        with a diagnostics line). Root ESLint and Prettier
-                        cover them; packs/tsconfig.json + the root
-                        typecheck:packs script (in the build chain) typecheck
-                        them. Everything else pack-shaped lives in the
-                        markii-packs repo
-guards/              repo-wide rule checks (NOT a workspace; root Vitest):
-                     development artifacts in source, the sentence rules
-                     in docs and READMEs, the paths this file names
-e2e/browser-host     a STANDALONE Vite fixture (not a workspace) that installs
-                     the packed @markii/* tarballs (scripts/setup.mjs runs
-                     build:dist + npm pack) and runs a Playwright suite in
-                     Chromium, Firefox and WebKit against a browser
-                     HostAdapter: render, Run in the Web Worker, watchdog,
-                     grant + origin allowlist, no CDN fetch, renderCode, a
-                     prebuilt .mkp, the worker's removed network globals.
-                     node-tests/ (npm run test:node) runs the shipped
-                     host corpus and createNodeHostIsolate() from the
-                     installed tarball, no browser. `npm run e2e` from the root; root
-                     `npm test` never starts a browser. CI:
-                     .github/workflows/e2e-browser.yml (path-triggered +
-                     weekly)
-apps/playground      thin Vite dev harness to view .mk.md files. NOT the product.
-apps/vscode          the "Markii" VS Code extension (preview + Run + packs) — an
-                     app/consumer of @markii/react, never a renderer:
-  src/extension.ts   activation + the markii.openPreview command
-  src/preview-panel.ts  the single webview panel; with extension.ts the ONLY
-                     files allowed to import `vscode` (vitest cannot resolve
-                     it, so all testable logic lives in plain modules)
-  src/protocol.ts    host<->webview message contract + hostile-shape guards
-  src/resource-roots.ts  localResourceRoots coverage logic (vscode-free);
-                     src/webview/document-images.ts resolves relative img
-                     srcs against the document's baseUri (img only, no <base>)
-  src/webview-html.ts  the CSP shell: nonce'd script, no remote hosts
-  src/webview/       the bundled React preview (renderMark + defaultRegistry)
-                     and theme.css, mapping --vscode-* colors onto doc.css
-                     without forking it (theme-coverage.test.ts guards drift);
-                     webview/pack-registry.ts is the webview half of pack
-                     loading: normalizes window.__markiiPackRegistrations and
-                     merges via @markii/host's buildRenderRegistry,
-                     sharing one merge + keep-first duplicate guard with the
-                     Obsidian host, and posts diagnostics to the extension
-                     host for the output channel
-  src/packs/         pack loading (docs/packs.md): discovery, the
-                     markii.packs path resolution, the scripts/*.lua
-                     pre-read and the worker-side resolver all live in
-                     packages/markii-host/src/packs/ and
-                     packages/markii-host/src/run/lua-resolver.ts;
-                     host-discovery.ts is the one way this extension
-                     reads pack folders (host.loadPacks() over an adapter
-                     that authorizes exactly those folders);
-                     pack-context.ts
-                     composes them; export-pack.ts backs the
-                     markii.exportPack command (issue #16), which
-                     writes a .mkp through a save dialog and nothing else;
-                     bundled-packs.ts + build-bundled-packs.ts build packs/
-                     into dist/packs at extension build time and register
-                     that folder as the always-present pack root;
-                     a markii.packs entry naming a .mkp file and the
-                     markii.installPack command (validate, consent, then
-                     write into globalStorage, in that order) go through
-                     @markii/host's pack-archive/pack-install via
-                     src/host-adapter.ts;
-                     src/insert-component.ts backs markii.insertComponent
-                     (issue #17); src/completion.ts (wording, snippet and
-                     filter text) backs the completion and hover providers
-                     registered in extension.ts for the markii language
-                     only (issue #27)
-  src/host-adapter.ts  the VS Code HostAdapter (the only app-side host
-                     logic); src/host-conformance.test.ts runs
-                     conformance/host/ through it under the fake editor
-  src/export-html.ts wording + outcome shape behind markii.exportHtml
-                     (issue #28); preview-panel.ts holds the handler
-  syntaxes/          TextMate injection grammar for the three directive forms
-  esbuild.config.mjs two bundles: extension host (node/cjs, vscode external)
-                     and webview (browser/iife); @markii/* aliased to src/;
-                     also copies the esbuild-wasm runtime into dist/ and
-                     bundles @markii/host's worker entry to dist/run/worker.js
-  src/packs/pack-diagnostics.ts  the lines written to the Markii output
-                     channel: packs loaded, packs skipped and why,
-                     deprecated relative markii.packs entries
-apps/cli             the "markii" command line tool, a third host and a
-                     consumer of @markii/ansi, never a renderer. Published
-                     as @markii/cli (files: dist + README + LICENSE; bin
-                     markii -> dist/markii.mjs; node >= 22; prepack builds).
-                     In the root build:dist chain; release.yml publishes it
-                     while its CLI_PUBLISH_ENABLED gate is 'true' (on since
-                     the user bootstrapped 0.0.1 with trusted publishing,
-                     2026-10-02). Bundled
-                     with esbuild as ESM (dist/markii.mjs, since Ink cannot
-                     be bundled as CJS), carrying @markii/host's worker
-                     entry and wasmoon's glue.wasm in its own dist/run/, so
-                     it needs no runtime dependency at all (every @markii/*
-                     entry is a devDependency). `markii view` mounts a live
-                     Ink viewer when stdin and stdout are terminals; a pipe
-                     or --static keeps the render-once path:
-  src/main.ts        the entry, exit codes (0/1/2/3), and with terminal.ts
-                     the ONLY module that reads env/argv/the terminal
-  src/args.ts        the hand-written parser; src/terminal.ts the IO seam
-  src/grant-store.ts the device-local GrantMemento: one state.json under the
-                     platform config dir, 0600, atomic, hostile-file safe
-  src/run-note.ts    runOnce through the shared path, manual tier only
-  src/host-adapter.ts  the CLI HostAdapter (exports and run go through
-                     createMarkiiHost); src/host-conformance.test.ts runs
-                     conformance/host/ through it
-  src/view-mode.ts   live vs static decision (pure); src/live-view.ts mounts
-                     buildMarkElement with Ink, owns width/resize and onExit,
-                     and re-renders in place for --watch
-  src/watch-file.ts  --watch: fs.watch on the note's directory (so a
-                     rename-over save is seen), debounced, with a polling
-                     fallback; fs injected for tests
-  src/render-note.ts the one call into @markii/ansi: width, color, and the
-                     box style (--box, else detectBoxStyle on the env the
-                     Terminal seam hands over)
-  src/pack-store.ts  the device-local pack store (<config dir>/packs/
-                     <namespace>/, beside state.json) and the bundled
-                     dist/packs root; the ONLY folders terminal pack code
-                     is loaded from (never a note, bundle, cwd or env var;
-                     pack-commands.test.ts probes it)
-  src/pack-registry.ts host.loadTerminalPacks() -> @markii/ansi's
-                     loadTerminalPackScript -> installAnsiPacks over
-                     defaultAnsiRegistry; the discovered pack.json is the
-                     authority, a terminal.js naming another namespace is
-                     refused. `markii pack install/list/remove` (--yes
-                     answers only the pack consent, never a network grant)
-  src/lsp/ + src/lsp-command.ts  `markii lsp`, the language server:
-                     frames.ts (hand-written Content-Length framing; no
-                     LSP library, none to be added), positions.ts (the one
-                     UTF-8/16/32 conversion point), server.ts (the
-                     protocol over injected deps, no process access),
-                     note-diagnostics.ts (@markii/stdlib's validateNote
-                     over the parsed tree, pack components from pack.json
-                     only: no render, no pack code, no scripts;
-                     lsp-pack-code.probe.test.ts is the executed probe).
-                     Terminal.openStdio is the only stdio seam and claims
-                     stdout for protocol frames. Completion/hover go
-                     through createMarkiiHost's editor behaviors
-  src/packs/build-bundled-packs.ts  builds the packs/ that name ansi
-                     sources into dist/packs at CLI build time
-  An HTML export still renders pack directives as the unknown fallback
-apps/nvim            a thin Neovim plugin (Lua, NOT a workspace): filetype
-                     `markii` for *.mk.md and `vim.lsp.start` of
-                     `markii lsp`; no Markii logic in Lua. test/run.sh is a
-                     headless test against the built CLI;
-                     .github/workflows/nvim.yml runs it. No mirror repo yet
-apps/obsidian        the "Markii" Obsidian plugin (desktop only) — an
-                     app/consumer of @markii/react, never a renderer. A full
-                     second host: preview, Run, packs, and in-place
-                     rendering of .mk.md notes in Reading view through a
-                     markdown post-processor (whole-note, first section).
-                     Still absent by design: a Live Preview CM6 extension,
-                     because its widget swapping makes the page jump:
-  src/main.ts        Plugin subclass: view registration, the three commands
-                     (Open Markii Preview, Run Markii scripts, Show Markii
-                     diagnostics), settings load. With view.tsx,
-                     settings-tab.ts, run-modals.ts, insert-modals.ts, and
-                     complete-suggest.ts the ONLY files allowed to import
-                     `obsidian` (guarded by src/obsidian-import-guard.test.ts)
-  src/view.tsx       ItemView owning a React root, re-rendering on active
-                     file and vault change
-  src/render-document.tsx  the obsidian-free render seam
-  src/settings.ts    plugin-data settings: COSMETIC ONLY (preview placement).
-                     Anything authorizing execution or network belongs in
-                     local-settings.ts, never here: saveData writes inside
-                     the vault and travels with Sync
-  src/local-settings.ts  the device-local half, via app.saveLocalStorage:
-                     runOnOpen, refreshIntervalSeconds, pack folders. The
-                     rule is executable: src/storage-boundary.test.ts fails
-                     the suite if a run/grant path ever calls saveData
-  src/run/           the host seam onto @markii/host: local-storage-memento
-                     (GrantMemento over saveLocalStorage, never throws on a
-                     full store) and browser-worker (the shared createBrowserHostIsolate over blob-URL
-                     setup); run-modals.ts carries the grant prompts. Run
-                     outcomes surface as Notice + console, not an in-page
-                     marker. embedded-assets.ts is a build-substituted
-                     placeholder: the plugin build base64-embeds the worker
-                     bundle + wasmoon's glue.wasm into main.js (issue #13
-                     step 2) and fails if substitution didn't happen;
-                     decode-base64.ts is the decode half. The release ships
-                     exactly main.js, manifest.json, and styles.css, so a
-                     3-file BRAT install runs scripts and carries the
-                     bundled packs
-  src/packs/         the app-managed pack store (user-set 2026-09-02):
-                     archive-only, NO compiler, no folder list. A pack is
-                     installed from a .mkp into
-                     .obsidian/plugins/markii/packs/<namespace>/ and loads
-                     only when the DEVICE-LOCAL trust list (@markii/host's
-                     shared trust behavior; this adapter declares trust:
-                     'device-list' over saveLocalStorage) names it; a folder present but
-                     untrusted (arrived via Sync or by hand) is listed as
-                     "present, not enabled on this device" and never
-                     evaluated (pack-trust.probe.test.ts proves it with real
-                     registration scripts, through the real adapter and the
-                     shared behavior); install goes through @markii/host's pack-install
-                     (src/host-adapter.ts), which refuses a bundled
-                     namespace before any write; pack-context, pack-runtime, pack-styles,
-                     pack-diagnostics (the console + notice surface named in
-                     docs/integration.md). Install, remove, enable, and the
-                     Reload Markii packs command reload packs and re-render
-                     every open view. The host contract's loadPacks feeds
-                     the insert command's catalog. No export/build command here by design (see
-                     Host positioning below): src/insert-component.ts +
-                     src/insert-modals.ts back Insert Markii component
-                     (issue #17); src/complete-component.ts +
-                     src/complete-suggest.ts (an EditorSuggest, .mk.md
-                     notes only) back directive completion (issue #27)
-  src/reading-view.ts + src/reading-view/  the Reading view post-processor:
-                     .mk.md notes only, renders the whole note into the first
-                     section and empties the rest, wikilinks converted to
-                     markdown links first; src/run/run-events.ts re-renders
-                     it when a Run lands values
-  src/packs/bundled-packs.ts (+ the build-substituted embedded sibling)
-                     the bundled packs base64-embedded in main.js like the
-                     worker, so a 3-file install carries them;
-                     src/host-adapter.ts is the Obsidian HostAdapter and
-                     the .mkp entry behind the Install Markii pack from
-                     file command; src/host-conformance.test.ts runs
-                     conformance/host/ through it
-  src/export-note.ts + src/export/html-to-pdf.ts  the two export commands
-                     (issue #28): export-note.ts is the obsidian-free flow,
-                     wording, and failure classification behind Export as
-                     HTML and Export as PDF; export/html-to-pdf.ts is the
-                     ONE Electron-touching module (hidden BrowserWindow,
-                     javascript disabled, webContents.printToPDF), feature-
-                     detected at call time and degrading to the HTML file
-  src/obsidian-theme.css  maps doc.css's 19 Tier 1 tokens onto Obsidian's
-                     theme variables; src/theme-coverage.test.ts fails when
-                     a token is left unmapped
-  scripts/generate-doc-css.ts  concatenates doc.css + the theme layer into
-                     the generated, gitignored styles.css Obsidian loads
-  scripts/release/   the release-channel helpers (issue #13 step 1):
-                     version gate (tag == manifest == package.json),
-                     plugin-folder assembly, mirror snapshot for
-                     markii-org/markii-obsidian (.github/workflows/
-                     obsidian-release.yml, fires on obsidian-v* tags)
+docs/                the spec and the documentation, the source of truth. spec.md is the
+                     normative core. format, scripting, bundles, security, integration
+                     (rendering in your own app), hosts (writing a host) and packs.md
+                     carry the topic material.
+conformance/         language-agnostic corpus, plain data, no TypeScript. The top level
+                     pairs *.mk.md inputs with expected-AST *.json. render/ holds render
+                     fixtures with committed *.html and *.txt, byte-diffed by @markii/html
+                     and @markii/ansi and cross-checked by @markii/react. host/ holds host
+                     scenarios (note.mk.md, scenario.json, expected.json) that
+                     @markii/host's conformance runner drives against every app's
+                     HostAdapter under a fake editor. executor/ holds the ScriptExecutor
+                     corpus. Each directory's README.md says what its files mean.
+guards/              repo-wide rule checks, not a workspace, run first by root npm test:
+                     development artifacts in source, the sentence rules in docs and
+                     READMEs, and the paths this file names.
+skills/              audit checklists for agents (security audit, renderer review gate).
+scripts/             repo-level build configuration (the workspace alias map).
+packs/               the bundled packs read, dash and prep. Plain component sources, not a
+                     workspace. Each component has a React view, a *.ansi.tsx terminal view
+                     and one shared *.logic.ts. Both hosts that load packs build them into
+                     their own output and load them before user packs; a user pack with the
+                     same namespace is skipped with a diagnostics line. Root ESLint,
+                     Prettier and typecheck:packs cover them. The markii-packs repository
+                     holds every other pack.
+e2e/browser-host     a standalone Vite fixture, not a workspace. It installs the packed
+                     @markii/* tarballs and runs Playwright in Chromium, Firefox and WebKit
+                     against a browser HostAdapter. Run it with npm run e2e from the root;
+                     root npm test never starts a browser. CI: e2e-browser.yml.
+
+packages/markii-core    PUBLISHED. Text to mdast (unified, remark-parse, remark-directive),
+                     directive tagging, the URL sanitizer, the corpus runner. May never
+                     import React, the registry or any component.
+packages/markii-stdlib  PUBLISHED. The neutral contracts every renderer implements:
+                     component contracts, the layout system as data, formatValue,
+                     deriveTableShape, validateNote, the DiagnosticEvent envelope and the
+                     INTERACTIVE_ATTRIBUTE name. Zero dependencies, no React. The
+                     @markii/stdlib/editor subpath is the pure editor seam (completion,
+                     hover, insert skeletons, fence lengthening) and never imports
+                     @markii/pack.
+packages/markii-runtime PUBLISHED. Value store, run orchestration, tier gate. No React, no
+                     wasmoon; the script executor is injected.
+packages/markii-bundle  PUBLISHED. The .mkz bundle in its zip, directory (Node-only ./fs
+                     subpath) and in-memory forms, manifest validation, the path jail
+                     (src/paths.ts) and the script view. No React, no parsing.
+packages/markii-pack    PUBLISHED. The pack contract: manifest validation, namespace rules,
+                     uses: resolution and the .mkp reader. It opens archives through
+                     @markii/bundle's zip reader and jail, never a second jail. No React.
+packages/markii-lua     PUBLISHED. The wasmoon Lua sandbox: whitelisted globals, tiered
+                     capabilities, limits, sandboxed require, marshalling. SECURITY
+                     CRITICAL. No React, no parsing. Probes: capability-stub.probe.test.ts,
+                     doc.probe.test.ts, require.probe.test.ts, require-pass3.probe.test.ts.
+packages/markii-host    PUBLISHED. The one shared, host-neutral script-running layer: tier
+                     gating, the grant model, address pinning, the terminatable-isolate
+                     watchdog (src/run/), and the HostAdapter contract with
+                     createMarkiiHost (src/host/). SECURITY CRITICAL: src/run/ holds the one
+                     copy of that glue. The watchdog, exactly-once settlement and
+                     never-rejects live in src/run/run-host.ts, never behind the isolate
+                     seam, and that file imports no node:*. The main entry
+                     (src/index.ts) is environment-neutral: nothing reachable from it
+                     imports node:*, esbuild-wasm, @markii/react or @markii/html at runtime.
+                     Engine-specific pieces are injected, never imported. Other entries:
+                     internal (no semver promise; the apps use it), node, browser,
+                     html-engine, the two worker entries and conformance. src/dev-isolate.ts
+                     is test-only and excluded from the published build. It never imports
+                     @markii/pack-build. Probes: neutral-entries.probe.test.ts and the
+                     *.probe.test.ts files plus pentest-probe.test.ts in src/run/.
+packages/markii-pack-build  PUBLISHED. The pack compiler and exporter, and the only package
+                     declaring esbuild-wasm (in-process WebAssembly path only; see Stack).
+                     It imports @markii/host and @markii/pack; host never imports it. A
+                     pack's source folder is never written to: builds cache elsewhere.
+packages/platforms/markii-react  PUBLISHED. The reference L1 renderer: registry, render, the
+                     standard component set (src/components/), doc.css, pack loading. It
+                     imports @markii/core and @markii/stdlib. Failure wording lives only
+                     in src/components/failure-presentation.ts. contract-drift.test.ts
+                     fails closed when a standard component lacks an attribute-read entry.
+                     Probe: url-resolve.probe.test.ts.
+packages/platforms/markii-html   PUBLISHED. The static HTML renderer. Zero React. It emits
+                     the same markup and classes as @markii/react, so doc.css is shared.
+                     Failure wording lives only in src/failure-presentation.ts.
+                     doc-css.generated.ts is generated and gitignored. Probe:
+                     url-resolve.probe.test.ts.
+packages/platforms/markii-ansi   PUBLISHED. The terminal renderer on Ink. Ink owns layout; the
+                     escapes and the theme stay this engine's own: no Ink color or style
+                     props and no chalk.level, so the only escapes in the output are its
+                     own. SECURITY CRITICAL: src/sanitize.ts is the one place control
+                     characters leave author text, and src/pack-script.ts evaluates a
+                     prebuilt terminal.js in-process, reachable only from a host's own
+                     store and shipped packs. src/glyphs.ts is the one glyph table:
+                     components read ctx.glyphs, never a literal. Needs ESM output (Ink
+                     loads WebAssembly through a top-level await). Probes:
+                     control-characters.probe.test.ts, hyperlink.probe.test.ts,
+                     url-resolve.probe.test.ts, pack-focus.probe.test.tsx,
+                     pack-loader.probe.test.ts.
+
+apps/playground      thin Vite dev harness for viewing .mk.md files. Not the product.
+apps/vscode          the Markii VS Code extension, the authoring host. Not published to npm.
+                     Only src/extension.ts and src/preview-panel.ts import vscode (Vitest
+                     cannot resolve it), so testable logic lives in plain modules. The
+                     webview is a CSP shell with a nonce'd script and no remote hosts.
+                     src/host-adapter.ts is its HostAdapter. Export Pack writes a .mkp and
+                     nothing else. Probes: contributes-runopen-scope.probe.test.ts,
+                     values-persistence-protocol.probe.test.ts.
+apps/obsidian        the Markii Obsidian plugin, desktop only, the consuming host. Only
+                     src/main.ts, src/view.tsx, src/settings-tab.ts, src/run-modals.ts,
+                     src/insert-modals.ts and src/complete-suggest.ts import obsidian;
+                     obsidian-import-guard.test.ts holds that. src/settings.ts is cosmetic
+                     only, because plugin data rides Sync. Anything that authorizes
+                     execution or network lives in src/local-settings.ts (device-local);
+                     storage-boundary.test.ts holds it. Packs install from .mkp archives
+                     only, with a device trust list. The release ships exactly main.js,
+                     manifest.json and styles.css, with the worker and bundled packs
+                     embedded. There is no Live Preview extension by design.
+                     src/export/html-to-pdf.ts is the one Electron-touching module.
+                     Release helpers: scripts/release/. Probes: pack-trust.probe.test.ts,
+                     browser-worker-bundle.probe.test.ts.
+apps/cli             the markii command line tool, published as @markii/cli, built with
+                     esbuild as ESM into dist/markii.mjs. Every @markii/* entry is a
+                     devDependency. Only src/main.ts and src/terminal.ts read env, argv or
+                     the terminal. Terminal pack code loads only from src/pack-store.ts's
+                     device-local store and the shipped packs, never from a note, a bundle,
+                     the working directory or an environment variable. src/lsp/ is the
+                     language server with hand-written framing and no LSP library, and it
+                     runs no script and no pack code. src/host-adapter.ts is its
+                     HostAdapter. Its HTML export draws pack directives as the unknown
+                     fallback. Probes: lsp-pack-code.probe.test.ts,
+                     run-note.probe.test.ts and pack-commands.test.ts.
+apps/nvim            a thin Neovim plugin in Lua, not a workspace. It starts markii lsp and
+                     holds no Markii logic. test/run.sh is the headless test; CI is
+                     nvim.yml. There is no mirror repository.
 ```
 
 Platform renderers live under `packages/platforms/*` (a workspace root alongside
@@ -702,12 +191,12 @@ Platform renderers live under `packages/platforms/*` (a workspace root alongside
 `packages/*`. Future non-React renderers go under `packages/platforms/` too.
 Consumer applications (the playground, the VS Code extension, the Obsidian
 plugin, the CLI) go under
-`apps/*` — they consume platform renderers, they are not renderers themselves.
+`apps/*`. They consume platform renderers and are not renderers themselves.
 
 Import rule: @markii/core must never import React or anything from @markii/react;
 @markii/react imports @markii/core and @markii/stdlib (the neutral contracts it
 implements); the playground imports @markii/react. The conformance
-corpus is plain data — no TypeScript in `conformance/`.
+corpus is plain data, with no TypeScript in `conformance/`.
 
 ## Repo structure policy (user-set 2026-08-26)
 
@@ -737,16 +226,16 @@ pack-development or export features. Note-authoring features (like Insert Compon
 development features and belong in BOTH hosts. A future engine/host may
 join the authoring side; nothing is built for that in advance.
 
-## Stack (fixed — do not add alternatives)
+## Stack (fixed: do not add alternatives)
 
 - TypeScript (strict), React 18, Vite, Vitest
 - Parsing: `unified`, `remark-parse`, `remark-gfm` (tables/task-lists/
   strikethrough/autolinks), `remark-directive`, `remark-frontmatter`,
   `remark-rehype`, `hast-util-to-jsx-runtime`, `mdast-util-directive`,
-  `unist-util-visit`. No YAML library — the `uses:` accessor is hand-rolled
+  `unist-util-visit`. No YAML library: the `uses:` accessor is hand-rolled
   for the simple list forms only, same philosophy as manifest validation.
 - Playground editor: CodeMirror 6 (playground only)
-- Bundles: `fflate` (zip form; @markii/bundle, plus the private
+- Bundles: `fflate` (zip form; @markii/bundle, plus the published
   @markii/host for the cascade-export zip)
 - Lua sandbox: `wasmoon` (Lua 5.4 in WASM; @markii/lua only)
 - Package manager: npm (workspaces). No pnpm/yarn/bun.
@@ -794,7 +283,7 @@ join the authoring side; nothing is built for that in advance.
   its WebAssembly through a top-level await, so any host bundling this
   engine must emit ESM; a CommonJS bundle cannot represent it.
 
-## Architecture rules (from the spec — violations are bugs)
+## Architecture rules (from the spec; violations are bugs)
 
 1. The parser is component-agnostic: it emits generic directive nodes and must
    never import from the registry or components.
@@ -821,27 +310,27 @@ join the authoring side; nothing is built for that in advance.
 - Dependencies: only what's listed under Stack. Adding anything else requires
   explicit approval from the orchestrator.
 - Components are SELF-BUILT: no third-party UI / component / charting library
-  (no MUI, Chakra, Recharts, etc.) — the standard set is hand-rolled
+  (no MUI, Chakra, Recharts, etc.). The standard set is hand-rolled
   (the dashboard chart is dependency-free SVG, deliberately) so a component
   can never break because an upstream package did. This is a hard rule for
   the reference set (@markii/stdlib, @markii/react) and the recommended
   posture generally. There is no "port an existing external component
-  library" path — external component-library dependencies are out of scope.
+  library" path: external component-library dependencies are out of scope.
 
 ## Documentation style (user-set, binding)
 
 Two kinds of documents, two different jobs. These rules govern every edit
-to `README.md` and `docs/` — violating them is rework, not taste.
+to `README.md` and `docs/`. Violating them is rework, not taste.
 
 **README = the front door. It links, it does not explain.** Keep it
 concise (no hard line cap, per user 2026-08-31), in exactly this shape:
 
-1. Tagline + hook: what this is and why it exists, with one tiny example —
+1. Tagline + hook: what this is and why it exists, with one tiny example,
    enough to stop a reader from leaving.
 2. Getting started: install, try-it, and platform support shown as a
    showcase table (available vs planned).
 3. Integrate & extend: a SHORT summary whose job is pointing into the
-   `docs/` pages — never the material itself.
+   `docs/` pages, never the material itself.
 4. A compact footer: license, contributing.
 
 Anything that can be referenced from `docs/` must not be expanded in the
@@ -855,11 +344,11 @@ not notes someone decodes:
   developer) and a coherent, logical flow; `docs/spec.md` stays the short
   normative core, with rationale in the topic pages.
 - Plain language. No jargon-dense sentences; never cram several facts into
-  one sentence — split it.
+  one sentence. Split it.
 - No long code inline or inside a paragraph. Code sits in short display
   blocks; if a sample grows, restructure the section instead.
 - Professional documentation tone throughout. First-person diary phrasing
-  ("What I did NOT test") never ships in docs/ — audit material is
+  ("What I did NOT test") never ships in docs/. Audit material is
   rewritten as verification status, keeping the evidence and the honesty,
   losing the diary voice.
 - No em dashes in authored pages: docs/, both READMEs, and demo content.
@@ -868,7 +357,7 @@ not notes someone decodes:
   exemption (that rationalization was tried and rejected 2026-08-18).
 - Final pass on every authored page: apply the humanizer rules
   (https://raw.githubusercontent.com/blader/humanizer/refs/heads/main/SKILL.md)
-  — strip inflated claims, filler, forced parallelism, decorative bolding,
+  and strip inflated claims, filler, forced parallelism, decorative bolding,
   and chatbot artifacts. Reference it; do not inline it.
 - While re-authoring, collect gaps and misdesigns and REPORT them; never
   silently change a design decision as part of a rewrite.
@@ -887,8 +376,14 @@ not notes someone decodes:
   snippet. A snippet that shows an attribute nothing reads is a bug.
 
 **Sentence rules** (user-set 2026-11-10, adapted from AS-FOSS/mandible's
-writing rules). They apply to every sentence committed here: docs, READMEs,
-CHANGELOG, code comments, commit messages, and issue text.
+writing rules). They apply to `docs/`, the READMEs, CHANGELOG entries, and
+every code comment or commit message written or touched from now on. The
+repository's older TypeScript comments still hold em dashes and are not
+rewritten in bulk. `guards/prose-rules.test.ts` holds the rules that a
+script can check (em dashes, the word list, machine paths, hashes, issue
+numbers and dates) for `docs/`, the READMEs and the walkthrough text.
+AGENTS.md itself uses no em dashes. The one exception to the bold rule is
+the lead-in on each Maintenance map entry, which works as the entry's name.
 
 - One fact per sentence, about twenty words, plain verbs.
 - No em dashes. No "not X but Y" constructions. No bold mini-headings
@@ -984,18 +479,18 @@ same commit as the change that triggers them:
   failure-presentation contract; the renderer checklist in
   `skills/markii-security-audit.md` is the review gate.
 - **New host embedding the Run path** → the isolate requirement and the host
-  checklist in `docs/integration.md` are the merge gate; grant persistence
+  responsibilities in `docs/hosts.md` are the merge gate; grant persistence
   re-validates on read; bundle handling goes through `@markii/bundle`'s
   jailed storage, never a reimplemented jail.
 - **Host parity** (user-set 2026-09-02) → a finding made while building,
   upgrading, or fixing ONE app (a runtime constraint, a dependency the
   host needs, a degraded mode such as a compiler-less install, a storage
-  rule, an export limitation) is recorded in `docs/integration.md`'s host
-  checklist in the same commit, in host-neutral wording, and the other
+  rule, an export limitation) is recorded in the host responsibilities of
+  `docs/hosts.md` in the same commit, in host-neutral wording, and the other
   app is checked against it: either it already complies, it is fixed in
   the same commit, or the gap is filed as an issue named in the commit
   message. A finding that lives only in one app's source comments or
-  CHANGELOG entry is lost to the next host. Concretely, the checklist must
+  CHANGELOG entry is lost to the next host. Concretely, that list must
   carry: which isolate kind each runtime supports and what it cannot
   bound, that pack compilation needs esbuild-wasm's in-process path and
   what a host without it does, how the worker bytes and the Lua wasm reach
@@ -1004,8 +499,11 @@ same commit as the change that triggers them:
 - **A host behavior** (anything in createMarkiiHost: open, run, export,
   install pack, load packs, complete, hover, insert, diagnostics) → it
   lives in `packages/markii-host/src/host/`, never in an app. An app
-  implements `HostAdapter` and nothing else. It never imports the
-  lower-level function a behavior is built on (`installPackFromArchive`,
+  implements `HostAdapter` and calls `createMarkiiHost` for these
+  behaviors. The linked-set (cascade) export still goes around the host
+  object: the apps call `buildCascadeArchive` and its siblings from
+  `@markii/host/internal`, as they do other helpers there. An app never
+  imports the lower-level function a behavior is built on (`installPackFromArchive`,
   `buildExportDocument`, `discoverPacks`, `runOnce`, `spawnRun` and their
   siblings): `eslint.config.js` fails the lint on that for `apps/*/src`,
   except tests, `host-adapter.ts` and build-time pack scripts. Adding a behavior means a
@@ -1022,7 +520,7 @@ same commit as the change that triggers them:
   sweep ALL demo and doc content in the same pass: `README.md`'s example,
   `docs/` snippets, both apps' READMEs and the VS Code
   walkthrough, the `markii-vault` repo (the tour note, the other example notes, example packs,
-  playground `@markii/*` deps — it consumes published npm versions, so it
+  playground `@markii/*` deps. It consumes published npm versions, so it
   updates after the npm release, not before), and the `markii-packs` repo
   (every pack's components, README, and example note; its CI consumes
   published `@markii/pack`/`@markii/react`, so like the vault it updates
@@ -1035,7 +533,7 @@ same commit as the change that triggers them:
 - **Editor-seam change** (completion, hover, the insert skeleton or catalog,
   fence lengthening) → it lives in `@markii/stdlib/editor`, a PUBLISHED
   subpath, so it needs a CHANGELOG entry and the editor-support section of
-  `docs/integration.md` in the same commit. `@markii/host` only re-exports
+  `docs/hosts.md` in the same commit. `@markii/host` only re-exports
   it; do not add a second copy there.
 - **A renderer that recognizes a value and declines to use it** (an
   out-of-enum attribute value, a refused source) → it renders anyway with a
@@ -1076,7 +574,10 @@ same commit as the change that triggers them:
 - Verify before reporting done: `npm test`, `npm run build`, `npm run lint`
   must all pass from the repo root. Report actual command output, not claims.
 - Do not edit the `docs/` pages or AGENTS.md; propose changes in your report
-  instead. (The orchestrator owns spec and docs edits.)
+  instead. (The orchestrator owns spec and docs edits, unless a brief says
+  otherwise.)
+- Never cite a brief, a `tmp/` file, a batch, a phase or a review in code,
+  comments, docs or commit text.
 - Workers get a brief on disk (`tmp/BRIEF-*.md`, gitignored) and return
   their report as their final message (the harness refuses report files
   from subagents); the orchestrator saves it as `tmp/REPORT-*.md`. A report
@@ -1118,7 +619,7 @@ Write the message about the change: what it does, why, and what it cost.
 
 ## Commands (repo root)
 
-- `npm test` — run all workspace tests
-- `npm run build` — build all workspaces
-- `npm run lint` — lint all workspaces
-- `npm run dev` — start the playground
+- `npm test`: run all workspace tests
+- `npm run build`: build all workspaces
+- `npm run lint`: lint all workspaces
+- `npm run dev`: start the playground

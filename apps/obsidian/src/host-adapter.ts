@@ -63,7 +63,7 @@ export interface ObsidianHostAdapterDeps {
   readonly saveLocalStorage: (key: string, value: unknown) => void;
   /** Reported when a local-storage write is refused (a full store). See `run/local-storage-memento.ts`. */
   readonly onMementoWriteFailure?: MementoWriteFailure;
-  /** The one line sink for this host's designated diagnostics surface (docs/integration.md: the developer console). Receives the line WITHOUT the `[markii] ` prefix; this adapter adds it. */
+  /** The one line sink for this host's designated diagnostics surface (docs/hosts.md: the developer console). Receives the line WITHOUT the `[markii] ` prefix; this adapter adds it. */
   readonly diagnostics: (line: string) => void;
   /** Defaults to `Date.now`. Injectable so a test's clock is fixed. */
   readonly now?: () => number;
