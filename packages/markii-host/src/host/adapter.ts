@@ -65,9 +65,9 @@ export type HostIsolate =
        */
       workerPath(): string;
       /**
-       * Creates the worker-thread isolate: `workerThreadIsolate` from
-       * `@markii/host/node`. Injected so the shared run path imports
-       * nothing from `node:*`.
+       * Creates the worker-thread isolate. `createNodeHostIsolate()` from
+       * `@markii/host/node` supplies it. Injected so the shared run path
+       * imports nothing from `node:*`.
        */
       readonly spawnIsolate: IsolateSpawner;
     }
@@ -173,10 +173,25 @@ export interface HostPackSource {
 /** Every export format any host offers today. */
 export type HostExportFormat = 'html' | 'pdf' | 'ansi' | 'md-plain';
 
+/**
+ * What a host declares to offer exports. A request can carry its own
+ * `targetPath`, so a host with no picker (the command line tool, or a call
+ * site that already knows where the file goes) leaves the resolvers out.
+ *
+ * A single-note export needs `exports` declared with the format in
+ * `formats`, and a destination: either a `resolveTarget` or the request's
+ * `targetPath`. Without a destination it answers `unsupported`.
+ *
+ * The linked-set export is offered when `exports` is declared and the host
+ * has a `resolveLinkedSetTarget` or the request carries a `targetPath`.
+ * Without either it answers `unsupported`. A host that declares `exports`
+ * with neither resolver, such as the command line tool, therefore offers
+ * the linked-set export only to a caller that names the path.
+ */
 export interface HostExportCapabilities {
   readonly formats: ReadonlySet<HostExportFormat>;
-  /** GUI hosts show a picker; the CLI returns the path it was given. */
-  resolveTarget(
+  /** GUI hosts show a picker; the CLI returns the path it was given. Resolves `undefined` when the user cancels. Absent for a host whose callers always pass `targetPath`. */
+  resolveTarget?(
     suggestedFileName: string,
     format: HostExportFormat,
   ): Promise<string | undefined>;
@@ -184,8 +199,7 @@ export interface HostExportCapabilities {
   htmlToPdf?(html: string): Promise<Uint8Array>;
   /**
    * Names the zip archive of a linked-set export, or resolves `undefined`
-   * when the user cancels. Present only on a host that offers the
-   * linked-set export; a host can offer single-note export without it
+   * when the user cancels. A host can offer single-note export without it
    * (the command line tool does), so it is a member of its own rather than
    * a `HostExportFormat`.
    */

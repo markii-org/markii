@@ -6,6 +6,8 @@ interface Report {
   importScriptsThrows: boolean;
   fetchOtherOrigin: string;
   fetchWasm: string;
+  chainExposes: string[];
+  chainLength: number;
   luaValue: unknown;
 }
 
@@ -48,5 +50,10 @@ for (const kind of ['module', 'classic'] as const) {
     // fetch reads the wasm file and nothing else.
     expect(report.fetchWasm).toBe('ok');
     expect(report.fetchOtherOrigin).toMatch(/^refused:/);
+    // Nothing further up the global's prototype chain offers a second way
+    // to the network: no `fetch`, `XMLHttpRequest` or `WebSocket` is an own
+    // property of any prototype the worker scope inherits from.
+    expect(report.chainLength).toBeGreaterThan(0);
+    expect(report.chainExposes).toEqual([]);
   });
 }

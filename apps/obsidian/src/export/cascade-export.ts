@@ -77,11 +77,12 @@ export async function exportNoteCascade(
     },
     exports: {
       formats: new Set(),
-      resolveTarget: async () => undefined,
-      resolveLinkedSetTarget: async () => cascadeArchivePath(request.rootPath),
     },
   });
-  return createMarkiiHost(adapter, { htmlEngine }).exportLinkedSet(hostRequest);
+  return createMarkiiHost(adapter, { htmlEngine }).exportLinkedSet({
+    ...hostRequest,
+    targetPath: cascadeArchivePath(request.rootPath),
+  });
 }
 
 /** Where the archive landed, appended to the shared success message. */

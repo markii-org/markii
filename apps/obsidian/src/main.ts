@@ -32,7 +32,6 @@ import {
 } from '@markii/host';
 import {
   MARK_EXTENSION,
-  readPersistedValues,
   scriptsDisabledConfirmationText,
   scriptsEnabledConfirmationText,
   cascadeDiagnosticLines,
@@ -43,6 +42,7 @@ import type {
   DiscoveredPack,
   ExportImageReader,
   HostAdapter,
+  LastRunOutcome,
   HostEditor,
   HostTextEdit,
   CascadeLinkResolver,
@@ -72,7 +72,6 @@ import {
   CASCADE_ARCHIVE_PLACEMENT,
   exportNoteCascade,
 } from './export/cascade-export.js';
-import { createLocalStorageMemento } from './run/local-storage-memento.js';
 import type { Registry } from '@markii/react';
 import { defaultRegistry } from '@markii/react/components';
 import { loadPackContext } from './packs/pack-context.js';
@@ -455,13 +454,7 @@ export default class MarkiiPlugin extends Plugin {
     let outcome: NoteExportOutcome;
     try {
       const text = await this.app.vault.cachedRead(file);
-      const memento = createLocalStorageMemento(
-        (key) => this.app.loadLocalStorage(key),
-        (key, value) => {
-          this.app.saveLocalStorage(key, value);
-        },
-      );
-      const values = readPersistedValues(memento, file.path);
+      const values = this.lastRun(file.path).persistedValues;
       const packContext = this.exportRegistryContext();
       const request = {
         notePath: file.path,
@@ -562,12 +555,6 @@ export default class MarkiiPlugin extends Plugin {
 
     let outcome: ExportLinkedSetOutcome;
     try {
-      const memento = createLocalStorageMemento(
-        (key) => this.app.loadLocalStorage(key),
-        (key, value) => {
-          this.app.saveLocalStorage(key, value);
-        },
-      );
       const packContext = this.exportRegistryContext();
       const lines: string[] = [];
       outcome = await exportNoteCascade({
@@ -575,7 +562,7 @@ export default class MarkiiPlugin extends Plugin {
         rootPath: file.path,
         readNote: this.readNoteText,
         resolveLink: this.cascadeLinkResolver(),
-        readValues: (path) => readPersistedValues(memento, path),
+        readValues: (path) => this.lastRun(path).persistedValues,
         fs: this.exportFs(),
         embedImagesFor: (path) => this.exportImageReader(path),
         ...(this.packContext
@@ -770,6 +757,11 @@ export default class MarkiiPlugin extends Plugin {
    * `src/view.tsx`'s own `adapter()` — see that method's doc comment for
    * why every key it touches is device-local, never `saveData`.
    */
+  /** What a note's last run left in this device's state, read through the shared host so no storage key is spelled here. */
+  lastRun(notePath: string): LastRunOutcome {
+    return createMarkiiHost(this.hostAdapter()).lastRun(notePath);
+  }
+
   private hostAdapter(): HostAdapter {
     return createObsidianHostAdapter({
       prompt: createObsidianPrompt(this.app),

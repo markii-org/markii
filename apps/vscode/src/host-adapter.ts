@@ -22,7 +22,7 @@
 import { readFile } from 'node:fs/promises';
 import {
   createNodeDirectoryLister,
-  workerThreadIsolate,
+  createNodeHostIsolate,
 } from '@markii/host/node';
 import {
   type GrantMemento,
@@ -64,7 +64,7 @@ export interface VSCodeHostAdapterDeps {
   readonly removeFolder?: (path: string) => Promise<void>;
   /** Every export format this call site offers (today, always `'html'` alone). */
   readonly exportFormats?: ReadonlySet<HostExportFormat>;
-  /** Shows the save dialog and returns the chosen path, or `undefined` on cancel. */
+  /** Shows the save dialog and returns the chosen path, or `undefined` on cancel. Omit it when every export request names its own `targetPath`. */
   readonly resolveExportTarget?: (
     suggestedFileName: string,
     format: HostExportFormat,
@@ -108,20 +108,20 @@ async function unavailableWrite(path: string): Promise<void> {
 export function createVSCodeHostAdapter(
   deps: VSCodeHostAdapterDeps,
 ): HostAdapter {
-  const isolate: Extract<HostIsolate, { kind: 'node' }> = deps.isolate ?? {
-    kind: 'node',
-    // Absent only when no `dist/` is built; a test injects `deps.isolate`.
-    workerPath: (): string => {
-      const bundled = deps.workerPath?.();
-      if (bundled === undefined) {
-        throw new Error(
-          'the extension has no bundled worker (dist/run/worker.js)',
-        );
-      }
-      return bundled;
-    },
-    spawnIsolate: workerThreadIsolate,
-  };
+  const isolate: Extract<HostIsolate, { kind: 'node' }> =
+    deps.isolate ??
+    createNodeHostIsolate({
+      // Absent only when no `dist/` is built; a test injects `deps.isolate`.
+      workerPath: (): string => {
+        const bundled = deps.workerPath?.();
+        if (bundled === undefined) {
+          throw new Error(
+            'the extension has no bundled worker (dist/run/worker.js)',
+          );
+        }
+        return bundled;
+      },
+    });
 
   const packs: HostPackSource | undefined =
     deps.authorizedFolders === undefined
@@ -142,13 +142,14 @@ export function createVSCodeHostAdapter(
         };
 
   const exports: HostExportCapabilities | undefined =
-    (deps.exportFormats === undefined ||
-      deps.resolveExportTarget === undefined) &&
+    deps.exportFormats === undefined &&
     deps.resolveLinkedSetTarget === undefined
       ? undefined
       : {
           formats: deps.exportFormats ?? new Set<HostExportFormat>(),
-          resolveTarget: deps.resolveExportTarget ?? (async () => undefined),
+          ...(deps.resolveExportTarget !== undefined
+            ? { resolveTarget: deps.resolveExportTarget }
+            : {}),
           ...(deps.resolveLinkedSetTarget !== undefined
             ? { resolveLinkedSetTarget: deps.resolveLinkedSetTarget }
             : {}),

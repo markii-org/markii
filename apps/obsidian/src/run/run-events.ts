@@ -8,7 +8,7 @@
  * `view.tsx`'s `MarkiiPreviewView.runScripts` calls `emitValuesChanged`
  * once a run's values are applied (both the streaming `onValue` callback
  * and the completed-run path); the Reading view section for the same note
- * path re-renders from its own `readPersistedValues` read, exactly the way
+ * path re-renders from its own `lastRun` read, exactly the way
  * `MarkiiPreviewView.refresh()` already does. Deliberately `obsidian`-free
  * (this plugin's file-scope split, `src/obsidian-import-guard.test.ts`), so
  * it can be unit-tested with a plain in-memory harness.

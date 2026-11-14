@@ -493,8 +493,8 @@ Both renderers also take an `onDiagnostic` callback. It is called once for
 each quiet marker a render produces for a value the renderer recognized and
 declined to use: a known attribute whose value is outside its closed set, a
 figure source refused as unsafe, a block component written as an inline
-directive (`form-mismatch`), and an inline component that received no
-content (`empty-inline`). It receives the kind, the directive, the
+directive (`form-mismatch`), and an inline component that received neither
+content nor attributes (`empty-inline`). It receives the kind, the directive, the
 attribute when there is one, and the sentence that explains the marker, so a
 host can put the finding on its diagnostics surface instead of relying on
 someone hovering the marker. An unknown attribute name never triggers it,

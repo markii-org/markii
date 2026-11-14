@@ -232,7 +232,10 @@ export async function exportPackArchive(
     zipInput[`scripts/${file.name}`] = encoder.encode(file.text);
   }
 
-  const bytes = zipSync(zipInput);
+  // A fixed modification time, so the same pack zips to the same bytes at
+  // any hour and on any machine. The date is built from local components,
+  // so the stored DOS time reads 1980-01-01 00:00 in every time zone.
+  const bytes = zipSync(zipInput, { mtime: new Date(1980, 0, 1, 0, 0, 0) });
 
   return {
     kind: 'built',

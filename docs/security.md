@@ -310,8 +310,18 @@ own, so the worker entry removes them before the first script runs:
 `XMLHttpRequest`, `WebSocket`, `EventSource`, `WebTransport`, `indexedDB`,
 `caches`, `BroadcastChannel` and the `Worker` constructors are gone,
 `importScripts` throws, and `fetch` serves only the Lua engine's own
-WebAssembly file. Lua cannot reach JavaScript in the first place; the
-removal is a second wall behind that one.
+WebAssembly file. Each name is replaced on the worker's global and on every
+prototype the global inherits from, because browsers define `fetch` on
+`WorkerGlobalScope.prototype`. A worker that cannot replace one of them
+refuses to run the script. Lua cannot reach JavaScript in the first place;
+the removal is a second wall behind that one.
+
+The removal covers names, and two channels have no name to remove. A
+dynamic `import()` of a remote module and a `FontFace` load both send a
+request from a worker. A browser host closes them with a Content Security
+Policy: `worker-src` and `script-src` limited to its own origin, and
+`font-src` likewise. Setting that policy is the host's job, because the
+worker cannot set its own.
 A refusal made in the host is marked as a policy denial on the wire, so it
 still reaches the script as a capability error rather than as an ordinary
 failure. A transport failure is the other case: an unresolved name, a
@@ -791,6 +801,18 @@ dropped by an output object built with plain assignment. Both paths skip
 what they cannot understand and build their output so that every name
 survives, matching the discipline `@markii/runtime`'s own value store already
 followed.
+
+The browser worker's removal of network globals was probed in real browsers
+in November 2026. The removal shadowed `fetch`, `importScripts` and the
+removed names on the global object only. In Chromium and Firefox,
+`WorkerGlobalScope.prototype` owns a real `fetch`, so
+`Object.getPrototypeOf(self).fetch` reached an unrestricted one. Lua cannot
+reach JavaScript, so a script could not use it, and the finding concerns the
+second wall only. The removal covers every prototype in the chain, and the
+worker refuses to run when a name stays live.
+`e2e/browser-host/tests/worker-isolation.spec.ts` walks the chain inside the
+packaged module and classic workers in Chromium, Firefox and WebKit.
+Browser-specific globals outside the listed names were not audited.
 
 ### Turning script execution off
 

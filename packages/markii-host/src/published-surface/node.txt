@@ -1,9 +1,7 @@
 NodeHostIsolateOptions
-SpawnRunOptions
 createNetProvider
 createNodeDirectoryLister
 createNodeFileReader
 createNodeHostIsolate
 createNodePackDiscoveryIo
 createNodePackScriptsReader
-workerThreadIsolate

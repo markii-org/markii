@@ -84,7 +84,7 @@ export async function installPackFromArchive(
   const opened = await openPackArchive(archiveBytes);
   if (!opened.ok) {
     return {
-      kind: 'rejected',
+      kind: 'invalid',
       reason: `"${archivePath}" is not a valid pack archive: ${describeArchiveError(opened.error)}`,
     };
   }
@@ -105,7 +105,7 @@ export async function installPackFromArchive(
       consequential: true,
     });
   } catch (err) {
-    return { kind: 'rejected', reason: describeThrown(err) };
+    return { kind: 'failed', reason: describeThrown(err) };
   }
   if (!consented) {
     return { kind: 'declined', step: 'consent', namespace: packName };
@@ -116,7 +116,7 @@ export async function installPackFromArchive(
   try {
     alreadyInstalled = await exists(targetDir);
   } catch (err) {
-    return { kind: 'rejected', reason: describeThrown(err) };
+    return { kind: 'failed', reason: describeThrown(err) };
   }
 
   let replaced = false;
@@ -131,7 +131,7 @@ export async function installPackFromArchive(
         consequential: true,
       });
     } catch (err) {
-      return { kind: 'rejected', reason: describeThrown(err) };
+      return { kind: 'failed', reason: describeThrown(err) };
     }
     if (!proceed) {
       return { kind: 'declined', step: 'replace', namespace: packName };
@@ -146,7 +146,7 @@ export async function installPackFromArchive(
     );
   } catch (err) {
     return {
-      kind: 'rejected',
+      kind: 'failed',
       reason: `could not install pack "${packName}": ${describeThrown(err)}`,
     };
   }
@@ -209,7 +209,11 @@ export function installPackMessage(
   labels: HostLabels,
   reloadsAutomatically = false,
 ): string {
-  if (outcome.kind === 'rejected' || outcome.kind === 'unsupported') {
+  if (
+    outcome.kind === 'invalid' ||
+    outcome.kind === 'failed' ||
+    outcome.kind === 'unsupported'
+  ) {
     return `Markii: could not install a pack from "${archivePath}". Open ${labels.diagnosticsSurface} for details.`;
   }
   if (outcome.kind === 'reserved') {
@@ -231,7 +235,7 @@ export function installPackDiagnosticLines(
   outcome: InstallAttemptOutcome,
   archivePath: string,
 ): string[] {
-  if (outcome.kind === 'rejected') {
+  if (outcome.kind === 'invalid' || outcome.kind === 'failed') {
     return [
       `Install pack from file rejected "${archivePath}": ${outcome.reason}`,
     ];

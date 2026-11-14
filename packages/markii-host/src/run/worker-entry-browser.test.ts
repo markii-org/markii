@@ -80,4 +80,42 @@ describe('lockdownWorkerGlobals', () => {
     }
     expect(scope.XMLHttpRequest).toBeUndefined();
   });
+
+  it('also locks the names on the prototypes the scope inherits from', async () => {
+    // A browser defines `fetch` on WorkerGlobalScope.prototype, so a
+    // shadow on the global alone leaves `Object.getPrototypeOf(self).fetch`.
+    const real = vi.fn(async () => 'wasm');
+    const base = Object.create(null) as Record<string, unknown>;
+    base.fetch = real;
+    base.importScripts = () => 'loaded';
+    base.XMLHttpRequest = class {};
+    const middle = Object.create(base) as Record<string, unknown>;
+    const scope = Object.create(middle) as Record<string, unknown>;
+    scope.location = { href: 'https://app.test/assets/worker.js' };
+
+    lockdownWorkerGlobals(scope, 'https://app.test/glue.wasm');
+
+    // `base` plays WorkerGlobalScope.prototype: two levels above the scope.
+    const chainFetch = base.fetch as (input: string) => Promise<unknown>;
+    await expect(chainFetch('https://evil.test/')).rejects.toThrow(
+      /not available/,
+    );
+    await expect(chainFetch('https://app.test/glue.wasm')).resolves.toBe(
+      'wasm',
+    );
+    expect(() => (base.importScripts as () => void)()).toThrow(/not available/);
+    expect(base.XMLHttpRequest).toBeUndefined();
+  });
+
+  it('throws when a prototype keeps a real fetch it cannot replace', () => {
+    const base = Object.create(null) as Record<string, unknown>;
+    base.fetch = async () => 'real';
+    Object.freeze(base);
+    const scope = Object.create(base) as Record<string, unknown>;
+    scope.location = { href: 'https://app.test/assets/worker.js' };
+
+    expect(() => lockdownWorkerGlobals(scope, undefined)).toThrow(
+      /could not be locked \(fetch\)/,
+    );
+  });
 });

@@ -16,25 +16,11 @@
 
 export type { ValuesFailure } from './values-failure.js';
 export type {
-  RunJob,
-  RunResult,
-  RunFailure,
-  SpawnRunOptions,
-  SpawnRunRequest,
-} from './run/run-host.js';
-export type {
   IsolateSpawner,
   RunIsolate,
   SpawnIsolateOptions,
 } from './run/isolate.js';
-export type { RunOnceOptions, RunOnceResult } from './run/run-flow.js';
-export type {
-  GrantMemento,
-  PromptHost,
-  PromptManyHosts,
-  PromptUnknownHosts,
-  Thenable,
-} from './run/grant-flow.js';
+export type { GrantMemento, Thenable } from './run/grant-flow.js';
 export type {
   BuildBundleSnapshotOptions,
   BundleSnapshotResult,
@@ -60,12 +46,9 @@ export type { PinPolicy } from './run/net-pinning.js';
 export type { PackModulesMap } from './run/lua-resolver.js';
 export type {
   DiscoveredPack,
-  DiscoverPacksResult,
   EngineUnsupportedPack,
-  PackDirectoryLister,
   SkippedPackFolder,
 } from './packs/discover.js';
-export { discoverPacks } from './packs/discover.js';
 export type {
   BuildRenderRegistryResult,
   DuplicateComposedName,
@@ -86,18 +69,10 @@ export type {
   HostPromptRequest,
   HostTextEdit,
 } from './host/adapter.js';
-export type {
-  RunViaAdapterRequest,
-  RunViaAdapterResult,
-} from './host/run-behavior.js';
 export { installPackMessage } from './host/pack-install.js';
-export type { PackDiscoveryIo } from './host/pack-load.js';
 export type { TerminalPackScript } from './host/terminal-packs.js';
-export type { RemovePackOutcome } from './host/pack-remove.js';
 export type {
-  DisablePackOutcome,
   EnabledPack,
-  EnablePackOutcome,
   InstalledPacksListing,
 } from './host/pack-trust-behavior.js';
 export {
@@ -111,6 +86,7 @@ export type {
   CascadeLinkResolver,
   CascadeTruncation,
 } from './export/cascade.js';
+export type { NoteLink } from './export/note-links.js';
 export type {
   CascadeExportedNote,
   UnreadableCascadeNote,
@@ -118,25 +94,28 @@ export type {
 export { createMarkiiHost } from './host/create-host.js';
 export type {
   CompleteOutcome,
+  DisablePackOutcome,
   EditorPositionRequest,
+  EnablePackOutcome,
   ExportLinkedSetOutcome,
   ExportLinkedSetRequest,
   ExportOutcome,
+  ExportRenderOptions,
   ExportRequest,
   HoverOutcome,
   InsertComponentRequest,
+  InsertOutcome,
   InstallPackOutcome,
   InstallPackRequest,
+  InstalledPacksOutcome,
+  LastRunOutcome,
   LoadPacksOutcome,
   LoadTerminalPacksOutcome,
   MarkiiHost,
   MarkiiHostOptions,
   OpenOutcome,
   OpenRequest,
-  RemovePackResult,
-  DisablePackResult,
-  EnablePackResult,
-  InstalledPacksOutcome,
+  RemovePackOutcome,
   RunOutcome,
   RunRequest,
   Unsupported,

@@ -51,8 +51,12 @@ export const workerThreadIsolate: IsolateSpawner = (options): RunIsolate => {
 };
 
 export interface NodeHostIsolateOptions {
-  /** The worker entry on disk. Defaults to `node-worker.js` in the package's `dist/`. */
-  workerPath?: string;
+  /**
+   * The worker entry on disk, or a function that finds it when a run asks.
+   * A function may throw, and that run then reports the worker as missing.
+   * Defaults to `node-worker.js` in the package's `dist/`.
+   */
+  workerPath?: string | (() => string);
 }
 
 /**
@@ -67,6 +71,7 @@ export function createNodeHostIsolate(
   return {
     kind: 'node',
     workerPath: (): string => {
+      if (typeof options.workerPath === 'function') return options.workerPath();
       if (options.workerPath !== undefined) return options.workerPath;
       const packaged = fileURLToPath(
         new URL('../node-worker.js', import.meta.url),

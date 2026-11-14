@@ -697,9 +697,12 @@ function renderDirectiveContentString(
     rendered = `${rendered}${markerSeparator}${dim(`[${label}]`, wctx.color)}`;
   }
 
+  // The same rule as the other engines: no content and no attributes. A
+  // component given attributes draws from them and is not flagged.
   if (
     isRegisteredInline(entry) &&
-    safeChildrenText(childrenText).trim() === ''
+    safeChildrenText(childrenText).trim() === '' &&
+    Object.keys(attributes).length === 0
   ) {
     reportDiagnostic(wctx.onDiagnostic, {
       kind: 'empty-inline',

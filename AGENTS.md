@@ -117,7 +117,12 @@ packages/markii-host    PUBLISHED. The one shared, host-neutral script-running l
                      imports node:*, esbuild-wasm, @markii/react or @markii/html at runtime.
                      Engine-specific pieces are injected, never imported. Other entries:
                      internal (no semver promise; the apps use it), node, browser,
-                     html-engine, the two worker entries and conformance. src/dev-isolate.ts
+                     html-engine, the two worker entries and conformance. The test seams
+                     (createMarkiiHostWithSeams) live in internal only.
+                     src/run/worker-entry-browser.ts locks each network name on the
+                     global and on its prototype chain and fails closed;
+                     e2e/browser-host/tests/worker-isolation.spec.ts holds that.
+                     src/dev-isolate.ts
                      is test-only and excluded from the published build. It never imports
                      @markii/pack-build. Probes: neutral-entries.probe.test.ts and the
                      *.probe.test.ts files plus pentest-probe.test.ts in src/run/.
@@ -125,6 +130,7 @@ packages/markii-pack-build  PUBLISHED. The pack compiler and exporter, and the o
                      declaring esbuild-wasm (in-process WebAssembly path only; see Stack).
                      It imports @markii/host and @markii/pack; host never imports it. A
                      pack's source folder is never written to: builds cache elsewhere.
+                     buildPackArchive is the one call from a pack folder to .mkp bytes.
 packages/platforms/markii-react  PUBLISHED. The reference L1 renderer: registry, render, the
                      standard component set (src/components/), doc.css, pack loading. It
                      imports @markii/core and @markii/stdlib. Failure wording lives only
@@ -549,6 +555,12 @@ same commit as the change that triggers them:
   never removed or weakened to make a suite pass. Pass 1's probe suite was
   lost as an untracked file; committing these suites makes that class of
   evidence loss impossible.
+- **A new `MarkiiHost` behavior or outcome kind** → use the one vocabulary:
+  `declined` (the user said no), `failed` with `reason` (I/O or runtime),
+  `invalid` with `reason` (bad input), `unsupported`. Export every type the
+  signature names from `src/index.ts`:
+  `packages/markii-host/src/signature-closure.test.ts` fails otherwise. Add
+  a `conformance/host/` scenario.
 - **A path named in this file** (a file moved, renamed or removed, a new
   layout entry) → `guards/agents-paths.test.ts` fails until this file names
   the real path. A generated file goes in its `ALLOWLIST` with the reason.

@@ -4,17 +4,12 @@
 // The corpus ships inside the package at `dist/conformance/host/`.
 
 export {
-  ACTION_CAPABILITY,
   assertHostScenario,
-  containsInOrder,
   createAnswerQueue,
   hostConformanceDir,
-  hostDeclaresCapability,
   listHostScenarioNames,
   loadHostScenario,
-  outcomeMismatches,
   runHostScenario,
-  zipArchiveDirectory,
 } from './host/conformance-runner.js';
 export type {
   HostScenario,

@@ -594,12 +594,16 @@ function renderDirectiveContent(
     rendered = `<${tag} data-mk-notice="" title="${escapeHtml(message)}">${rendered}</${tag}>`;
   }
 
-  // ITEM 1 (AGENTS.md "clean is not silent"): mirrors `@markii/react`'s
-  // identical check in `renderDirectiveContent` — an `inline: true`
-  // component with no content still renders exactly as registered, wrapped
-  // in the same quiet marker/title, so the two engines produce identical
-  // markup for this case.
-  if (isRegisteredInline(entry) && childrenHtml.trim() === '') {
+  // Mirrors `@markii/react`'s identical check in `renderDirectiveContent`:
+  // an `inline: true` component with neither content nor attributes still
+  // renders exactly as registered, wrapped in the same quiet marker and
+  // title, so the two engines produce identical markup for this case. A
+  // component given attributes draws from them and is not flagged.
+  if (
+    isRegisteredInline(entry) &&
+    childrenHtml.trim() === '' &&
+    Object.keys(attributes).length === 0
+  ) {
     reportDiagnostic(ctx.onDiagnostic, {
       kind: 'empty-inline',
       directive: name,

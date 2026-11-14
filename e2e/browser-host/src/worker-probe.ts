@@ -20,6 +20,10 @@ export interface WorkerProbeReport {
   readonly importScriptsThrows: boolean;
   readonly fetchOtherOrigin: string;
   readonly fetchWasm: string;
+  /** Each name still usable through an object on the global's prototype chain, as `name@constructor`. Empty when every prototype holds only the locked forms: no removed name, a `fetch` that refuses other URLs and an `importScripts` that throws. */
+  readonly chainExposes: string[];
+  /** How many objects the prototype chain walk visited, so a test can tell an empty result from a walk that never ran. */
+  readonly chainLength: number;
   readonly luaValue: unknown;
 }
 
@@ -30,6 +34,35 @@ self.addEventListener('message', async (event) => {
   if (!data || data.__probe !== true) return;
   const report = { types: {} };
   for (const name of names) report.types[name] = typeof self[name];
+  // Every prototype the global inherits from must hold only the locked
+  // forms: no usable network constructor, a fetch that refuses other URLs,
+  // and an importScripts that throws.
+  report.chainExposes = [];
+  report.chainLength = 0;
+  for (let proto = Object.getPrototypeOf(self); proto !== null && report.chainLength < 16; proto = Object.getPrototypeOf(proto)) {
+    report.chainLength += 1;
+    const label = (proto.constructor && proto.constructor.name) || String(report.chainLength);
+    for (const name of names) {
+      const d = Object.getOwnPropertyDescriptor(proto, name);
+      if (d !== undefined && (d.get !== undefined || d.set !== undefined || d.value !== undefined)) report.chainExposes.push(name + '@' + label);
+    }
+    const fetchDescriptor = Object.getOwnPropertyDescriptor(proto, 'fetch');
+    if (fetchDescriptor !== undefined) {
+      if (typeof fetchDescriptor.value !== 'function') report.chainExposes.push('fetch@' + label);
+      else {
+        try { await fetchDescriptor.value.call(self, location.origin + '/'); report.chainExposes.push('fetch@' + label); }
+        catch (error) { /* refused, as it must be */ }
+      }
+    }
+    const importDescriptor = Object.getOwnPropertyDescriptor(proto, 'importScripts');
+    if (importDescriptor !== undefined) {
+      if (typeof importDescriptor.value !== 'function') report.chainExposes.push('importScripts@' + label);
+      else {
+        try { importDescriptor.value.call(self, 'data:text/javascript,0'); report.chainExposes.push('importScripts@' + label); }
+        catch (error) { /* throws, as it must */ }
+      }
+    }
+  }
   report.importScripts = typeof importScripts;
   try { importScripts('data:text/javascript,0'); report.importScriptsThrows = false; }
   catch { report.importScriptsThrows = true; }

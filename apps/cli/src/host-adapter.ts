@@ -33,7 +33,7 @@
  * silently wondering why nothing was granted (AGENTS.md's "clean is not
  * silent").
  */
-import { workerThreadIsolate } from '@markii/host/node';
+import { createNodeHostIsolate } from '@markii/host/node';
 import {
   access,
   mkdir,
@@ -219,17 +219,19 @@ export function createCliHostAdapter(
 
     now: options.now ?? ((): number => Date.now()),
 
-    isolate: options.isolate ?? {
-      kind: 'node',
-      workerPath: (): string => {
-        const bundled = resolveWorkerPath();
-        if (bundled === undefined) {
-          throw new Error('the CLI has no bundled worker (dist/run/worker.js)');
-        }
-        return bundled;
-      },
-      spawnIsolate: workerThreadIsolate,
-    },
+    isolate:
+      options.isolate ??
+      createNodeHostIsolate({
+        workerPath: (): string => {
+          const bundled = resolveWorkerPath();
+          if (bundled === undefined) {
+            throw new Error(
+              'the CLI has no bundled worker (dist/run/worker.js)',
+            );
+          }
+          return bundled;
+        },
+      }),
 
     exports: {
       formats: exportFormats,

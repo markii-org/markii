@@ -594,6 +594,12 @@ archive is. A build that fails reports its reason on the Markii output
 channel rather than in the popup, so the full compiler output is available
 without cluttering the notification.
 
+A build script produces the same archive with one call,
+`buildPackArchive(packFolder, { cacheDir })` from `@markii/pack-build`. It
+finds the pack in that folder and compiles its React views and, when it has
+them, its terminal views. It returns the `.mkp` bytes and the file name. The
+same pack gives the same bytes on any machine.
+
 The pack's own source folder is never touched. Obsidian has no export
 command: VS Code is the authoring host and owns pack packaging, while
 Obsidian installs a pack another host produced. The section below describes

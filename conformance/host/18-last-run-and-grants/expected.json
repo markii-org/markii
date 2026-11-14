@@ -1,0 +1,42 @@
+{
+  "outcomes": [
+    { "kind": "lastRun", "values": {} },
+    {
+      "kind": "ran",
+      "values": { "total": 3 },
+      "failureKinds": [],
+      "traceOk": true
+    },
+    {
+      "kind": "lastRun",
+      "values": { "total": 3 },
+      "valueStatuses": { "total": "stale" },
+      "traceOk": true
+    },
+    {
+      "kind": "ran",
+      "values": { "total": 3 },
+      "failureKinds": [],
+      "traceOk": true
+    },
+    { "kind": "forgotten" },
+    {
+      "kind": "ran",
+      "values": { "total": 3 },
+      "failureKinds": [],
+      "traceOk": true
+    }
+  ],
+  "diagnostics": [
+    "manual run: net declaration mismatch",
+    "uses net access to api.example.com",
+    "manual run: net declaration mismatch",
+    "uses net access to api.example.com",
+    "manual run: net declaration mismatch",
+    "uses net access to api.example.com"
+  ],
+  "prompts": [
+    "This note's scripts can send data to api.example.com. Allow?",
+    "This note's scripts can send data to api.example.com. Allow?"
+  ]
+}

@@ -12,14 +12,14 @@ export type {
 export {
   buildPackRegistrationScript,
   buildPackTerminalScript,
-  computeCacheKey,
 } from './pack-build.js';
 
-export {
-  lintPackCss,
-  lintPackCssColors,
-  lintPackCssPrefix,
-} from './pack-css-lint.js';
+// One call from a pack folder to the bytes of its `.mkp` archive.
+export type {
+  BuildPackArchiveOptions,
+  BuildPackArchiveOutcome,
+} from './build-pack-archive.js';
+export { buildPackArchive } from './build-pack-archive.js';
 
 // "Export pack" (issue #16): compiles a pack and writes a clean,
 // distributable folder at a caller-chosen destination, never inside the
@@ -31,7 +31,7 @@ export type {
   PackExportFs,
   PackExportOutcome,
 } from './pack-export.js';
-export { exportPack, resolveExportTarget } from './pack-export.js';
+export { exportPack } from './pack-export.js';
 
 // The archive shape of "export pack": the same build, zipped into a single
 // `.mkp` file's bytes instead of written as a folder.

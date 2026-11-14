@@ -206,7 +206,11 @@ async function installPackCommand(
 
   if (outcome.kind === 'unsupported') return; // already diagnosed
   const message = installPackMessage(outcome, archivePath, adapter.labels);
-  if (outcome.kind === 'rejected' || outcome.kind === 'reserved') {
+  if (
+    outcome.kind === 'invalid' ||
+    outcome.kind === 'failed' ||
+    outcome.kind === 'reserved'
+  ) {
     void vscode.window.showWarningMessage(message);
     return;
   }

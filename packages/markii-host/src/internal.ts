@@ -4,6 +4,27 @@
 // the main entry. Environment-neutral like the main entry
 // (`src/neutral-entries.probe.test.ts` bundles it for a browser).
 
+export { createMarkiiHostWithSeams } from './host/create-host.js';
+export type { MarkiiHostSeams } from './host/create-host.js';
+export type {
+  RunJob,
+  RunResult,
+  RunFailure,
+  SpawnRunOptions,
+  SpawnRunRequest,
+} from './run/run-host.js';
+export type { RunOnceOptions, RunOnceResult } from './run/run-flow.js';
+export type {
+  PromptHost,
+  PromptManyHosts,
+  PromptUnknownHosts,
+} from './run/grant-flow.js';
+export type {
+  DiscoverPacksResult,
+  PackDirectoryLister,
+} from './packs/discover.js';
+export { discoverPacks } from './packs/discover.js';
+export type { PackDiscoveryIo } from './host/pack-load.js';
 export { mergeArrivingValue } from './values-merge.js';
 export { isRunProgress } from './run/run-progress.js';
 export { isNetBridgeRequest, serveNetRequest } from './run/net-bridge.js';
@@ -14,11 +35,7 @@ export {
   runOnce,
   valuesStorageKeyFor,
 } from './run/run-flow.js';
-export {
-  ALLOW_LABEL,
-  DONT_ALLOW_LABEL,
-  clearGrantForDocument,
-} from './run/grant-flow.js';
+export { ALLOW_LABEL, DONT_ALLOW_LABEL } from './run/grant-flow.js';
 export {
   decodeBundleCacheFromStorage,
   encodeBundleCacheForStorage,
@@ -28,7 +45,6 @@ export {
   isBundleName,
   resolveBundleDocumentPath,
 } from './run/bundle-document.js';
-export { readLastRunTrace } from './run/run-trace.js';
 export { staleValuesForRehydration } from './run/stale-values.js';
 export {
   MARK_EXTENSION,

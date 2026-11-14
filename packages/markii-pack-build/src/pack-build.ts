@@ -1163,7 +1163,11 @@ export interface PackBuildOptions {
   readonly esbuildWasmBinaryPath?: string;
   /** Reads one component source file's UTF-8 text, or `undefined` if unreadable — defaults to real `node:fs`. Injected so a build-failure ("missing component source") path is testable without touching disk. */
   readonly readComponentSource?: PackFileReader;
-  /** Replaces esbuild-wasm's `build` function outright — for tests that want to assert cache behavior (or a build failure) without paying for a real esbuild-wasm invocation, and for the ANY-real-invocation counting a cache-hit test needs. Bypasses `loadEsbuildWasm`/the module-path options entirely when given. */
+  /**
+   * Replaces esbuild-wasm's `build` function outright, for tests that want to assert cache behavior (or a build failure) without paying for a real esbuild-wasm invocation, and for the ANY-real-invocation counting a cache-hit test needs. Bypasses `loadEsbuildWasm`/the module-path options entirely when given.
+   *
+   * @internal A test seam. It is left out of the published declarations.
+   */
   readonly build?: EsbuildBuildFn;
 }
 

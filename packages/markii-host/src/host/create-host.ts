@@ -5,12 +5,19 @@
  * environment-neutral. VS Code's webview imports only the pure pieces and
  * never calls this function.
  *
- * It provides `run`, `diagnostics`, `open`, `exportNote`, `installPack`, `loadPacks`, `completeAt`,
- * `hoverAt`, and `insertComponent`, over the behavior modules (`./export-behavior.js`, `./pack-install.js`,
- * `./pack-load.js`, `./editor-behavior.js`). Every one of them
- * returns the shared `Unsupported` outcome, with one diagnostics line,
- * when the adapter lacks the capability it needs — AGENTS.md's "clean is
- * not silent": a decline is never a silent no-op.
+ * It provides `run`, `lastRun`, `forgetGrants`, `diagnostics`, `open`,
+ * `exportNote`, `exportLinkedSet`, `installPack`, `loadPacks`, `completeAt`,
+ * `hoverAt`, and `insertComponent`, over the behavior modules
+ * (`./export-behavior.js`, `./pack-install.js`, `./pack-load.js`,
+ * `./editor-behavior.js`). A behavior that needs a capability the adapter
+ * lacks returns the shared `Unsupported` outcome with one diagnostics line,
+ * so a decline is never a silent no-op ("clean is not silent").
+ *
+ * Outcome vocabulary, the same in every behavior:
+ * `declined` is a user's "no" to a prompt or a cancelled picker; `failed`
+ * is an I/O or runtime failure and carries a `reason`; `invalid` is input
+ * that was read and judged bad and carries a `reason`; `unsupported` is a
+ * host that lacks the capability. No behavior rejects.
  */
 import type {
   HostAdapter,
@@ -19,7 +26,15 @@ import type {
   HostTextEdit,
 } from './adapter.js';
 import type { RunResult, SpawnRunRequest } from '../run/run-host.js';
-import type { StoredValue } from '@markii/runtime';
+import type { RunTrigger, StoredValue } from '@markii/runtime';
+import type { BundleManifest } from '@markii/bundle';
+import type { PinPolicy } from '../run/net-pinning.js';
+import type { PackModulesMap } from '../run/lua-resolver.js';
+import type { ValuesFailure } from '../values-failure.js';
+import { readPersistedValues } from '../run/run-flow.js';
+import { clearGrantForDocument } from '../run/grant-flow.js';
+import { readLastRunTrace, type RunTrace } from '../run/run-trace.js';
+import { staleValuesForRehydration } from '../run/stale-values.js';
 import type { OnDiagnostic, UnavailableComponent } from '@markii/stdlib';
 import type {
   CompletionItem,
@@ -27,11 +42,7 @@ import type {
   InsertableComponent,
   LineColumn,
 } from '@markii/stdlib/editor';
-import {
-  runViaAdapter,
-  type RunViaAdapterRequest,
-  type RunViaAdapterResult,
-} from './run-behavior.js';
+import { runViaAdapter } from './run-behavior.js';
 import {
   installPackDiagnosticLines,
   installPackFromArchive,
@@ -52,11 +63,15 @@ import type {
   EmbeddedImageReport,
   ExportImageReader,
 } from '../export/image-embed.js';
-import type { CascadeLinkResolver } from '../export/cascade.js';
+import type {
+  CascadeLinkResolver,
+  CascadeTruncation,
+} from '../export/cascade.js';
 import { exportBaseName } from '../export/note-export.js';
 import {
   exportLinkedSetViaAdapter,
-  type CascadeExportOutcome,
+  type CascadeExportedNote,
+  type UnreadableCascadeNote,
 } from './cascade-export-behavior.js';
 import { buildComponentCatalog } from '../insert/component-catalog.js';
 import {
@@ -71,7 +86,6 @@ import {
 import {
   removePackDiagnosticLine,
   removePackViaAdapter,
-  type RemovePackOutcome,
 } from './pack-remove.js';
 import { formatComponentDocumentation } from '@markii/stdlib/editor';
 import {
@@ -89,11 +103,7 @@ import {
   trustedPackFolders,
   usesPackTrust,
 } from './pack-trust-behavior.js';
-import type {
-  DisablePackOutcome,
-  EnablePackOutcome,
-  InstalledPacksListing,
-} from './pack-trust-behavior.js';
+import type { InstalledPacksListing } from './pack-trust-behavior.js';
 import {
   completionPlanAt,
   createCatalogCache,
@@ -137,20 +147,69 @@ export type OpenOutcome =
 
 // --- run -------------------------------------------------------------
 
-export type RunRequest = RunViaAdapterRequest;
+export interface RunRequest {
+  /** Stable identity for the note this run belongs to. The same key reads the run back through `lastRun` and clears its grants through `forgetGrants`. */
+  readonly documentKey: string;
+  readonly text: string;
+  readonly trigger: RunTrigger;
+  /** The address policy for the run's network access. Omitted keeps the fail-closed default, which refuses private and loopback addresses. */
+  readonly netPolicy?: PinPolicy;
+  /** Present only for a bundle-backed note. */
+  readonly bundle?: {
+    readonly manifest: BundleManifest;
+    /** Called once per run, before the grant flow, to read the bundle's files. */
+    readonly buildSnapshot: () => Promise<Record<string, Uint8Array>>;
+    /** Receives the bundle's `.cache/` subtree after a run that produced one. */
+    readonly persistCacheOut: (
+      cacheOut: Record<string, Uint8Array>,
+    ) => Promise<void>;
+  };
+  /** Pre-read pack Lua modules, so a script's `require` of a pack module resolves. Omit it when no packs are loaded. */
+  readonly packModules?: PackModulesMap;
+  /** Called once per script as its value arrives, already scrubbed for the wire. */
+  readonly onValue?: (name: string, value: StoredValue) => void;
+  /** The wall-clock budget for the run. Defaults to 15 seconds. */
+  readonly timeoutMs?: number;
+}
 
 export type RunOutcome =
-  ({ readonly kind: 'ran' } & RunViaAdapterResult) | Unsupported;
+  | {
+      readonly kind: 'ran';
+      readonly values: Record<string, StoredValue>;
+      readonly failures: ValuesFailure[];
+      /** The same failures with their messages, for the diagnostics surface only. */
+      readonly failureDetails: {
+        name: string;
+        kind: ValuesFailure['kind'];
+        message: string;
+      }[];
+      /** Lines describing a mismatch between declared and reached hosts, for the diagnostics surface only. */
+      readonly netDeclarationDiagnostics: string[];
+      /** The outcome this run recorded, for the in-note marker. */
+      readonly trace: RunTrace;
+      /** How many of this run's values came back `fresh`. */
+      readonly freshCount: number;
+      /** How many of this run's values came back `error`. */
+      readonly errorCount: number;
+    }
+  /** The run threw. The diagnostics line and a failed trace are already written. */
+  | { readonly kind: 'failed'; readonly reason: string }
+  | Unsupported;
+
+/** What a note's last run left in the adapter's memento. */
+export interface LastRunOutcome {
+  /** The stored values marked for showing on open: a `fresh` value reads `stale` until a new run lands. Empty when nothing is stored. */
+  readonly values: Record<string, StoredValue>;
+  /** The stored values exactly as persisted, for an export that bakes a snapshot in. Empty when nothing is stored. */
+  readonly persistedValues: Record<string, StoredValue>;
+  /** The last run's recorded outcome, absent when nothing is stored. */
+  readonly trace?: RunTrace;
+}
 
 // --- export ------------------------------------------------------------
 
-export interface ExportRequest {
-  readonly format: HostExportFormat;
-  /** The note's own path, used to name the exported file. */
-  readonly notePath: string;
-  readonly text: string;
-  /** The note's last-run values, baked into an html/pdf export. Omitted or empty exports the note's standard empty states. */
-  readonly values?: Record<string, StoredValue>;
+/** The render options a single-note export and a linked-set export share. */
+export interface ExportRenderOptions {
   /**
    * Installed pack components the static HTML engine cannot draw. A
    * directive naming one is labeled "no HTML view" instead of "unknown
@@ -160,7 +219,7 @@ export interface ExportRequest {
   readonly unavailableComponents?: readonly UnavailableComponent[];
   /** Receives the static engine's render diagnostics, such as the `no-engine-view` event. */
   readonly onDiagnostic?: OnDiagnostic;
-  /** The host's own render of the body (a React pass bound to its loaded packs). Omitted means the static engine renders, and `staticReason` says why. Used by the `html` and `pdf` formats. */
+  /** The host's own render of the body (a React pass bound to its loaded packs). Omitted means the static engine renders, and `staticReason` says why. */
   readonly renderBody?: ExportBodyRenderer;
   /** Why the static engine renders when `renderBody` is omitted. Defaults to `no-packs`. */
   readonly staticReason?: StaticExportReason;
@@ -168,10 +227,21 @@ export interface ExportRequest {
   readonly packStylesheets?: readonly ExportPackStylesheet[];
   /** How many loaded packs contributed to the render. Diagnostics only. */
   readonly packCount?: number;
-  /** Reads one of the note's local images so the export embeds it as a `data:` URI. Omitted leaves every image source as written. */
-  readonly embedImages?: ExportImageReader;
   /** Hides the collapsed script marker in the exported file. Defaults to `false`. */
   readonly hideScriptBlocks?: boolean;
+}
+
+export interface ExportRequest extends ExportRenderOptions {
+  readonly format: HostExportFormat;
+  /** The note's own path, used to name the exported file. */
+  readonly notePath: string;
+  readonly text: string;
+  /** The note's last-run values, baked into an html/pdf export. Omitted or empty exports the note's standard empty states. */
+  readonly values?: Record<string, StoredValue>;
+  /** Reads one of the note's local images so the export embeds it as a `data:` URI. Omitted leaves every image source as written. */
+  readonly embedImages?: ExportImageReader;
+  /** Where to write the file. When present the adapter's `resolveTarget` is not asked. */
+  readonly targetPath?: string;
 }
 
 export type ExportOutcome =
@@ -189,42 +259,41 @@ export type ExportOutcome =
       readonly images: EmbeddedImageReport;
     }
   | { readonly kind: 'failed'; readonly reason: string }
-  /** `adapter.exports.resolveTarget`/`htmlToPdf`/an injected `renderAnsi` was unavailable at the moment of export — a picker cancel, or a seam this host declared but did not wire up. */
-  | { readonly kind: 'cancelled' }
+  /** The picker was cancelled, or a seam this host declared (`htmlToPdf`, an injected `renderAnsi`) was not wired up at the moment of export. Nothing was written. */
+  | { readonly kind: 'declined' }
   | Unsupported;
 
 // --- linked-set export -----------------------------------------------------
 
-export interface ExportLinkedSetRequest {
+export interface ExportLinkedSetRequest extends ExportRenderOptions {
   /** The root note's path, in whatever form `adapter.readFile` and `resolveLink` understand. */
   readonly rootPath: string;
   /** Resolves one link in a note to the path of a note this host can export, or `undefined` to leave the link as written. */
   readonly resolveLink: CascadeLinkResolver;
   /** Reads one note's persisted last-run values, keyed by that note's own path. An empty object exports that note's standard empty states. */
   readonly readValues: (notePath: string) => Record<string, StoredValue>;
-  /** The host's own render of each note's body. Omitted renders every note with the static engine, and `staticReason` says why. */
-  readonly renderBody?: ExportBodyRenderer;
-  /** Why the static engine renders when `renderBody` is omitted. Defaults to `no-packs`. */
-  readonly staticReason?: StaticExportReason;
-  /** The loaded packs' stylesheets, embedded only when `renderBody` ran. */
-  readonly packStylesheets?: readonly ExportPackStylesheet[];
-  /** How many loaded packs contributed to the render. Diagnostics only. */
-  readonly packCount?: number;
-  /** Installed pack components the static engine cannot draw. */
-  readonly unavailableComponents?: readonly UnavailableComponent[];
-  /** Receives the static engine's render diagnostics for every note. */
-  readonly onDiagnostic?: OnDiagnostic;
   /** Builds the image reader for one note, bound to that note's own folder. Omitted embeds no images. */
   readonly embedImagesFor?: (notePath: string) => ExportImageReader;
-  /** Hides the collapsed script marker in every exported note. Defaults to `false`. */
-  readonly hideScriptBlocks?: boolean;
+  /** Where to write the archive. When present the adapter's `resolveLinkedSetTarget` is not asked. */
+  readonly targetPath?: string;
 }
 
 export type ExportLinkedSetOutcome =
-  | Extract<CascadeExportOutcome, { kind: 'exported' }>
+  | {
+      readonly kind: 'exported';
+      /** The written archive's display path. */
+      readonly path: string;
+      readonly bytes: number;
+      /** Every note the archive contains, breadth first, the root note first. */
+      readonly notes: readonly CascadeExportedNote[];
+      /** Notes a link pointed at that could not be read. */
+      readonly unreadable: readonly UnreadableCascadeNote[];
+      /** Set when a bound stopped the walk before it ran out of links to follow. */
+      readonly truncated?: CascadeTruncation;
+    }
   | { readonly kind: 'failed'; readonly path?: string; readonly reason: string }
   /** The host's picker was cancelled, so nothing was written. */
-  | { readonly kind: 'cancelled' }
+  | { readonly kind: 'declined' }
   | Unsupported;
 
 // --- packs ---------------------------------------------------------------
@@ -249,7 +318,10 @@ export type InstallPackOutcome =
       readonly namespace: string;
     }
   | { readonly kind: 'reserved'; readonly namespace: string }
-  | { readonly kind: 'rejected'; readonly reason: string }
+  /** The archive was read and judged bad: it is not a valid pack archive. Nothing was written. */
+  | { readonly kind: 'invalid'; readonly reason: string }
+  /** A prompt, a check or a write failed. */
+  | { readonly kind: 'failed'; readonly reason: string }
   | Unsupported;
 
 export type LoadPacksOutcome =
@@ -290,14 +362,36 @@ export type LoadTerminalPacksOutcome =
     }
   | Unsupported;
 
-export type RemovePackResult = RemovePackOutcome | Unsupported;
+export type RemovePackOutcome =
+  | { readonly kind: 'removed'; readonly namespace: string }
+  | { readonly kind: 'not-installed'; readonly namespace: string }
+  | { readonly kind: 'reserved'; readonly namespace: string }
+  /** The namespace is not a valid pack name. */
+  | { readonly kind: 'invalid'; readonly reason: string }
+  | { readonly kind: 'failed'; readonly reason: string }
+  | Unsupported;
 
 export type InstalledPacksOutcome =
   ({ readonly kind: 'listed' } & InstalledPacksListing) | Unsupported;
 
-export type EnablePackResult = EnablePackOutcome | Unsupported;
+export type EnablePackOutcome =
+  | { readonly kind: 'enabled'; readonly namespace: string }
+  /** The user refused the consent prompt. */
+  | { readonly kind: 'declined'; readonly namespace: string }
+  | { readonly kind: 'not-installed'; readonly namespace: string }
+  | { readonly kind: 'reserved'; readonly namespace: string }
+  /** The namespace is not a valid pack name. */
+  | { readonly kind: 'invalid'; readonly reason: string }
+  | { readonly kind: 'failed'; readonly reason: string }
+  | Unsupported;
 
-export type DisablePackResult = DisablePackOutcome | Unsupported;
+export type DisablePackOutcome =
+  | { readonly kind: 'disabled'; readonly namespace: string }
+  | { readonly kind: 'not-enabled'; readonly namespace: string }
+  /** The namespace is not a valid pack name. */
+  | { readonly kind: 'invalid'; readonly reason: string }
+  | { readonly kind: 'failed'; readonly reason: string }
+  | Unsupported;
 
 // --- editor seam -----------------------------------------------------
 
@@ -371,6 +465,15 @@ export type InsertOutcome =
 export interface MarkiiHost {
   open(request: OpenRequest): Promise<OpenOutcome>;
   run(request: RunRequest): Promise<RunOutcome>;
+  /**
+   * What the last run of `documentKey` left in the adapter's memento: the
+   * values as they should be shown on open, the values as stored, and the
+   * recorded trace. Empty when nothing is stored. Synchronous, because the
+   * memento read is.
+   */
+  lastRun(documentKey: string): LastRunOutcome;
+  /** Clears the stored script grants of `documentKey`, so its next manual run prompts again for every host. Nothing stored is not an error. */
+  forgetGrants(documentKey: string): Promise<void>;
   exportNote(request: ExportRequest): Promise<ExportOutcome>;
   /** Exports a note and the notes it links to as one zip archive of HTML files. */
   exportLinkedSet(
@@ -385,7 +488,7 @@ export interface MarkiiHost {
    */
   loadTerminalPacks(): Promise<LoadTerminalPacksOutcome>;
   /** Removes one installed pack by namespace, through the install root. Writes its outcome to the diagnostics surface. Under `trust: 'device-list'` it also withdraws the namespace's trust entry. */
-  removePack(namespace: string): Promise<RemovePackResult>;
+  removePack(namespace: string): Promise<RemovePackOutcome>;
   /**
    * Under `trust: 'device-list'`: the install root's folders split into the
    * ones this device has enabled and the ones merely present. Unsupported
@@ -393,9 +496,9 @@ export interface MarkiiHost {
    */
   installedPacks(): Promise<InstalledPacksOutcome>;
   /** Asks the install consent prompt, then trusts an installed folder on this device. Unsupported without the trust list. */
-  enablePack(namespace: string): Promise<EnablePackResult>;
+  enablePack(namespace: string): Promise<EnablePackOutcome>;
   /** Withdraws a namespace's trust entry and leaves its folder in place. Unsupported without the trust list. */
-  disablePack(namespace: string): Promise<DisablePackResult>;
+  disablePack(namespace: string): Promise<DisablePackOutcome>;
   completeAt(request: EditorPositionRequest): Promise<CompleteOutcome>;
   /**
    * `completeAt` for a caller that must answer synchronously (Obsidian's
@@ -412,23 +515,39 @@ export interface MarkiiHost {
 }
 
 /**
- * Injectables a test needs to make a run/export deterministic. Defaults
- * are the real implementations; no option changes behavior for a real
- * host.
+ * What an outside host may pass to `createMarkiiHost`. Neither field
+ * changes what a behavior decides; each supplies an engine this package
+ * never imports itself.
  */
 export interface MarkiiHostOptions {
-  readonly spawnRun?: (options: SpawnRunRequest) => Promise<RunResult>;
   /** The static HTML engine behind the `html` and `pdf` exports (`createHtmlExportEngine()` from `@markii/host/html-engine`). Without it those formats decline, like `renderAnsi` for `ansi`. */
   readonly htmlEngine?: HtmlExportEngine;
-  /** Pack discovery's file reads. Defaults to reads through the adapter's own `readFile` and `listFolder`. */
-  readonly packDiscoveryIo?: PackDiscoveryIo;
   /** `@markii/ansi`'s renderer, injected because this package never depends on `@markii/ansi` (a platform renderer, never a `@markii/host` dependency). A host declaring `'ansi'` in `adapter.exports.formats` without supplying this gets `Unsupported` at export time. */
   readonly renderAnsi?: (text: string) => Promise<string>;
+}
+
+/**
+ * The test seams of `createMarkiiHostWithSeams`, which `@markii/host/internal`
+ * exports. They make a run or a pack discovery deterministic. Defaults are
+ * the real implementations.
+ */
+export interface MarkiiHostSeams extends MarkiiHostOptions {
+  readonly spawnRun?: (options: SpawnRunRequest) => Promise<RunResult>;
+  /** Pack discovery's file reads. Defaults to reads through the adapter's own `readFile` and `listFolder`. */
+  readonly packDiscoveryIo?: PackDiscoveryIo;
 }
 
 export function createMarkiiHost(
   adapter: HostAdapter,
   options: MarkiiHostOptions = {},
+): MarkiiHost {
+  return createMarkiiHostWithSeams(adapter, options);
+}
+
+/** `createMarkiiHost` with the test seams. Exported from `@markii/host/internal` only. */
+export function createMarkiiHostWithSeams(
+  adapter: HostAdapter,
+  options: MarkiiHostSeams = {},
 ): MarkiiHost {
   const packIo = options.packDiscoveryIo ?? packDiscoveryIoFromAdapter(adapter);
 
@@ -514,8 +633,33 @@ export function createMarkiiHost(
           'no isolate is configured, so scripts cannot run.',
         );
       }
-      const result = await runViaAdapter(adapter, request, options.spawnRun);
-      return { kind: 'ran', ...result };
+      try {
+        return await runViaAdapter(adapter, request, options.spawnRun);
+      } catch (err) {
+        // `runViaAdapter` reports a throwing run as `failed` itself. This
+        // catches only what threw outside it, so `run` never rejects.
+        const reason = err instanceof Error ? err.message : String(err);
+        try {
+          adapter.diagnostics(`run failed: ${reason}`);
+        } catch {
+          // the diagnostics surface itself is what failed
+        }
+        return { kind: 'failed', reason };
+      }
+    },
+
+    lastRun(documentKey: string): LastRunOutcome {
+      const persistedValues = readPersistedValues(adapter.memento, documentKey);
+      const trace = readLastRunTrace(adapter.memento, documentKey);
+      return {
+        values: staleValuesForRehydration(persistedValues),
+        persistedValues,
+        ...(trace !== undefined ? { trace } : {}),
+      };
+    },
+
+    forgetGrants(documentKey: string): Promise<void> {
+      return clearGrantForDocument(adapter.memento, documentKey);
     },
 
     async exportNote(request: ExportRequest): Promise<ExportOutcome> {
@@ -528,10 +672,24 @@ export function createMarkiiHost(
         );
       }
 
+      if (
+        request.targetPath === undefined &&
+        adapter.exports?.resolveTarget === undefined
+      ) {
+        return unsupported(
+          adapter,
+          'export-format',
+          `export format "${request.format}" has no destination on ${adapter.id}: the host declares no resolveTarget and the request has no targetPath.`,
+        );
+      }
+
       const outcome = await exportNoteFileViaAdapter(
         adapter,
         request.format,
         {
+          ...(request.targetPath !== undefined
+            ? { targetPath: request.targetPath }
+            : {}),
           ...(options.htmlEngine !== undefined
             ? { engine: options.htmlEngine }
             : {}),
@@ -570,7 +728,7 @@ export function createMarkiiHost(
         adapter.diagnostics(
           `export declined: format "${request.format}" has no working export path on ${adapter.id} (a cancelled picker, or a missing renderer/PDF seam).`,
         );
-        return { kind: 'cancelled' };
+        return { kind: 'declined' };
       }
 
       for (const line of exportDiagnosticLines(outcome)) {
@@ -596,7 +754,14 @@ export function createMarkiiHost(
     async exportLinkedSet(
       request: ExportLinkedSetRequest,
     ): Promise<ExportLinkedSetOutcome> {
-      if (adapter.exports?.resolveLinkedSetTarget === undefined) {
+      // A host offers the linked-set export when it declares `exports` and
+      // either names a `resolveLinkedSetTarget` or gets a `targetPath` with
+      // the request.
+      if (
+        adapter.exports === undefined ||
+        (request.targetPath === undefined &&
+          adapter.exports.resolveLinkedSetTarget === undefined)
+      ) {
         return unsupported(
           adapter,
           'linked-set-export',
@@ -619,7 +784,7 @@ export function createMarkiiHost(
         adapter.diagnostics(
           `linked-set export declined: no archive target was chosen on ${adapter.id}.`,
         );
-        return { kind: 'cancelled' };
+        return { kind: 'declined' };
       }
       return outcome;
     },
@@ -748,7 +913,7 @@ export function createMarkiiHost(
       };
     },
 
-    async removePack(namespace: string): Promise<RemovePackResult> {
+    async removePack(namespace: string): Promise<RemovePackOutcome> {
       const packs = adapter.packs;
       if (!packs?.installRoot || !packs.removeFolder) {
         return unsupported(
@@ -786,7 +951,7 @@ export function createMarkiiHost(
       return { kind: 'listed', ...(await listInstalledPacks(adapter)) };
     },
 
-    async enablePack(namespace: string): Promise<EnablePackResult> {
+    async enablePack(namespace: string): Promise<EnablePackOutcome> {
       if (!usesPackTrust(adapter)) {
         return unsupported(
           adapter,
@@ -800,7 +965,7 @@ export function createMarkiiHost(
       return outcome;
     },
 
-    async disablePack(namespace: string): Promise<DisablePackResult> {
+    async disablePack(namespace: string): Promise<DisablePackOutcome> {
       if (!usesPackTrust(adapter)) {
         return unsupported(
           adapter,

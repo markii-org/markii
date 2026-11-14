@@ -324,6 +324,8 @@ export interface LinkedSetExportInputs extends Omit<
 > {
   /** The suggested archive file name handed to the host's picker. */
   readonly suggestedFileName: string;
+  /** Where to write the archive. When present the adapter's `resolveLinkedSetTarget` is not asked. */
+  readonly targetPath?: string;
 }
 
 /**
@@ -332,20 +334,24 @@ export interface LinkedSetExportInputs extends Omit<
  * note through `adapter.readFile`, writes it through `adapter.writeFile`,
  * and sends the diagnostics lines to `adapter.diagnostics`. Resolves
  * `undefined` when the host has no linked-set target or its picker was
- * cancelled. Never throws.
+ * cancelled. A `targetPath` skips the picker. Never throws.
  */
 export async function exportLinkedSetViaAdapter(
   adapter: HostAdapter,
   inputs: LinkedSetExportInputs,
 ): Promise<CascadeExportOutcome | undefined> {
   const resolveTarget = adapter.exports?.resolveLinkedSetTarget;
-  if (resolveTarget === undefined) return undefined;
-  const { suggestedFileName, ...archiveRequest } = inputs;
+  const { suggestedFileName, targetPath, ...archiveRequest } = inputs;
+  if (targetPath === undefined && resolveTarget === undefined) {
+    return undefined;
+  }
 
   let path: string | undefined;
   let outcome: CascadeExportOutcome;
   try {
-    path = await resolveTarget.call(adapter.exports, suggestedFileName);
+    path =
+      targetPath ??
+      (await resolveTarget?.call(adapter.exports, suggestedFileName));
     if (path === undefined) return undefined;
     const target = path;
     const archive = await buildCascadeArchive({

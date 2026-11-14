@@ -21,10 +21,36 @@ without writing it.
 
 The host writes a `HostAdapter` and passes it to `createMarkiiHost` from
 `@markii/host`. The result is a `MarkiiHost` with these behaviors: `open`,
-`run`, `exportNote`, `exportLinkedSet`, `installPack`, `loadPacks`, `loadTerminalPacks`,
-`removePack`, `installedPacks`, `enablePack`, `disablePack`, `completeAt`,
+`run`, `lastRun`, `forgetGrants`, `exportNote`, `exportLinkedSet`,
+`installPack`, `loadPacks`, `loadTerminalPacks`, `removePack`,
+`installedPacks`, `enablePack`, `disablePack`, `completeAt`,
 `completeAtSync`, `hoverAt`, `insertComponent`, `invalidateCatalog` and
 `diagnostics`.
+
+### Outcomes
+
+Every behavior answers with an outcome whose `kind` uses one vocabulary.
+`declined` means the user said no to a prompt or cancelled a picker.
+`failed` means an I/O or runtime failure, and it carries a `reason`.
+`invalid` means input was read and judged bad, such as a malformed pack
+archive, and it carries a `reason`. `unsupported` means the host lacks the
+capability.
+
+`run` resolves `failed` when the run threw. The diagnostics line and a
+failed trace are written before it resolves. A completed run carries
+`freshCount` and `errorCount`, so a host can say how many values updated
+without walking them. Its `failureDetails` hold each failure's message for
+the diagnostics surface. The messages never go into the rendered page: the
+`failures` list a host sends to its page carries the name and kind only,
+because a message can hold a traceback or a request URL.
+
+### Reading a run back
+
+`lastRun(documentKey)` takes the key `run` takes. It returns the stored
+values as they should be shown on open, the values exactly as stored, and
+the last run's trace. A host shows the first on open and bakes the second
+into an export. `forgetGrants(documentKey)` clears that note's stored
+grants, so its next manual run prompts again.
 
 ### The adapter fields
 
@@ -51,7 +77,7 @@ leaves the field out.
 | `isolate` | A `node` isolate (`workerPath()` and `spawnIsolate`) or a `browser` isolate (`spawner()`, `dispose()` and an optional `entryLabel`). Running scripts needs it. |
 | `editor` | The live editor: `documentText()`, `documentPath()`, `cursor()` and `applyEdits()`, which applies a whole edit array as one undoable edit. |
 | `packs` | The pack source, described in the next table. |
-| `exports` | The `formats` the host offers, `resolveTarget()` for the destination, and `htmlToPdf()` for a host that offers `pdf`. |
+| `exports` | The `formats` the host offers, an optional `resolveTarget()` for the destination, an optional `resolveLinkedSetTarget()`, and `htmlToPdf()` for a host that offers `pdf`. |
 
 The `HostLabels` fields are `appNoun`, `previewNoun`, `diagnosticsSurface`
 and `deviceNoun`, plus an optional `settingName` for a host that exposes
@@ -88,6 +114,31 @@ pack loading. A host that declares neither `packs` nor `exports` and
 never calls `open` never has `readFile`, `exists` or `listFolder` called.
 `run` and `completeAt` do not reach them: with no `packs` group, completion
 answers from the standard component set.
+
+`installPack` calls `prompt` for consent and for a replace, `exists` on the
+target folder, `removeFolder` when it replaces, and `writeFile` for each
+file of the archive. It writes `pack.json` last, so a failed install leaves
+no loadable pack. `exportNote` calls `resolveTarget` unless the request
+carries a `targetPath`, then `writeFile`. `exportLinkedSet` calls `readFile`
+for each note and `writeFile` once. `lastRun` and `forgetGrants` reach only
+`memento`.
+
+### From installed packs to a registry
+
+`loadPacks` returns the discovered packs, each pack's components, and the
+components with no view for the host's engine. A host that draws pack views
+evaluates each pack's compiled script and collects the registrations it
+queues. It passes them to `buildRenderRegistry` with the renderer's default
+registry and the renderer's pack engine, such as `reactPackEngine` from
+`@markii/react`. The result carries the registry, and the reasons for
+anything it left out, for the diagnostics surface.
+
+Three catalogs exist, each with one job. `buildComponentCatalog` feeds
+completion, hover and insert. `buildRenderRegistry` feeds the renderer and
+decides what draws. The `unavailable` list of `loadPacks` feeds the
+renderer's `unavailableComponents` option and the static export, so a note
+says a component has no view here where it would otherwise say the
+component is unknown.
 
 ### Declared, not faked
 
@@ -694,18 +745,19 @@ renders CommonMark, where a wikilink is ordinary text.
 
 The walk, the naming, the rewriting and the archive are host-neutral logic
 in `@markii/host`, behind the `exportLinkedSet` behavior of the host
-object. A host offers it by declaring `exports.resolveLinkedSetTarget`,
-which names the archive's path or resolves `undefined` when the user
-cancels. The behavior reads every note through `adapter.readFile`, writes
+object. A host offers it by declaring `exports` and naming the archive's
+path. The path comes from `exports.resolveLinkedSetTarget`, which resolves
+`undefined` when the user cancels, or from a `targetPath` on the request.
+The behavior reads every note through `adapter.readFile`, writes
 one zip through `adapter.writeFile`, and writes its diagnostics lines to
 `adapter.diagnostics`.
 
 The request supplies the root note's path, a function that resolves a link,
 and a function that reads a note's stored values. It also takes the render
 options `exportNote` takes. The outcome is `exported`, `failed`,
-`cancelled` or `unsupported`. `cascadeResultMessage` words the notice for
-any of them. A host that declares no `resolveLinkedSetTarget` gets
-`unsupported`, as the command line tool does. Exporting a linked set to
+`declined` or `unsupported`. `cascadeResultMessage` words the notice for
+any of them. A host that declares no `resolveLinkedSetTarget` and passes no
+`targetPath` gets `unsupported`, as the command line tool does. Exporting a linked set to
 PDF is not offered.
 
 ## Limits to know

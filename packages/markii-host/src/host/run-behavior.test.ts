@@ -224,6 +224,7 @@ describe('runViaAdapter', () => {
       async () => fakeResult,
     );
 
+    if (result.kind !== 'ran') throw new Error('expected a ran outcome');
     expect(result.values).toEqual({});
     expect(result.failures).toEqual([]);
 
@@ -247,6 +248,7 @@ describe('runViaAdapter', () => {
       async () => fakeResult,
     );
 
+    if (result.kind !== 'ran') throw new Error('expected a ran outcome');
     expect(result.freshCount).toBe(2);
     expect(result.errorCount).toBe(1);
   });
@@ -289,6 +291,7 @@ describe('runViaAdapter', () => {
       'manual run finished with 1 script failure(s):',
       '  s1 (script-error): boom',
     ]);
+    if (result.kind !== 'ran') throw new Error('expected a ran outcome');
     expect(result.trace).toEqual({
       trigger: 'manual',
       ranAt: 9,
@@ -308,21 +311,20 @@ describe('runViaAdapter', () => {
     expect(lines).toEqual([]);
   });
 
-  it('a run that throws writes a diagnostics line and a failed trace, then rethrows', async () => {
+  it('a run that throws writes a diagnostics line and a failed trace, then resolves failed', async () => {
     const lines: string[] = [];
     const adapter = fakeAdapter({
       now: () => 3,
       diagnostics: (line) => lines.push(line),
     });
-    await expect(
-      runViaAdapter(
-        adapter,
-        { documentKey: 'doc-6', text: 'text', trigger: 'scheduled' },
-        async () => {
-          throw new Error('worker exploded');
-        },
-      ),
-    ).rejects.toThrow('worker exploded');
+    const outcome = await runViaAdapter(
+      adapter,
+      { documentKey: 'doc-6', text: 'text', trigger: 'scheduled' },
+      async () => {
+        throw new Error('worker exploded');
+      },
+    );
+    expect(outcome).toEqual({ kind: 'failed', reason: 'worker exploded' });
     expect(lines).toEqual([
       'scheduled run failed before it could report: worker exploded',
     ]);

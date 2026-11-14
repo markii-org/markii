@@ -205,6 +205,8 @@ export function exportDiagnosticLines(
 
 /** What `exportHtmlDocumentViaAdapter` needs beyond the note's own text and path. */
 export interface ExportHtmlDocumentRequest {
+  /** Where to write the file. When present the adapter's `resolveTarget` is not asked. */
+  readonly targetPath?: string;
   /** The static HTML engine. Required for the `html` and `pdf` formats; `exportNoteFileViaAdapter` declines those without it. */
   readonly engine?: HtmlExportEngine;
   readonly notePath: string;
@@ -272,6 +274,19 @@ export async function buildExportDocument(
   };
 }
 
+/** The path an export writes to: the request's own `targetPath`, else whatever the adapter's `resolveTarget` picks, which resolves `undefined` on a cancel. */
+async function exportTarget(
+  adapter: HostAdapter,
+  request: ExportHtmlDocumentRequest,
+  format: HostExportFormat,
+): Promise<string | undefined> {
+  if (request.targetPath !== undefined) return request.targetPath;
+  return adapter.exports?.resolveTarget?.(
+    exportDefaultFileName(request.notePath, format),
+    format,
+  );
+}
+
 function reasonOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -305,10 +320,7 @@ export async function exportNoteFileViaAdapter(
       const built = await buildExportDocument({ ...request, engine });
       if (format === 'html') {
         const bytes = new TextEncoder().encode(built.html).byteLength;
-        const path = await adapter.exports?.resolveTarget(
-          exportDefaultFileName(request.notePath, 'html'),
-          'html',
-        );
+        const path = await exportTarget(adapter, request, 'html');
         if (path === undefined) return undefined;
         await adapter.writeFile(path, new TextEncoder().encode(built.html));
         return {
@@ -324,10 +336,7 @@ export async function exportNoteFileViaAdapter(
       // 'pdf': the seam only. Degradation policy stays app-side.
       const htmlToPdf = adapter.exports?.htmlToPdf;
       if (htmlToPdf === undefined) return undefined;
-      const path = await adapter.exports?.resolveTarget(
-        exportDefaultFileName(request.notePath, 'pdf'),
-        'pdf',
-      );
+      const path = await exportTarget(adapter, request, 'pdf');
       if (path === undefined) return undefined;
       const pdfBytes = await htmlToPdf(built.html);
       await adapter.writeFile(path, pdfBytes);
@@ -348,10 +357,7 @@ export async function exportNoteFileViaAdapter(
   if (format === 'md-plain') {
     try {
       const text = mdPlainFromSource(request.text);
-      const path = await adapter.exports?.resolveTarget(
-        exportDefaultFileName(request.notePath, 'md-plain'),
-        'md-plain',
-      );
+      const path = await exportTarget(adapter, request, 'md-plain');
       if (path === undefined) return undefined;
       await adapter.writeFile(path, new TextEncoder().encode(text));
       return {
@@ -371,10 +377,7 @@ export async function exportNoteFileViaAdapter(
   if (renderAnsi === undefined) return undefined;
   try {
     const text = await renderAnsi(request.text);
-    const path = await adapter.exports?.resolveTarget(
-      exportDefaultFileName(request.notePath, 'ansi'),
-      'ansi',
-    );
+    const path = await exportTarget(adapter, request, 'ansi');
     if (path === undefined) return undefined;
     await adapter.writeFile(path, new TextEncoder().encode(text));
     return {

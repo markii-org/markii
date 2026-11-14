@@ -502,14 +502,19 @@ function renderDirectiveContent(
     );
   }
 
-  // ITEM 1 (AGENTS.md "clean is not silent"): an inline component that got
-  // no content is an authoring mistake, not a rendering failure — the
-  // component still renders exactly as registered (no fallback box, no
+  // AGENTS.md "clean is not silent": an inline component that got neither
+  // content nor attributes is an authoring mistake, not a rendering failure.
+  // The component still renders exactly as registered (no fallback box, no
   // destroyed content), wrapped in a quiet marker whose `title` carries the
-  // reason out of the text flow. Scoped to an EXPLICIT `inline: true`
-  // registration, so a component that says nothing about its kind keeps
-  // rendering exactly as before this rule existed.
-  if (isRegisteredInline(entry) && isEmptyContent(children)) {
+  // reason out of the text flow. A component given attributes draws from
+  // them (`:badge{variant=info}`), so it is not flagged. Scoped to an
+  // EXPLICIT `inline: true` registration, so a component that says nothing
+  // about its kind keeps rendering as it always did.
+  if (
+    isRegisteredInline(entry) &&
+    isEmptyContent(children) &&
+    Object.keys(attributes).length === 0
+  ) {
     reportDiagnostic(onDiagnostic, {
       kind: 'empty-inline',
       directive: name,

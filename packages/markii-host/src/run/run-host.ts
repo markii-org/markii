@@ -73,8 +73,8 @@ export interface SpawnRunOptions {
   /**
    * The KIND of isolate this run spawns. Required: this module has no
    * default so it stays free of `node:*`. A Node host passes
-   * `workerThreadIsolate` from `@markii/host/node` (the only kind that
-   * accepts a V8 heap cap); a host whose runtime cannot create worker
+   * the worker-thread isolate that `createNodeHostIsolate()` from
+   * `@markii/host/node` carries (the only kind that accepts a V8 heap cap); a host whose runtime cannot create worker
    * threads, such as an Electron renderer, supplies a Web Worker one. See
    * `./isolate.ts` for the constraints an implementation must meet, and
    * for what a Web Worker cannot bound that a worker thread can.

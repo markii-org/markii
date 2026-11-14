@@ -28,12 +28,13 @@ export type ArchiveFileWriter = (
 ) => Promise<void>;
 
 /**
- * Writes a validated archive's contents into `destinationDir`: `pack.json`
- * (the parsed manifest, re-serialized: `openPackArchive` keeps only the
- * validated manifest fields, not the original bytes, so the written file
- * is a normalized round-trip of the same fields, not a byte-for-byte
- * copy), `webview.js`, `webview.css` and `terminal.js` when the archive has them, and
- * `scripts/*` when it ships any. Does NOT clear `destinationDir` first;
+ * Writes a validated archive's contents into `destinationDir`: `webview.js`,
+ * `webview.css` and `terminal.js` when the archive has them, `scripts/*`
+ * when it ships any, and then `pack.json` (the parsed manifest,
+ * re-serialized: `openPackArchive` keeps only the validated manifest
+ * fields, not the original bytes, so the written file is a normalized
+ * round-trip of the same fields, not a byte-for-byte copy). The manifest is
+ * written last, so a failure midway leaves no loadable pack. Does NOT clear `destinationDir` first;
  * a caller that needs a clean re-extract (a reinstall replacing an
  * existing pack) removes the folder itself before this.
  *
@@ -51,10 +52,6 @@ export async function writeArchiveContents(
   writeFile: ArchiveFileWriter,
 ): Promise<void> {
   const encoder = new TextEncoder();
-  await writeFile(
-    joinPath(destinationDir, 'pack.json'),
-    encoder.encode(JSON.stringify(archive.manifest, null, 2) + '\n'),
-  );
   await writeFile(joinPath(destinationDir, 'webview.js'), archive.scriptBytes);
   if (archive.stylesheetBytes !== undefined) {
     await writeFile(
@@ -76,4 +73,11 @@ export async function writeArchiveContents(
       await writeFile(target, archive.scriptModules[name]!);
     }
   }
+  // The manifest goes last. Discovery treats a folder with no `pack.json`
+  // as no pack, so an install that fails partway never leaves a manifest
+  // beside a missing script.
+  await writeFile(
+    joinPath(destinationDir, 'pack.json'),
+    encoder.encode(JSON.stringify(archive.manifest, null, 2) + '\n'),
+  );
 }

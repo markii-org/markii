@@ -202,10 +202,10 @@ const htmlEngine = createHtmlExportEngine();
 const EXPORT_EXTENSION = { html: '.html', pdf: '.pdf' } as const;
 
 /**
- * The shared host over the vault: `resolveTarget` names the vault-relative
- * file beside the note, and `writeFile` goes through the injected
- * `NoteExportFs`. `printer` is the PDF seam; the host calls it with the
- * finished HTML. Every decision about building the document, and the
+ * The shared host over the vault: `writeFile` goes through the injected
+ * `NoteExportFs`, and each request names the vault-relative file beside the
+ * note as its `targetPath`. `printer` is the PDF seam; the host calls it
+ * with the finished HTML. Every decision about building the document, and the
  * diagnostics lines for a written file, belong to `@markii/host`.
  */
 function exportHost(
@@ -226,11 +226,6 @@ function exportHost(
     },
     exports: {
       formats: new Set<HostExportFormat>(printer ? ['html', 'pdf'] : ['html']),
-      resolveTarget: async (_suggested, format) =>
-        exportedSiblingPath(
-          request.notePath,
-          format === 'pdf' ? EXPORT_EXTENSION.pdf : EXPORT_EXTENSION.html,
-        ),
       ...(printer ? { htmlToPdf: printer } : {}),
     },
   });
@@ -246,6 +241,10 @@ function hostRequest(
     format,
     notePath: request.notePath,
     text: request.text,
+    targetPath: exportedSiblingPath(
+      request.notePath,
+      format === 'pdf' ? EXPORT_EXTENSION.pdf : EXPORT_EXTENSION.html,
+    ),
     ...(request.values !== undefined ? { values: request.values } : {}),
     ...(request.unavailableComponents !== undefined
       ? { unavailableComponents: request.unavailableComponents }
@@ -306,7 +305,7 @@ function failureReason(
   >,
 ): string {
   if (outcome.kind === 'failed') return outcome.reason;
-  if (outcome.kind === 'cancelled') return 'the export had nowhere to write.';
+  if (outcome.kind === 'declined') return 'the export had nowhere to write.';
   return outcome.detail ?? 'this export format is not available.';
 }
 

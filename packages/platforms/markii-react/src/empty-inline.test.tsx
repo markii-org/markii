@@ -26,14 +26,14 @@ function html(source: string): HTMLElement {
 
 describe('ITEM 1: an inline component that renders empty', () => {
   it('still renders the component (no fallback box) when written empty as a leaf', () => {
-    const container = html('::chip{label="x"}');
+    const container = html('::chip{}');
     const chip = container.querySelector('.probe-chip');
     expect(chip).not.toBeNull();
     expect(container.querySelector('.mk-unknown')).toBeNull();
   });
 
   it('wraps the empty component in the quiet marker with an explanatory title', () => {
-    const container = html('::chip{label="x"}');
+    const container = html('::chip{}');
     const marker = container.querySelector('.mk-inline-empty');
     expect(marker).not.toBeNull();
     expect(marker?.querySelector('.probe-chip')).not.toBeNull();
@@ -43,6 +43,20 @@ describe('ITEM 1: an inline component that renders empty', () => {
   it('written as an inline directive with empty brackets also gets the marker', () => {
     const container = html(':chip[]');
     expect(container.querySelector('.mk-inline-empty')).not.toBeNull();
+  });
+
+  it('does NOT mark a chip that has attributes and no content', () => {
+    for (const source of [':chip{variant=info}', '::chip{label="x"}']) {
+      const container = html(source);
+      expect(container.querySelector('.mk-inline-empty'), source).toBeNull();
+      expect(container.querySelector('.probe-chip'), source).not.toBeNull();
+    }
+  });
+
+  it('does NOT mark a pack-style inline component given only data=', () => {
+    const container = html(':chip{data=total}');
+    expect(container.querySelector('.mk-inline-empty')).toBeNull();
+    expect(container.querySelector('.probe-chip')).not.toBeNull();
   });
 
   it('does NOT mark a chip that has content', () => {
@@ -91,6 +105,15 @@ describe('the empty-inline marker reaches onDiagnostic (React engine)', () => {
     const options = { onDiagnostic: (e: DiagnosticEvent) => events.push(e) };
     render(renderMark(':chip[hi]', registry, undefined, undefined, options));
     render(renderMark('::box{}', registry, undefined, undefined, options));
+    render(
+      renderMark(
+        ':chip{variant=info}',
+        registry,
+        undefined,
+        undefined,
+        options,
+      ),
+    );
     expect(events).toEqual([]);
   });
 });

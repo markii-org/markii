@@ -15,7 +15,7 @@
  * this host's adapter, the same way every other scenario already
  * exercises the real run/export/pack path.
  */
-import { workerThreadIsolate } from '@markii/host/node';
+import { createNodeHostIsolate } from '@markii/host/node';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -102,11 +102,7 @@ describe('conformance/host/ corpus via the real Obsidian HostAdapter', () => {
         saveLocalStorage: localStorage.save,
         diagnostics: () => {},
         now: () => scenario.clock,
-        isolate: {
-          kind: 'node',
-          workerPath: () => '/worker.js',
-          spawnIsolate: workerThreadIsolate,
-        },
+        isolate: createNodeHostIsolate({ workerPath: '/worker.js' }),
         packs: {
           // The host adds the trusted installed folders itself.
           authorizedFolders: async () => [],

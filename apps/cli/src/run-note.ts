@@ -5,7 +5,7 @@
  * owns none of the sandboxing, grant policy, tier gating, or spawn
  * wiring itself — all of that lives in `@markii/host`; this module only
  * supplies the CLI's own seams (the bundle read/write adapters) and
- * shapes the outcome back into the plain `RunOnceResult` its callers
+ * shapes the outcome back into the plain `NoteRunResult` its callers
  * already expect.
  */
 import { pathToFileURL } from 'node:url';
@@ -13,8 +13,8 @@ import {
   buildBundleSnapshot,
   createMarkiiHost,
   type GrantMemento,
-  type RunOnceOptions,
-  type RunOnceResult,
+  type RunOutcome,
+  type RunRequest,
 } from '@markii/host';
 import { openDirBundle } from '@markii/bundle/fs';
 import type { ResolvedNote } from './read-note.js';
@@ -27,7 +27,7 @@ import type { Terminal } from './terminal.js';
 function bundleOptionsFor(
   bundle: NonNullable<ResolvedNote['bundle']>,
   onDiagnosticLine: (line: string) => void,
-): NonNullable<RunOnceOptions['bundle']> {
+): NonNullable<RunRequest['bundle']> {
   if (bundle.form === 'directory' && bundle.rootDir !== undefined) {
     const rootDir = bundle.rootDir;
     return {
@@ -47,7 +47,7 @@ function bundleOptionsFor(
 
   // The zip form is read-only: there is no file on disk to write a
   // `.cache/` update back into. The run's values still feed this process's
-  // render (`RunOnceResult.values` covers that), but nothing is persisted
+  // render (`NoteRunResult.values` covers that), but nothing is persisted
   // across invocations for a `.mkz` note. Said once, under --verbose, per
   // this module's contract with its caller.
   return {
@@ -76,26 +76,45 @@ export interface RunNoteOptions {
   readonly isolate?: CliHostAdapterOptions['isolate'];
 }
 
-/**
- * A run outcome for a host whose `isolate` capability is somehow missing.
- * Never expected in practice — this CLI always declares `isolate` — but
- * kept so `runNote`'s return type stays the plain `RunOnceResult` every
- * caller already expects, rather than the wider `RunOutcome` union.
- */
-function unsupportedRunResult(detail: string | undefined): RunOnceResult {
-  const message = detail ?? 'this host has no isolate configured.';
+/** What `runNote` returns: the part of a completed run every caller reads. */
+export type NoteRunResult = Pick<
+  Extract<RunOutcome, { kind: 'ran' }>,
+  'values' | 'failures' | 'failureDetails' | 'netDeclarationDiagnostics'
+>;
+
+/** A result that reports one failure on the whole document, for a run that never produced values. */
+function documentFailureResult(
+  kind: 'capability-denied' | 'script-error',
+  message: string,
+): NoteRunResult {
   return {
     values: {},
-    failures: [{ name: '<document>', kind: 'capability-denied' }],
-    failureDetails: [
-      { name: '<document>', kind: 'capability-denied', message },
-    ],
+    failures: [{ name: '<document>', kind }],
+    failureDetails: [{ name: '<document>', kind, message }],
     netDeclarationDiagnostics: [],
   };
 }
 
+/**
+ * A run outcome for a host whose `isolate` capability is somehow missing.
+ * Never expected in practice, since this CLI always declares `isolate`. It
+ * keeps `runNote`'s return type the plain result every caller expects,
+ * rather than the wider `RunOutcome` union.
+ */
+function unsupportedRunResult(detail: string | undefined): NoteRunResult {
+  return documentFailureResult(
+    'capability-denied',
+    detail ?? 'this host has no isolate configured.',
+  );
+}
+
+/** A result for a run that threw. The shared run path already wrote the diagnostics line, so the failure reaches both surfaces. */
+function failedRunResult(reason: string): NoteRunResult {
+  return documentFailureResult('script-error', `the run failed: ${reason}`);
+}
+
 /** Runs `note`'s scripts once, at the manual tier, through the shared run path. Never throws — `@markii/host`'s `createMarkiiHost`/`runOnce` already guarantee that. */
-export async function runNote(options: RunNoteOptions): Promise<RunOnceResult> {
+export async function runNote(options: RunNoteOptions): Promise<NoteRunResult> {
   const { absolutePath, note, terminal, memento } = options;
   const onDiagnosticLine = options.onDiagnosticLine ?? ((): void => {});
   const documentKey = pathToFileURL(absolutePath).toString();
@@ -120,11 +139,14 @@ export async function runNote(options: RunNoteOptions): Promise<RunOnceResult> {
   if (outcome.kind === 'unsupported') {
     return unsupportedRunResult(outcome.detail);
   }
+  if (outcome.kind === 'failed') {
+    return failedRunResult(outcome.reason);
+  }
   const { kind: _kind, ...result } = outcome;
   return result;
 }
 
 /** Whether this run's result should make the CLI exit 2 (a script failed). */
-export function scriptsFailed(result: RunOnceResult): boolean {
+export function scriptsFailed(result: NoteRunResult): boolean {
   return result.failures.length > 0;
 }

@@ -28,6 +28,7 @@ import {
 } from '../packs/pack-trust.js';
 import type { PackTrustEntry, PackTrustList } from '../packs/pack-trust.js';
 import type { HostAdapter } from './adapter.js';
+import type { DisablePackOutcome, EnablePackOutcome } from './create-host.js';
 import { installConsentMessage } from './pack-install.js';
 
 /** One installed pack this device has enabled. */
@@ -182,19 +183,17 @@ export async function trustInstalledPack(
 
 // --- enable / disable / forget ---------------------------------------------
 
-export type EnablePackOutcome =
-  | { readonly kind: 'enabled'; readonly namespace: string }
-  | { readonly kind: 'declined'; readonly namespace: string }
-  | { readonly kind: 'not-installed'; readonly namespace: string }
-  | { readonly kind: 'reserved'; readonly namespace: string }
-  | { readonly kind: 'invalid'; readonly reason: string }
-  | { readonly kind: 'failed'; readonly reason: string };
+/** What one enable attempt produced, before the host adds `unsupported`. */
+export type EnablePackAttempt = Exclude<
+  EnablePackOutcome,
+  { readonly kind: 'unsupported' }
+>;
 
-export type DisablePackOutcome =
-  | { readonly kind: 'disabled'; readonly namespace: string }
-  | { readonly kind: 'not-enabled'; readonly namespace: string }
-  | { readonly kind: 'invalid'; readonly reason: string }
-  | { readonly kind: 'failed'; readonly reason: string };
+/** What one disable attempt produced, before the host adds `unsupported`. */
+export type DisablePackAttempt = Exclude<
+  DisablePackOutcome,
+  { readonly kind: 'unsupported' }
+>;
 
 function invalidReason(namespace: string): string {
   return `"${namespace}" is not a valid pack namespace`;
@@ -204,7 +203,7 @@ function invalidReason(namespace: string): string {
 export async function enablePackViaAdapter(
   adapter: HostAdapter,
   namespace: string,
-): Promise<EnablePackOutcome> {
+): Promise<EnablePackAttempt> {
   if (!validatePackName(namespace).ok) {
     return { kind: 'invalid', reason: invalidReason(namespace) };
   }
@@ -256,7 +255,7 @@ export async function enablePackViaAdapter(
 export async function disablePackViaAdapter(
   adapter: HostAdapter,
   namespace: string,
-): Promise<DisablePackOutcome> {
+): Promise<DisablePackAttempt> {
   if (!validatePackName(namespace).ok) {
     return { kind: 'invalid', reason: invalidReason(namespace) };
   }
@@ -297,6 +296,8 @@ export async function forgetPackTrust(
 
 export function enablePackMessage(outcome: EnablePackOutcome): string {
   switch (outcome.kind) {
+    case 'unsupported':
+      return 'Markii: enabling packs is not available on this host. Nothing was enabled.';
     case 'enabled':
       return `Markii: enabled the pack ${outcome.namespace}.`;
     case 'declined':
@@ -312,7 +313,7 @@ export function enablePackMessage(outcome: EnablePackOutcome): string {
   }
 }
 
-export function enablePackDiagnosticLine(outcome: EnablePackOutcome): string {
+export function enablePackDiagnosticLine(outcome: EnablePackAttempt): string {
   switch (outcome.kind) {
     case 'enabled':
       return `Enable pack enabled "${outcome.namespace}".`;
@@ -331,6 +332,8 @@ export function enablePackDiagnosticLine(outcome: EnablePackOutcome): string {
 
 export function disablePackMessage(outcome: DisablePackOutcome): string {
   switch (outcome.kind) {
+    case 'unsupported':
+      return 'Markii: disabling packs is not available on this host. Nothing changed.';
     case 'disabled':
       return `Markii: disabled the pack ${outcome.namespace}. Its folder was left in place.`;
     case 'not-enabled':
@@ -342,7 +345,7 @@ export function disablePackMessage(outcome: DisablePackOutcome): string {
   }
 }
 
-export function disablePackDiagnosticLine(outcome: DisablePackOutcome): string {
+export function disablePackDiagnosticLine(outcome: DisablePackAttempt): string {
   switch (outcome.kind) {
     case 'disabled':
       return `Disable pack disabled "${outcome.namespace}"; its folder was left in place.`;

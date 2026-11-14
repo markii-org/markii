@@ -5,8 +5,6 @@ import { createValueStore } from '@markii/runtime';
 import {
   createRenderDiagnosticReporter,
   MARK_EXTENSION,
-  readPersistedValues,
-  staleValuesForRehydration,
 } from '@markii/host/internal';
 import type { Registry } from '@markii/react';
 import { renderDocument } from './render-document.js';
@@ -15,7 +13,6 @@ import {
   createVaultImageResolver,
 } from './preview-images.js';
 import type { VaultImageResolver } from './preview-images.js';
-import { createLocalStorageMemento } from './run/local-storage-memento.js';
 import { onValuesChanged } from './run/run-events.js';
 import { convertNoteWikilinks } from './reading-view/wikilinks.js';
 import { ReadingViewSectionCoordinator } from './reading-view/section-coordinator.js';
@@ -182,16 +179,10 @@ class ReadingViewSection extends MarkdownRenderChild {
         app.metadataCache.getFirstLinkpathDest(link, this.sourcePath)?.path,
     );
 
-    const memento = createLocalStorageMemento(
-      (key) => app.loadLocalStorage(key),
-      (key, value) => {
-        app.saveLocalStorage(key, value);
-      },
-    );
-    const persisted = readPersistedValues(memento, this.sourcePath);
+    const last = this.plugin.lastRun(this.sourcePath);
     const store =
-      Object.keys(persisted).length > 0
-        ? createValueStore(staleValuesForRehydration(persisted))
+      Object.keys(last.persistedValues).length > 0
+        ? createValueStore(last.values)
         : undefined;
 
     const registry: Registry = this.plugin.readingViewRegistry();

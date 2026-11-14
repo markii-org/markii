@@ -43,9 +43,10 @@
  * ordinary fenced code block; the block rendered as usual. Carries no
  * directive or attribute.
  *
- * `'empty-inline'`: an inline component registered as inline received no
- * content (`:badge{variant=info}` with no text); it rendered as registered,
- * with a quiet marker.
+ * `'empty-inline'`: an inline component registered as inline received
+ * neither content nor attributes (`:badge[]`); it rendered as registered,
+ * with a quiet marker. A component given attributes, such as
+ * `:badge{variant=info}`, draws from them and is not flagged.
  */
 export type DiagnosticKind =
   | 'invalid-attribute-value'

@@ -6,6 +6,54 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Security
+
+- `@markii/host`: the browser worker's removal of network globals now
+  covers the global's prototype chain. `fetch` stayed reachable through
+  `WorkerGlobalScope.prototype` in Chromium and Firefox. Lua cannot reach
+  JavaScript, so no script could use it. The worker refuses to run when a
+  name cannot be replaced.
+
+### Added
+
+- `@markii/host`: `lastRun(documentKey)` returns a note's stored values
+  and last trace, and `forgetGrants(documentKey)` clears its grants.
+- `@markii/host`: both export requests take a `targetPath`, and
+  `resolveTarget` is optional. `ExportRenderOptions`, `InsertOutcome`,
+  `NoteLink` and `LastRunOutcome` are exported.
+- `@markii/pack-build`: `buildPackArchive(packFolder, options)` goes from
+  a pack folder to `.mkp` bytes in one call.
+
+### Changed
+
+- **Breaking: `run` resolves `{ kind: 'failed', reason }`** where it
+  rejected.
+- **Breaking: one outcome vocabulary.** A cancelled picker is `declined`
+  in `exportNote` and `exportLinkedSet`, where it was `cancelled`.
+  `installPack` reports `invalid` for a malformed archive and `failed` for
+  other failures, where it reported `rejected`.
+- **Breaking: one outcome type per pack behavior.** `RemovePackResult`,
+  `EnablePackResult` and `DisablePackResult` are gone; `RemovePackOutcome`,
+  `EnablePackOutcome` and `DisablePackOutcome` include `unsupported`.
+- **Breaking: `@markii/host` main entry.** `RunViaAdapterRequest` and
+  `RunViaAdapterResult` are gone. The run, prompt and spawn wire types,
+  `discoverPacks` with its helper types, and the `spawnRun` and
+  `packDiscoveryIo` options moved to `@markii/host/internal`.
+  `@markii/host/node` drops `workerThreadIsolate`; use
+  `createNodeHostIsolate`. `@markii/host/conformance` drops its helper
+  exports.
+- **Breaking: `@markii/pack-build`** no longer exports `computeCacheKey`,
+  the CSS lint functions or `resolveExportTarget`.
+- A `.mkp` archive carries a fixed modification time, so the same pack
+  gives the same bytes at any hour.
+- The empty-inline marker and its diagnostic need a directive with no
+  content and no attributes, in all three renderers.
+
+### Fixed
+
+- A pack install writes `pack.json` last, so a failed install leaves no
+  loadable pack.
+
 ## [0.17.0-next.5] - 2026-11-14
 
 ### Added

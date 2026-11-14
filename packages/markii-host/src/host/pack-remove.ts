@@ -9,13 +9,13 @@
 import { joinPath } from '../path-util.js';
 import { validatePackName } from '@markii/pack';
 import type { HostAdapter } from './adapter.js';
+import type { RemovePackOutcome } from './create-host.js';
 
-export type RemovePackOutcome =
-  | { readonly kind: 'removed'; readonly namespace: string }
-  | { readonly kind: 'not-installed'; readonly namespace: string }
-  | { readonly kind: 'reserved'; readonly namespace: string }
-  | { readonly kind: 'invalid'; readonly reason: string }
-  | { readonly kind: 'failed'; readonly reason: string };
+/** What one removal attempt produced, in the shape `createMarkiiHost(...).removePack` returns (minus `unsupported`, which only the host behavior can say). */
+export type RemovePackAttempt = Exclude<
+  RemovePackOutcome,
+  { readonly kind: 'unsupported' }
+>;
 
 /** Never throws. The caller checks `adapter.packs.installRoot`/`removeFolder` exist first. */
 export async function removePackViaAdapter(
@@ -24,7 +24,7 @@ export async function removePackViaAdapter(
   installRoot: string,
   removeFolder: (folder: string) => Promise<void>,
   reservedNamespaces: ReadonlySet<string>,
-): Promise<RemovePackOutcome> {
+): Promise<RemovePackAttempt> {
   const valid = validatePackName(namespace);
   if (!valid.ok) {
     return {
@@ -52,6 +52,8 @@ export async function removePackViaAdapter(
 
 export function removePackMessage(outcome: RemovePackOutcome): string {
   switch (outcome.kind) {
+    case 'unsupported':
+      return 'Markii: removing packs is not available on this host. Nothing was removed.';
     case 'removed':
       return `Markii: removed pack "${outcome.namespace}".`;
     case 'not-installed':
@@ -65,7 +67,7 @@ export function removePackMessage(outcome: RemovePackOutcome): string {
   }
 }
 
-export function removePackDiagnosticLine(outcome: RemovePackOutcome): string {
+export function removePackDiagnosticLine(outcome: RemovePackAttempt): string {
   switch (outcome.kind) {
     case 'removed':
       return `Remove pack removed "${outcome.namespace}".`;

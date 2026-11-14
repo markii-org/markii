@@ -238,7 +238,7 @@ export function Preview({ registry }: PreviewProps): ReactElement {
             unavailableComponents: data.unavailableComponents,
             packSkippedCount: data.packSkippedCount,
             // ITEM 3: rehydrated from storage by `postUpdate` — see
-            // `preview-panel.ts`'s `readLastRunTrace`. `undefined` when no
+            // `preview-panel.ts`'s `lastRun` read. `undefined` when no
             // run has ever completed for this document, in which case the
             // marker below stays absent, same as `packNamespaces`'s own
             // omitted-vs-empty convention.

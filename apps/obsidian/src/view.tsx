@@ -7,16 +7,17 @@ import { createMarkiiHost } from '@markii/host';
 import {
   createRenderDiagnosticReporter,
   mergeArrivingValue,
-  readPersistedValues,
   scheduledRefreshNotStartedLine,
   scriptsDisabledDiagnosticLine,
   scriptsDisabledNotice,
-  staleValuesForRehydration,
   refreshIntervalMsFromSeconds,
   MARK_EXTENSION,
   packsNotInstalledLabel,
 } from '@markii/host/internal';
-import type { HostAdapter, RunOnceResult } from '@markii/host';
+import type { HostAdapter, RunOutcome } from '@markii/host';
+
+/** The part of a completed run this view keeps for its diagnostics command. */
+type RunFailureDetails = Extract<RunOutcome, { kind: 'ran' }>['failureDetails'];
 import { extractFrontmatterUses } from '@markii/core';
 import { resolveUses } from '@markii/pack';
 import { renderDocument } from './render-document.js';
@@ -69,8 +70,8 @@ export class MarkiiPreviewView extends ItemView {
   /** At-most-once run-on-open, for this view's whole lifetime — mirrors `apps/vscode/src/preview-panel.ts`'s `ActivePreview.ranOnOpen` (panel-lifetime, not per-document: switching notes in the same view does not re-trigger it). */
   private ranOnOpen = false;
   private refreshTimer: ReturnType<typeof setInterval> | undefined;
-  /** The last completed run's failure details (`RunOnceResult.failureDetails`), kept so the "Show Markii diagnostics" command can replay them on demand — diagnostics-surface only, never rendered into the page. */
-  private lastRunFailures: RunOnceResult['failureDetails'] = [];
+  /** The last completed run's failure details (`RunOutcome.failureDetails`), kept so the "Show Markii diagnostics" command can replay them on demand. They go to the diagnostics surface only, never into the page. */
+  private lastRunFailures: RunFailureDetails = [];
 
   /**
    * The console line for an image source that names no file in the vault
@@ -422,6 +423,16 @@ export class MarkiiPreviewView extends ItemView {
         }
         return;
       }
+      if (outcome.kind === 'failed') {
+        // The shared path already wrote the diagnostics line and a failed
+        // trace. The notice and the refresh match what a thrown run did.
+        console.error('Markii: runScripts failed:', outcome.reason);
+        if (trigger === 'manual') {
+          new Notice("Markii: running this note's scripts failed.");
+        }
+        if (this.currentFile?.path === documentKey) await this.refresh();
+        return;
+      }
       const result = outcome;
 
       // The file shown may have changed while the run (grant prompts
@@ -462,7 +473,7 @@ export class MarkiiPreviewView extends ItemView {
    */
   private reportRunOutcome(
     trigger: RunTrigger,
-    failures: RunOnceResult['failureDetails'],
+    failures: RunFailureDetails,
   ): void {
     if (failures.length === 0) {
       if (trigger === 'manual') new Notice("Markii: this note's scripts ran.");
@@ -503,14 +514,12 @@ export class MarkiiPreviewView extends ItemView {
     if (isNewFile) {
       // A freshly-shown note: forget the previous note's values and
       // rehydrate this one's last-known values (marked stale — GitHub
-      // issue #11's rehydration behavior, `staleValuesForRehydration`) so
+      // issue #11's rehydration behavior, `MarkiiHost.lastRun`) so
       // it renders its last figures instantly, before (or without) any
       // fresh run.
-      const persisted = readPersistedValues(this.adapter().memento, file.path);
+      const last = createMarkiiHost(this.adapter()).lastRun(file.path);
       this.values =
-        Object.keys(persisted).length > 0
-          ? staleValuesForRehydration(persisted)
-          : undefined;
+        Object.keys(last.persistedValues).length > 0 ? last.values : undefined;
     }
 
     const rawText = await this.app.vault.cachedRead(file);

@@ -63,11 +63,7 @@ import {
   buildBundleSnapshot,
 } from '@markii/host';
 import {
-  clearGrantForDocument,
   cascadeDiagnosticLines,
-  readPersistedValues,
-  staleValuesForRehydration,
-  readLastRunTrace,
   decodeBundleCacheFromStorage,
   encodeBundleCacheForStorage,
   withPersistedCache,
@@ -87,7 +83,7 @@ import type {
   ExportRequest,
   HostPromptRequest,
   MarkiiHost,
-  RunOnceOptions,
+  RunRequest,
 } from '@markii/host';
 import { createVSCodeHostAdapter } from './host-adapter.js';
 import { valuesMessageForRun } from './run-values-message.js';
@@ -145,6 +141,27 @@ async function promptViaModal(request: HostPromptRequest): Promise<boolean> {
  * `undefined` (dev/Vitest, no `dist/` built yet) — `createVSCodeHostAdapter`
  * owns that fallback, so this call site no longer duplicates it.
  */
+/**
+ * The long-lived host over this extension's device state. It reads a note's
+ * last run and clears its grants, so no storage key is spelled here. One
+ * host serves each memento, and it never asks a question.
+ */
+const stateHosts = new WeakMap<object, MarkiiHost>();
+function stateHost(memento: vscode.Memento): MarkiiHost {
+  let host = stateHosts.get(memento);
+  if (host === undefined) {
+    host = createMarkiiHost(
+      createVSCodeHostAdapter({
+        memento,
+        prompt: async () => false,
+        diagnostics: (line) => diagnosticsChannel?.appendLine(line),
+      }),
+    );
+    stateHosts.set(memento, host);
+  }
+  return host;
+}
+
 function runHostAdapter(context: vscode.ExtensionContext) {
   return createVSCodeHostAdapter({
     memento: context.workspaceState,
@@ -738,7 +755,9 @@ function postUpdate(preview: ActivePreview): void {
   }
 
   if (source.kind === 'bundle-archive') {
-    const lastRun = readLastRunTrace(preview.memento, source.bundle.identity);
+    const lastRun = stateHost(preview.memento).lastRun(
+      source.bundle.identity,
+    ).trace;
     const message: HostToWebviewMessage = {
       type: 'update',
       revision: preview.revision,
@@ -758,10 +777,9 @@ function postUpdate(preview: ActivePreview): void {
   }
 
   const baseUri = baseUriForDocument(source.document, preview);
-  const lastRun = readLastRunTrace(
-    preview.memento,
+  const lastRun = stateHost(preview.memento).lastRun(
     source.document.uri.toString(),
-  );
+  ).trace;
   const message: HostToWebviewMessage = {
     type: 'update',
     revision: preview.revision,
@@ -800,10 +818,9 @@ function postStalePersistedValues(
 ): void {
   const documentKey = documentKeyForSource(source);
   if (documentKey === undefined) return;
-  const persisted = readPersistedValues(preview.memento, documentKey);
-  if (Object.keys(persisted).length === 0) return;
-  const stale: Record<string, StoredValue> =
-    staleValuesForRehydration(persisted);
+  const last = stateHost(preview.memento).lastRun(documentKey);
+  if (Object.keys(last.persistedValues).length === 0) return;
+  const stale: Record<string, StoredValue> = last.values;
   const message: ValuesMessage = {
     type: 'values',
     revision: preview.revision,
@@ -1501,7 +1518,7 @@ function bundleCacheStorageKeyFor(identity: string): string {
 function bundleOptionsFor(
   context: vscode.ExtensionContext,
   bundle: BundleRunContext,
-): RunOnceOptions['bundle'] {
+): RunRequest['bundle'] {
   if (bundle.form === 'directory') {
     const rootDir = bundle.rootDir;
     return {
@@ -1659,12 +1676,15 @@ async function runWithTrigger(
     // to, and touching `preview.panel` past disposal would itself throw.
     if (active !== preview) return;
 
-    if (outcome.kind === 'unsupported') {
+    if (outcome.kind === 'unsupported' || outcome.kind === 'failed') {
       // The shared path already wrote the diagnostics line; the user gets
-      // the same short notice every failed run does.
+      // the same short notice every failed run does. A run that failed
+      // also recorded a failed trace, so re-sending the document makes
+      // the marker show it right away.
       void vscode.window.showErrorMessage(
         "Markii: running this note's scripts failed.",
       );
+      if (outcome.kind === 'failed' && active === preview) postUpdate(preview);
       return;
     }
 
@@ -1810,6 +1830,41 @@ function requestExportBody(
 }
 
 /**
+ * Where an export's chosen save location lives until the host writes it,
+ * keyed by the path handed to the host. A save dialog can return a Uri on a
+ * virtual file system, which a plain path cannot name.
+ */
+const exportTargets = new Map<string, vscode.Uri>();
+
+/** The write behind every export: the registered Uri for the path, else the file at that path. */
+async function writeExportFile(path: string, bytes: Uint8Array): Promise<void> {
+  await vscode.workspace.fs.writeFile(
+    exportTargets.get(path) ?? vscode.Uri.file(path),
+    bytes,
+  );
+}
+
+/**
+ * The long-lived host for a single-note export. Each export request names
+ * its own `targetPath`, so the adapter declares the `html` format and no
+ * save-dialog resolver.
+ */
+let exportHostInstance: MarkiiHost | undefined;
+function exportHost(context: vscode.ExtensionContext): MarkiiHost {
+  exportHostInstance ??= createMarkiiHost(
+    createVSCodeHostAdapter({
+      memento: context.workspaceState,
+      prompt: promptViaModal,
+      diagnostics: exportDiagnosticsSink(),
+      writeFile: writeExportFile,
+      exportFormats: new Set(['html']),
+    }),
+    { htmlEngine },
+  );
+  return exportHostInstance;
+}
+
+/**
  * Writes one export outcome to the "Markii" output channel — the other of a
  * failure's two homes (AGENTS.md's "clean is not silent"). The popup carries
  * the short sentence; the verbatim reason only ever lands here.
@@ -1858,7 +1913,7 @@ function panelHasWebviewPacks(preview: ActivePreview): boolean {
  * throwaway panel with the whole pack script-tag bootstrap just to answer
  * one export would be worse than a clearly diagnosed static fallback.
  *
- * VALUES. The note's last run is baked in: `readPersistedValues` reads the
+ * VALUES. The note's last run is baked in: `lastRun` reads the
  * same `workspaceState` entry the preview rehydrates from, keyed by the
  * document URI, so an export made after a run carries the figures that run
  * produced. Deliberately NOT marked stale the way a rehydrated preview is
@@ -1899,10 +1954,9 @@ export async function exportHtml(
   });
   if (!target) return; // cancelled
 
-  const values = readPersistedValues(
-    context.workspaceState,
+  const values = stateHost(context.workspaceState).lastRun(
     document.uri.toString(),
-  );
+  ).persistedValues;
   let outcome: Awaited<ReturnType<MarkiiHost['exportNote']>>;
   try {
     // Issue #28 slice 2 follow-up: rendering pack components needs the
@@ -1954,25 +2008,18 @@ export async function exportHtml(
     diagnosticsChannel?.appendLine(
       `Markii: HTML export at ${new Date().toISOString()}`,
     );
-    const adapter = createVSCodeHostAdapter({
-      memento: context.workspaceState,
-      prompt: promptViaModal,
-      diagnostics: exportDiagnosticsSink(),
-      writeFile: async (_path, bytes) => {
-        await vscode.workspace.fs.writeFile(target, bytes);
-      },
-      exportFormats: new Set(['html']),
-      resolveExportTarget: async () => target.fsPath,
-    });
-    outcome = await createMarkiiHost(adapter, { htmlEngine }).exportNote({
+    exportTargets.set(target.fsPath, target);
+    outcome = await exportHost(context).exportNote({
       format: 'html',
       notePath: defaultName,
       text: document.getText(),
+      targetPath: target.fsPath,
       values,
       embedImages,
       hideScriptBlocks: configuredHideScriptBlocks(),
       ...render,
     });
+    exportTargets.delete(target.fsPath);
   } catch (error) {
     outcome = {
       kind: 'failed',
@@ -2124,10 +2171,9 @@ export async function exportHtmlCascade(
       rootPath: document.uri.path,
       resolveLink,
       readValues: (notePath: string) =>
-        readPersistedValues(
-          context.workspaceState,
+        stateHost(context.workspaceState).lastRun(
           uriForNote(notePath).toString(),
-        ),
+        ).persistedValues,
       embedImagesFor: (notePath: string) =>
         createExportImageReader(folderForNote(notePath)),
     };
@@ -2152,19 +2198,23 @@ export async function exportHtmlCascade(
       request = { ...common, staticReason };
     }
 
+    // This adapter stays per call because its read seam does: an open
+    // editor's text wins over the file on disk, and the note paths are URI
+    // paths in this root note's scheme.
+    exportTargets.set(target.fsPath, target);
     const adapter = createVSCodeHostAdapter({
       memento: context.workspaceState,
       prompt: promptViaModal,
       diagnostics: exportDiagnosticsSink(),
       readFile: readNoteBytes,
-      writeFile: async (_path, bytes) => {
-        await vscode.workspace.fs.writeFile(target, bytes);
-      },
-      resolveLinkedSetTarget: async () => target.fsPath,
+      writeFile: writeExportFile,
+      exportFormats: new Set(),
     });
-    outcome = await createMarkiiHost(adapter, { htmlEngine }).exportLinkedSet(
-      request,
-    );
+    outcome = await createMarkiiHost(adapter, { htmlEngine }).exportLinkedSet({
+      ...request,
+      targetPath: target.fsPath,
+    });
+    exportTargets.delete(target.fsPath);
   } catch (error) {
     // The host reports its own failures. This catches only what went wrong
     // before it was called, so the reason still reaches the output channel.
@@ -2212,7 +2262,7 @@ export async function resetScriptGrants(
     return;
   }
 
-  await clearGrantForDocument(context.workspaceState, document.uri.toString());
+  await stateHost(context.workspaceState).forgetGrants(document.uri.toString());
   void vscode.window.showInformationMessage(
     "Markii: cleared this note's saved script permissions. The next run will prompt again.",
   );

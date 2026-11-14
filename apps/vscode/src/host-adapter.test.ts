@@ -72,14 +72,25 @@ describe('createVSCodeHostAdapter', () => {
     expect(adapter.packs?.installRoot?.()).toBe('/installed-packs');
   });
 
-  it('omits the exports capability unless both formats and resolveTarget are injected', () => {
+  it('omits the exports capability unless formats or a linked-set resolver are injected', () => {
+    const adapter = createVSCodeHostAdapter({
+      memento: fakeMemento(),
+      prompt: async () => true,
+      diagnostics: vi.fn(),
+    });
+    expect(adapter.exports).toBeUndefined();
+  });
+
+  it('offers the exports capability with formats alone, leaving the resolvers absent for a caller that names its own target', () => {
     const adapter = createVSCodeHostAdapter({
       memento: fakeMemento(),
       prompt: async () => true,
       diagnostics: vi.fn(),
       exportFormats: new Set(['html']),
     });
-    expect(adapter.exports).toBeUndefined();
+    expect(adapter.exports?.formats).toEqual(new Set(['html']));
+    expect(adapter.exports?.resolveTarget).toBeUndefined();
+    expect(adapter.exports?.resolveLinkedSetTarget).toBeUndefined();
   });
 
   it('omits the editor capability unless documentText, cursor, and applyEdits are all injected', () => {

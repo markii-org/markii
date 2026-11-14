@@ -29,4 +29,18 @@ describe('the empty-inline marker reaches onDiagnostic (terminal engine)', () =>
     await plain('text :badge[ok] end', events);
     expect(events).toEqual([]);
   });
+
+  it('reports nothing for an inline component given attributes and no content', async () => {
+    const events: DiagnosticEvent[] = [];
+    const out = await plain('text :badge{variant=info} end', events);
+    expect(events).toEqual([]);
+    expect(out).not.toContain('no content');
+  });
+
+  it('reports nothing for an inline component given only data=', async () => {
+    const events: DiagnosticEvent[] = [];
+    const out = await plain('text :badge{data=total} end', events);
+    expect(events).toEqual([]);
+    expect(out).not.toContain('no content');
+  });
 });

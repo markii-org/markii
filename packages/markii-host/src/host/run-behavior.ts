@@ -2,30 +2,20 @@
  * The `run` behavior's host-shaped seams, built from a `HostAdapter`:
  * the grant prompts and the isolate spawn live here once for every host.
  *
- * A1: `apps/vscode/src/preview-panel.ts`'s `promptHostAdapter` /
- * `promptUnknownHostsAdapter` / `promptManyHostsAdapter`,
- * `apps/obsidian/src/run-modals.ts`'s `promptHostModal` /
- * `promptUnknownHostsModal` / `promptManyHostsModal`, and
- * `apps/cli/src/prompts.ts`'s three closures all did the same thing: call
- * one of `@markii/host`'s exported message builders and turn the answer
- * into a `boolean` through a host-specific UI primitive. `promptsFromAdapter`
- * below collapses all nine into three calls to the ONE `adapter.prompt`
- * method every `HostAdapter` already has.
+ * `promptsFromAdapter` routes the three grant prompts through the one
+ * `adapter.prompt` method every `HostAdapter` has, so a host writes no
+ * per-prompt code. Each prompt carries the wording the grant flow's message
+ * builders produce.
  *
- * A6: `apps/vscode/src/preview-panel.ts:spawnRun` and
- * `apps/cli/src/run-note.ts:spawnRun` were the same five-line function —
- * the CLI's own doc comment said outright it was "mirroring
- * apps/vscode/src/preview-panel.ts's identical function". `spawnRunViaAdapter`
- * below is that function, written once, dispatching on `HostAdapter.isolate`'s
- * discriminated union instead of assuming a Node worker path.
+ * `spawnRunViaAdapter` starts the run in the isolate the adapter names. It
+ * dispatches on `HostIsolate`'s discriminated union, so a Node worker path
+ * and a browser spawner go through the same call.
  *
- * `runViaAdapter` composes both of these around `../run/run-flow.ts`'s
- * `runOnce` (the existing, already-shared grant-flow-plus-spawn
- * orchestration) and writes the `RunTrace` through `adapter.now()` rather
- * than `Date.now()`, so a fixed clock in a test fake makes the trace
- * byte-stable.
+ * `runViaAdapter` composes both around `../run/run-flow.ts`'s `runOnce`,
+ * the shared grant-flow-plus-spawn orchestration. It writes the `RunTrace`
+ * through `adapter.now()` rather than `Date.now()`, so a fixed clock in a
+ * test fake makes the trace byte-stable.
  */
-import type { RunTrigger } from '@markii/runtime';
 import {
   ALLOW_LABEL,
   DONT_ALLOW_LABEL,
@@ -41,16 +31,13 @@ import {
   type RunResult,
   type SpawnRunRequest,
 } from '../run/run-host.js';
-import {
-  runOnce,
-  type RunOnceOptions,
-  type RunOnceResult,
-} from '../run/run-flow.js';
+import { runOnce, type RunOnceResult } from '../run/run-flow.js';
 import { writeLastRunTrace, type RunTrace } from '../run/run-trace.js';
 import {
   runCrashDiagnosticLine,
   runDiagnosticLines,
 } from './run-diagnostics.js';
+import type { RunRequest } from './create-host.js';
 import { BROWSER_ISOLATE_ENTRY } from './adapter.js';
 import type { HostAdapter, HostIsolate } from './adapter.js';
 
@@ -188,18 +175,6 @@ export async function spawnRunViaAdapter(
   }
 }
 
-export interface RunViaAdapterRequest {
-  /** Stable identity for the note this run belongs to. */
-  readonly documentKey: string;
-  readonly text: string;
-  readonly trigger: RunTrigger;
-  readonly netPolicy?: RunOnceOptions['netPolicy'];
-  readonly bundle?: RunOnceOptions['bundle'];
-  readonly packModules?: RunOnceOptions['packModules'];
-  readonly onValue?: RunOnceOptions['onValue'];
-  readonly timeoutMs?: number;
-}
-
 /** A run's result plus the `RunTrace` it just recorded, so a host can show its in-note marker from the same value the shared path persisted. */
 export type RunViaAdapterResult = RunOnceResult & {
   readonly trace: RunTrace;
@@ -208,6 +183,11 @@ export type RunViaAdapterResult = RunOnceResult & {
   /** How many of this run's values came back with the value store's `error` status. */
   readonly errorCount: number;
 };
+
+/** What one run produced: the result, or the reason it could not complete. Never thrown. */
+export type RunAttemptOutcome =
+  | ({ readonly kind: 'ran' } & RunViaAdapterResult)
+  | { readonly kind: 'failed'; readonly reason: string };
 
 /**
  * Runs one manual, auto, or scheduled pass of `request.text`'s scripts,
@@ -221,9 +201,9 @@ export type RunViaAdapterResult = RunOnceResult & {
  */
 export async function runViaAdapter(
   adapter: HostAdapter,
-  request: RunViaAdapterRequest,
+  request: RunRequest,
   overrideSpawnRun?: (options: SpawnRunRequest) => Promise<RunResult>,
-): Promise<RunViaAdapterResult> {
+): Promise<RunAttemptOutcome> {
   const prompts = promptsFromAdapter(adapter);
   const spawn =
     overrideSpawnRun ??
@@ -251,8 +231,8 @@ export async function runViaAdapter(
     });
   } catch (err) {
     // A run that threw is still a failure with two homes: the diagnostics
-    // line and a failed trace for the in-note marker. The caller keeps its
-    // own visible surface (a notice), so the error is rethrown.
+    // line and a failed trace for the in-note marker. The caller gets the
+    // reason as a `failed` outcome and keeps its own visible surface.
     const detail = err instanceof Error ? err.message : String(err);
     adapter.diagnostics(runCrashDiagnosticLine(request.trigger, detail));
     await writeLastRunTrace(adapter.memento, request.documentKey, {
@@ -261,7 +241,7 @@ export async function runViaAdapter(
       ok: false,
       reason: detail,
     }).then(undefined, () => {});
-    throw err;
+    return { kind: 'failed', reason: detail };
   }
 
   // The failure's second home (AGENTS.md, "clean is not silent"): one line
@@ -296,5 +276,5 @@ export async function runViaAdapter(
     else if (value.status === 'error') errorCount += 1;
   }
 
-  return { ...result, trace, freshCount, errorCount };
+  return { kind: 'ran', ...result, trace, freshCount, errorCount };
 }

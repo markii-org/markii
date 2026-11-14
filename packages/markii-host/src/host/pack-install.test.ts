@@ -18,6 +18,7 @@ import {
   installReplaceConfirmMessage,
 } from './pack-install.js';
 import type { PackDirectoryExists } from './pack-install.js';
+import { discoverPacks } from '../packs/discover.js';
 import type { HostAdapter, HostPromptRequest } from './adapter.js';
 import {
   CLI_LABELS,
@@ -131,7 +132,58 @@ describe('installPackFromArchive', () => {
     expect(manifestText).toContain('"ana"');
   });
 
-  it('a rejected archive installs nothing and never asks for consent', async () => {
+  it('writes pack.json last, so a write failure midway leaves no loadable pack', async () => {
+    const installRoot = await makeTempDir();
+    const encoder = new TextEncoder();
+    const archiveBytes = zipSync({
+      'pack.json': encoder.encode(
+        JSON.stringify({
+          name: 'ana',
+          engine: 'react',
+          components: { widget: './Widget.tsx' },
+        }),
+      ),
+      'webview.js': encoder.encode('window.__markiiRegisterPack(() => ({}));'),
+      'webview.css': encoder.encode('.ana-x { display: block; }'),
+    });
+    let writes = 0;
+    const adapter: HostAdapter = {
+      ...fakeAdapter(),
+      writeFile: async (absolutePath, bytes) => {
+        writes += 1;
+        if (writes === 2) throw new Error('disk full');
+        await writeCreatingParents(absolutePath, bytes);
+      },
+    };
+
+    const outcome = await installPackFromArchive(adapter, {
+      archiveBytes,
+      archivePath: '/downloads/ana.mkp',
+      installRoot,
+      exists: existsOnDisk(),
+      removeFolder: removeTree,
+      reservedNamespaces: new Set(),
+    });
+
+    expect(outcome.kind).toBe('failed');
+    await expect(
+      access(path.join(installRoot, 'ana', 'pack.json')),
+    ).rejects.toThrow();
+    const found = await discoverPacks(
+      [path.join(installRoot, 'ana')],
+      async (p) => {
+        try {
+          return await readFile(p, 'utf8');
+        } catch {
+          return undefined;
+        }
+      },
+      async () => [],
+    );
+    expect(found.packs).toEqual([]);
+  });
+
+  it('an invalid archive installs nothing and never asks for consent', async () => {
     const installRoot = await makeTempDir();
     const seen: HostPromptRequest[] = [];
 
@@ -144,7 +196,7 @@ describe('installPackFromArchive', () => {
       reservedNamespaces: new Set(),
     });
 
-    expect(outcome.kind).toBe('rejected');
+    expect(outcome.kind).toBe('invalid');
     expect(seen).toEqual([]);
     await expect(access(path.join(installRoot, 'ana'))).rejects.toThrow();
   });
@@ -314,8 +366,8 @@ describe('wording', () => {
     expect(installReplaceConfirmMessage('ana')).toContain('removes');
   });
 
-  it("the rejected message names this host's own diagnostics surface", () => {
-    const outcome = { kind: 'rejected' as const, reason: 'bad zip' };
+  it("the failure message names this host's own diagnostics surface", () => {
+    const outcome = { kind: 'invalid' as const, reason: 'bad zip' };
     expect(installPackMessage(outcome, '/x/ana.mkp', VSCODE_LABELS)).toBe(
       'Markii: could not install a pack from "/x/ana.mkp". Open the Markii output channel for details.',
     );
@@ -356,7 +408,8 @@ describe('wording', () => {
       { kind: 'declined' as const, step: 'consent' as const, namespace: 'ana' },
       { kind: 'declined' as const, step: 'replace' as const, namespace: 'ana' },
       { kind: 'reserved' as const, namespace: 'read' },
-      { kind: 'rejected' as const, reason: 'bad zip' },
+      { kind: 'invalid' as const, reason: 'bad zip' },
+      { kind: 'failed' as const, reason: 'disk full' },
     ];
     for (const outcome of outcomes) {
       expect(

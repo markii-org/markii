@@ -17,7 +17,7 @@ import type { RunResult } from '../run/run-host.js';
 import type { GrantMemento, Thenable } from '../run/grant-flow.js';
 import type { HostAdapter, HostEditor } from './adapter.js';
 import { CLI_LABELS } from './labels.fixture.js';
-import { createMarkiiHost } from './create-host.js';
+import { createMarkiiHost, createMarkiiHostWithSeams } from './create-host.js';
 
 const tempDirs: string[] = [];
 
@@ -161,7 +161,7 @@ describe('createMarkiiHost.run', () => {
         spawnIsolate: devWorkerIsolate,
       },
     });
-    const host = createMarkiiHost(adapter, {
+    const host = createMarkiiHostWithSeams(adapter, {
       spawnRun: async () => fakeResult,
     });
     const outcome = await host.run({
@@ -308,14 +308,14 @@ describe('createMarkiiHost.exportLinkedSet', () => {
     expect(lines).toHaveLength(1);
   });
 
-  it('is cancelled, not thrown, when the picker declines', async () => {
+  it('is declined, not thrown, when the picker declines', async () => {
     const written = new Map<string, Uint8Array>();
     const lines: string[] = [];
     const outcome = await createMarkiiHost(
       linkedSetAdapter(written, lines, null),
       { htmlEngine: createHtmlExportEngine() },
     ).exportLinkedSet(request);
-    expect(outcome).toEqual({ kind: 'cancelled' });
+    expect(outcome).toEqual({ kind: 'declined' });
     expect(written.size).toBe(0);
     expect(lines).toHaveLength(1);
   });
@@ -405,7 +405,7 @@ describe('createMarkiiHost.exportNote', () => {
     expect(html).toContain('.x { color: red; }');
   });
 
-  it('is cancelled, not thrown, when the picker declines', async () => {
+  it('is declined, not thrown, when the picker declines', async () => {
     const adapter = fakeAdapter({
       exports: {
         formats: new Set(['html']),
@@ -419,7 +419,7 @@ describe('createMarkiiHost.exportNote', () => {
       notePath: '/note.mk.md',
       text: '# hello',
     });
-    expect(outcome).toEqual({ kind: 'cancelled' });
+    expect(outcome).toEqual({ kind: 'declined' });
   });
 });
 
@@ -862,5 +862,188 @@ describe('createMarkiiHost editor behaviors', () => {
     const edits = applied[0] as { line: number; text: string }[];
     expect(edits).toHaveLength(3);
     expect(edits.map((edit) => edit.line)).toEqual([3, 2, 0]);
+  });
+});
+
+describe('createMarkiiHost.run never rejects', () => {
+  const nodeIsolate = {
+    kind: 'node' as const,
+    workerPath: () => '/worker.js',
+    spawnIsolate: devWorkerIsolate,
+  };
+
+  it('resolves failed, with the diagnostics line and a failed trace, when the isolate throws', async () => {
+    const lines: string[] = [];
+    const adapter = fakeAdapter({
+      isolate: nodeIsolate,
+      now: () => 7,
+      diagnostics: (line) => lines.push(line),
+    });
+    const host = createMarkiiHostWithSeams(adapter, {
+      spawnRun: async () => {
+        throw new Error('isolate exploded');
+      },
+    });
+    const outcome = await host.run({
+      documentKey: 'doc-throws',
+      text: 'text',
+      trigger: 'manual',
+    });
+    expect(outcome).toEqual({ kind: 'failed', reason: 'isolate exploded' });
+    expect(lines).toEqual([
+      'manual run failed before it could report: isolate exploded',
+    ]);
+    expect(host.lastRun('doc-throws').trace).toEqual({
+      trigger: 'manual',
+      ranAt: 7,
+      ok: false,
+      reason: 'isolate exploded',
+    });
+  });
+});
+
+describe('createMarkiiHost.lastRun and forgetGrants', () => {
+  const nodeIsolate = {
+    kind: 'node' as const,
+    workerPath: () => '/worker.js',
+    spawnIsolate: devWorkerIsolate,
+  };
+  const note = ['```lua {name=total}', 'return 1', '```', ''].join('\n');
+
+  it('is empty when nothing is stored', () => {
+    const host = createMarkiiHost(fakeAdapter());
+    expect(host.lastRun('never-ran')).toEqual({
+      values: {},
+      persistedValues: {},
+    });
+  });
+
+  it('returns the values a run stored, stale-marked for showing, and the raw ones for an export', async () => {
+    const adapter = fakeAdapter({ isolate: nodeIsolate, now: () => 11 });
+    const host = createMarkiiHostWithSeams(adapter, {
+      spawnRun: async () => ({
+        values: { total: { status: 'fresh', value: 3 } },
+        failures: [],
+        cacheSnapshot: {},
+      }),
+    });
+    await host.run({ documentKey: 'doc-a', text: note, trigger: 'manual' });
+    const last = host.lastRun('doc-a');
+    expect(last.values['total']).toMatchObject({ status: 'stale', value: 3 });
+    expect(last.persistedValues['total']).toMatchObject({
+      status: 'fresh',
+      value: 3,
+    });
+    expect(last.trace).toEqual({ trigger: 'manual', ranAt: 11, ok: true });
+    expect(host.lastRun('doc-b')).toEqual({ values: {}, persistedValues: {} });
+  });
+
+  it('forgetGrants clears the stored grant so the next run prompts again', async () => {
+    const prompts: string[] = [];
+    const adapter = fakeAdapter({
+      isolate: nodeIsolate,
+      prompt: async (request) => {
+        prompts.push(request.kind);
+        return true;
+      },
+    });
+    const host = createMarkiiHostWithSeams(adapter, {
+      spawnRun: async () => ({ values: {}, failures: [], cacheSnapshot: {} }),
+    });
+    const netNote =
+      '```lua {name=total}\nreturn net.fetch_json("https://api.example.com/orders")\n```\n';
+    await host.run({ documentKey: 'doc-g', text: netNote, trigger: 'manual' });
+    await host.run({ documentKey: 'doc-g', text: netNote, trigger: 'manual' });
+    expect(prompts).toEqual(['grant-host']);
+    await host.forgetGrants('doc-g');
+    await host.run({ documentKey: 'doc-g', text: netNote, trigger: 'manual' });
+    expect(prompts).toEqual(['grant-host', 'grant-host']);
+    await expect(host.forgetGrants('doc-unknown')).resolves.toBeUndefined();
+  });
+});
+
+describe('export targetPath', () => {
+  const written = (): {
+    map: Map<string, Uint8Array>;
+    adapter: HostAdapter;
+    asked: string[];
+  } => {
+    const map = new Map<string, Uint8Array>();
+    const asked: string[] = [];
+    const adapter = fakeAdapter({
+      readFile: async (p) =>
+        new TextEncoder().encode(
+          p === '/v/root.mk.md' ? '# Root\n' : '# Other\n',
+        ),
+      writeFile: async (p, bytes) => {
+        map.set(p, bytes);
+      },
+      exports: {
+        formats: new Set(['html']),
+        resolveLinkedSetTarget: async (name) => {
+          asked.push(name);
+          return '/picked/root.zip';
+        },
+      },
+    });
+    return { map, adapter, asked };
+  };
+
+  it('a single-note export writes to targetPath with no resolveTarget declared', async () => {
+    const { map, adapter } = written();
+    const outcome = await createMarkiiHost(adapter, {
+      htmlEngine: createHtmlExportEngine(),
+    }).exportNote({
+      format: 'html',
+      notePath: '/v/root.mk.md',
+      text: '# Root',
+      targetPath: '/chosen/out.html',
+    });
+    expect(outcome.kind).toBe('exported');
+    expect([...map.keys()]).toEqual(['/chosen/out.html']);
+  });
+
+  it('a single-note export with no resolveTarget and no targetPath is unsupported', async () => {
+    const { adapter } = written();
+    const outcome = await createMarkiiHost(adapter, {
+      htmlEngine: createHtmlExportEngine(),
+    }).exportNote({
+      format: 'html',
+      notePath: '/v/root.mk.md',
+      text: '# Root',
+    });
+    expect(outcome.kind).toBe('unsupported');
+  });
+
+  it('a linked-set export skips the resolver when targetPath is present', async () => {
+    const { map, adapter, asked } = written();
+    const outcome = await createMarkiiHost(adapter, {
+      htmlEngine: createHtmlExportEngine(),
+    }).exportLinkedSet({
+      rootPath: '/v/root.mk.md',
+      resolveLink: () => undefined,
+      readValues: () => ({}),
+      targetPath: '/given/root.zip',
+    });
+    expect(outcome.kind).toBe('exported');
+    expect(asked).toEqual([]);
+    expect([...map.keys()]).toEqual(['/given/root.zip']);
+  });
+
+  it('a linked-set export with exports declared but no resolver and no targetPath is unsupported', async () => {
+    const adapter = fakeAdapter({
+      exports: { formats: new Set(['html']) },
+    });
+    const outcome = await createMarkiiHost(adapter, {
+      htmlEngine: createHtmlExportEngine(),
+    }).exportLinkedSet({
+      rootPath: '/v/root.mk.md',
+      resolveLink: () => undefined,
+      readValues: () => ({}),
+    });
+    expect(outcome).toMatchObject({
+      kind: 'unsupported',
+      capability: 'linked-set-export',
+    });
   });
 });

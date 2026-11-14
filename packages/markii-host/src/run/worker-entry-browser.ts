@@ -85,13 +85,18 @@ function requestUrl(input: unknown, base: string): string | undefined {
  * - `importScripts` becomes a function that throws. It stays a function
  *   because the Lua engine's start-up detects a worker by
  *   `typeof importScripts`.
+ * - Each of these names is replaced on the global and on every prototype
+ *   the global inherits from, because a browser defines some of them
+ *   (`fetch`) on `WorkerGlobalScope.prototype`.
  * - `fetch` keeps working for exactly one URL, the `glue.wasm` the job
  *   named, because the engine loads its WebAssembly through it for every
  *   script. Any other URL is refused.
  *
  * Net traffic is unaffected: it goes to the host with `postMessage`.
  * Idempotent. Covered by `worker-entry-browser.test.ts` and, in a real
- * browser, by the e2e suite.
+ * browser, by `e2e/browser-host/tests/worker-isolation.spec.ts`: the
+ * removed globals, a refused `fetch` to any other URL, and a prototype chain
+ * with no second `fetch`, `XMLHttpRequest` or `WebSocket`.
  */
 export function lockdownWorkerGlobals(
   scope: object,
@@ -104,6 +109,7 @@ export function lockdownWorkerGlobals(
   const base = target.location?.href ?? 'http://localhost/';
   const allowed = wasmUri === undefined ? undefined : requestUrl(wasmUri, base);
   const realFetch = target.fetch;
+  const realImport = target['importScripts'];
 
   const shadow = (name: string, value: unknown): void => {
     try {
@@ -122,12 +128,41 @@ export function lockdownWorkerGlobals(
     }
   };
 
-  for (const name of REMOVED_GLOBALS) shadow(name, undefined);
-  shadow('importScripts', () => {
+  /**
+   * Also replaces `name` on every prototype the scope inherits from. A
+   * browser defines `fetch` on `WorkerGlobalScope.prototype`, so shadowing
+   * only the global's own property would leave
+   * `Object.getPrototypeOf(self).fetch` as a way around the lockdown.
+   */
+  const shadowOnChain = (name: string, value: unknown): void => {
+    for (
+      let proto: object | null = Object.getPrototypeOf(scope) as object | null;
+      proto !== null && proto !== Object.prototype;
+      proto = Object.getPrototypeOf(proto) as object | null
+    ) {
+      if (!Object.hasOwn(proto, name)) continue;
+      try {
+        Object.defineProperty(proto, name, {
+          value,
+          configurable: false,
+          writable: false,
+        });
+      } catch {
+        // A frozen prototype keeps its member, and nothing more can be done.
+      }
+    }
+  };
+  const lock = (name: string, value: unknown): void => {
+    shadow(name, value);
+    shadowOnChain(name, value);
+  };
+
+  for (const name of REMOVED_GLOBALS) lock(name, undefined);
+  lock('importScripts', () => {
     throw new Error('importScripts is not available in the run isolate');
   });
   if (typeof realFetch === 'function') {
-    shadow('fetch', (input: unknown, init?: unknown) => {
+    lock('fetch', (input: unknown, init?: unknown) => {
       const url = requestUrl(input, base);
       if (allowed !== undefined && url === allowed) {
         return (realFetch as (...args: unknown[]) => unknown).call(
@@ -140,6 +175,34 @@ export function lockdownWorkerGlobals(
         new TypeError('network access is not available in the run isolate'),
       );
     });
+  }
+
+  // Fail closed: a name that could not be replaced, on the global or on a
+  // prototype, means the isolate is not locked, so the run must not start.
+  const live: string[] = [];
+  const isLive = (holder: object, name: string): boolean => {
+    const descriptor = Object.getOwnPropertyDescriptor(holder, name);
+    if (descriptor === undefined) return false;
+    if (descriptor.get !== undefined || descriptor.set !== undefined) {
+      return true;
+    }
+    if (name === 'fetch') return descriptor.value === realFetch;
+    if (name === 'importScripts') return descriptor.value === realImport;
+    return descriptor.value !== undefined;
+  };
+  for (
+    let holder: object | null = scope;
+    holder !== null && holder !== Object.prototype;
+    holder = Object.getPrototypeOf(holder) as object | null
+  ) {
+    for (const name of [...REMOVED_GLOBALS, 'importScripts', 'fetch']) {
+      if (isLive(holder, name)) live.push(name);
+    }
+  }
+  if (live.length > 0) {
+    throw new Error(
+      `the run isolate could not be locked (${[...new Set(live)].join(', ')})`,
+    );
   }
   Object.defineProperty(scope, '__markiiLocked', { value: true });
 }
@@ -189,9 +252,9 @@ function start(scope: WorkerGlobal): void {
         return;
       }
       const job = message as BrowserRunJob;
-      lockdownWorkerGlobals(scope, job.wasmUri);
       let result: RunResult;
       try {
+        lockdownWorkerGlobals(scope, job.wasmUri);
         result = await runJob(job, {
           createNet: () => bridge.provider,
           wasmUri: job.wasmUri,

@@ -1,0 +1,27 @@
+{
+  "id": "last-run-and-grants",
+  "invariant": "a run's values and trace can be read back with no storage key, and clearing the stored grants makes the next manual run prompt again",
+  "clock": 1700000000000,
+  "actions": [
+    { "type": "lastRun" },
+    {
+      "type": "run",
+      "trigger": "manual",
+      "answers": ["allow"],
+      "simulate": { "name": "total", "value": 3, "requiresHost": "api.example.com" }
+    },
+    { "type": "lastRun" },
+    {
+      "type": "run",
+      "trigger": "manual",
+      "simulate": { "name": "total", "value": 3, "requiresHost": "api.example.com" }
+    },
+    { "type": "forgetGrants" },
+    {
+      "type": "run",
+      "trigger": "manual",
+      "answers": ["allow"],
+      "simulate": { "name": "total", "value": 3, "requiresHost": "api.example.com" }
+    }
+  ]
+}

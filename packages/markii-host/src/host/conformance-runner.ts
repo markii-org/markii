@@ -46,7 +46,7 @@ import { unzipSync, zipSync } from 'fflate';
 import { conformanceDir } from '@markii/core/corpus';
 import type { RunTrigger } from '@markii/runtime';
 import {
-  createMarkiiHost,
+  createMarkiiHostWithSeams,
   type ExportLinkedSetOutcome,
   type ExportOutcome,
   type MarkiiHost,
@@ -113,6 +113,10 @@ export type HostScenarioAction =
       readonly scriptsDisabled?: boolean;
       readonly simulate?: RunSimulation;
     }
+  /** Reads what the note's last run left: the values to show on open and the trace. */
+  | { readonly type: 'lastRun' }
+  /** Clears the note's stored script grants. */
+  | { readonly type: 'forgetGrants' }
   | { readonly type: 'exportHtml' }
   | { readonly type: 'exportAnsi' }
   | { readonly type: 'exportLinkedSet' }
@@ -229,6 +233,8 @@ export const ACTION_CAPABILITY: Readonly<
 > = {
   open: undefined,
   run: 'isolate',
+  lastRun: undefined,
+  forgetGrants: undefined,
   exportHtml: 'export-format',
   exportAnsi: 'export-format',
   exportLinkedSet: 'linked-set-export',
@@ -436,7 +442,7 @@ export async function runHostScenario(
   };
 
   let currentSimulation: RunSimulation | undefined;
-  const host: MarkiiHost = createMarkiiHost(recording, {
+  const host: MarkiiHost = createMarkiiHostWithSeams(recording, {
     // The runner is Node-only test tooling, so it supplies the real Node
     // implementations of the seams the host layer takes by injection.
     htmlEngine: createHtmlExportEngine(),
@@ -527,6 +533,20 @@ async function runOneAction(
         trigger: action.trigger,
       });
     }
+
+    case 'lastRun': {
+      const last = host.lastRun(ctx.notePath);
+      return {
+        kind: 'lastRun',
+        values: last.values,
+        persistedValues: last.persistedValues,
+        ...(last.trace !== undefined ? { trace: last.trace } : {}),
+      };
+    }
+
+    case 'forgetGrants':
+      await host.forgetGrants(ctx.notePath);
+      return { kind: 'forgotten' };
 
     case 'exportHtml':
     case 'exportAnsi': {
@@ -715,6 +735,41 @@ export function outcomeMismatches(
         mismatches.push(
           `failure kinds: expected ${JSON.stringify(wantKinds)}, got ${JSON.stringify(gotKinds)}`,
         );
+      }
+      if (expected['traceOk'] !== undefined) {
+        const trace = actualRecord['trace'] as { ok?: unknown } | undefined;
+        if (trace?.ok !== expected['traceOk']) {
+          mismatches.push(
+            `trace.ok: expected ${String(expected['traceOk'])}, got ${String(trace?.ok)}`,
+          );
+        }
+      }
+      break;
+    }
+    case 'lastRun': {
+      const wantValues = (expected['values'] as Record<string, unknown>) ?? {};
+      const gotValues = landedValues(actualRecord['values']);
+      if (JSON.stringify(gotValues) !== JSON.stringify(wantValues)) {
+        mismatches.push(
+          `values: expected ${JSON.stringify(wantValues)}, got ${JSON.stringify(gotValues)}`,
+        );
+      }
+      if (expected['valueStatuses'] !== undefined) {
+        const statuses: Record<string, unknown> = {};
+        const raw = (actualRecord['values'] ?? {}) as Record<
+          string,
+          { status?: unknown }
+        >;
+        for (const [name, entry] of Object.entries(raw)) {
+          statuses[name] = entry.status;
+        }
+        if (
+          JSON.stringify(statuses) !== JSON.stringify(expected['valueStatuses'])
+        ) {
+          mismatches.push(
+            `value statuses: expected ${JSON.stringify(expected['valueStatuses'])}, got ${JSON.stringify(statuses)}`,
+          );
+        }
       }
       if (expected['traceOk'] !== undefined) {
         const trace = actualRecord['trace'] as { ok?: unknown } | undefined;

@@ -29,12 +29,8 @@ import {
   valuesStorageKeyFor,
   staleValuesForRehydration,
 } from '@markii/host/internal';
-import type {
-  GrantMemento,
-  Thenable,
-  RunResult,
-  SpawnRunRequest,
-} from '@markii/host';
+import type { RunResult, SpawnRunRequest } from '@markii/host/internal';
+import type { GrantMemento, Thenable } from '@markii/host';
 import {
   isHostToWebviewMessage,
   isNewerRevision,

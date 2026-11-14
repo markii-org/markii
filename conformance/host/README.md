@@ -47,6 +47,8 @@ needs, is the runner's own `ACTION_CAPABILITY` map:
 |---|---|
 | `open` | (always supported) |
 | `run` | `isolate` |
+| `lastRun` | (always supported) |
+| `forgetGrants` | (always supported) |
 | `exportHtml` | `export-format` (`html`) |
 | `exportAnsi` | `export-format` (`ansi`) |
 | `exportLinkedSet` | `linked-set-export` (a `resolveLinkedSetTarget`) |
@@ -137,6 +139,9 @@ coarse, matching each `kind`:
   (`{name: value}`); `failureKinds` compares the closed `FailureKind`
   taxonomy only, never a raw message or a timing; an optional `traceOk`
   compares the recorded run trace's `ok` flag.
+- `lastRun`: `values` compares the stored values shown on open, by name,
+  like `ran`. `valueStatuses` compares each value's status by name, and
+  `traceOk` compares the recorded trace's `ok` flag.
 - `exported`: `contains`/`excludes` are substrings checked against the
   written file's content, never the whole document, the render corpora
   already pin bytes. `valueCount` is how many last-run values were baked
@@ -147,7 +152,8 @@ coarse, matching each `kind`:
   of the folder the pack was unzipped into.
 - `declined`: `step` (`'consent'`/`'replace'`, or absent for the
   scripts-disabled synthetic outcome) and `reasonContains`, a substring of
-  the user-facing reason.
+  the user-facing reason. A user's "no" to a prompt and a cancelled picker
+  are both `declined`.
 - `listed`: `enabled` and `notEnabled`, namespace lists, order-independent.
 - `enabled`, `disabled`, `placed`, `removed`: `namespace`.
 - `loaded`: `namespaces`, order-independent.
@@ -159,8 +165,8 @@ coarse, matching each `kind`:
   accepted container item.
 - `hover`: `contains`, a substring of the hover text. Optional `start` and
   `end` compare the hovered name's columns.
-- every other `kind` (`opened`, `none`, `not-found`, `failed`, `rejected`,
-  `reserved`, `cancelled`, `inserted`): `kind` equality is the whole check.
+- every other `kind` (`opened`, `none`, `not-found`, `failed`, `invalid`,
+  `reserved`, `forgotten`, `inserted`): `kind` equality is the whole check.
 
 An action whose capability the adapter under test does not declare is
 never diffed against `expected.json` at all (see "Capability handling"
@@ -200,7 +206,7 @@ run the whole corpus honestly: its result records say `unsupported`
 where it genuinely offers nothing, which is the truth and is visible,
 rather than a skipped test or a faked empty answer.
 
-## The sixteen scenarios
+## The scenarios
 
 | id | what it proves |
 |---|---|
@@ -221,6 +227,7 @@ rather than a skipped test or a faked empty answer.
 | `15-load-packs-engine-views` | loading packs reports every installed component and, as `unavailable`, the ones this host's engine has no view for |
 | `16-pack-trust` | a folder that arrives without consent is listed as present and never loaded; enable, disable, re-enable and remove move the device trust list; a host without the list reports the whole scenario `unsupported` |
 | `17-export-linked-set` | a note and the notes it links to export as one archive with an index page; a host with no linked-set target reports `unsupported` |
+| `18-last-run-and-grants` | a run's values and trace read back through `lastRun` with no storage key, and clearing the grants makes the next manual run prompt again |
 
 The capabilities an adapter declares decide which scenarios report
 `unsupported` on that host. That is a reported gap and not a corpus defect.

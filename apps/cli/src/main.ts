@@ -25,7 +25,6 @@ import {
 import {
   createRenderDiagnosticCollector,
   noteHasScripts,
-  readPersistedValues,
 } from '@markii/host/internal';
 import type { AnsiRegistry } from '@markii/ansi';
 import { createValueStore, type StoredValue } from '@markii/runtime';
@@ -173,6 +172,23 @@ async function loadPackRegistry(
     for (const line of loaded.failureLines) emit(`markii: ${line}\n`);
   }
   return { registry: loaded.registry, unavailable: loaded.unavailable };
+}
+
+/**
+ * What a note's last run left in this device's state, as stored. The shared
+ * host reads it, so no storage key is spelled here.
+ */
+function storedValuesFor(
+  terminal: Terminal,
+  memento: GrantMemento,
+  documentKey: string,
+): Record<string, StoredValue> {
+  const adapter = createCliHostAdapter({
+    terminal,
+    memento,
+    diagnostics: () => {},
+  });
+  return createMarkiiHost(adapter).lastRun(documentKey).persistedValues;
 }
 
 /**
@@ -327,7 +343,7 @@ async function runViewCommand(
     // shows them once; only this one-line summary is written here.
     if (result.failures.length > 0) exitCode = 2;
   } else {
-    values = readPersistedValues(memento, documentKey);
+    values = storedValuesFor(terminal, memento, documentKey);
     // AGENTS.md's "clean is not silent" rule: a note with scripts that are
     // skipped because stdin/stdout is not a terminal is a real, discoverable
     // outcome, not just a --verbose detail, so this reaches stderr always.
@@ -510,7 +526,7 @@ async function runExportCommand(
   if (command.format !== 'md-plain') {
     memento = buildGrantMemento(terminal);
     const documentKey = pathToFileURL(absolutePath).toString();
-    values = readPersistedValues(memento, documentKey);
+    values = storedValuesFor(terminal, memento, documentKey);
   }
 
   // The render-diagnostics collector fills for 'ansi' (rendered through this
@@ -583,7 +599,7 @@ async function runExportCommand(
     );
     return 1;
   }
-  // 'cancelled' or 'unsupported': neither is reachable through this app's
+  // 'declined' or 'unsupported': neither is reachable through this app's
   // own supported formats today, but the outcome type covers them, so
   // this command reports rather than assumes they can't happen.
   terminal.writeError('markii: export did not produce a file.\n');
@@ -693,7 +709,8 @@ async function runPackInstallCommand(
   if (
     outcome.kind === 'declined' ||
     outcome.kind === 'reserved' ||
-    outcome.kind === 'rejected'
+    outcome.kind === 'invalid' ||
+    outcome.kind === 'failed'
   ) {
     terminal.writeError(
       `${installPackMessage(outcome, command.file, CLI_LABELS)}\n`,

@@ -6,6 +6,7 @@
     "rootDir": "src",
     "declaration": true,
     "noEmit": false,
+    "stripInternal": true,
     "types": ["node"]
   },
   "include": ["src"],
