@@ -57,6 +57,7 @@ const FIXTURE_NAMES = [
   '30-directive-name-colon-rejected.mk.md',
   '31-malformed-leaf-attributes.mk.md',
   '32-script-permissions.mk.md',
+  '33-directive-label-colon.mk.md',
 ];
 
 describe('conformance corpus renders through @markii/html', () => {

@@ -11,22 +11,13 @@ const MAX_DEPTH = 6;
  * arrays and into an element's own `children` prop, up to `MAX_DEPTH`
  * levels and `budget.remaining` characters. `children` here is rendered
  * React content, not raw markdown, so it can be an arbitrary element tree;
- * this only ever reads `props.children` and `props['data-mk-name']`, never
- * touches an unknown prop, and every branch is a plain type check, so
+ * this only ever reads `props.children`, never touches an unknown prop, and every branch is a plain type check, so
  * nothing here can throw on its own, but the caller still wraps the whole
  * walk in a try/catch as defense against a future change to this function.
  *
- * One quirk of the format matters here. A colon inside a text directive's
- * bracket text starts ANOTHER text directive, so `:read_at[12:34]` does
- * not parse as the text "12:34": it parses as the text "12" followed by a
- * nested directive named "34". Reading only the strings would silently
- * show "12" and drop half the timestamp, which is exactly the mute
- * failure this project forbids. A directive element carries its written
- * name on `data-mk-name` (the same prop `@markii/react`'s own
- * `readDirectiveChild` reads), so a nested directive is put back as
- * `:<name>` and the timestamp survives. An author can also write
- * `12\:34`, which the parser keeps as literal text; both spellings reach
- * this function as the same string.
+ * A timestamp such as `:read_at[12:34]` reaches this function as the
+ * single string "12:34", because the parser keeps a colon followed by a
+ * digit as plain text.
  */
 function collectText(
   node: ReactNode,
@@ -55,12 +46,6 @@ function collectText(
 
   if (isValidElement(node)) {
     const props = node.props as Record<string, unknown>;
-    const directiveName = props['data-mk-name'];
-    if (typeof directiveName === 'string' && directiveName !== '') {
-      const piece = `:${directiveName}`.slice(0, budget.remaining);
-      out.push(piece);
-      budget.remaining -= piece.length;
-    }
     if ('children' in props) {
       collectText(props.children as ReactNode, depth + 1, budget, out);
     }

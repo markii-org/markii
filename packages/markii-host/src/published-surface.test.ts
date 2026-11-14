@@ -16,7 +16,13 @@ const here = dirname(fileURLToPath(import.meta.url));
 const packageRoot = join(here, '..');
 const snapshotDirectory = join(here, 'published-surface');
 
-const ENTRIES = ['index', 'node', 'browser', 'conformance'] as const;
+const ENTRIES = [
+  'index',
+  'node',
+  'html-engine',
+  'browser',
+  'conformance',
+] as const;
 
 function createProgram(): ts.Program {
   const configPath = join(packageRoot, 'tsconfig.json');

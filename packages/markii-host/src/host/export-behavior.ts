@@ -50,6 +50,7 @@ import type {
 } from '../export/image-embed.js';
 import { mdPlainFromSource } from './export/md-plain.js';
 import type { HostAdapter, HostExportFormat, HostLabels } from './adapter.js';
+import type { ExportOutcome } from './create-host.js';
 
 /** The file name an export lands under, by format: the note's own base name with the format's own extension, so the export lands beside the note unless the host's picker says otherwise. */
 export function exportDefaultFileName(
@@ -100,18 +101,10 @@ export function fileNameOf(path: string): string {
  * a stack trace — the verbatim reason goes there instead.
  */
 export function exportResultMessage(
-  outcome:
-    | NoteFileExportOutcome
-    | {
-        readonly kind: 'exported';
-        readonly path: string;
-        readonly valueCount: number;
-        readonly hasScripts?: boolean;
-      }
-    | { readonly kind: 'failed' | 'cancelled' | 'unsupported' },
+  outcome: ExportOutcome,
   labels: HostLabels,
 ): string {
-  if (outcome.kind !== 'written' && outcome.kind !== 'exported') {
+  if (outcome.kind !== 'exported') {
     return `Markii: could not export this note. Open ${labels.diagnosticsSurface} for details.`;
   }
   const name = fileNameOf(outcome.path);

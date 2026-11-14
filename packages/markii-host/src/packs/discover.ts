@@ -103,6 +103,8 @@ export interface DiscoveredPack {
   /** The configured folder this pack was discovered in (absolute path, as given). */
   readonly folder: string;
   readonly manifest: PackManifest;
+  /** The exact text of the pack's `pack.json`, as read. A compiled script registers this text unchanged. Discovery always sets it; it is absent only on a pack a host assembled by hand. */
+  readonly manifestText?: string;
   /** Local component name -> absolute path to its declared source file (`manifest.components[name]`, resolved against `folder`). Informational: what a host consumes them for (bundling, `import()`, or locating the pack's prebuilt registration script) is that host's own concern. */
   readonly componentPaths: Readonly<Record<string, string>>;
   /** Engine id -> (local component name -> absolute source path), for every engine any component declares a source for. `componentPaths` is the `react` slice of this. A terminal build (`ansi`) reads its slice here. */
@@ -227,6 +229,7 @@ async function tryLoadPackAt(
     pack: {
       folder,
       manifest: result.manifest,
+      manifestText: text,
       componentPaths,
       componentPathsByEngine,
       scriptsDir: joinPath(folder, 'scripts'),

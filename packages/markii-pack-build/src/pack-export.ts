@@ -290,7 +290,7 @@ export async function exportPack(
         reason: `pack "${packName}" was not built`,
       };
     }
-    scriptText = emptyWebviewScript(JSON.stringify(pack.manifest));
+    scriptText = emptyWebviewScript(manifestText);
   } else {
     try {
       scriptText = await fs.readFile(outcome.scriptPath);

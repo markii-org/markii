@@ -49,6 +49,7 @@
       ],
       "@markii/host": ["packages/markii-host/src/index.ts"],
       "@markii/host/node": ["packages/markii-host/src/node.ts"],
+      "@markii/host/html-engine": ["packages/markii-host/src/html-engine.ts"],
       "@markii/host/dev-isolate": ["packages/markii-host/src/dev-isolate.ts"],
       "@markii/host/browser": ["packages/markii-host/src/browser.ts"],
       "@markii/host/conformance": ["packages/markii-host/src/conformance.ts"],

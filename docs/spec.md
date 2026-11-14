@@ -279,7 +279,7 @@ The `Fixtures` column uses one of five forms:
 | S1-10 | 1 | An implementation MUST NOT fail on any other shape of `uses`. | core:frontmatter.test.ts |
 | S1-11 | 1 | Reading frontmatter MUST NOT require a YAML parser. | other: dependency constraint, not AST-observable; `frontmatter.ts` is a hand-rolled reader and no `@markii/core` dependency is a YAML library |
 | S1-12 | 1 | A directive name MUST NOT contain `:`. | 30 |
-| S1-13 | 1 | A conforming parser MUST apply the inline-directive word-start recognition rule. | 28 |
+| S1-13 | 1 | A conforming parser MUST apply the inline-directive word-start recognition rule. | 28, 33 |
 | S1-14 | 1 | The reserved first path segments (`scripts`, `assets`, `.cache`) MUST NOT be pack or library namespaces, nor component name prefixes. | other: pack/bundle namespace rule enforced by `@markii/pack`'s `namespace.ts` (own test suite), not by `@markii/core`'s parser, which this same section says accepts any legal directive name |
 | S3-01 | 3 | Components MUST NOT ship outer margins. | render:react:doc-css-invariants.test.ts |
 | S3-02 | 3 | Text MUST NOT wrap around components. | render:react:doc-css-invariants.test.ts |

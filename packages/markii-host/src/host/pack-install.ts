@@ -44,53 +44,11 @@ export interface InstallPackFromArchiveOptions {
   readonly reservedNamespaces: ReadonlySet<string>;
 }
 
-export type InstallPackOutcome =
-  | {
-      readonly kind: 'installed';
-      readonly packName: string;
-      readonly installedDir: string;
-      readonly replaced: boolean;
-    }
-  | {
-      readonly kind: 'declined';
-      readonly step: 'consent' | 'replace';
-      readonly packName: string;
-    }
-  | { readonly kind: 'reserved'; readonly packName: string }
-  | { readonly kind: 'rejected'; readonly reason: string };
-
-/** The outcome `createMarkiiHost(...).installPack` returns, as the message wording reads it. */
-function toInstallOutcome(
-  outcome: InstallPackOutcome | HostInstallPackOutcome,
-): InstallPackOutcome {
-  if (!('namespace' in outcome) && outcome.kind !== 'unsupported') {
-    return outcome;
-  }
-  switch (outcome.kind) {
-    case 'installed':
-      return {
-        kind: 'installed',
-        packName: outcome.namespace,
-        installedDir: outcome.installedDir,
-        replaced: outcome.replaced,
-      };
-    case 'declined':
-      return {
-        kind: 'declined',
-        step: outcome.step,
-        packName: outcome.namespace,
-      };
-    case 'reserved':
-      return { kind: 'reserved', packName: outcome.namespace };
-    case 'unsupported':
-      return {
-        kind: 'rejected',
-        reason: outcome.detail ?? 'this host cannot install packs.',
-      };
-    default:
-      return outcome;
-  }
-}
+/** What one install attempt produced, in the shape `createMarkiiHost(...).installPack` returns (minus `unsupported`, which only the host behavior can say). */
+export type InstallAttemptOutcome = Exclude<
+  HostInstallPackOutcome,
+  { readonly kind: 'unsupported' }
+>;
 
 function describeThrown(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -113,7 +71,7 @@ function describeThrown(err: unknown): string {
 export async function installPackFromArchive(
   adapter: HostAdapter,
   options: InstallPackFromArchiveOptions,
-): Promise<InstallPackOutcome> {
+): Promise<InstallAttemptOutcome> {
   const {
     archiveBytes,
     archivePath,
@@ -134,7 +92,7 @@ export async function installPackFromArchive(
   const packName = opened.archive.manifest.name;
 
   if (reservedNamespaces.has(packName)) {
-    return { kind: 'reserved', packName };
+    return { kind: 'reserved', namespace: packName };
   }
 
   let consented: boolean;
@@ -150,7 +108,7 @@ export async function installPackFromArchive(
     return { kind: 'rejected', reason: describeThrown(err) };
   }
   if (!consented) {
-    return { kind: 'declined', step: 'consent', packName };
+    return { kind: 'declined', step: 'consent', namespace: packName };
   }
 
   const targetDir = joinPath(installRoot, packName);
@@ -176,7 +134,7 @@ export async function installPackFromArchive(
       return { kind: 'rejected', reason: describeThrown(err) };
     }
     if (!proceed) {
-      return { kind: 'declined', step: 'replace', packName };
+      return { kind: 'declined', step: 'replace', namespace: packName };
     }
     replaced = true;
   }
@@ -192,7 +150,12 @@ export async function installPackFromArchive(
   }
 
   await trustInstalledPack(adapter, packName, targetDir);
-  return { kind: 'installed', packName, installedDir: targetDir, replaced };
+  return {
+    kind: 'installed',
+    namespace: packName,
+    installedDir: targetDir,
+    replaced,
+  };
 }
 
 /**
@@ -239,32 +202,31 @@ export function installReplaceConfirmMessage(packName: string): string {
  * `false`.
  */
 export function installPackMessage(
-  hostOutcome: InstallPackOutcome | HostInstallPackOutcome,
+  outcome: HostInstallPackOutcome,
   archivePath: string,
   labels: HostLabels,
   reloadsAutomatically = false,
 ): string {
-  const outcome = toInstallOutcome(hostOutcome);
-  if (outcome.kind === 'rejected') {
+  if (outcome.kind === 'rejected' || outcome.kind === 'unsupported') {
     return `Markii: could not install a pack from "${archivePath}". Open ${labels.diagnosticsSurface} for details.`;
   }
   if (outcome.kind === 'reserved') {
-    return `Markii: "${outcome.packName}" is built in and cannot be installed. Nothing was installed.`;
+    return `Markii: "${outcome.namespace}" is built in and cannot be installed. Nothing was installed.`;
   }
   if (outcome.kind === 'declined') {
     return outcome.step === 'consent'
-      ? `Markii: install of "${outcome.packName}" cancelled. Nothing was installed.`
-      : `Markii: install of "${outcome.packName}" cancelled. The existing pack was kept.`;
+      ? `Markii: install of "${outcome.namespace}" cancelled. Nothing was installed.`
+      : `Markii: install of "${outcome.namespace}" cancelled. The existing pack was kept.`;
   }
   const reloadSuffix = reloadsAutomatically ? ' Markii packs reloaded.' : '';
   return outcome.replaced
-    ? `Markii: reinstalled pack "${outcome.packName}".${reloadSuffix}`
-    : `Markii: installed pack "${outcome.packName}".${reloadSuffix}`;
+    ? `Markii: reinstalled pack "${outcome.namespace}".${reloadSuffix}`
+    : `Markii: installed pack "${outcome.namespace}".${reloadSuffix}`;
 }
 
 /** The full diagnostics-surface detail for one install attempt (AGENTS.md's "clean is not silent": the other of a failure's two homes). */
 export function installPackDiagnosticLines(
-  outcome: InstallPackOutcome,
+  outcome: InstallAttemptOutcome,
   archivePath: string,
 ): string[] {
   if (outcome.kind === 'rejected') {
@@ -274,15 +236,15 @@ export function installPackDiagnosticLines(
   }
   if (outcome.kind === 'reserved') {
     return [
-      `Install pack from file refused "${archivePath}": pack "${outcome.packName}" is a reserved namespace and cannot be installed.`,
+      `Install pack from file refused "${archivePath}": pack "${outcome.namespace}" is a reserved namespace and cannot be installed.`,
     ];
   }
   if (outcome.kind === 'declined') {
     return [
-      `Install pack from file cancelled for "${archivePath}" (pack "${outcome.packName}") at the ${outcome.step} step; nothing was installed.`,
+      `Install pack from file cancelled for "${archivePath}" (pack "${outcome.namespace}") at the ${outcome.step} step; nothing was installed.`,
     ];
   }
   return [
-    `Install pack from file installed pack "${outcome.packName}" from "${archivePath}" to ${outcome.installedDir}${outcome.replaced ? ' (replacing the previous install)' : ''}.`,
+    `Install pack from file installed pack "${outcome.namespace}" from "${archivePath}" to ${outcome.installedDir}${outcome.replaced ? ' (replacing the previous install)' : ''}.`,
   ];
 }

@@ -345,8 +345,10 @@ packages/markii-host    PUBLISHED (user-approved 2026-11-09; in build:dist and
   src/node.ts        @markii/host/node: createNodeHostIsolate (the
                      worker_threads isolate over the packaged
                      dist/node-worker.js, run/node-isolate.ts), the pinned
-                     net provider, the Node fs seams (node-fs.ts) and the
-                     @markii/html export engine (html-engine.ts).
+                     net provider and the Node fs seams (node-fs.ts). It
+                     reaches no optional peer (node-entry-peers.test.ts).
+                     @markii/host/html-engine (html-engine.ts) is the one
+                     entry that imports @markii/html.
                      @markii/host/node-worker exports the worker file
   src/dev-isolate.ts TEST-ONLY, excluded from the published build: runs
                      worker-entry.ts from source through tsx

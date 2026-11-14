@@ -426,6 +426,12 @@ parses it itself. Passing an object instead is rejected, and re-serializing
 it is a quiet way to lose fields, because anything the producer's parser did
 not recognize is dropped on the way through.
 
+`@markii/pack-build` follows the same rule: a compiled `webview.js` or
+`terminal.js` registers the text of `pack.json` exactly as the file has
+it. Its output names modules by their path inside the pack and contains no
+path from the build machine, so one pack compiles to the same bytes
+anywhere.
+
 `componentModules` maps each component's LOCAL name, the key as written in
 the manifest, to an object with a `component` function and an optional
 boolean `inline`. Only own properties are read, so an inherited value cannot

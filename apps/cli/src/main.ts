@@ -11,10 +11,8 @@
  * Exit codes: 0 ok, 1 a render/parse failure or an unreadable file, 2 a
  * script failure, 3 a usage error.
  */
-import {
-  createHtmlExportEngine,
-  createNodeArchiveExtractFs,
-} from '@markii/host/node';
+import { createHtmlExportEngine } from '@markii/host/html-engine';
+import { createNodeArchiveExtractFs } from '@markii/host/node';
 import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import * as path from 'node:path';
@@ -642,16 +640,7 @@ async function runPackInstallCommand(
 
   if (outcome.kind === 'installed') {
     terminal.write(
-      `${installPackMessage(
-        {
-          kind: 'installed',
-          packName: outcome.namespace,
-          installedDir: '',
-          replaced: outcome.replaced,
-        },
-        command.file,
-        CLI_LABELS,
-      )}\n`,
+      `${installPackMessage(outcome, command.file, CLI_LABELS)}\n`,
     );
     // A pack with no terminal views installs fine and labels its components
     // "no terminal view" here; say so now rather than at first use.
@@ -668,25 +657,13 @@ async function runPackInstallCommand(
     return 0;
   }
 
-  if (outcome.kind === 'declined') {
+  if (
+    outcome.kind === 'declined' ||
+    outcome.kind === 'reserved' ||
+    outcome.kind === 'rejected'
+  ) {
     terminal.writeError(
-      `${installPackMessage(
-        {
-          kind: 'declined',
-          step: outcome.step,
-          packName: outcome.namespace,
-        },
-        command.file,
-        CLI_LABELS,
-      )}\n`,
-    );
-  } else if (outcome.kind === 'reserved') {
-    terminal.writeError(
-      `${installPackMessage({ kind: 'reserved', packName: outcome.namespace }, command.file, CLI_LABELS)}\n`,
-    );
-  } else if (outcome.kind === 'rejected') {
-    terminal.writeError(
-      `${installPackMessage({ kind: 'rejected', reason: outcome.reason }, command.file, CLI_LABELS)}\n`,
+      `${installPackMessage(outcome, command.file, CLI_LABELS)}\n`,
     );
   } else {
     terminal.writeError('Markii: this tool cannot install packs here.\n');

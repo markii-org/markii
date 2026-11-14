@@ -17,7 +17,7 @@
  * NO PDF. A cascade export is HTML only; issue #29 covers a cascade PDF,
  * and nothing in this module or `main.ts`'s wiring of it produces one.
  */
-import { createHtmlExportEngine } from '@markii/host/node';
+import { createHtmlExportEngine } from '@markii/host/html-engine';
 import {
   buildCascadeArchive,
   cascadeReasonOf,

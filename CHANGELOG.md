@@ -13,14 +13,36 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
   `embedImages` and `hideScriptBlocks`, and its `exported` outcome carries
   `valueCount`, `hasScripts`, `render` and `images`.
 
+- `@markii/host`: `DiscoveredPack` carries `manifestText`, the raw
+  `pack.json` text.
+
 ### Changed
 
+- **Breaking: `createHtmlExportEngine` moved** from `@markii/host/node` to
+  the new `@markii/host/html-engine` entry. `@markii/host/node` no longer
+  needs the optional `@markii/html` peer.
+- **Breaking: `installPackFromArchive` returns `namespace`** in place of
+  `packName`. `installPackMessage` and `exportResultMessage` take the
+  outcomes of `createMarkiiHost(...).installPack` and `.exportNote`.
+- `@markii/pack-build`: a compiled pack registers its `pack.json` text
+  unchanged, so a field such as an empty `attributes` array survives.
+- `@markii/pack-build`: compiled `webview.js`, `webview.css` and
+  `terminal.js` contain no build-machine paths and are the same bytes on
+  every machine. Packs rebuild once.
 - The VS Code extension and the Obsidian plugin install packs, export
   notes and discover packs through `createMarkiiHost`, the path the host
   conformance corpus tests. Their export diagnostics lines use the shared
   wording.
 - VS Code: a pack with no `react` views is listed as unavailable and no
   longer counts as a pack that failed to load.
+
+### Fixed
+
+- **A colon before a digit renders as text.** `toHast` skipped the
+  word-start rule that `parse` applies, so `12:34` in prose or in a label
+  such as `:read_at[12:34]` rendered as "unknown component `34`" in all
+  three renderers (#67). `parse` output is unchanged.
+- Obsidian: a failed export is logged once.
 
 ## [0.17.0-next.3] - 2026-11-10
 

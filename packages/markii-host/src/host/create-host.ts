@@ -372,7 +372,7 @@ export interface MarkiiHostOptions {
   readonly spawnRun?: (options: SpawnRunRequest) => Promise<RunResult>;
   /** The `.mkp` extraction filesystem `installPack` writes through. Required for a host that installs packs (`createNodeArchiveExtractFs()` from `@markii/host/node`); without it `installPack` is `Unsupported`. */
   readonly archiveExtractFs?: ArchiveExtractFs;
-  /** The static HTML engine behind the `html` and `pdf` exports (`createHtmlExportEngine()` from `@markii/host/node`). Without it those formats decline, like `renderAnsi` for `ansi`. */
+  /** The static HTML engine behind the `html` and `pdf` exports (`createHtmlExportEngine()` from `@markii/host/html-engine`). Without it those formats decline, like `renderAnsi` for `ansi`. */
   readonly htmlEngine?: HtmlExportEngine;
   /** Pack discovery's file reads. Defaults to reads through the adapter's own `readFile` and `listFolder`. */
   readonly packDiscoveryIo?: PackDiscoveryIo;
@@ -583,25 +583,7 @@ export function createMarkiiHost(
         adapter.diagnostics(line);
       }
 
-      if (outcome.kind === 'installed') {
-        return {
-          kind: 'installed',
-          namespace: outcome.packName,
-          installedDir: outcome.installedDir,
-          replaced: outcome.replaced,
-        };
-      }
-      if (outcome.kind === 'declined') {
-        return {
-          kind: 'declined',
-          step: outcome.step,
-          namespace: outcome.packName,
-        };
-      }
-      if (outcome.kind === 'reserved') {
-        return { kind: 'reserved', namespace: outcome.packName };
-      }
-      return { kind: 'rejected', reason: outcome.reason };
+      return outcome;
     },
 
     async loadPacks(): Promise<LoadPacksOutcome> {

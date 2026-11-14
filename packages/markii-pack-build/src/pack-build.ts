@@ -181,6 +181,8 @@ export interface PackBuildSource {
   /** The pack's own folder on disk — `resolveDir` for the synthetic entry `entrySource` compiles. */
   readonly folder: string;
   readonly manifest: PackManifest;
+  /** The text of the pack's own `pack.json`, embedded unchanged in the compiled script. Absent means the parsed manifest is serialized instead, which can lose fields the parser normalizes. */
+  readonly manifestText?: string;
   /** Local component name -> absolute path to its declared source file (`manifest.components[name]`, resolved against `folder`). */
   readonly componentPaths: Readonly<Record<string, string>>;
   /** Engine id -> (local component name -> absolute source path). A terminal build reads its `ansi` slice here; `componentPaths` stays the `react` slice. Absent means the pack names no sources for any other engine. */
@@ -200,7 +202,7 @@ type EsbuildInitializeFn =
   typeof import('esbuild-wasm/lib/browser.js').initialize;
 
 /** Bumped whenever this module's OUTPUT for the same pack sources would change (a shim/plugin tweak, an esbuild option change) — folded into the cache key (`computeCacheKey`) so a stale cached script from a previous version of this builder is never reused after an upgrade. Bumped again for the `inject`-based JSX shim (replacing `banner`): a pack built before this version leaves `__markiiJSX` as a global on `window`, so every pack must rebuild once to pick up the fix. */
-const BUILDER_VERSION = 5;
+const BUILDER_VERSION = 6;
 
 /**
  * `esbuild-wasm`'s browser entry unconditionally reaches for the `self`
@@ -609,16 +611,27 @@ function resolveFailure(text: string): OnResolveResult {
  */
 function virtualSourcePlugin(
   packName: string,
+  packFolder: string,
   fileContents: Map<string, string>,
   jailRealRoot: string,
   virtualOnlyPaths: ReadonlySet<string>,
 ): Plugin {
+  // esbuild names each module in its output by the path a plugin returns,
+  // so a module is handed back under its pack-relative key (never its
+  // absolute build-machine path) and mapped to the real file only here.
+  const keyFor = (absolutePath: string): string =>
+    path.relative(packFolder, absolutePath).split(path.sep).join('/');
+  const absoluteFor = (key: string): string => path.resolve(packFolder, key);
   return {
     name: 'markii-pack-source',
     setup(build) {
       build.onResolve(
         { filter: /.*/ },
         async (args: OnResolveArgs): Promise<OnResolveResult> => {
+          const importer =
+            args.namespace === VIRTUAL_SOURCE_NAMESPACE
+              ? absoluteFor(args.importer)
+              : args.importer;
           let base: string;
           if (path.isAbsolute(args.path)) {
             base = args.path;
@@ -626,7 +639,7 @@ function virtualSourcePlugin(
             args.path.startsWith('./') ||
             args.path.startsWith('../')
           ) {
-            base = path.resolve(path.dirname(args.importer), args.path);
+            base = path.resolve(path.dirname(importer), args.path);
           } else {
             return resolveFailure(
               `pack "${packName}": cannot resolve "${args.path}" — a pack import must be a relative path within the pack, or "react"/"react-dom"; other bare package specifiers are not supported (packs are self-contained).`,
@@ -638,7 +651,7 @@ function virtualSourcePlugin(
             : await resolveImportCandidate(base);
           if (resolved === undefined) {
             return resolveFailure(
-              `pack "${packName}": could not resolve "${args.path}" imported from "${args.importer}"`,
+              `pack "${packName}": could not resolve "${args.path}" imported from "${importer}"`,
             );
           }
 
@@ -646,7 +659,10 @@ function virtualSourcePlugin(
             // Never exists on disk (the JSX shim) — realpath would throw
             // ENOENT. Its content was written by this builder, not read
             // from the pack, so the jail check has nothing to verify.
-            return { path: resolved, namespace: VIRTUAL_SOURCE_NAMESPACE };
+            return {
+              path: keyFor(resolved),
+              namespace: VIRTUAL_SOURCE_NAMESPACE,
+            };
           }
 
           let real: string;
@@ -678,16 +694,20 @@ function virtualSourcePlugin(
             fileContents.set(resolved, text);
           }
 
-          return { path: resolved, namespace: VIRTUAL_SOURCE_NAMESPACE };
+          return {
+            path: keyFor(resolved),
+            namespace: VIRTUAL_SOURCE_NAMESPACE,
+          };
         },
       );
       build.onLoad(
         { filter: /.*/, namespace: VIRTUAL_SOURCE_NAMESPACE },
         (args: OnLoadArgs): OnLoadResult => {
+          const absolutePath = absoluteFor(args.path);
           return {
-            contents: fileContents.get(args.path) ?? '',
-            loader: loaderForPath(args.path),
-            resolveDir: path.dirname(args.path),
+            contents: fileContents.get(absolutePath) ?? '',
+            loader: loaderForPath(absolutePath),
+            resolveDir: path.dirname(absolutePath),
           };
         },
       );
@@ -739,6 +759,11 @@ const WEBVIEW_ENGINE = 'react';
 /** The engine id whose sources the terminal build compiles (`@markii/ansi`'s `ANSI_ENGINE_ID`). */
 const TERMINAL_ENGINE = 'ansi';
 
+/** The manifest text a compiled script registers: the pack's own file text when the caller kept it, else the parsed manifest re-serialized. */
+function manifestSourceText(pack: PackBuildSource): string {
+  return pack.manifestText ?? JSON.stringify(pack.manifest);
+}
+
 /** One component's declared local name and the absolute path to its source, in `manifest.components` declaration order. Reads the manifest through `@markii/pack`'s `packComponents()` (the one accessor that normalizes both the string shorthand and the object form) rather than walking `pack.manifest.components` directly. */
 function orderedComponents(
   pack: PackBuildSource,
@@ -785,7 +810,7 @@ function entrySource(
         `  ${JSON.stringify(c.localName)}: __markiiPick(__markiiMod${i}),`,
     )
     .join('\n');
-  const manifestJsonLiteral = JSON.stringify(JSON.stringify(pack.manifest));
+  const manifestJsonLiteral = JSON.stringify(manifestSourceText(pack));
   // Which local names the manifest declares `kind: "inline"` for, baked
   // into the artifact so a standalone consumer of the registration
   // convention sees a truthful `inline` flag (loadPack re-derives it from
@@ -867,7 +892,7 @@ function terminalEntrySource(
         `  ${JSON.stringify(c.localName)}: __markiiPick(__markiiMod${i}),`,
     )
     .join('\n');
-  const manifestJsonLiteral = JSON.stringify(JSON.stringify(pack.manifest));
+  const manifestJsonLiteral = JSON.stringify(manifestSourceText(pack));
   const inlineNames = packComponents(pack.manifest)
     .filter((listing) => listing.kind === 'inline')
     .map((listing) => listing.localName);
@@ -962,7 +987,7 @@ export function computeCacheKey(
 ): string {
   const hash = createHash('sha256');
   hash.update(`builder:${BUILDER_VERSION}\n`);
-  hash.update(`manifest:${JSON.stringify(pack.manifest)}\n`);
+  hash.update(`manifest:${manifestSourceText(pack)}\n`);
   const entries = [...componentSources.entries()].sort(([a], [b]) =>
     a < b ? -1 : a > b ? 1 : 0,
   );
@@ -1417,6 +1442,7 @@ async function buildPackScript(
           : lazyGlobalModulePlugin(),
         virtualSourcePlugin(
           pack.manifest.name,
+          pack.folder,
           fileContents,
           jailRealRoot,
           virtualOnlyPaths,

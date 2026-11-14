@@ -95,7 +95,7 @@ describe('installPackFromArchive', () => {
 
     expect(outcome).toEqual({
       kind: 'installed',
-      packName: 'ana',
+      namespace: 'ana',
       installedDir: path.join(installRoot, 'ana'),
       replaced: false,
     });
@@ -140,7 +140,7 @@ describe('installPackFromArchive', () => {
     expect(outcome).toEqual({
       kind: 'declined',
       step: 'consent',
-      packName: 'ana',
+      namespace: 'ana',
     });
     await expect(access(path.join(installRoot, 'ana'))).rejects.toThrow();
   });
@@ -184,7 +184,7 @@ describe('installPackFromArchive', () => {
     expect(outcome).toEqual({
       kind: 'declined',
       step: 'replace',
-      packName: 'ana',
+      namespace: 'ana',
     });
     const stillThere = await readFile(
       path.join(existingDir, 'pack.json'),
@@ -214,7 +214,7 @@ describe('installPackFromArchive', () => {
 
     expect(outcome).toEqual({
       kind: 'installed',
-      packName: 'ana',
+      namespace: 'ana',
       installedDir: existingDir,
       replaced: true,
     });
@@ -241,7 +241,7 @@ describe('installPackFromArchive — reserved namespace refusal', () => {
       reservedNamespaces: new Set(['read', 'dash', 'prep']),
     });
 
-    expect(outcome).toEqual({ kind: 'reserved', packName: 'read' });
+    expect(outcome).toEqual({ kind: 'reserved', namespace: 'read' });
     expect(seen).toEqual([]);
     await expect(access(path.join(installRoot, 'read'))).rejects.toThrow();
   });
@@ -309,7 +309,7 @@ describe('wording', () => {
   it('reloadsAutomatically appends the reload sentence only when true', () => {
     const outcome = {
       kind: 'installed' as const,
-      packName: 'ana',
+      namespace: 'ana',
       installedDir: '/x/ana',
       replaced: false,
     };
@@ -325,19 +325,19 @@ describe('wording', () => {
     const outcomes = [
       {
         kind: 'installed' as const,
-        packName: 'ana',
+        namespace: 'ana',
         installedDir: '/x/ana',
         replaced: false,
       },
       {
         kind: 'installed' as const,
-        packName: 'ana',
+        namespace: 'ana',
         installedDir: '/x/ana',
         replaced: true,
       },
-      { kind: 'declined' as const, step: 'consent' as const, packName: 'ana' },
-      { kind: 'declined' as const, step: 'replace' as const, packName: 'ana' },
-      { kind: 'reserved' as const, packName: 'read' },
+      { kind: 'declined' as const, step: 'consent' as const, namespace: 'ana' },
+      { kind: 'declined' as const, step: 'replace' as const, namespace: 'ana' },
+      { kind: 'reserved' as const, namespace: 'read' },
       { kind: 'rejected' as const, reason: 'bad zip' },
     ];
     for (const outcome of outcomes) {

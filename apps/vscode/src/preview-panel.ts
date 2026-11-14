@@ -1,4 +1,4 @@
-import { createHtmlExportEngine } from '@markii/host/node';
+import { createHtmlExportEngine } from '@markii/host/html-engine';
 import * as vscode from 'vscode';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';

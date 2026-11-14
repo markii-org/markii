@@ -8,7 +8,9 @@
  * Node strips the TypeScript types; run it with `npm run test:node`.
  */
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import type { GrantMemento } from '@markii/host';
 import {
@@ -84,4 +86,42 @@ test('createNodeHostIsolate() runs a Lua script from the installed package', asy
   if (outcome.kind !== 'ran') return;
   assert.deepEqual(outcome.failures, []);
   assert.equal(outcome.values.sum?.value, 2);
+});
+
+/** Every module `entry` reaches through relative imports, and each bare specifier on the way. */
+function importGraph(entryUrl: string): Set<string> {
+  const bare = new Set<string>();
+  const seen = new Set<string>();
+  const queue = [fileURLToPath(entryUrl)];
+  const pattern =
+    /(?:^|\n)\s*(?:import|export)\s[^'"\n;]*?from\s*['"]([^'"]+)['"]|(?:^|\n)\s*import\s*['"]([^'"]+)['"]|\bimport\(\s*['"]([^'"]+)['"]\s*\)/g;
+  while (queue.length > 0) {
+    const file = queue.pop();
+    if (file === undefined || seen.has(file)) continue;
+    seen.add(file);
+    const text = readFileSync(file, 'utf8');
+    for (const match of text.matchAll(pattern)) {
+      const specifier = match[1] ?? match[2] ?? match[3];
+      if (specifier === undefined) continue;
+      if (specifier.startsWith('.')) {
+        queue.push(path.resolve(path.dirname(file), specifier));
+      } else {
+        bare.add(specifier);
+      }
+    }
+  }
+  return bare;
+}
+
+test('@markii/host/node imports without the optional @markii/html or @markii/react peers', () => {
+  const bare = importGraph(import.meta.resolve('@markii/host/node'));
+  assert.ok(bare.has('node:fs/promises') || bare.has('node:fs'));
+  const optional = [...bare].filter(
+    (specifier) =>
+      specifier === '@markii/html' ||
+      specifier.startsWith('@markii/html/') ||
+      specifier === '@markii/react' ||
+      specifier.startsWith('@markii/react/'),
+  );
+  assert.deepEqual(optional, []);
 });

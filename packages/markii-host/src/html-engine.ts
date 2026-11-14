@@ -1,9 +1,9 @@
 /**
- * The `@markii/html`-backed `HtmlExportEngine`. Kept out of the main entry
- * (it is the one module that carries the static HTML renderer); a host that
+ * The `@markii/host/html-engine` entry: the `@markii/html`-backed
+ * `HtmlExportEngine`. Kept out of the main and `/node` entries (it is the
+ * one module that needs the optional `@markii/html` peer); a host that
  * exports HTML builds it here and hands it to `createMarkiiHost`'s
- * `htmlEngine` option or to `buildNoteExport`. Reached through
- * `@markii/host/node`.
+ * `htmlEngine` option or to `buildNoteExport`.
  */
 import { escapeHtml, exportHtmlDocument, renderMarkToHtml } from '@markii/html';
 import { defaultHtmlRegistry } from '@markii/html/components';

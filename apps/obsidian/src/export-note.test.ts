@@ -502,10 +502,14 @@ describe('exportDiagnosticLines', () => {
     expect(lines.join('\n')).toContain('print from there');
   });
 
-  it('adds nothing for a written file, which the shared export already reported', () => {
+  it('adds nothing for a written or failed export, which the shared export already reported', () => {
     for (const outcome of OUTCOMES) {
       const lines = exportDiagnosticLines(outcome);
-      if (outcome.kind === 'html' || outcome.kind === 'pdf') {
+      if (
+        outcome.kind === 'html' ||
+        outcome.kind === 'pdf' ||
+        outcome.kind === 'failed'
+      ) {
         expect(lines).toEqual([]);
       } else {
         expect(lines.length).toBeGreaterThan(0);

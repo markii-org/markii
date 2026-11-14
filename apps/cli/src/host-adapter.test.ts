@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createHtmlExportEngine } from '@markii/host/node';
+import { createHtmlExportEngine } from '@markii/host/html-engine';
 import {
   buildNoteHtmlExport,
   createMarkiiHost,

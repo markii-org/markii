@@ -184,7 +184,7 @@ body {
 
 /**
  * The static HTML engine, injected so this module imports no renderer.
- * A host passes `createHtmlExportEngine()` from `@markii/host/node`, which
+ * A host passes `createHtmlExportEngine()` from `@markii/host/html-engine`, which
  * wraps `@markii/html`; a test may pass a stub.
  */
 export interface HtmlExportEngine {

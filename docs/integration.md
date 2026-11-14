@@ -449,7 +449,10 @@ Pick the entry that matches the environment:
   `createNodeHostIsolate()` starts the packaged worker, which carries the
   Lua engine and needs nothing from the host's own dependencies. A host
   that bundles everything into one file bundles `@markii/host/node-worker`
-  as a second output and passes its path as `workerPath`.
+  as a second output and passes its path as `workerPath`. This entry needs
+  no optional peer. A host that exports HTML or PDF imports
+  `createHtmlExportEngine` from `@markii/host/html-engine`, which needs
+  `@markii/html`.
 - An Electron renderer: the browser entry's isolate (pass
   `workerType: 'classic'` for an embedded classic worker), with the pinned
   network provider served from the renderer's Node side, as the Obsidian

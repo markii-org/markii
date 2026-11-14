@@ -497,6 +497,8 @@ export default class MarkiiPlugin extends Plugin {
         kind: 'failed',
         reason: error instanceof Error ? error.message : String(error),
       };
+      // The host never saw this failure, so nothing else has written it.
+      console.error(`[markii] Export failed: ${outcome.reason}`);
     }
 
     for (const line of exportDiagnosticLines(outcome)) {

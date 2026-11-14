@@ -1,4 +1,4 @@
-import { createHtmlExportEngine } from '@markii/host/node';
+import { createHtmlExportEngine } from '@markii/host/html-engine';
 import { describe, expect, it } from 'vitest';
 import {
   EXPORT_HTML_FILTERS,

@@ -26,7 +26,7 @@
  * Electron surface at all" to "printing threw", degrades to writing the
  * HTML file instead — the user always ends up with an exported note.
  */
-import { createHtmlExportEngine } from '@markii/host/node';
+import { createHtmlExportEngine } from '@markii/host/html-engine';
 import {
   createMarkiiHost,
   exportedSiblingPath,
@@ -415,7 +415,7 @@ export function exportNoticeText(outcome: NoteExportOutcome): string {
  * The console lines this plugin adds for one outcome, beyond what the shared
  * host already wrote while exporting (the written file, how the body was
  * rendered, what image embedding did, and a failed write). A written file
- * adds none. A PDF that fell back to HTML adds the reason and how to get a
+ * or a failed export adds none. A PDF that fell back to HTML adds the reason and how to get a
  * PDF. Every failure reaches the console in full, including the reason the
  * notice deliberately omits, so a user can always find out why without
  * opening developer tools on a hunch.
@@ -436,6 +436,8 @@ export function exportDiagnosticLines(outcome: NoteExportOutcome): string[] {
         `Wrote ${outcome.path} as HTML instead. Open it in a browser and print from there to get a PDF.`,
       ];
     case 'failed':
-      return [`Export failed: ${outcome.reason}`];
+      // The shared host wrote this failure's line, with the reason, when it
+      // returned the outcome.
+      return [];
   }
 }

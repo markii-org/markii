@@ -4,7 +4,9 @@
 // The main entry (`./index.ts`) is environment-neutral. This entry adds:
 // - the worker_threads isolate and the pinned network provider (`node:*`);
 // - the Node-backed file-system seams the neutral code takes by injection;
-// - the `@markii/html`-backed static export engine;
+//
+// The `@markii/html`-backed static export engine is its own entry,
+// `@markii/host/html-engine`, so importing this one needs no optional peer.
 //
 // A Node host imports from both entries. No browser bundle imports this one.
 
@@ -23,4 +25,3 @@ export {
   createNodePackDiscoveryIo,
   createNodeReader as createNodePackScriptsReader,
 } from './node-fs.js';
-export { createHtmlExportEngine } from './html-engine.js';

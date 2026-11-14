@@ -14,6 +14,8 @@ Entries:
   provider bound to an origin allowlist.
 - `@markii/host/node`: a worker-thread isolate (`createNodeHostIsolate`),
   the address-pinning network provider, and the Node file system seams.
+- `@markii/host/html-engine`: the HTML export engine. The one entry that
+  needs `@markii/html`.
 - `@markii/host/node-worker`: the self-contained worker file, for a host
   that bundles the worker itself.
 - `@markii/host/conformance`: the host scenario corpus and its runner, to

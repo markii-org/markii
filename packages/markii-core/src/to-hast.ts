@@ -1,4 +1,5 @@
 import { unified } from 'unified';
+import { parse } from './parse.js';
 import type { Plugin } from 'unified';
 import remarkParse from 'remark-parse';
 import remarkDirective from 'remark-directive';
@@ -232,7 +233,9 @@ function createProcessor() {
  */
 export function toHast(text: string): HastRoot {
   const processor = createProcessor();
-  const mdastTree = processor.parse(text);
+  // The shared `parse` (not `processor.parse`) so the word-start demotion
+  // of a colon in prose applies here exactly as it does for an AST consumer.
+  const mdastTree = parse(text);
   const hastTree = processor.runSync(mdastTree) as HastRoot;
   sanitizeUrls(hastTree);
   return hastTree;

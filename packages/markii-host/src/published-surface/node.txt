@@ -1,6 +1,5 @@
 NodeHostIsolateOptions
 SpawnRunOptions
-createHtmlExportEngine
 createNetProvider
 createNodeArchiveExtractFs
 createNodeDirectoryLister

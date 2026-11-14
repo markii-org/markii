@@ -1,0 +1,132 @@
+{
+  "children": [
+    {
+      "children": [
+        {
+          "attributes": {},
+          "children": [
+            {
+              "type": "text",
+              "value": "12:34"
+            }
+          ],
+          "name": "read_at",
+          "type": "textDirective"
+        }
+      ],
+      "type": "paragraph"
+    },
+    {
+      "children": [
+        {
+          "attributes": {
+            "href": "x"
+          },
+          "children": [
+            {
+              "type": "text",
+              "value": "1:02:03"
+            }
+          ],
+          "name": "read_at",
+          "type": "textDirective"
+        }
+      ],
+      "type": "paragraph"
+    },
+    {
+      "children": [
+        {
+          "attributes": {},
+          "children": [
+            {
+              "type": "text",
+              "value": "see "
+            },
+            {
+              "attributes": {},
+              "children": [
+                {
+                  "type": "text",
+                  "value": "x"
+                }
+              ],
+              "name": "inner",
+              "type": "textDirective"
+            }
+          ],
+          "name": "outer",
+          "type": "textDirective"
+        }
+      ],
+      "type": "paragraph"
+    },
+    {
+      "children": [
+        {
+          "attributes": {},
+          "children": [
+            {
+              "type": "text",
+              "value": "at 12:34 see "
+            },
+            {
+              "attributes": {},
+              "children": [
+                {
+                  "type": "text",
+                  "value": "x"
+                }
+              ],
+              "name": "inner",
+              "type": "textDirective"
+            }
+          ],
+          "name": "outer",
+          "type": "textDirective"
+        }
+      ],
+      "type": "paragraph"
+    },
+    {
+      "attributes": {},
+      "children": [
+        {
+          "type": "text",
+          "value": "12:34"
+        }
+      ],
+      "name": "leaf",
+      "type": "leafDirective"
+    },
+    {
+      "attributes": {},
+      "children": [
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": "12:34"
+            }
+          ],
+          "data": {
+            "directiveLabel": true
+          },
+          "type": "paragraph"
+        },
+        {
+          "children": [
+            {
+              "type": "text",
+              "value": "body"
+            }
+          ],
+          "type": "paragraph"
+        }
+      ],
+      "name": "box",
+      "type": "containerDirective"
+    }
+  ],
+  "type": "root"
+}

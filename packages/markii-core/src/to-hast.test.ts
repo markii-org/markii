@@ -198,3 +198,38 @@ describe('frontmatter (hast level)', () => {
     expect(JSON.stringify(tree)).toContain('title: Notes');
   });
 });
+
+describe('toHast applies the word-start rule at every depth', () => {
+  function directiveNames(tree: HastRoot): string[] {
+    const names: string[] = [];
+    visit(tree, 'element', (node: HastElement) => {
+      if (node.tagName === 'mk-directive') {
+        names.push(String(node.properties['data-mk-name']));
+      }
+    });
+    return names;
+  }
+
+  it('keeps a clock time in prose as text', () => {
+    const tree = toHast('Meet at 12:34 pm');
+    expect(directiveNames(tree)).toEqual([]);
+    expect(textOf(findElement(tree, 'p') as HastElement)).toBe(
+      'Meet at 12:34 pm',
+    );
+  });
+
+  it('keeps a timestamp inside a directive label as text', () => {
+    const tree = toHast(':read_at[1:02:03]{href="x"}');
+    expect(directiveNames(tree)).toEqual(['read_at']);
+    expect(textOf(findElement(tree, 'mk-directive') as HastElement)).toBe(
+      '1:02:03',
+    );
+  });
+
+  it('keeps a real directive nested in a label', () => {
+    expect(directiveNames(toHast(':outer[see :inner[x]]'))).toEqual([
+      'outer',
+      'inner',
+    ]);
+  });
+});

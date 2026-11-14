@@ -15,6 +15,7 @@ import {
   renderEngineDiagnosticLine,
 } from './export-behavior.js';
 import type { NoteFileExportOutcome } from './export-behavior.js';
+import type { ExportOutcome } from './create-host.js';
 import type { HostAdapter, HostExportFormat } from './adapter.js';
 import { CLI_LABELS, OBSIDIAN_LABELS, VSCODE_LABELS } from './labels.js';
 
@@ -70,8 +71,8 @@ describe('exportDefaultFileName', () => {
 
 describe('exportResultMessage', () => {
   it('names the written file, by name only', () => {
-    const outcome: NoteFileExportOutcome = {
-      kind: 'written',
+    const outcome: ExportOutcome = {
+      kind: 'exported',
       path: '/a/b/note.html',
       bytes: 100,
       valueCount: 3,
@@ -84,8 +85,8 @@ describe('exportResultMessage', () => {
   });
 
   it('says so when nothing was baked in and the note has scripts', () => {
-    const outcome: NoteFileExportOutcome = {
-      kind: 'written',
+    const outcome: ExportOutcome = {
+      kind: 'exported',
       path: '/a/b/note.html',
       bytes: 100,
       valueCount: 0,
@@ -99,7 +100,7 @@ describe('exportResultMessage', () => {
   });
 
   it("points a failure at this host's own diagnostics surface, never the reason", () => {
-    const outcome: NoteFileExportOutcome = {
+    const outcome: ExportOutcome = {
       kind: 'failed',
       reason: 'disk full',
     };
@@ -171,7 +172,9 @@ describe('exportDiagnosticLines', () => {
       for (const line of exportDiagnosticLines(outcome)) {
         expect(line).not.toContain('—');
       }
-      expect(exportResultMessage(outcome, VSCODE_LABELS)).not.toContain('—');
+      const hostShape: ExportOutcome =
+        outcome.kind === 'written' ? { ...outcome, kind: 'exported' } : outcome;
+      expect(exportResultMessage(hostShape, VSCODE_LABELS)).not.toContain('—');
     }
   });
 });
