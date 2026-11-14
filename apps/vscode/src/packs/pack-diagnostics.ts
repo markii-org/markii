@@ -29,7 +29,7 @@ import {
   formatPackDiagnosticLines as formatPackDiagnosticLinesShared,
   prebuiltShadowLine as prebuiltShadowLineShared,
   skippedPackCount as skippedPackCountShared,
-} from '@markii/host';
+} from '@markii/host/internal';
 import type { PackContext } from './pack-context.js';
 import type { PackDiagnosticsMessage } from '../protocol.js';
 

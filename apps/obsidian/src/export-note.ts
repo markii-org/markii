@@ -27,11 +27,8 @@
  * HTML file instead — the user always ends up with an exported note.
  */
 import { createHtmlExportEngine } from '@markii/host/html-engine';
-import {
-  createMarkiiHost,
-  exportedSiblingPath,
-  fileNameOf,
-} from '@markii/host';
+import { createMarkiiHost } from '@markii/host';
+import { exportedSiblingPath, fileNameOf } from '@markii/host/internal';
 import type { ExportRequest, HostExportFormat, MarkiiHost } from '@markii/host';
 import { createObsidianHostAdapter } from './host-adapter.js';
 import type { UnavailableComponent } from '@markii/stdlib';

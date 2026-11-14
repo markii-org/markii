@@ -15,12 +15,14 @@
  * run here and nothing here touches the network.
  */
 import {
-  completionOriginTag,
-  isContainerCompletionItem,
   type CompleteOutcome,
   type EditorPositionRequest,
   type HoverOutcome,
 } from '@markii/host';
+import {
+  completionOriginTag,
+  isContainerCompletionItem,
+} from '@markii/host/internal';
 import {
   formatComponentDocumentation,
   type CompletionItem,

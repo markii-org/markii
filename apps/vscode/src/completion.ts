@@ -14,7 +14,7 @@ import type {
   CompletionItem,
   ComponentDocumentation,
 } from '@markii/stdlib/editor';
-import { completionOriginTag } from '@markii/host';
+import { completionOriginTag } from '@markii/host/internal';
 
 /**
  * The characters that (re)open the completion popup while typing a

@@ -27,7 +27,7 @@ import { packArchiveFileName } from '@markii/pack';
 import {
   PREBUILT_TERMINAL_SCRIPT_FILENAME,
   emptyWebviewScript,
-} from '@markii/host';
+} from '@markii/host/internal';
 import type { DiscoveredPack } from '@markii/host';
 import type { PackBuildOutcome } from './pack-build.js';
 import type { PackExportBuilder, PackExportFs } from './pack-export.js';

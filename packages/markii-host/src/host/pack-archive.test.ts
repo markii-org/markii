@@ -1,11 +1,19 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { zipSync } from 'fflate';
 import { openPackArchive } from '@markii/pack';
-import { createNodeArchiveExtractFs } from '../node-fs.js';
 import { describeArchiveError, writeArchiveContents } from './pack-archive.js';
+
+/** What a host's `writeFile` does: create the parent folders, then write. */
+async function writeCreatingParents(
+  absolutePath: string,
+  bytes: Uint8Array,
+): Promise<void> {
+  await mkdir(path.dirname(absolutePath), { recursive: true });
+  await writeFile(absolutePath, bytes);
+}
 
 const tempDirs: string[] = [];
 
@@ -34,11 +42,10 @@ describe('describeArchiveError', () => {
   });
 });
 
-describe('writeArchiveContents + createNodeArchiveExtractFs', () => {
+describe('writeArchiveContents', () => {
   it('writes pack.json, webview.js, webview.css and nested scripts/ modules', async () => {
     const workDir = await makeTempDir();
     const target = path.join(workDir, 'out');
-    const fs = createNodeArchiveExtractFs();
 
     await writeArchiveContents(
       {
@@ -54,7 +61,7 @@ describe('writeArchiveContents + createNodeArchiveExtractFs', () => {
         ignoredEntries: [],
       },
       target,
-      fs,
+      writeCreatingParents,
     );
 
     expect(await readFile(path.join(target, 'pack.json'), 'utf8')).toContain(
@@ -98,7 +105,7 @@ describe('writeArchiveContents + createNodeArchiveExtractFs', () => {
     await writeArchiveContents(
       opened.archive,
       destination,
-      createNodeArchiveExtractFs(),
+      writeCreatingParents,
     );
 
     const written = JSON.parse(
@@ -114,13 +121,5 @@ describe('writeArchiveContents + createNodeArchiveExtractFs', () => {
     await expect(
       readFile(path.join(destination, 'scripts', 'http.lua'), 'utf8'),
     ).resolves.toBe('return {}');
-  });
-
-  it('removeDirectory never rejects, even for a path that does not exist', async () => {
-    const workDir = await makeTempDir();
-    const fs = createNodeArchiveExtractFs();
-    await expect(
-      fs.removeDirectory(path.join(workDir, 'does-not-exist')),
-    ).resolves.toBeUndefined();
   });
 });

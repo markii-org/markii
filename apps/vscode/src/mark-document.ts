@@ -6,7 +6,7 @@
  * a `*.test.ts` file exercises may import it.
  */
 
-import { MARK_EXTENSION } from '@markii/host';
+import { MARK_EXTENSION } from '@markii/host/internal';
 
 /**
  * True when `fileName` ends with `.mk.md` (case-insensitively) AND has a

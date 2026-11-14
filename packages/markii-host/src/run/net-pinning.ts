@@ -44,7 +44,13 @@ export interface PinnedAddress {
 }
 
 export type PinResult =
-  { ok: true; pinned: PinnedAddress } | { ok: false; reason: string };
+  | { ok: true; pinned: PinnedAddress }
+  | {
+      ok: false;
+      reason: string;
+      /** `unresolved`: the name did not resolve (a transport failure). `refused`: the address policy refused it. */
+      kind: 'unresolved' | 'refused';
+    };
 
 export interface PinPolicy {
   /**
@@ -124,11 +130,19 @@ export async function pinHostAddress(
   } catch {
     // Deliberately not the resolver's own message: it varies by platform and
     // says nothing a note's author can act on.
-    return { ok: false, reason: `host "${hostname}" could not be resolved` };
+    return {
+      ok: false,
+      kind: 'unresolved',
+      reason: `host "${hostname}" could not be resolved`,
+    };
   }
 
   if (addresses.length === 0) {
-    return { ok: false, reason: `host "${hostname}" resolved to no address` };
+    return {
+      ok: false,
+      kind: 'unresolved',
+      reason: `host "${hostname}" resolved to no address`,
+    };
   }
 
   for (const candidate of addresses) {
@@ -136,12 +150,14 @@ export async function pinHostAddress(
     if (scope === undefined) {
       return {
         ok: false,
+        kind: 'refused',
         reason: `host "${hostname}" resolved to an unusable address`,
       };
     }
     if (isRestrictedScope(scope) && !policy.allowRestrictedAddresses) {
       return {
         ok: false,
+        kind: 'refused',
         reason: `host "${hostname}" resolves to ${describeScope(scope)}`,
       };
     }
@@ -149,7 +165,11 @@ export async function pinHostAddress(
 
   const chosen = addresses[0];
   if (chosen === undefined) {
-    return { ok: false, reason: `host "${hostname}" resolved to no address` };
+    return {
+      ok: false,
+      kind: 'unresolved',
+      reason: `host "${hostname}" resolved to no address`,
+    };
   }
   const scope = classifyIpAddress(chosen.address) ?? 'reserved';
   return {

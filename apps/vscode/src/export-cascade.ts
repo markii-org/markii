@@ -12,7 +12,7 @@
  * hosts cannot drift. What stays here is the save dialog's wording and
  * the default file name.
  */
-import { exportBaseName } from '@markii/host';
+import { exportBaseName } from '@markii/host/internal';
 
 /** Shown when the command runs with no Markii document to export. */
 export const EXPORT_CASCADE_NO_DOCUMENT_MESSAGE =

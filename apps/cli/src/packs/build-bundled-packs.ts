@@ -17,7 +17,8 @@
  */
 import { createNodeDirectoryLister } from '@markii/host/node';
 import * as path from 'node:path';
-import { discoverPacks, packHasTerminalViews } from '@markii/host';
+import { discoverPacks } from '@markii/host';
+import { packHasTerminalViews } from '@markii/host/internal';
 import { createNodeFileReader } from '@markii/host/node';
 import {
   buildPackTerminalScript,

@@ -307,8 +307,9 @@ packages/markii-host    PUBLISHED (user-approved 2026-11-09; in build:dist and
                      diagnostics. A behavior whose capability the adapter
                      does not declare returns an Unsupported outcome AND
                      writes one diagnostics line: declining is never a
-                     silent no-op. labels.ts holds the per-host wording
-                     nouns the shared message templates interpolate. The
+                     silent no-op. labels.ts holds the HostLabels type the
+                     shared message templates interpolate; each app owns
+                     its own nouns in a labels module of its own. The
                      behavior modules beside them (script-execution,
                      refresh-interval, run-behavior, run-diagnostics,
                      pack-archive, pack-install, pack-load,
@@ -331,14 +332,23 @@ packages/markii-host    PUBLISHED (user-approved 2026-11-09; in build:dist and
                      editor. Engine-specific pieces are injected, never
                      imported: the pack registry engine (`reactPackEngine`
                      from @markii/react), `htmlEngine` for HTML/PDF export,
-                     `archiveExtractFs` for pack install, and
-                     `HostPackSource.engine`. Pack discovery reads through
+                     and `HostPackSource.engine`. Pack install writes
+                     through adapter.writeFile (which creates parent
+                     folders) and packs.removeFolder. Pack discovery reads through
                      the adapter's readFile/listFolder
   src/index.ts       the MAIN entry (@markii/host), environment-neutral:
                      nothing reachable imports node:*, esbuild-wasm,
                      @markii/react or @markii/html at runtime.
-                     apps/vscode/src/browser-entry.probe.test.ts bundles it
+                     packages/markii-host/src/neutral-entries.probe.test.ts bundles it
                      for a browser and checks the module inputs
+  src/internal.ts    @markii/host/internal: what this repository's apps
+                     and @markii/pack-build use below the host object.
+                     NO semver promise; environment-neutral like the main
+                     entry. src/neutral-entries.probe.test.ts bundles
+                     both, and ./browser, for a browser
+  src/run/net-refusal.ts  netRefusal/isNetRefusal: a provider marks a
+                     policy refusal; an unmarked failure is transport and
+                     reaches the script as an ordinary error
   src/node-worker.ts the @markii/host/node-worker entry: loading it starts
                      the worker_threads isolate; apps bundle it by that
                      specifier, never by a path inside this package
@@ -370,8 +380,10 @@ packages/markii-host    PUBLISHED (user-approved 2026-11-09; in build:dist and
   src/conformance.ts @markii/host/conformance: the host scenario runner;
                      build:dist ships the corpus in dist/conformance/host/
   scripts/build-dist-assets.mjs  finishes build:dist: dist/package.json
-                     (type module), the self-contained browser and Node
-                     workers (esbuild), glue.wasm, the conformance
+                     (type module), the self-contained browser workers
+                     (module and classic, one recipe in
+                     scripts/browser-worker-build.mjs that the Obsidian
+                     build also uses) and Node worker, glue.wasm, the conformance
                      corpus; then fails if a .d.ts reachable from
                      dist/index.d.ts imports @markii/react or @markii/html
   src/path-util.ts   adapter-path helpers (join, dirname, isAbsolute); the
@@ -1009,7 +1021,7 @@ same commit as the change that triggers them:
 - **New export from `@markii/host`'s main entry** → it must stay
   environment-neutral transitively (no `node:*`, `esbuild-wasm`,
   `@markii/react` or `@markii/html` at runtime);
-  `apps/vscode/src/browser-entry.probe.test.ts` is the gate. A module
+  `packages/markii-host/src/neutral-entries.probe.test.ts` is the gate. A module
   needing any of those goes behind `@markii/host/node`.
 - **Editor-seam change** (completion, hover, the insert skeleton or catalog,
   fence lengthening) → it lives in `@markii/stdlib/editor`, a PUBLISHED
@@ -1032,8 +1044,8 @@ same commit as the change that triggers them:
 - **A path named in this file** (a file moved, renamed or removed, a new
   layout entry) → `guards/agents-paths.test.ts` fails until this file names
   the real path. A generated file goes in its `ALLOWLIST` with the reason.
-- **A change to the exported names of `@markii/host`** (any of its four
-  entries) → `packages/markii-host/src/published-surface.test.ts` fails
+- **A change to the exported names of `@markii/host`** (any published
+  entry, `/internal` included) → `packages/markii-host/src/published-surface.test.ts` fails
   until the snapshot in `src/published-surface/` is regenerated with
   `UPDATE_HOST_SURFACE=1 npm test -w @markii/host`. The change needs a
   CHANGELOG entry.

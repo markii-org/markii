@@ -24,7 +24,7 @@
  * read outside the vault it was handed. There is no separate path check
  * here because there is nothing left to jail against.
  */
-import { MAX_EMBEDDED_IMAGE_BYTES } from '@markii/host';
+import { MAX_EMBEDDED_IMAGE_BYTES } from '@markii/host/internal';
 import type { ExportImageReader, ExportImageResult } from '@markii/host';
 import {
   isVaultRelativePath,

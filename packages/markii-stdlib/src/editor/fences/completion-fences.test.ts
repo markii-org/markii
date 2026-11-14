@@ -3,8 +3,8 @@ import {
   completionAt,
   componentSkeleton,
   fenceExtensionEdits,
-} from '@markii/stdlib/editor';
-import { buildComponentCatalog } from '../insert/component-catalog.js';
+  standardComponentCatalog,
+} from '../index.js';
 
 /**
  * Ties the two seams a host actually pairs at runtime: the text
@@ -13,7 +13,7 @@ import { buildComponentCatalog } from '../insert/component-catalog.js';
  * only together do they prove that what a host inserts is recognized as a
  * container by the fence scanner.
  */
-const catalog = buildComponentCatalog([]);
+const catalog = standardComponentCatalog();
 
 describe('accepting a completion inside a container', () => {
   it('lengthens the enclosing pair for a container item', () => {

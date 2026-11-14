@@ -37,21 +37,21 @@ import { readFile as nodeReadFile } from 'node:fs/promises';
 import type { Registry } from '@markii/react';
 import type { UnavailableComponent } from '@markii/stdlib';
 import { REACT_ENGINE_ID, reactPackEngine } from '@markii/react';
+import { buildRenderRegistry } from '@markii/host';
 import {
-  buildRenderRegistry,
   componentsWithoutEngineView,
   declaredPackComponents,
   installedNamespaces,
   loadPackModules,
   resolvePrebuiltPack,
-} from '@markii/host';
+} from '@markii/host/internal';
 import type {
   DiscoveredPack,
   LoadPacksOutcome,
   PackModulesMap,
-  PackPathExists,
   SkippedPackFolder,
 } from '@markii/host';
+import type { PackPathExists } from '@markii/host/internal';
 import {
   collectPackRegistrations,
   evaluatePackScript,

@@ -7,7 +7,7 @@ import {
   MARK_EXTENSION,
   readPersistedValues,
   staleValuesForRehydration,
-} from '@markii/host';
+} from '@markii/host/internal';
 import type { Registry } from '@markii/react';
 import { renderDocument } from './render-document.js';
 import {

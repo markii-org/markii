@@ -16,7 +16,7 @@
  * empty query matches everything.
  */
 import type { CompletionItem } from '@markii/stdlib/editor';
-import { completionOriginTag } from '@markii/host';
+import { completionOriginTag } from '@markii/host/internal';
 import { filterSuggestionsByLabel } from './insert-component.js';
 
 /**

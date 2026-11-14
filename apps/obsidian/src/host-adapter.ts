@@ -44,11 +44,12 @@ import type {
   HostPackSource,
   HostPromptRequest,
 } from '@markii/host';
-import { OBSIDIAN_LABELS } from '@markii/host';
+
 import {
   createLocalStorageMemento,
   type MementoWriteFailure,
 } from './run/local-storage-memento.js';
+import { OBSIDIAN_LABELS } from './labels.js';
 
 /** The `[markii] ` console prefix every diagnostics line this plugin writes gets. See this module's top comment: the prefix is the sink's job, never the shared wording's. */
 const DIAGNOSTICS_PREFIX = '[markii] ';

@@ -17,7 +17,11 @@ import {
 import type { NoteFileExportOutcome } from './export-behavior.js';
 import type { ExportOutcome } from './create-host.js';
 import type { HostAdapter, HostExportFormat } from './adapter.js';
-import { CLI_LABELS, OBSIDIAN_LABELS, VSCODE_LABELS } from './labels.js';
+import {
+  CLI_LABELS,
+  OBSIDIAN_LABELS,
+  VSCODE_LABELS,
+} from './labels.fixture.js';
 
 const STATIC_NO_PACKS: ExportRenderInfo = {
   engine: 'static',

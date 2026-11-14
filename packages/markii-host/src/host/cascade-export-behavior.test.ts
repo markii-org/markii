@@ -13,7 +13,7 @@ import {
   type CascadeArchiveRequest,
   type CascadeExportOutcome,
 } from './cascade-export-behavior.js';
-import { OBSIDIAN_LABELS, VSCODE_LABELS } from './labels.js';
+import { OBSIDIAN_LABELS, VSCODE_LABELS } from './labels.fixture.js';
 
 /** A fake workspace: path to text, links resolved relative to the linking note's folder. */
 function workspace(notes: Record<string, string>): {

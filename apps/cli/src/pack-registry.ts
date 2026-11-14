@@ -20,11 +20,11 @@ import {
   type AnsiPackToInstall,
   type AnsiRegistry,
 } from '@markii/ansi';
+import { type MarkiiHost } from '@markii/host';
 import {
   terminalScriptNamespaceMismatchLine,
   terminalScriptRejectedLine,
-  type MarkiiHost,
-} from '@markii/host';
+} from '@markii/host/internal';
 
 export interface CliPackRegistry {
   readonly registry: AnsiRegistry;

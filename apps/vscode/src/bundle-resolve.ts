@@ -14,7 +14,7 @@
 
 import type { BundleManifest, BundleStorage } from '@markii/bundle';
 import { parseManifest } from '@markii/bundle';
-import { resolveBundleDocumentPath } from '@markii/host';
+import { resolveBundleDocumentPath } from '@markii/host/internal';
 
 const MANIFEST_PATH = 'manifest.json';
 

@@ -16,8 +16,29 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 - `@markii/host`: `DiscoveredPack` carries `manifestText`, the raw
   `pack.json` text.
 
+- `@markii/host/browser-worker-classic`: the Web Worker as a classic
+  script (`dist/browser-worker.classic.js`).
+- `netRefusal`: a custom network provider marks a policy refusal with it.
+- `@markii/host` and `@markii/pack-build` declare `engines.node >=22`.
+
 ### Changed
 
+- **Breaking: the main entry of `@markii/host` exports 92 names, down
+  from 351.** It keeps `createMarkiiHost`, the adapter, request and
+  outcome types, and the message helpers. 73 names the reference apps use
+  moved to `@markii/host/internal`, which carries no compatibility
+  promise. The rest are no longer exported. The editor seam is no longer
+  re-exported: import it from `@markii/stdlib/editor`.
+- **Breaking: the `archiveExtractFs` option and
+  `createNodeArchiveExtractFs` are removed.** Pack install writes through
+  `adapter.writeFile`, which must create parent folders, and needs
+  `packs.removeFolder`.
+- **Breaking: `VSCODE_LABELS`, `OBSIDIAN_LABELS` and `CLI_LABELS` are
+  removed.** `HostAdapter.id` is a string.
+- **A network outage is no longer reported as a refusal.** An unresolved
+  name, a refused connection, a timeout or an abort reaches the script as
+  an ordinary error with its reason. A custom provider that throws a
+  plain error for a policy refusal must mark it with `netRefusal`.
 - **Breaking: `createHtmlExportEngine` moved** from `@markii/host/node` to
   the new `@markii/host/html-engine` entry. `@markii/host/node` no longer
   needs the optional `@markii/html` peer.

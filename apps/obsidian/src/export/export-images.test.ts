@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_EMBEDDED_IMAGE_BYTES } from '@markii/host';
+import { MAX_EMBEDDED_IMAGE_BYTES } from '@markii/host/internal';
 import {
   createVaultImageReader,
   resolveVaultImagePath,

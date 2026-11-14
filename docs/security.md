@@ -314,7 +314,11 @@ WebAssembly file. Lua cannot reach JavaScript in the first place; the
 removal is a second wall behind that one.
 A refusal made in the host is marked as a policy denial on the wire, so it
 still reaches the script as a capability error rather than as an ordinary
-failure.
+failure. A transport failure is the other case: an unresolved name, a
+refused connection, a timeout or an aborted request reaches the script as
+an ordinary error that carries its reason. A custom network provider
+marks its own refusals with `netRefusal`. Both kinds are errors, so a
+script never reads either as a response.
 
 The worker's bytes reach the isolate differently in the Obsidian plugin
 than in the worker-thread hosts. The plugin embeds the worker bundle and

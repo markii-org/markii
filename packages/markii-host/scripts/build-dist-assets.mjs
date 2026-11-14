@@ -9,6 +9,11 @@
  * - `dist/browser-worker.js` is the Web Worker isolate as ONE self-contained
  *   ES module (wasmoon and @markii/lua bundled in). `browser.js` references
  *   it with `new URL('./browser-worker.js', import.meta.url)`.
+ * - `dist/browser-worker.classic.js` is the same worker as one IIFE for a
+ *   host that starts a classic worker (a blob URL), with a banner that
+ *   shadows `process`, `Buffer` and `require`. `@markii/host/
+ *   browser-worker-classic` exports it. Both builds share
+ *   `scripts/browser-worker-build.mjs`.
  * - `dist/node-worker.js` is the worker_threads isolate as ONE self-contained
  *   ES module (wasmoon and @markii/lua bundled in), so a Node host needs no
  *   resolution of the worker's imports. `createNodeHostIsolate` defaults to
@@ -22,6 +27,10 @@ import { cpSync, copyFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
+import {
+  browserWorkerBuildOptions,
+  markiiSrcRoots as browserWorkerRoots,
+} from './browser-worker-build.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const pkgRoot = path.resolve(here, '..');
@@ -34,38 +43,22 @@ writeFileSync(
   JSON.stringify({ type: 'module' }, null, 2) + '\n',
 );
 
-/** `@markii/*` resolves to each package's `src/`, so the worker never bundles a stale `dist/`. */
-const markiiSrcRoots = {
-  '@markii/bundle': path.join(repoRoot, 'packages', 'markii-bundle', 'src'),
-  '@markii/runtime': path.join(repoRoot, 'packages', 'markii-runtime', 'src'),
-  '@markii/lua': path.join(repoRoot, 'packages', 'markii-lua', 'src'),
-};
+const markiiSrcRoots = browserWorkerRoots(repoRoot);
 
 await build({
+  ...browserWorkerBuildOptions({ repoRoot, format: 'esm' }),
   entryPoints: [path.join(pkgRoot, 'src', 'run', 'worker-entry-browser.ts')],
   outfile: path.join(dist, 'browser-worker.js'),
-  bundle: true,
-  platform: 'browser',
-  format: 'esm',
-  target: 'es2022',
   minify: true,
   logLevel: 'info',
-  alias: {
-    ...markiiSrcRoots,
-    // micromark's browser build of this package calls `document.createElement`
-    // at module top level, which throws inside a Web Worker. The package's
-    // portable `index.js` is a plain character-entities map.
-    'decode-named-character-reference': path.join(
-      repoRoot,
-      'node_modules',
-      'decode-named-character-reference',
-      'index.js',
-    ),
-  },
-  // wasmoon's Emscripten bundle carries a Node branch behind an environment
-  // sniff. A browser worker never takes it; `url` and `module` stay external
-  // so esbuild leaves that unreachable branch's imports alone.
-  external: ['url', 'module'],
+});
+
+await build({
+  ...browserWorkerBuildOptions({ repoRoot, format: 'iife' }),
+  entryPoints: [path.join(pkgRoot, 'src', 'browser-worker-classic.ts')],
+  outfile: path.join(dist, 'browser-worker.classic.js'),
+  minify: true,
+  logLevel: 'info',
 });
 
 await build({
@@ -104,13 +97,16 @@ cpSync(
   { recursive: true },
 );
 
-// The neutral main entry must not leak the optional peers' types: no
+// The neutral main and internal entries must not leak the optional peers' types: no
 // declaration reachable from dist/index.d.ts may import @markii/react or
 // @markii/html (they stay optional peer dependencies).
 {
   const { readFileSync, existsSync } = await import('node:fs');
   const seen = new Set();
-  const queue = [path.join(dist, 'index.d.ts')];
+  const queue = [
+    path.join(dist, 'index.d.ts'),
+    path.join(dist, 'internal.d.ts'),
+  ];
   const offenders = [];
   while (queue.length > 0) {
     const file = queue.pop();
@@ -132,7 +128,8 @@ cpSync(
   }
   if (offenders.length > 0) {
     throw new Error(
-      'dist/index.d.ts reaches optional peer types:\n' + offenders.join('\n'),
+      'dist/index.d.ts or dist/internal.d.ts reaches optional peer types:\n' +
+        offenders.join('\n'),
     );
   }
 }

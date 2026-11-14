@@ -19,7 +19,7 @@
  * section headers: those fight Obsidian's fuzzy filter). Instead each row
  * carries its own small origin tag alongside the directive name.
  */
-import type { InsertableComponent } from '@markii/host';
+import type { InsertableComponent } from '@markii/stdlib/editor';
 
 /** Shown (as a Notice) when there is no active Markdown editor to insert into. */
 export const NO_ACTIVE_MARK_EDITOR_MESSAGE =

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { VSCODE_LABELS } from '@markii/host';
+
 import { createVSCodeHostAdapter } from './host-adapter.js';
+import { VSCODE_LABELS } from './labels.js';
 
 function fakeMemento() {
   const store = new Map<string, unknown>();

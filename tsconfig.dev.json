@@ -48,6 +48,7 @@
         "packages/platforms/markii-ansi/src/components/index.ts"
       ],
       "@markii/host": ["packages/markii-host/src/index.ts"],
+      "@markii/host/internal": ["packages/markii-host/src/internal.ts"],
       "@markii/host/node": ["packages/markii-host/src/node.ts"],
       "@markii/host/html-engine": ["packages/markii-host/src/html-engine.ts"],
       "@markii/host/dev-isolate": ["packages/markii-host/src/dev-isolate.ts"],

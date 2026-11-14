@@ -5,7 +5,7 @@ import { readLastRunTrace } from '../run/run-trace.js';
 import type { GrantMemento, Thenable } from '../run/grant-flow.js';
 import { BROWSER_ISOLATE_ENTRY } from './adapter.js';
 import type { HostAdapter, HostPromptRequest } from './adapter.js';
-import { CLI_LABELS } from './labels.js';
+import { CLI_LABELS } from './labels.fixture.js';
 import {
   promptsFromAdapter,
   runViaAdapter,

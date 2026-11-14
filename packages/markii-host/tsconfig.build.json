@@ -9,5 +9,11 @@
     "types": ["node"]
   },
   "include": ["src"],
-  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/dev-isolate.ts"]
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+    "src/dev-isolate.ts",
+    "src/browser-worker-classic.ts",
+    "src/**/*.fixture.ts"
+  ]
 }

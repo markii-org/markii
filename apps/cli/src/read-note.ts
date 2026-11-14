@@ -10,7 +10,7 @@
  */
 import { readFile, stat } from 'node:fs/promises';
 import { basename } from 'node:path';
-import { isBundleName, resolveBundleDocumentPath } from '@markii/host';
+import { isBundleName, resolveBundleDocumentPath } from '@markii/host/internal';
 import {
   openZipBundle,
   parseManifest,

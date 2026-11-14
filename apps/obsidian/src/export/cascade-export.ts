@@ -22,8 +22,11 @@ import {
   buildCascadeArchive,
   cascadeReasonOf,
   exportBaseName,
-} from '@markii/host';
-import type { CascadeArchiveRequest, CascadeExportOutcome } from '@markii/host';
+} from '@markii/host/internal';
+import type {
+  CascadeArchiveRequest,
+  CascadeExportOutcome,
+} from '@markii/host/internal';
 import type { NoteExportFs } from '../export-note.js';
 
 /** The static HTML engine every note in the cascade renders with. */

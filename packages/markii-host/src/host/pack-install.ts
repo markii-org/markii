@@ -20,7 +20,6 @@
 import { joinPath } from '../path-util.js';
 import { openPackArchive } from '@markii/pack';
 import { describeArchiveError, writeArchiveContents } from './pack-archive.js';
-import type { ArchiveExtractFs } from './pack-archive.js';
 import type { HostAdapter, HostLabels } from './adapter.js';
 import type { InstallPackOutcome as HostInstallPackOutcome } from './create-host.js';
 import { trustInstalledPack } from './pack-trust-behavior.js';
@@ -35,7 +34,8 @@ export interface InstallPackFromArchiveOptions {
   /** This host's own pack-install directory (`HostPackSource.installRoot()`). Each installed pack gets a subdirectory named by its namespace, since two packs can never share one (docs/packs.md's collision rule), which makes "is this namespace already installed" a plain directory check. */
   readonly installRoot: string;
   readonly exists: PackDirectoryExists;
-  readonly extractFs: ArchiveExtractFs;
+  /** Removes the installed folder before a replacing install (`HostPackSource.removeFolder`). Called only when the namespace is already installed. */
+  readonly removeFolder: (absolutePath: string) => Promise<void>;
   /**
    * Namespaces this install may never claim (`HostPackSource.reservedNamespaces()`).
    * Empty for a host with no reserved set (VS Code). Checked before the
@@ -77,7 +77,7 @@ export async function installPackFromArchive(
     archivePath,
     installRoot,
     exists,
-    extractFs,
+    removeFolder,
     reservedNamespaces,
   } = options;
 
@@ -140,8 +140,10 @@ export async function installPackFromArchive(
   }
 
   try {
-    await extractFs.removeDirectory(targetDir);
-    await writeArchiveContents(opened.archive, targetDir, extractFs);
+    if (alreadyInstalled) await removeFolder(targetDir);
+    await writeArchiveContents(opened.archive, targetDir, (path, bytes) =>
+      adapter.writeFile(path, bytes),
+    );
   } catch (err) {
     return {
       kind: 'rejected',

@@ -3,14 +3,14 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { RunTrigger } from '@markii/runtime';
 import {
-  OBSIDIAN_LABELS,
   scheduledRefreshNotStartedLine,
   scriptsDisabledConfirmationText,
   scriptsDisabledDiagnosticLine,
   scriptsDisabledNotice,
   scriptsDisabledNoticeText,
   scriptsEnabledConfirmationText,
-} from '@markii/host';
+} from '@markii/host/internal';
+import { OBSIDIAN_LABELS } from './labels.js';
 
 /**
  * Batch 11: the wording itself (`scriptsDisabledNoticeText` and friends)

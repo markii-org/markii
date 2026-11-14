@@ -23,6 +23,7 @@ import * as https from 'node:https';
 import * as dns from 'node:dns';
 
 import type { NetProvider, NetResponse } from '@markii/lua';
+import { netRefusal } from './net-refusal.js';
 import {
   pinHostAddress,
   pinnedLookup,
@@ -199,13 +200,15 @@ function issueRequest(
     );
 
     req.on('error', (err) => {
-      settleReject(denial(`request failed: ${describeThrown(err)}`));
+      // A transport failure (connection refused, reset, timeout): an
+      // ordinary runtime failure with the reason, not a policy refusal.
+      settleReject(new Error(`request failed: ${describeThrown(err)}`));
     });
 
     if (signal !== undefined) {
       const onAbort = (): void => {
         req.destroy();
-        settleReject(denial('the run has ended'));
+        settleReject(new Error('the run has ended'));
       };
       if (signal.aborted) onAbort();
       else signal.addEventListener('abort', onAbort, { once: true });
@@ -284,6 +287,10 @@ export function createNetProvider(
   signal?: AbortSignal,
 ): NetProvider {
   const allowed = new Set(allowlist.map((host) => host.toLowerCase()));
+  // Every policy refusal is built by the injected `denial` and then marked,
+  // so the net bridge can tell it from a transport failure without importing
+  // the Lua runtime. A transport failure is a plain `Error`.
+  const refuse = (message: string): Error => netRefusal(denial(message));
 
   async function fetchAllowed(
     startUrl: string,
@@ -296,30 +303,34 @@ export function createNetProvider(
       try {
         parsed = new URL(currentUrl);
       } catch {
-        throw denial(`"${currentUrl}" is not a valid URL`);
+        throw refuse(`"${currentUrl}" is not a valid URL`);
       }
 
       if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-        throw denial(`scheme "${parsed.protocol}" is not allowed`);
+        throw refuse(`scheme "${parsed.protocol}" is not allowed`);
       }
       // N-4: a URL carrying credentials is refused outright, on every hop.
       if (parsed.username !== '' || parsed.password !== '') {
-        throw denial(
+        throw refuse(
           `URL "${currentUrl}" embeds credentials, which is not allowed`,
         );
       }
 
-      if (signal?.aborted) throw denial('the run has ended');
+      if (signal?.aborted) throw new Error('the run has ended');
       const host = parsed.hostname.toLowerCase();
       if (!allowed.has(host)) {
-        throw denial(`host "${host}" is not on the run's allowlist`);
+        throw refuse(`host "${host}" is not on the run's allowlist`);
       }
 
       // Issue #10: resolve-then-pin, closing the DNS-rebinding / private-
       // range SSRF gap a hostname allowlist alone cannot see.
       const pinResult = await pinHostAddress(host, policy, lookup);
       if (!pinResult.ok) {
-        throw denial(pinResult.reason);
+        // A name that does not resolve is a transport failure; an address
+        // the policy refuses is a policy refusal.
+        throw pinResult.kind === 'unresolved'
+          ? new Error(pinResult.reason)
+          : refuse(pinResult.reason);
       }
 
       const response = await issueRequest(
@@ -328,18 +339,18 @@ export function createNetProvider(
         body,
         pinResult.pinned,
         maxFetchBytes,
-        denial,
+        refuse,
         signal,
       );
 
       if (response.status >= 300 && response.status < 400) {
         if (!response.location) {
-          throw denial('redirect response carried no Location header');
+          throw refuse('redirect response carried no Location header');
         }
         try {
           currentUrl = new URL(response.location, currentUrl).toString();
         } catch {
-          throw denial(
+          throw refuse(
             'redirect response carried an unparseable Location header',
           );
         }
@@ -348,7 +359,7 @@ export function createNetProvider(
 
       return { status: response.status, body: response.body };
     }
-    throw denial(`exceeded ${MAX_REDIRECTS} redirects`);
+    throw refuse(`exceeded ${MAX_REDIRECTS} redirects`);
   }
 
   return {

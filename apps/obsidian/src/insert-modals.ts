@@ -1,5 +1,5 @@
 import { App, SuggestModal } from 'obsidian';
-import type { InsertableComponent } from '@markii/host';
+import type { InsertableComponent } from '@markii/stdlib/editor';
 import {
   createChoiceSettlement,
   filterInsertComponentSuggestions,

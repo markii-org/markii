@@ -21,6 +21,7 @@
  * the pinned request itself.
  */
 import type { NetProvider, NetResponse } from '@markii/lua';
+import { isNetRefusal } from './net-refusal.js';
 
 /** Worker -> host. `id` correlates the reply; `method` selects the provider call. */
 export interface NetBridgeRequest {
@@ -105,11 +106,12 @@ export async function serveNetRequest(
       id: request.id,
       ok: false,
       error: error instanceof Error ? error.message : String(error),
-      // Everything the host's provider refuses IS a policy denial: the
-      // provider's own failures are allowlist, redirect, size, and pinning
-      // refusals. Marking them so keeps the worker's classification
-      // identical to the in-worker case.
-      denied: true,
+      // A policy refusal (allowlist, redirect, size, address range) is
+      // marked by the provider and crosses as a denial, so the worker
+      // classifies it exactly as it would in-worker. A transport failure
+      // (DNS, connection, timeout, abort) is unmarked and crosses as an
+      // ordinary failure with its reason. Both reach the script as errors.
+      denied: isNetRefusal(error),
     });
   }
 }

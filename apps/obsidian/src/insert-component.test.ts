@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { InsertableComponent } from '@markii/host';
+import type { InsertableComponent } from '@markii/stdlib/editor';
 import {
   createChoiceSettlement,
   filterInsertComponentSuggestions,

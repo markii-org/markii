@@ -25,7 +25,6 @@ import {
   workerThreadIsolate,
 } from '@markii/host/node';
 import {
-  VSCODE_LABELS,
   type GrantMemento,
   type HostAdapter,
   type HostDirEntry,
@@ -36,8 +35,10 @@ import {
   type HostPackSource,
   type HostPromptRequest,
   type HostTextEdit,
-  type LineColumn,
 } from '@markii/host';
+
+import { type LineColumn } from '@markii/stdlib/editor';
+import { VSCODE_LABELS } from './labels.js';
 
 export interface VSCodeHostAdapterDeps {
   /** `context.workspaceState`, structurally a `GrantMemento` already — no wrapper needed. */

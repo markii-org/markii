@@ -35,7 +35,7 @@ import {
   isRunProgress,
   serveNetRequest,
   type NetBridgeReply,
-} from '@markii/host';
+} from '@markii/host/internal';
 import type { NetProvider } from '@markii/lua';
 
 const outDir = mkdtempSync(path.join(tmpdir(), 'markii-worker-probe-'));

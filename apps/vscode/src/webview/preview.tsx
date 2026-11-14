@@ -1,12 +1,15 @@
 import { Component, useEffect, useMemo, useState } from 'react';
 import type { ErrorInfo, ReactElement, ReactNode } from 'react';
 import { renderMark } from '@markii/react';
-import { createRenderDiagnosticCollector } from '@markii/host';
+import { createRenderDiagnosticCollector } from '@markii/host/internal';
 import type { Registry } from '@markii/react';
 import { createValueStore } from '@markii/runtime';
 import type { StoredValue } from '@markii/runtime';
 import type { UnavailableComponent } from '@markii/stdlib';
-import { mergeArrivingValue, packsNotInstalledLabel } from '@markii/host';
+import {
+  mergeArrivingValue,
+  packsNotInstalledLabel,
+} from '@markii/host/internal';
 import { extractFrontmatterUses } from '@markii/core';
 import { resolveUses } from '@markii/pack';
 import { isHostToWebviewMessage, isNewerRevision } from '../protocol.js';

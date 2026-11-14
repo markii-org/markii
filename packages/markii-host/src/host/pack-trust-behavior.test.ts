@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { GrantMemento, Thenable } from '../run/grant-flow.js';
 import type { HostAdapter, HostPackSource } from './adapter.js';
-import { CLI_LABELS } from './labels.js';
+import { CLI_LABELS } from './labels.fixture.js';
 import { createMarkiiHost } from './create-host.js';
 import { PACK_TRUST_STORAGE_KEY } from '../packs/pack-trust.js';
 import { selectEnabledPacks } from './pack-trust-behavior.js';

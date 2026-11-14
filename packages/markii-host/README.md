@@ -10,12 +10,16 @@ load, trust and removal, export, completion, hover and component insertion.
 Entries:
 
 - `@markii/host`: environment-neutral; safe to bundle for a browser.
+- `@markii/host/internal`: for the reference apps. No compatibility
+  promise; do not build on it.
 - `@markii/host/browser`: a Web Worker isolate and a `fetch` network
   provider bound to an origin allowlist.
 - `@markii/host/node`: a worker-thread isolate (`createNodeHostIsolate`),
   the address-pinning network provider, and the Node file system seams.
 - `@markii/host/html-engine`: the HTML export engine. The one entry that
   needs `@markii/html`.
+- `@markii/host/browser-worker-classic`: the Web Worker as a classic
+  script, for a host that starts it from a blob URL.
 - `@markii/host/node-worker`: the self-contained worker file, for a host
   that bundles the worker itself.
 - `@markii/host/conformance`: the host scenario corpus and its runner, to

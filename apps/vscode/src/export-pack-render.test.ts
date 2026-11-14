@@ -17,7 +17,7 @@ import * as React from 'react';
 import { createRegistry, mergeRegistries } from '@markii/react';
 import type { MarkComponentProps, Registry } from '@markii/react';
 import { defaultRegistry } from '@markii/react/components';
-import { composeNoteHtmlExport } from '@markii/host';
+import { composeNoteHtmlExport } from '@markii/host/internal';
 import type { ExportPackStylesheet } from '@markii/host';
 import { renderExportBody } from './webview/export-render.js';
 

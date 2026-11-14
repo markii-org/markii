@@ -26,7 +26,8 @@ import {
   EXPORT_HTML_SAVE_DIALOG_TITLE,
   EXPORT_HTML_SAVE_LABEL,
 } from './export-html.js';
-import { exportDefaultFileName, exportResultMessage } from '@markii/host';
+import { exportResultMessage } from '@markii/host';
+import { exportDefaultFileName } from '@markii/host/internal';
 import {
   EXPORT_CASCADE_FILTERS,
   EXPORT_CASCADE_NO_DOCUMENT_MESSAGE,
@@ -56,16 +57,15 @@ import {
   withTrailingSlash,
 } from './resource-roots.js';
 import { buildWebviewHtml, createNonce } from './webview-html.js';
+import { createMarkiiHost, buildBundleSnapshot } from '@markii/host';
 import {
   clearGrantForDocument,
   buildCascadeArchive,
   cascadeDiagnosticLines,
   cascadeResultMessage,
-  createMarkiiHost,
   readPersistedValues,
   staleValuesForRehydration,
   readLastRunTrace,
-  buildBundleSnapshot,
   decodeBundleCacheFromStorage,
   encodeBundleCacheForStorage,
   withPersistedCache,
@@ -74,14 +74,9 @@ import {
   scheduledRefreshNotStartedLine,
   scriptsDisabledDiagnosticLine,
   scriptsDisabledNotice,
-  VSCODE_LABELS,
-} from '@markii/host';
+} from '@markii/host/internal';
 import { buildPackRegistrationScript } from '@markii/pack-build';
 import type {
-  CascadeArchiveRequest,
-  CascadeExportOutcome,
-  CascadeLinkResolver,
-  CascadeNoteReader,
   ExportBodyResult,
   ExportImageReader,
   ExportRequest,
@@ -89,6 +84,12 @@ import type {
   MarkiiHost,
   RunOnceOptions,
 } from '@markii/host';
+import type {
+  CascadeArchiveRequest,
+  CascadeExportOutcome,
+  CascadeLinkResolver,
+  CascadeNoteReader,
+} from '@markii/host/internal';
 import { createVSCodeHostAdapter } from './host-adapter.js';
 import { valuesMessageForRun } from './run-values-message.js';
 import { resolveWorkerPath } from './worker-path.js';
@@ -106,6 +107,7 @@ import {
   formatPackRegistrationDiagnosticLines,
   skippedPackCount,
 } from './packs/pack-diagnostics.js';
+import { VSCODE_LABELS } from './labels.js';
 
 /**
  * Imports `vscode` — deliberately NOT unit-tested (vitest cannot resolve

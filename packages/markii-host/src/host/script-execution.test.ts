@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { RunTrigger } from '@markii/runtime';
-import { CLI_LABELS, OBSIDIAN_LABELS, VSCODE_LABELS } from './labels.js';
+import {
+  CLI_LABELS,
+  OBSIDIAN_LABELS,
+  VSCODE_LABELS,
+} from './labels.fixture.js';
 import type { HostLabels } from './adapter.js';
 import {
   scheduledRefreshNotStartedLine,

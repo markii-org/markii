@@ -287,7 +287,11 @@ export default tseslint.config(
       'no-restricted-imports': [
         'error',
         {
-          paths: ['@markii/host', '@markii/host/node'].flatMap((name) => [
+          paths: [
+            '@markii/host',
+            '@markii/host/internal',
+            '@markii/host/node',
+          ].flatMap((name) => [
             {
               name,
               importNames: [

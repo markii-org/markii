@@ -30,7 +30,7 @@ import {
   PREBUILT_STYLESHEET_FILENAME,
   PREBUILT_TERMINAL_SCRIPT_FILENAME,
   emptyWebviewScript,
-} from '@markii/host';
+} from '@markii/host/internal';
 
 const MANIFEST_FILENAME = 'pack.json';
 const SCRIPTS_DIRNAME = 'scripts';

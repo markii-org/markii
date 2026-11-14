@@ -28,7 +28,7 @@ import {
   runOnce,
   valuesStorageKeyFor,
   staleValuesForRehydration,
-} from '@markii/host';
+} from '@markii/host/internal';
 import type {
   GrantMemento,
   Thenable,

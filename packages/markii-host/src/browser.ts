@@ -17,6 +17,7 @@
 import type { NetProvider, NetResponse } from '@markii/lua';
 import type { HostIsolate } from './host/adapter.js';
 import { createBrowserIsolate } from './run/browser-isolate.js';
+import { netRefusal } from './run/net-refusal.js';
 import type { IsolateSpawner } from './run/isolate.js';
 
 /** Builds the provider for one run from the job's host allowlist, byte cap and pin policy (the policy is meaningless in a browser and ignored). */
@@ -35,7 +36,7 @@ export interface FetchNetProviderOptions {
    * every request. Entries that do not parse as an http(s) URL are ignored.
    */
   allowedOrigins?: readonly string[];
-  /** How a policy refusal is built. Defaults to a plain `Error`; the isolate bridge marks every refusal as a denial on the wire either way. */
+  /** How a policy refusal is built. Defaults to a plain `Error`. The provider marks every refusal it throws, so the isolate bridge sends it as a denial. A transport failure is never marked. */
   denial?: (message: string) => Error;
   /** The `fetch` to use. Defaults to the global one; injectable for tests. */
   fetch?: typeof fetch;
@@ -117,7 +118,10 @@ export function createFetchNetProvider(
       .map(originOf)
       .filter((origin): origin is string => origin !== undefined),
   );
-  const denial = options.denial ?? ((message: string) => new Error(message));
+  const build = options.denial ?? ((message: string) => new Error(message));
+  // Every policy refusal is marked so the net bridge can tell it from a
+  // transport failure (a plain `Error`).
+  const denial = (message: string): Error => netRefusal(build(message));
 
   return (netAllowlist, maxFetchBytes, _policy, signal) => {
     // The run's granted hosts, re-checked here on the page side: the worker
@@ -150,7 +154,7 @@ export function createFetchNetProvider(
       if (!allowed.has(url.origin)) {
         throw denial(`origin "${url.origin}" is not on the host's allowlist`);
       }
-      if (signal?.aborted) throw denial('the run has ended');
+      if (signal?.aborted) throw new Error('the run has ended');
       const doFetch = options.fetch ?? fetch;
       let response: Response;
       try {
@@ -165,7 +169,10 @@ export function createFetchNetProvider(
           ...(signal !== undefined ? { signal } : {}),
         });
       } catch (error) {
-        throw denial(
+        // A transport failure (network down, connection refused, CORS,
+        // abort): an ordinary runtime failure with the reason, not a policy
+        // refusal.
+        throw new Error(
           `request failed: ${error instanceof Error ? error.message : String(error)}`,
         );
       }

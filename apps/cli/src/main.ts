@@ -12,21 +12,21 @@
  * script failure, 3 a usage error.
  */
 import { createHtmlExportEngine } from '@markii/host/html-engine';
-import { createNodeArchiveExtractFs } from '@markii/host/node';
 import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
-  CLI_LABELS,
   createMarkiiHost,
-  createRenderDiagnosticCollector,
   installPackMessage,
-  noteHasScripts,
-  readPersistedValues,
   removePackMessage,
   type GrantMemento,
 } from '@markii/host';
+import {
+  createRenderDiagnosticCollector,
+  noteHasScripts,
+  readPersistedValues,
+} from '@markii/host/internal';
 import type { AnsiRegistry } from '@markii/ansi';
 import { createValueStore, type StoredValue } from '@markii/runtime';
 import { parseArgs, type ParsedCommand } from './args.js';
@@ -48,6 +48,7 @@ import { runLspCommand } from './lsp-command.js';
 import { runLiveViewer } from './live-view.js';
 import { watchNote } from './watch-file.js';
 import type { MountLiveViewerInput, ViewDeps } from './view-deps.js';
+import { CLI_LABELS } from './labels.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -598,9 +599,7 @@ function packCommandHost(
     diagnostics: (line) => lines.push(line),
   });
   return {
-    host: createMarkiiHost(adapter, {
-      archiveExtractFs: createNodeArchiveExtractFs(),
-    }),
+    host: createMarkiiHost(adapter),
     lines,
   };
 }

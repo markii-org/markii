@@ -32,7 +32,6 @@ import {
   type RunViaAdapterRequest,
   type RunViaAdapterResult,
 } from './run-behavior.js';
-import { type ArchiveExtractFs } from './pack-archive.js';
 import {
   installPackDiagnosticLines,
   installPackFromArchive,
@@ -370,8 +369,6 @@ export interface MarkiiHost {
  */
 export interface MarkiiHostOptions {
   readonly spawnRun?: (options: SpawnRunRequest) => Promise<RunResult>;
-  /** The `.mkp` extraction filesystem `installPack` writes through. Required for a host that installs packs (`createNodeArchiveExtractFs()` from `@markii/host/node`); without it `installPack` is `Unsupported`. */
-  readonly archiveExtractFs?: ArchiveExtractFs;
   /** The static HTML engine behind the `html` and `pdf` exports (`createHtmlExportEngine()` from `@markii/host/html-engine`). Without it those formats decline, like `renderAnsi` for `ansi`. */
   readonly htmlEngine?: HtmlExportEngine;
   /** Pack discovery's file reads. Defaults to reads through the adapter's own `readFile` and `listFolder`. */
@@ -560,12 +557,12 @@ export function createMarkiiHost(
         );
       }
       const archivePath = request.archivePath ?? 'the selected archive';
-      const extractFs = options.archiveExtractFs;
-      if (extractFs === undefined) {
+      const removeFolder = adapter.packs.removeFolder;
+      if (removeFolder === undefined) {
         return unsupported(
           adapter,
           'packs',
-          'this host was given no archive extraction filesystem.',
+          'this host has no way to remove an installed pack folder.',
         );
       }
 
@@ -574,7 +571,7 @@ export function createMarkiiHost(
         archivePath,
         installRoot: adapter.packs.installRoot(),
         exists: (path) => adapter.exists(path),
-        extractFs,
+        removeFolder: (path) => removeFolder.call(adapter.packs, path),
         reservedNamespaces: adapter.packs.reservedNamespaces(),
       });
 

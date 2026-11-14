@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { createRegistry } from '@markii/react';
 import { createNodePackDiscoveryIo } from '@markii/host/node';
-import { discoverConfiguredPacks } from '@markii/host';
+import { discoverConfiguredPacks } from '@markii/host/internal';
 import { loadPackContext } from './pack-context.js';
 
 /** What the shared host's `loadPacks` hands the plugin for these folders: the same discovery call it makes over the trusted installed ones. */

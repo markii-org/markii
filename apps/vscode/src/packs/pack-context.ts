@@ -19,15 +19,15 @@ import {
   relativePackEntries,
   resolvePackPaths,
   resolvePrebuiltPack,
-} from '@markii/host';
+} from '@markii/host/internal';
 import { REACT_ENGINE_ID } from '@markii/react';
 import type { UnavailableComponent } from '@markii/stdlib';
 import type {
   DiscoveredPack,
   PackModulesMap,
-  PackPathExists,
   SkippedPackFolder,
 } from '@markii/host';
+import type { PackPathExists } from '@markii/host/internal';
 import type { PackBuildOutcome } from '@markii/pack-build';
 import { discoverFoldersViaHost } from './host-discovery.js';
 import { discoverBundledPacks, mergeBundledPacks } from './bundled-packs.js';

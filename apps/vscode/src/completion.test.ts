@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildComponentCatalog, completionOriginTag } from '@markii/host';
+import { buildComponentCatalog } from '@markii/host';
+import { completionOriginTag } from '@markii/host/internal';
 import type { DiscoveredPack } from '@markii/host';
 import { completionAt, hoverAt } from '@markii/stdlib/editor';
 import type {

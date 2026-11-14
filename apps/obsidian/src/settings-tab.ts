@@ -2,7 +2,7 @@ import { App, MarkdownView, PluginSettingTab, Setting } from 'obsidian';
 import type MarkiiPlugin from './main.js';
 import type { PreviewPlacement, PreviewWidth } from './settings.js';
 import { MARKII_PREVIEW_VIEW_TYPE, MarkiiPreviewView } from './view.js';
-import { MIN_REFRESH_INTERVAL_SECONDS } from '@markii/host';
+import { MIN_REFRESH_INTERVAL_SECONDS } from '@markii/host/internal';
 import { normalizeLocalSettings } from './local-settings.js';
 import { bundledDiscoveredPacks } from './packs/bundled-packs.js';
 

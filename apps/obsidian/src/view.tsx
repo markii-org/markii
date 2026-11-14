@@ -3,12 +3,11 @@ import { createElement, Fragment } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { createValueStore } from '@markii/runtime';
 import type { RunTrigger, StoredValue } from '@markii/runtime';
+import { createMarkiiHost } from '@markii/host';
 import {
-  OBSIDIAN_LABELS,
   createRenderDiagnosticReporter,
   mergeArrivingValue,
   readPersistedValues,
-  createMarkiiHost,
   scheduledRefreshNotStartedLine,
   scriptsDisabledDiagnosticLine,
   scriptsDisabledNotice,
@@ -16,7 +15,7 @@ import {
   refreshIntervalMsFromSeconds,
   MARK_EXTENSION,
   packsNotInstalledLabel,
-} from '@markii/host';
+} from '@markii/host/internal';
 import type { HostAdapter, RunOnceResult } from '@markii/host';
 import { extractFrontmatterUses } from '@markii/core';
 import { resolveUses } from '@markii/pack';
@@ -36,6 +35,7 @@ import {
 } from './settings.js';
 import { convertNoteWikilinks } from './reading-view/wikilinks.js';
 import type MarkiiPlugin from './main.js';
+import { OBSIDIAN_LABELS } from './labels.js';
 
 export const MARKII_PREVIEW_VIEW_TYPE = 'markii-preview';
 

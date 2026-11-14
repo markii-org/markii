@@ -28,7 +28,7 @@ import {
   formatPackDiagnosticLines as formatPackDiagnosticLinesShared,
   prebuiltShadowLine,
   skippedPackCount as skippedPackCountShared,
-} from '@markii/host';
+} from '@markii/host/internal';
 import type { PackContext } from './pack-context.js';
 
 /** This plugin's own rebuild instruction for `@markii/host`'s shared `prebuiltShadowLine`: it has no build command of its own (AGENTS.md's Host positioning), so it points at VS Code's Export Pack command. */

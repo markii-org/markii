@@ -9,7 +9,7 @@
  * "still recognized for one more release", so both are accepted here too.
  */
 
-import { isBundleName } from '@markii/host';
+import { isBundleName } from '@markii/host/internal';
 
 /** What a filesystem entry at a bundle-shaped name turns out to be. */
 export type BundleTargetKind = 'directory' | 'zip' | 'not-a-bundle';

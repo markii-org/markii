@@ -3,7 +3,7 @@ import { createElement } from 'react';
 import type { StoredValue } from '@markii/runtime';
 import { createRegistry } from '@markii/react';
 import { defaultRegistry } from '@markii/react/components';
-import { EMPTY_IMAGE_REPORT } from '@markii/host';
+import { EMPTY_IMAGE_REPORT } from '@markii/host/internal';
 import type {
   ExportBodyRenderer,
   ExportImageReader,

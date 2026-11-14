@@ -19,7 +19,6 @@ export {
 export { createNetProvider } from './run/net-provider.js';
 
 export {
-  createNodeArchiveExtractFs,
   createNodeDirectoryLister,
   createNodeFileReader,
   createNodePackDiscoveryIo,

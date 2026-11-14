@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { Buffer } from 'node:buffer';
 import { inflateRawSync } from 'node:zlib';
-import type { CascadeLinkResolver, CascadeNoteReader } from '@markii/host';
+import type {
+  CascadeLinkResolver,
+  CascadeNoteReader,
+} from '@markii/host/internal';
 import { exportNoteCascade } from './cascade-export.js';
 import type { CascadeExportRequest } from './cascade-export.js';
 import type { NoteExportFs } from '../export-note.js';

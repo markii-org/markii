@@ -65,6 +65,7 @@ import {
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
+import { browserWorkerBuildOptions } from '../../packages/markii-host/scripts/browser-worker-build.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '..', '..');
@@ -133,6 +134,11 @@ const bundledPacksEmbeddedFile = path.join(
  * HOST performs the pinned request, since a Web Worker has no `node:dns`)
  * and its `glue.wasm` from a URL.
  *
+ * The recipe (iife format, the `process`/`Buffer`/`require` banner, the
+ * aliases) is the host package's own, shared with its packaged
+ * `dist/browser-worker.classic.js`; this file adds only the alias map and
+ * the entry specifier.
+ *
  * `format: 'iife'` because a Web Worker started from a blob URL is a
  * classic worker, not a module worker. `platform: 'browser'` so nothing
  * Node-shaped is pulled in; if this bundle ever grows a `node:` import the
@@ -145,54 +151,13 @@ const bundledPacksEmbeddedFile = path.join(
  */
 export const workerBuild = {
   ...shared,
-  // `decode-named-character-reference` (micromark, via remark-parse) ships a
-  // browser build that calls `document.createElement` AT MODULE TOP LEVEL.
-  // esbuild's `platform: 'browser'` picks that build, but this bundle runs
-  // in a WEB WORKER, where `document` does not exist -- the worker then
-  // throws on load and every run fails before the job even arrives. Alias
-  // it to the package's portable `index.js` (a plain character-entities
-  // map, no DOM), which is exactly what the Node worker bundle already
-  // resolves to via `platform: 'node'`.
-  alias: {
-    ...shared.alias,
-    'decode-named-character-reference': path.join(
-      repoRoot,
-      'node_modules',
-      'decode-named-character-reference',
-      'index.js',
-    ),
-  },
-  entryPoints: [
-    path.join(
-      repoRoot,
-      'packages',
-      'markii-host',
-      'src',
-      'run',
-      'worker-entry-browser.ts',
-    ),
-  ],
+  ...browserWorkerBuildOptions({
+    repoRoot,
+    format: 'iife',
+    alias: markiiSrcRoots,
+  }),
+  entryPoints: ['@markii/host/browser-worker-classic'],
   outfile: path.join(here, 'dist', 'worker.browser.js'),
-  platform: 'browser',
-  format: 'iife',
-  target: 'es2022',
-  // wasmoon's Emscripten bundle carries BOTH environments and picks one at
-  // runtime by sniffing the globals. Obsidian creates its Web Workers WITH
-  // Node integration (`process`, `require`, and `Buffer` all exist inside
-  // them — verified in a real vault: without the mask below, wasmoon takes
-  // its Node path and dies on `import('module')`, which a classic blob
-  // worker cannot resolve). The banner's `var process/Buffer = undefined`
-  // shadows those globals for the whole bundle, so the sniff sees a plain
-  // DedicatedWorkerGlobalScope and takes the browser path both hosts
-  // actually support; the `require` guard likewise shadows the real
-  // integration-provided `require`, so if the Node branch is ever reached
-  // anyway it fails with a sentence rather than doing real Node work.
-  // `url`/`module` stay external so esbuild leaves that (now unreachable)
-  // branch's imports unresolved instead of failing the build.
-  external: ['url', 'module'],
-  banner: {
-    js: "var process = undefined, Buffer = undefined; var require = (m) => { throw new Error('markii: the Lua runtime took its Node code path inside a Web Worker (tried to require ' + m + ')'); };",
-  },
 };
 
 const wasmGluePath = path.join(

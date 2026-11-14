@@ -1,9 +1,69 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createBrowserHostIsolate, createFetchNetProvider } from './browser.js';
+import { isNetRefusal } from './run/net-refusal.js';
 
 function okFetch(body = 'hello', status = 200): typeof fetch {
   return vi.fn(async () => new Response(body, { status })) as typeof fetch;
 }
+
+describe('createFetchNetProvider failure kinds', () => {
+  const options = { allowedOrigins: ['https://api.example.com'] };
+
+  async function failureOf(call: Promise<unknown>): Promise<Error> {
+    try {
+      await call;
+    } catch (error) {
+      if (error instanceof Error) return error;
+    }
+    throw new Error('the request was expected to fail');
+  }
+
+  it('marks an origin outside the allowlist as a policy refusal', async () => {
+    const provider = createFetchNetProvider({ ...options, fetch: okFetch() })(
+      ['evil.example.com'],
+      1024,
+      {},
+    );
+    const error = await failureOf(provider.get('https://evil.example.com/'));
+    expect(isNetRefusal(error)).toBe(true);
+  });
+
+  it('marks a redirect as a policy refusal', async () => {
+    const provider = createFetchNetProvider({
+      ...options,
+      fetch: okFetch('', 302),
+    })(['api.example.com'], 1024, {});
+    const error = await failureOf(provider.get('https://api.example.com/'));
+    expect(isNetRefusal(error)).toBe(true);
+  });
+
+  it('leaves a network failure as a plain failure with the reason', async () => {
+    const failing = vi.fn(async () => {
+      throw new TypeError('Failed to fetch');
+    }) as unknown as typeof fetch;
+    const provider = createFetchNetProvider({ ...options, fetch: failing })(
+      ['api.example.com'],
+      1024,
+      {},
+    );
+    const error = await failureOf(provider.get('https://api.example.com/'));
+    expect(isNetRefusal(error)).toBe(false);
+    expect(error.message).toBe('request failed: Failed to fetch');
+  });
+
+  it('leaves an aborted run as a plain failure', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const provider = createFetchNetProvider({ ...options, fetch: okFetch() })(
+      ['api.example.com'],
+      1024,
+      {},
+      controller.signal,
+    );
+    const error = await failureOf(provider.get('https://api.example.com/'));
+    expect(isNetRefusal(error)).toBe(false);
+  });
+});
 
 describe('createFetchNetProvider', () => {
   it('denies everything with no allowlist, without calling fetch', async () => {

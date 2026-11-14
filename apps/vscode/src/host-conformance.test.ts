@@ -14,7 +14,7 @@
  * exercises the real run/export/pack path.
  */
 import { mkdtempSync, readFile, rmSync, writeFile } from 'node:fs';
-import { access, rm } from 'node:fs/promises';
+import { access, mkdir, rm } from 'node:fs/promises';
 import { devNodeHostIsolate } from '@markii/host/dev-isolate';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
@@ -120,7 +120,10 @@ describe('conformance/host/ corpus via the real VS Code HostAdapter', () => {
             return false;
           }
         },
-        writeFile: (p, bytes) => writeFileAsync(p, bytes),
+        writeFile: async (p, bytes) => {
+          await mkdir(path.dirname(p), { recursive: true });
+          await writeFileAsync(p, bytes);
+        },
         authorizedFolders: async () => [installRoot],
         installRoot: () => installRoot,
         removeFolder: (p) => rm(p, { recursive: true, force: true }),

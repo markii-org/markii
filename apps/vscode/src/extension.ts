@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
+import { dirname } from 'node:path';
 import { bundledPacksFolder } from './packs/bundled-packs.js';
 import {
   esbuildBrowserModulePath,
@@ -36,17 +38,17 @@ import { createVSCodeHostAdapter } from './host-adapter.js';
 import {
   buildComponentCatalog,
   createMarkiiHost,
-  isContainerCompletionItem,
   installPackMessage,
-  parseRefreshIntervalSeconds,
   removePackMessage,
+} from '@markii/host';
+import {
+  isContainerCompletionItem,
+  parseRefreshIntervalSeconds,
   refreshIntervalValidationMessage,
   resolvePackPaths,
   scriptsDisabledConfirmationText,
   scriptsEnabledConfirmationText,
-  VSCODE_LABELS,
-} from '@markii/host';
-import { createNodeArchiveExtractFs } from '@markii/host/node';
+} from '@markii/host/internal';
 import {
   buildPackRegistrationScript,
   buildPackTerminalScript,
@@ -77,6 +79,7 @@ import {
   NO_ACTIVE_MARK_EDITOR_MESSAGE,
 } from './insert-component.js';
 import type { InsertComponentQuickPickEntry } from './insert-component.js';
+import { VSCODE_LABELS } from './labels.js';
 
 /**
  * The `markii.addPackFolder` command: a folder picker that appends the chosen
@@ -185,13 +188,21 @@ async function installPackCommand(
         return false;
       }
     },
+    // An install writes through the adapter, which creates parent folders.
+    writeFile: async (absolutePath, bytes) => {
+      await mkdir(dirname(absolutePath), { recursive: true });
+      await writeFile(absolutePath, bytes);
+    },
     authorizedFolders: async () => [],
     installRoot: () => installedPacksDir(context),
+    removeFolder: (absolutePath) =>
+      rm(absolutePath, { recursive: true, force: true }),
   });
 
-  const outcome = await createMarkiiHost(adapter, {
-    archiveExtractFs: createNodeArchiveExtractFs(),
-  }).installPack({ archiveBytes, archivePath });
+  const outcome = await createMarkiiHost(adapter).installPack({
+    archiveBytes,
+    archivePath,
+  });
 
   if (outcome.kind === 'unsupported') return; // already diagnosed
   const message = installPackMessage(outcome, archivePath, adapter.labels);

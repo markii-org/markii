@@ -1,7 +1,7 @@
 {
   "name": "@markii/host",
   "version": "0.17.0-next.3",
-  "description": "Shared, host-neutral script-running layer for Markii hosts: tier gating, the grant model, address pinning, and the terminatable-isolate watchdog, plus the HostAdapter contract and createMarkiiHost. Entries: the neutral main entry, /node, /html-engine, /browser, /conformance.",
+  "description": "Shared, host-neutral script-running layer for Markii hosts: tier gating, the grant model, address pinning, and the terminatable-isolate watchdog, plus the HostAdapter contract and createMarkiiHost. Entries: the neutral main entry, /internal (no semver promise), /node, /html-engine, /browser, /browser-worker-classic, /conformance.",
   "keywords": [
     "markdown",
     "mk.md",
@@ -27,6 +27,11 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
+    "./internal": {
+      "types": "./dist/internal.d.ts",
+      "import": "./dist/internal.js",
+      "default": "./dist/internal.js"
+    },
     "./node": {
       "types": "./dist/node.d.ts",
       "import": "./dist/node.js",
@@ -45,11 +50,17 @@
       "import": "./dist/browser.js",
       "default": "./dist/browser.js"
     },
+    "./browser-worker-classic": {
+      "default": "./dist/browser-worker.classic.js"
+    },
     "./conformance": {
       "types": "./dist/conformance.d.ts",
       "import": "./dist/conformance.js",
       "default": "./dist/conformance.js"
     }
+  },
+  "engines": {
+    "node": ">=22"
   },
   "scripts": {
     "pretest": "npm run generate:doc-css --workspace @markii/html",

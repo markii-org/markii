@@ -24,34 +24,34 @@ import {
   type BrowserWorkerSetup,
 } from './run/browser-worker.js';
 import {
-  OBSIDIAN_LABELS,
   buildComponentCatalog,
   createMarkiiHost,
   installPackMessage,
-  MARK_EXTENSION,
-  readPersistedValues,
   enablePackMessage,
   removePackMessage,
+} from '@markii/host';
+import {
+  MARK_EXTENSION,
+  readPersistedValues,
   scriptsDisabledConfirmationText,
   scriptsEnabledConfirmationText,
   cascadeDiagnosticLines,
   cascadeResultMessage,
-} from '@markii/host';
-import {
-  createNetProvider,
-  createNodeArchiveExtractFs,
-} from '@markii/host/node';
+} from '@markii/host/internal';
+import { createNetProvider } from '@markii/host/node';
 import type {
-  CascadeExportOutcome,
-  CascadeLinkResolver,
   MarkiiHost,
   DiscoveredPack,
   ExportImageReader,
   HostAdapter,
   HostEditor,
   HostTextEdit,
-  InsertableComponent,
 } from '@markii/host';
+import type {
+  CascadeExportOutcome,
+  CascadeLinkResolver,
+} from '@markii/host/internal';
+import type { InsertableComponent } from '@markii/stdlib/editor';
 import {
   bundledDiscoveredPacks,
   bundledPackAssets,
@@ -97,6 +97,7 @@ import { registerReadingView } from './reading-view.js';
 import { pickPackArchiveFile } from './pick-folder.js';
 import { createObsidianPrompt } from './run-modals.js';
 import { createObsidianHostAdapter } from './host-adapter.js';
+import { OBSIDIAN_LABELS } from './labels.js';
 
 /**
  * Imports `obsidian` — deliberately NOT unit-tested (Vitest cannot resolve
@@ -1026,9 +1027,10 @@ export default class MarkiiPlugin extends Plugin {
       return;
     }
 
-    const outcome = await createMarkiiHost(this.hostAdapter(), {
-      archiveExtractFs: createNodeArchiveExtractFs(),
-    }).installPack({ archiveBytes, archivePath });
+    const outcome = await createMarkiiHost(this.hostAdapter()).installPack({
+      archiveBytes,
+      archivePath,
+    });
     if (outcome.kind === 'unsupported') return; // already diagnosed
 
     // Obsidian reloads every open view's packs automatically on a

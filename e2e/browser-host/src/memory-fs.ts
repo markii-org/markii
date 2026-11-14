@@ -1,4 +1,4 @@
-import type { ArchiveExtractFs, HostDirEntry } from '@markii/host';
+import type { HostDirEntry } from '@markii/host';
 
 function normalize(p: string): string {
   const parts = p.split('/').filter((part) => part !== '' && part !== '.');
@@ -21,13 +21,14 @@ export class MemoryFs {
     return this.files.has(key) || this.dirs.has(key);
   }
 
+  /** Creates the missing parent folders, as `HostAdapter.writeFile` requires. */
   async writeFile(p: string, bytes: Uint8Array): Promise<void> {
     const key = normalize(p);
     await this.makeDirectory(key.slice(0, key.lastIndexOf('/')) || '/');
     this.files.set(key, bytes);
   }
 
-  async makeDirectory(p: string): Promise<void> {
+  private async makeDirectory(p: string): Promise<void> {
     let current = '';
     for (const part of normalize(p).split('/').filter(Boolean)) {
       current += '/' + part;
@@ -64,13 +65,5 @@ export class MemoryFs {
       names.set(slash === -1 ? rest : rest.slice(0, slash), true);
     }
     return [...names].map(([name, isDirectory]) => ({ name, isDirectory }));
-  }
-
-  asArchiveExtractFs(): ArchiveExtractFs {
-    return {
-      removeDirectory: (p) => this.removeDirectory(p),
-      makeDirectory: (p) => this.makeDirectory(p),
-      writeFile: (p, bytes) => this.writeFile(p, bytes),
-    };
   }
 }

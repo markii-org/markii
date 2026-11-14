@@ -437,6 +437,15 @@ groups it supports. `createMarkiiHost` turns that adapter into the shared
 behaviors: run, export, pack install, load, trust and removal, completion,
 hover and component insertion.
 
+The adapter's `writeFile` creates missing parent folders. A host that
+installs packs also provides `packs.removeFolder`, which install uses to
+replace a pack and removal uses to delete one. Each host supplies its own
+`HostLabels`, the nouns the shared messages use.
+
+The main entry holds what a host needs: `createMarkiiHost`, the adapter,
+request and outcome types, and the message helpers. `@markii/host/internal`
+exists for the reference apps and carries no compatibility promise.
+
 Pick the entry that matches the environment:
 
 - A web page: `@markii/host/browser` for a module Web Worker isolate
@@ -454,7 +463,8 @@ Pick the entry that matches the environment:
   `createHtmlExportEngine` from `@markii/host/html-engine`, which needs
   `@markii/html`.
 - An Electron renderer: the browser entry's isolate (pass
-  `workerType: 'classic'` for an embedded classic worker), with the pinned
+  `workerType: 'classic'` for an embedded classic worker, shipped as
+  `@markii/host/browser-worker-classic`), with the pinned
   network provider served from the renderer's Node side, as the Obsidian
   plugin does.
 
@@ -487,10 +497,9 @@ your host cannot support reports `unsupported` because the adapter left
 that capability out, which is a pass, not a failure.
 
 The runner itself runs in Node and needs `@markii/html` installed, because
-the export scenarios render through it. An adapter that keeps its files
-somewhere other than the disk passes `archiveExtractFs` to
-`runHostScenario`, so the install scenarios write into the same store the
-adapter reads.
+the export scenarios render through it. Pack install writes through the adapter's own
+`writeFile` and removes through `packs.removeFolder`, so an adapter over
+any store passes the install scenarios without extra wiring.
 
 `HostPackSource.trust` has no default. A host that installs packs a user
 picks, as a web page does, declares `'device-list'`. A host that owns a

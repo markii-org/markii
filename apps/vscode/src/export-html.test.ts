@@ -8,7 +8,10 @@ import {
   EXPORT_HTML_SAVE_LABEL,
 } from './export-html.js';
 import type { ExportImageReader } from '@markii/host';
-import { composeNoteHtmlExport, embedImagesInHtml } from '@markii/host';
+import {
+  composeNoteHtmlExport,
+  embedImagesInHtml,
+} from '@markii/host/internal';
 
 // The exported file's default name, the outcome shape, the result
 // message, and every diagnostics-line builder (`exportDefaultFileName`,

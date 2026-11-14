@@ -18,6 +18,7 @@ const snapshotDirectory = join(here, 'published-surface');
 
 const ENTRIES = [
   'index',
+  'internal',
   'node',
   'html-engine',
   'browser',

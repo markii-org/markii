@@ -1,7 +1,6 @@
 NodeHostIsolateOptions
 SpawnRunOptions
 createNetProvider
-createNodeArchiveExtractFs
 createNodeDirectoryLister
 createNodeFileReader
 createNodeHostIsolate

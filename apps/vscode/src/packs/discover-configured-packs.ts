@@ -21,7 +21,7 @@
  * stays unit-testable without a real workspace.
  */
 import { homedir } from 'node:os';
-import { resolvePackPaths } from '@markii/host';
+import { resolvePackPaths } from '@markii/host/internal';
 import { discoverFoldersViaHost } from './host-discovery.js';
 import type { DiscoveredPack } from '@markii/host';
 import { discoverBundledPacks, mergeBundledPacks } from './bundled-packs.js';

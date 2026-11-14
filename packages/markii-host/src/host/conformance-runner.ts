@@ -40,9 +40,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHtmlExportEngine } from '../html-engine.js';
-import { createNodeArchiveExtractFs } from '../node-fs.js';
 import { usesPackTrust } from './pack-trust-behavior.js';
-import type { ArchiveExtractFs } from './pack-archive.js';
 import { join, relative, sep } from 'node:path';
 import { zipSync } from 'fflate';
 import { conformanceDir } from '@markii/core/corpus';
@@ -269,10 +267,7 @@ export function hostDeclaresCapability(
   if (capability === 'editor') return adapter.editor !== undefined;
   if (capability === 'packs') {
     if (adapter.packs === undefined) return false;
-    if (action.type === 'installPack') {
-      return adapter.packs.installRoot !== undefined;
-    }
-    if (action.type === 'removePack') {
+    if (action.type === 'installPack' || action.type === 'removePack') {
       return (
         adapter.packs.installRoot !== undefined &&
         adapter.packs.removeFolder !== undefined
@@ -405,8 +400,6 @@ export async function runHostScenario(
   scenarioDir: string,
   options: {
     readonly renderAnsi?: (text: string) => Promise<string>;
-    /** Where an installed pack archive is extracted. Defaults to the Node file system, which is right for an adapter that reads and writes real files. An adapter over another store (memory, a virtual file system) passes the matching writer. */
-    readonly archiveExtractFs?: ArchiveExtractFs;
   } = {},
 ): Promise<HostScenarioRunResult> {
   const diagnostics: string[] = [];
@@ -436,7 +429,6 @@ export async function runHostScenario(
     // The runner is Node-only test tooling, so it supplies the real Node
     // implementations of the seams the host layer takes by injection.
     htmlEngine: createHtmlExportEngine(),
-    archiveExtractFs: options.archiveExtractFs ?? createNodeArchiveExtractFs(),
     spawnRun: (spawnOptions: SpawnRunRequest): Promise<RunResult> =>
       Promise.resolve(simulatedRunResult(currentSimulation, spawnOptions)),
     ...(options.renderAnsi ? { renderAnsi: options.renderAnsi } : {}),

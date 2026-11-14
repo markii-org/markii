@@ -8,7 +8,10 @@ import type {
   TFile,
 } from 'obsidian';
 import { offsetToLineColumn } from '@markii/stdlib/editor';
-import { MARK_EXTENSION, isContainerCompletionItem } from '@markii/host';
+import {
+  MARK_EXTENSION,
+  isContainerCompletionItem,
+} from '@markii/host/internal';
 import type { HostTextEdit, MarkiiHost } from '@markii/host';
 import {
   completionQuery,

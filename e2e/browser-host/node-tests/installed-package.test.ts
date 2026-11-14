@@ -60,7 +60,6 @@ for (const name of names) {
       scenario,
       noteText,
       dir,
-      { archiveExtractFs: fixture.fs.asArchiveExtractFs() },
     );
     const problems = assertHostScenario(
       fixture.adapter,

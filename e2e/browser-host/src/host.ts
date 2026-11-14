@@ -108,9 +108,7 @@ export function createFixtureHost(
     },
   };
 
-  const host = createMarkiiHost(adapter, {
-    archiveExtractFs: fs.asArchiveExtractFs(),
-  });
+  const host = createMarkiiHost(adapter);
 
   return {
     adapter,

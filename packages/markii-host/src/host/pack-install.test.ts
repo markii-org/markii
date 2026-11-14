@@ -1,9 +1,15 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtemp, readFile, rm, access } from 'node:fs/promises';
+import {
+  access,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { zipSync } from 'fflate';
-import { createNodeArchiveExtractFs } from '../node-fs.js';
 import {
   installConsentMessage,
   installPackDiagnosticLines,
@@ -13,7 +19,23 @@ import {
 } from './pack-install.js';
 import type { PackDirectoryExists } from './pack-install.js';
 import type { HostAdapter, HostPromptRequest } from './adapter.js';
-import { CLI_LABELS, OBSIDIAN_LABELS, VSCODE_LABELS } from './labels.js';
+import {
+  CLI_LABELS,
+  OBSIDIAN_LABELS,
+  VSCODE_LABELS,
+} from './labels.fixture.js';
+
+/** What a host's `writeFile` does: create the parent folders, then write. */
+async function writeCreatingParents(
+  absolutePath: string,
+  bytes: Uint8Array,
+): Promise<void> {
+  await mkdir(path.dirname(absolutePath), { recursive: true });
+  await writeFile(absolutePath, bytes);
+}
+
+const removeTree = (absolutePath: string): Promise<void> =>
+  rm(absolutePath, { recursive: true, force: true });
 
 const tempDirs: string[] = [];
 
@@ -64,7 +86,7 @@ function fakeAdapter(
     labels: CLI_LABELS,
     readFile: async () => new Uint8Array(),
     exists: async () => false,
-    writeFile: async () => {},
+    writeFile: writeCreatingParents,
     listFolder: async () => [],
     prompt: async (request) => {
       seen.push(request);
@@ -89,7 +111,7 @@ describe('installPackFromArchive', () => {
       archivePath: '/downloads/ana.mkp',
       installRoot,
       exists: existsOnDisk(),
-      extractFs: createNodeArchiveExtractFs(),
+      removeFolder: removeTree,
       reservedNamespaces: new Set(),
     });
 
@@ -118,7 +140,7 @@ describe('installPackFromArchive', () => {
       archivePath: '/downloads/bad.mkp',
       installRoot,
       exists: existsOnDisk(),
-      extractFs: createNodeArchiveExtractFs(),
+      removeFolder: removeTree,
       reservedNamespaces: new Set(),
     });
 
@@ -134,7 +156,7 @@ describe('installPackFromArchive', () => {
       archivePath: '/downloads/ana.mkp',
       installRoot,
       exists: existsOnDisk(),
-      extractFs: createNodeArchiveExtractFs(),
+      removeFolder: removeTree,
       reservedNamespaces: new Set(),
     });
     expect(outcome).toEqual({
@@ -148,9 +170,7 @@ describe('installPackFromArchive', () => {
   it('asks before replacing an already-installed namespace, and declining leaves the existing install untouched', async () => {
     const installRoot = await makeTempDir();
     const existingDir = path.join(installRoot, 'ana');
-    const fs = createNodeArchiveExtractFs();
-    await fs.makeDirectory(existingDir);
-    await fs.writeFile(
+    await writeCreatingParents(
       path.join(existingDir, 'pack.json'),
       new TextEncoder().encode('{"marker":"old"}'),
     );
@@ -172,7 +192,7 @@ describe('installPackFromArchive', () => {
       archivePath: '/downloads/ana.mkp',
       installRoot,
       exists: existsOnDisk(),
-      extractFs: fs,
+      removeFolder: removeTree,
       reservedNamespaces: new Set(),
     });
 
@@ -196,9 +216,7 @@ describe('installPackFromArchive', () => {
   it('replacing an already-installed namespace overwrites it once confirmed', async () => {
     const installRoot = await makeTempDir();
     const existingDir = path.join(installRoot, 'ana');
-    const fs = createNodeArchiveExtractFs();
-    await fs.makeDirectory(existingDir);
-    await fs.writeFile(
+    await writeCreatingParents(
       path.join(existingDir, 'stale.txt'),
       new TextEncoder().encode('stale'),
     );
@@ -208,7 +226,7 @@ describe('installPackFromArchive', () => {
       archivePath: '/downloads/ana.mkp',
       installRoot,
       exists: existsOnDisk(),
-      extractFs: fs,
+      removeFolder: removeTree,
       reservedNamespaces: new Set(),
     });
 
@@ -237,7 +255,7 @@ describe('installPackFromArchive — reserved namespace refusal', () => {
       archivePath: '/downloads/read.mkp',
       installRoot,
       exists: existsOnDisk(),
-      extractFs: createNodeArchiveExtractFs(),
+      removeFolder: removeTree,
       reservedNamespaces: new Set(['read', 'dash', 'prep']),
     });
 
@@ -253,7 +271,7 @@ describe('installPackFromArchive — reserved namespace refusal', () => {
       archivePath: '/downloads/ana.mkp',
       installRoot,
       exists: existsOnDisk(),
-      extractFs: createNodeArchiveExtractFs(),
+      removeFolder: removeTree,
       reservedNamespaces: new Set(['read', 'dash', 'prep']),
     });
     expect(outcome.kind).toBe('installed');
@@ -266,7 +284,7 @@ describe('installPackFromArchive — reserved namespace refusal', () => {
       archivePath: '/downloads/read.mkp',
       installRoot,
       exists: existsOnDisk(),
-      extractFs: createNodeArchiveExtractFs(),
+      removeFolder: removeTree,
       reservedNamespaces: new Set(),
     });
     expect(outcome.kind).toBe('installed');

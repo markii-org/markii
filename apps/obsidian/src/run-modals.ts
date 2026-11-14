@@ -1,5 +1,5 @@
 import { App, Modal } from 'obsidian';
-import { ALLOW_LABEL, DONT_ALLOW_LABEL } from '@markii/host';
+import { ALLOW_LABEL, DONT_ALLOW_LABEL } from '@markii/host/internal';
 import type { HostPromptRequest } from '@markii/host';
 
 /**

@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { createHtmlExportEngine } from '@markii/host/html-engine';
 import {
-  buildNoteHtmlExport,
   createMarkiiHost,
-  mdPlainFromSource,
   type GrantMemento,
   type Thenable,
 } from '@markii/host';
+import { buildNoteHtmlExport, mdPlainFromSource } from '@markii/host/internal';
 import { createCliHostAdapter } from './host-adapter.js';
 import { createFakeTerminal } from './test-terminal.js';
 

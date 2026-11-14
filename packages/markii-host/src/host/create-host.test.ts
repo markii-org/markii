@@ -1,6 +1,5 @@
 import { createNodeDirectoryLister } from '../node-fs.js';
 import { createHtmlExportEngine } from '../html-engine.js';
-import { createNodeArchiveExtractFs } from '../node-fs.js';
 import { devWorkerIsolate } from '../dev-isolate.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
@@ -17,7 +16,7 @@ import { zipSync } from 'fflate';
 import type { RunResult } from '../run/run-host.js';
 import type { GrantMemento, Thenable } from '../run/grant-flow.js';
 import type { HostAdapter, HostEditor } from './adapter.js';
-import { CLI_LABELS } from './labels.js';
+import { CLI_LABELS } from './labels.fixture.js';
 import { createMarkiiHost } from './create-host.js';
 
 const tempDirs: string[] = [];
@@ -322,17 +321,20 @@ describe('createMarkiiHost.installPack', () => {
     const adapter = fakeAdapter({
       diagnostics: (line) => lines.push(line),
       prompt: async () => true,
+      writeFile: async (file, bytes) => {
+        await mkdir(path.dirname(file), { recursive: true });
+        await writeFile(file, bytes);
+      },
       packs: {
         trust: 'none',
         engine: 'react',
         authorizedFolders: async () => [],
         reservedNamespaces: () => new Set(),
         installRoot: () => installRoot,
+        removeFolder: (folder) => rm(folder, { recursive: true, force: true }),
       },
     });
-    const outcome = await createMarkiiHost(adapter, {
-      archiveExtractFs: createNodeArchiveExtractFs(),
-    }).installPack({
+    const outcome = await createMarkiiHost(adapter).installPack({
       archiveBytes: validArchiveBytes('ana'),
       archivePath: '/downloads/ana.mkp',
     });
@@ -359,15 +361,36 @@ describe('createMarkiiHost.installPack', () => {
         authorizedFolders: async () => [],
         reservedNamespaces: () => new Set(['read']),
         installRoot: () => installRoot,
+        removeFolder: async () => {},
       },
     });
-    const outcome = await createMarkiiHost(adapter, {
-      archiveExtractFs: createNodeArchiveExtractFs(),
-    }).installPack({
+    const outcome = await createMarkiiHost(adapter).installPack({
       archiveBytes: validArchiveBytes('read'),
     });
     expect(outcome).toEqual({ kind: 'reserved', namespace: 'read' });
     expect(seen).toEqual([]);
+  });
+});
+
+describe('createMarkiiHost.installPack without removeFolder', () => {
+  it('is unsupported and writes a diagnostics line', async () => {
+    const installRoot = await makeTempDir();
+    const lines: string[] = [];
+    const adapter = fakeAdapter({
+      diagnostics: (line) => lines.push(line),
+      packs: {
+        trust: 'none',
+        engine: 'react',
+        authorizedFolders: async () => [],
+        reservedNamespaces: () => new Set(),
+        installRoot: () => installRoot,
+      },
+    });
+    const outcome = await createMarkiiHost(adapter).installPack({
+      archiveBytes: validArchiveBytes('ana'),
+    });
+    expect(outcome.kind).toBe('unsupported');
+    expect(lines.length).toBeGreaterThan(0);
   });
 });
 

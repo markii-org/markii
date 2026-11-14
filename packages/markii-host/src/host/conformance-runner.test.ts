@@ -9,7 +9,7 @@ import {
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { CLI_LABELS } from './labels.js';
+import { CLI_LABELS } from './labels.fixture.js';
 import type { GrantMemento, Thenable } from '../run/grant-flow.js';
 import type { HostAdapter, HostPromptRequest } from './adapter.js';
 import {
@@ -351,6 +351,7 @@ describe('runHostScenario: installPack', () => {
         authorizedFolders: async () => [],
         reservedNamespaces: () => new Set(),
         installRoot: () => installRoot,
+        removeFolder: async () => {},
       },
     });
     const scenario: HostScenario = {

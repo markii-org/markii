@@ -34,10 +34,17 @@
  * silent").
  */
 import { workerThreadIsolate } from '@markii/host/node';
-import { access, readFile, readdir, rm, writeFile } from 'node:fs/promises';
-import * as path from 'node:path';
 import {
-  CLI_LABELS,
+  access,
+  mkdir,
+  readFile,
+  readdir,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
+import * as path from 'node:path';
+import { dirname } from 'node:path';
+import {
   type GrantMemento,
   type HostAdapter,
   type HostDirEntry,
@@ -46,8 +53,10 @@ import {
   type HostIsolate,
   type HostPromptRequest,
 } from '@markii/host';
+
 import type { Terminal } from './terminal.js';
 import { resolveWorkerPath } from './worker-path.js';
+import { CLI_LABELS } from './labels.js';
 
 const PROMPT_SUFFIX = ' [y/N]';
 
@@ -182,8 +191,10 @@ export function createCliHostAdapter(
         return false;
       }
     },
-    writeFile: (path: string, bytes: Uint8Array): Promise<void> =>
-      writeFile(path, bytes),
+    writeFile: async (path: string, bytes: Uint8Array): Promise<void> => {
+      await mkdir(dirname(path), { recursive: true });
+      await writeFile(path, bytes);
+    },
     listFolder: async (path: string): Promise<readonly HostDirEntry[]> => {
       try {
         const entries = await readdir(path, { withFileTypes: true });

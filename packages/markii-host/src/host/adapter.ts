@@ -166,7 +166,7 @@ export interface HostPackSource {
    * `authorizedFolders` names.
    */
   bundledPacks?(): readonly DiscoveredPack[];
-  /** Removes an installed pack folder. Required when `installRoot` is present. */
+  /** Removes an installed pack folder and everything under it. Required when `installRoot` is present: a replacing install clears the old folder through it, and removing a pack uses it. */
   removeFolder?(path: string): Promise<void>;
 }
 
@@ -217,11 +217,13 @@ export interface HostLabels {
  *.
  */
 export interface HostAdapter {
-  readonly id: 'vscode' | 'obsidian' | 'cli' | (string & {});
+  /** A short name for the host, used in diagnostics wording. */
+  readonly id: string;
   readonly labels: HostLabels;
 
   readFile(path: string): Promise<Uint8Array>;
   exists(path: string): Promise<boolean>;
+  /** Writes `bytes` to `path` and creates any missing parent folder first. Exports and pack installs both write through it. */
   writeFile(path: string, bytes: Uint8Array): Promise<void>;
   /** A missing folder resolves to an empty list — never throws, matching the existing `PackDirectoryLister` contract. */
   listFolder(path: string): Promise<readonly HostDirEntry[]>;

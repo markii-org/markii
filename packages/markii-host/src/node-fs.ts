@@ -5,8 +5,7 @@
  * extraction filesystem. Reached only through `@markii/host/node`; nothing
  * in the main entry imports this module.
  */
-import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
-import type { ArchiveExtractFs } from './host/pack-archive.js';
+import { readFile, readdir } from 'node:fs/promises';
 import type { PackDiscoveryIo } from './host/pack-load.js';
 import type { PackDirectoryLister, PackFileReader } from './packs/discover.js';
 import type { PackScriptsReader } from './packs/pack-scripts.js';
@@ -44,26 +43,6 @@ export function createNodeReader(): PackScriptsReader {
   return {
     readDirectory: (absoluteDir) => listDirectory(absoluteDir),
     readFile: (absolutePath) => readText(absolutePath),
-  };
-}
-
-/** The real, Node-backed `ArchiveExtractFs`. */
-export function createNodeArchiveExtractFs(): ArchiveExtractFs {
-  return {
-    removeDirectory: async (absolutePath) => {
-      try {
-        await rm(absolutePath, { recursive: true, force: true });
-      } catch {
-        // Quiet: the write that follows fails loudly on its own if the
-        // path is genuinely unusable.
-      }
-    },
-    makeDirectory: async (absolutePath) => {
-      await mkdir(absolutePath, { recursive: true });
-    },
-    writeFile: async (absolutePath, bytes) => {
-      await writeFile(absolutePath, bytes);
-    },
   };
 }
 
