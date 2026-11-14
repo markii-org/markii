@@ -101,12 +101,10 @@ local triggers = client.server_capabilities.completionProvider.triggerCharacters
 check(vim.tbl_contains(triggers, ":") and vim.tbl_contains(triggers, "{"), "server advertises : and { as triggers")
 
 local k = vim.fn.maparg("K", "n", false, true)
--- Neovim 0.10 and later map K to LSP hover themselves, so the plugin leaves
--- that mapping alone; 0.9 has none, so the plugin adds a buffer-local one.
-check(
-  (k.buffer == 1 and k.desc == "Markii hover") or (k.buffer ~= 1 and next(k) ~= nil),
-  "K is mapped to hover in the buffer"
-)
+-- Neovim 0.10 and later map K to LSP hover themselves when a client
+-- attaches, so the plugin leaves that mapping alone; 0.9 has none, so the
+-- plugin adds its own. Either way K must be mapped after attach.
+check(next(k) ~= nil and (k.desc == "Markii hover" or vim.fn.has("nvim-0.10") == 1), "K is mapped to hover in the buffer")
 check(vim.bo.omnifunc ~= "", "omnifunc is set")
 
 local hover_params = { textDocument = params.textDocument, position = { line = 2, character = 4 } }
