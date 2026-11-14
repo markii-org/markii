@@ -6,6 +6,8 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.17.0-next.6] - 2026-11-15
+
 ### Security
 
 - `@markii/host`: the browser worker's removal of network globals now
