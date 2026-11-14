@@ -6,6 +6,8 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.17.0-next.5] - 2026-11-14
+
 ### Added
 
 - `@markii/stdlib`: `validateNote(tree, catalog)` with

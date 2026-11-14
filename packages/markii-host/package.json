@@ -1,6 +1,6 @@
 {
   "name": "@markii/host",
-  "version": "0.17.0-next.4",
+  "version": "0.17.0-next.5",
   "description": "Shared, host-neutral script-running layer for Markii hosts: tier gating, the grant model, address pinning, and the terminatable-isolate watchdog, plus the HostAdapter contract and createMarkiiHost. Entries: the neutral main entry, /internal (no semver promise), /node, /html-engine, /browser, /browser-worker-classic, /conformance.",
   "keywords": [
     "markdown",
@@ -71,20 +71,20 @@
     "build:dist": "rm -rf dist && tsc -p tsconfig.build.json && node scripts/build-dist-assets.mjs"
   },
   "dependencies": {
-    "@markii/bundle": "^0.17.0-next.4",
-    "@markii/core": "^0.17.0-next.4",
-    "@markii/lua": "^0.17.0-next.4",
-    "@markii/pack": "^0.17.0-next.4",
-    "@markii/runtime": "^0.17.0-next.4",
-    "@markii/stdlib": "^0.17.0-next.4",
+    "@markii/bundle": "^0.17.0-next.5",
+    "@markii/core": "^0.17.0-next.5",
+    "@markii/lua": "^0.17.0-next.5",
+    "@markii/pack": "^0.17.0-next.5",
+    "@markii/runtime": "^0.17.0-next.5",
+    "@markii/stdlib": "^0.17.0-next.5",
     "fflate": "^0.8.3"
   },
   "files": [
     "dist"
   ],
   "peerDependencies": {
-    "@markii/html": "^0.17.0-next.4",
-    "@markii/react": "^0.17.0-next.4"
+    "@markii/html": "^0.17.0-next.5",
+    "@markii/react": "^0.17.0-next.5"
   },
   "peerDependenciesMeta": {
     "@markii/html": {
@@ -95,8 +95,8 @@
     }
   },
   "devDependencies": {
-    "@markii/html": "^0.17.0-next.4",
-    "@markii/react": "^0.17.0-next.4",
+    "@markii/html": "^0.17.0-next.5",
+    "@markii/react": "^0.17.0-next.5",
     "esbuild": "^0.28.2"
   },
   "publishConfig": {
