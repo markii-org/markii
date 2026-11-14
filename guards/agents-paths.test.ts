@@ -43,6 +43,10 @@ const ALLOWLIST: { name: string; reason: string }[] = [
     reason: 'owned by @markii/react and named from the other packages',
   },
   {
+    name: 'styles.css',
+    reason: 'generated, gitignored: the stylesheet the Obsidian plugin ships',
+  },
+  {
     name: 'webview.css',
     reason: 'generated, the stylesheet a prebuilt pack ships beside webview.js',
   },
