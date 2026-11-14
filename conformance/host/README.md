@@ -49,6 +49,7 @@ needs, is the runner's own `ACTION_CAPABILITY` map:
 | `run` | `isolate` |
 | `exportHtml` | `export-format` (`html`) |
 | `exportAnsi` | `export-format` (`ansi`) |
+| `exportLinkedSet` | `linked-set-export` (a `resolveLinkedSetTarget`) |
 | `installPack` | `packs` (and an `installRoot`) |
 | `loadPacks` | `packs` |
 | `removePack` | `packs` (and an `installRoot` plus `removeFolder`) |
@@ -140,6 +141,8 @@ coarse, matching each `kind`:
   written file's content, never the whole document, the render corpora
   already pin bytes. `valueCount` is how many last-run values were baked
   in, and `renderEngine` (`static` or `react`) is which engine drew the body.
+  A linked-set export is an `exported` outcome too: `noteCount` is how many
+  notes the archive holds, and `entries` is its sorted file names.
 - `installed`: `namespace` and `replaced`, and `installedDirName`, the name
   of the folder the pack was unzipped into.
 - `declined`: `step` (`'consent'`/`'replace'`, or absent for the
@@ -217,6 +220,7 @@ rather than a skipped test or a faked empty answer.
 | `14-remove-pack` | removing an installed pack deletes it; removing it again reports it is not installed |
 | `15-load-packs-engine-views` | loading packs reports every installed component and, as `unavailable`, the ones this host's engine has no view for |
 | `16-pack-trust` | a folder that arrives without consent is listed as present and never loaded; enable, disable, re-enable and remove move the device trust list; a host without the list reports the whole scenario `unsupported` |
+| `17-export-linked-set` | a note and the notes it links to export as one archive with an index page; a host with no linked-set target reports `unsupported` |
 
 The capabilities an adapter declares decide which scenarios report
 `unsupported` on that host. That is a reported gap and not a corpus defect.

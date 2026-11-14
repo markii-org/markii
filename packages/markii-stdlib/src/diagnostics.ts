@@ -42,6 +42,10 @@
  * `'code-renderer-failed'` — a host's `renderCode` callback threw for an
  * ordinary fenced code block; the block rendered as usual. Carries no
  * directive or attribute.
+ *
+ * `'empty-inline'`: an inline component registered as inline received no
+ * content (`:badge{variant=info}` with no text); it rendered as registered,
+ * with a quiet marker.
  */
 export type DiagnosticKind =
   | 'invalid-attribute-value'
@@ -49,7 +53,8 @@ export type DiagnosticKind =
   | 'form-mismatch'
   | 'no-engine-view'
   | 'unknown-directive'
-  | 'code-renderer-failed';
+  | 'code-renderer-failed'
+  | 'empty-inline';
 
 /**
  * Where in the note's source an event happened: the directive's range, in

@@ -322,6 +322,32 @@ describe('diagnostics', () => {
     ]);
   });
 
+  it('publishes a refused image source at the figure directive', async () => {
+    const h = await ready(
+      {},
+      '# Title\n\n::figure{src="javascript:alert(1)"}\n',
+    );
+    const [published] = await h.published('textDocument/publishDiagnostics');
+    expect(published?.params.diagnostics).toEqual([
+      {
+        range: {
+          start: { line: 2, character: 0 },
+          end: { line: 2, character: 35 },
+        },
+        severity: 2,
+        code: 'unsafe-image-src',
+        source: 'markii',
+        message: 'figure: image source was refused as unsafe and was not shown',
+      },
+    ]);
+  });
+
+  it('does not flag a relative image source', async () => {
+    const h = await ready({}, '::figure{src="images/a.png"}\n');
+    const [published] = await h.published('textDocument/publishDiagnostics');
+    expect(published?.params.diagnostics).toEqual([]);
+  });
+
   it('republishes after an edit and clears on close', async () => {
     const h = await ready({}, BAD);
     await h.published('textDocument/publishDiagnostics');

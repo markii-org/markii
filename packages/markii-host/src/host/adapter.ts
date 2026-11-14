@@ -182,6 +182,16 @@ export interface HostExportCapabilities {
   ): Promise<string | undefined>;
   /** Only present on a host declaring `'pdf'`. The one Electron-touching seam. */
   htmlToPdf?(html: string): Promise<Uint8Array>;
+  /**
+   * Names the zip archive of a linked-set export, or resolves `undefined`
+   * when the user cancels. Present only on a host that offers the
+   * linked-set export; a host can offer single-note export without it
+   * (the command line tool does), so it is a member of its own rather than
+   * a `HostExportFormat`.
+   */
+  resolveLinkedSetTarget?(
+    suggestedFileName: string,
+  ): Promise<string | undefined>;
 }
 
 /**

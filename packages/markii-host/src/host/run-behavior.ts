@@ -201,7 +201,13 @@ export interface RunViaAdapterRequest {
 }
 
 /** A run's result plus the `RunTrace` it just recorded, so a host can show its in-note marker from the same value the shared path persisted. */
-export type RunViaAdapterResult = RunOnceResult & { readonly trace: RunTrace };
+export type RunViaAdapterResult = RunOnceResult & {
+  readonly trace: RunTrace;
+  /** How many of this run's values came back with the value store's `fresh` status. */
+  readonly freshCount: number;
+  /** How many of this run's values came back with the value store's `error` status. */
+  readonly errorCount: number;
+};
 
 /**
  * Runs one manual, auto, or scheduled pass of `request.text`'s scripts,
@@ -283,5 +289,12 @@ export async function runViaAdapter(
     () => {},
   );
 
-  return { ...result, trace };
+  let freshCount = 0;
+  let errorCount = 0;
+  for (const value of Object.values(result.values)) {
+    if (value.status === 'fresh') freshCount += 1;
+    else if (value.status === 'error') errorCount += 1;
+  }
+
+  return { ...result, trace, freshCount, errorCount };
 }

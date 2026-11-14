@@ -231,6 +231,26 @@ describe('runViaAdapter', () => {
     expect(trace).toEqual({ trigger: 'manual', ranAt: 42_000, ok: true });
   });
 
+  it('counts the fresh and the errored values of a run', async () => {
+    const fakeResult: RunResult = {
+      values: {
+        a: { value: 1, status: 'fresh' },
+        b: { value: 2, status: 'fresh' },
+        c: { value: null, status: 'error', failureKind: 'script-error' },
+      },
+      failures: [{ name: 'c', message: 'boom', kind: 'script-error' }],
+      cacheSnapshot: {},
+    };
+    const result = await runViaAdapter(
+      fakeAdapter({ now: () => 1 }),
+      { documentKey: 'doc-counts', text: 'text', trigger: 'manual' },
+      async () => fakeResult,
+    );
+
+    expect(result.freshCount).toBe(2);
+    expect(result.errorCount).toBe(1);
+  });
+
   it('records a failing RunTrace with a reason when the run reports failures', async () => {
     const fakeResult: RunResult = {
       values: {},

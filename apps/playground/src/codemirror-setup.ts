@@ -93,8 +93,10 @@ const smdEditorTheme = EditorView.theme({
  * The playground editor's full extension set: markdown syntax highlighting
  * (`@codemirror/lang-markdown`), line wrapping, and a small hand-picked set
  * of editing conveniences (history/undo, bracket matching, gutter cue for the
- * caret's line). Deliberately excludes autocomplete and linting — out of scope
- * per docs/integration.md (no directive-aware language server, "maybe never").
+ * caret's line). Deliberately excludes autocomplete and linting: the
+ * playground is a viewing harness, and directive-aware editing support
+ * comes from the language server (`markii lsp`, see docs/hosts.md) in the
+ * editors that connect to it.
  *
  * `highlightActiveLine` is deliberately absent: it paints its background on
  * the `.cm-line` element, which sits ABOVE `drawSelection`'s selection layer,

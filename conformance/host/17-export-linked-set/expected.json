@@ -1,0 +1,17 @@
+{
+  "outcomes": [
+    {
+      "kind": "exported",
+      "noteCount": 2,
+      "entries": ["index.html", "note.html", "second.html"]
+    }
+  ],
+  "diagnostics": [
+    "Cascade export wrote",
+    "Exported",
+    "Rendered with the static engine because no pack components are loaded",
+    "Exported",
+    "Rendered with the static engine because no pack components are loaded"
+  ],
+  "prompts": []
+}

@@ -1,0 +1,6 @@
+{
+  "id": "export-linked-set",
+  "invariant": "a note and the notes it links to export as one archive with an index page, and a host that does not offer the export reports it unsupported",
+  "clock": 1700000000000,
+  "actions": [{ "type": "exportLinkedSet" }]
+}

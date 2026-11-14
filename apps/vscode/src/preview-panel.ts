@@ -57,12 +57,14 @@ import {
   withTrailingSlash,
 } from './resource-roots.js';
 import { buildWebviewHtml, createNonce } from './webview-html.js';
-import { createMarkiiHost, buildBundleSnapshot } from '@markii/host';
+import {
+  cascadeResultMessage,
+  createMarkiiHost,
+  buildBundleSnapshot,
+} from '@markii/host';
 import {
   clearGrantForDocument,
-  buildCascadeArchive,
   cascadeDiagnosticLines,
-  cascadeResultMessage,
   readPersistedValues,
   staleValuesForRehydration,
   readLastRunTrace,
@@ -77,19 +79,16 @@ import {
 } from '@markii/host/internal';
 import { buildPackRegistrationScript } from '@markii/pack-build';
 import type {
+  CascadeLinkResolver,
   ExportBodyResult,
   ExportImageReader,
+  ExportLinkedSetOutcome,
+  ExportLinkedSetRequest,
   ExportRequest,
   HostPromptRequest,
   MarkiiHost,
   RunOnceOptions,
 } from '@markii/host';
-import type {
-  CascadeArchiveRequest,
-  CascadeExportOutcome,
-  CascadeLinkResolver,
-  CascadeNoteReader,
-} from '@markii/host/internal';
 import { createVSCodeHostAdapter } from './host-adapter.js';
 import { valuesMessageForRun } from './run-values-message.js';
 import { resolveWorkerPath } from './worker-path.js';
@@ -1997,17 +1996,18 @@ export async function exportHtml(
 }
 
 /**
- * Writes one cascade outcome to the "Markii" output channel, the other of
- * a failure's two homes. Every note that was skipped, and every bound that
- * cut the walk short, is named here rather than only in a count.
+ * Writes a cascade failure that happened before the shared host ran (a
+ * preview that would not open) to the "Markii" output channel, the other
+ * of a failure's two homes. The host writes every other cascade outcome
+ * itself.
  */
-function logCascadeDiagnostics(outcome: CascadeExportOutcome): void {
-  if (!diagnosticsChannel) return;
-  diagnosticsChannel.appendLine(
-    `Markii: HTML cascade export at ${new Date().toISOString()}`,
-  );
+function logCascadeFailure(outcome: {
+  kind: 'failed';
+  path?: string;
+  reason: string;
+}): void {
   for (const line of cascadeDiagnosticLines(outcome)) {
-    diagnosticsChannel.appendLine(`  ${line}`);
+    exportDiagnosticsSink()(line);
   }
 }
 
@@ -2067,7 +2067,10 @@ export async function exportHtmlCascade(
   });
   if (!target) return; // cancelled
 
-  let outcome: CascadeExportOutcome;
+  let outcome: ExportLinkedSetOutcome;
+  diagnosticsChannel?.appendLine(
+    `Markii: HTML cascade export at ${new Date().toISOString()}`,
+  );
   try {
     if (active === undefined && configuredPackFolders().length > 0) {
       await presentSource(context, { kind: 'document', document });
@@ -2093,21 +2096,16 @@ export async function exportHtmlCascade(
 
     // An open editor's text wins over the file on disk, so a cascade
     // exported mid-edit matches what the author is looking at, exactly as
-    // the single-note export uses `document.getText()`.
-    const readNote: CascadeNoteReader = async (notePath) => {
+    // the single-note export uses `document.getText()`. The adapter's
+    // `readFile` is how the shared host reads every note.
+    const readNoteBytes = async (notePath: string): Promise<Uint8Array> => {
       const uri = uriForNote(notePath);
       const key = uri.toString();
       const open = vscode.workspace.textDocuments.find(
         (candidate) => candidate.uri.toString() === key,
       );
-      if (open) return open.getText();
-      try {
-        return new TextDecoder().decode(
-          await vscode.workspace.fs.readFile(uri),
-        );
-      } catch {
-        return undefined;
-      }
+      if (open) return new TextEncoder().encode(open.getText());
+      return vscode.workspace.fs.readFile(uri);
     };
 
     const rootFolder = documentFolder(document);
@@ -2124,7 +2122,6 @@ export async function exportHtmlCascade(
 
     const common = {
       rootPath: document.uri.path,
-      readNote,
       resolveLink,
       readValues: (notePath: string) =>
         readPersistedValues(
@@ -2135,7 +2132,7 @@ export async function exportHtmlCascade(
         createExportImageReader(folderForNote(notePath)),
     };
 
-    let request: CascadeArchiveRequest;
+    let request: ExportLinkedSetRequest;
     if (useReact && preview) {
       const packStylesheets = await packExportStylesheets(
         preview.packContext.webviewPacks,
@@ -2143,7 +2140,6 @@ export async function exportHtmlCascade(
       );
       request = {
         ...common,
-        engine: htmlEngine,
         renderBody: (text, vals) => requestExportBody(preview, text, vals),
         packStylesheets,
         packCount: preview.packContext.webviewPacks.length,
@@ -2153,40 +2149,35 @@ export async function exportHtmlCascade(
         preview === undefined && configuredPackFolders().length > 0
           ? 'no-renderer'
           : 'no-packs';
-      request = { ...common, engine: htmlEngine, staticReason };
+      request = { ...common, staticReason };
     }
 
-    const archive = await buildCascadeArchive(request);
-    if (archive.kind === 'failed') {
-      outcome = {
-        kind: 'failed',
-        path: target.fsPath,
-        reason: archive.reason,
-      };
-    } else {
-      await vscode.workspace.fs.writeFile(target, archive.bytes);
-      outcome = {
-        kind: 'written',
-        path: target.fsPath,
-        bytes: archive.bytes.byteLength,
-        notes: archive.notes,
-        unreadable: archive.unreadable,
-        ...(archive.truncated !== undefined
-          ? { truncated: archive.truncated }
-          : {}),
-      };
-    }
+    const adapter = createVSCodeHostAdapter({
+      memento: context.workspaceState,
+      prompt: promptViaModal,
+      diagnostics: exportDiagnosticsSink(),
+      readFile: readNoteBytes,
+      writeFile: async (_path, bytes) => {
+        await vscode.workspace.fs.writeFile(target, bytes);
+      },
+      resolveLinkedSetTarget: async () => target.fsPath,
+    });
+    outcome = await createMarkiiHost(adapter, { htmlEngine }).exportLinkedSet(
+      request,
+    );
   } catch (error) {
+    // The host reports its own failures. This catches only what went wrong
+    // before it was called, so the reason still reaches the output channel.
     outcome = {
       kind: 'failed',
       path: target.fsPath,
       reason: error instanceof Error ? error.message : String(error),
     };
+    logCascadeFailure(outcome);
   }
 
-  logCascadeDiagnostics(outcome);
   const message = cascadeResultMessage(outcome, VSCODE_LABELS);
-  if (outcome.kind === 'failed') {
+  if (outcome.kind !== 'exported') {
     void vscode.window.showWarningMessage(message);
     return;
   }

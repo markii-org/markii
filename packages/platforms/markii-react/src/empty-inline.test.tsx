@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { render } from '@testing-library/react';
 import type { ReactElement } from 'react';
+import type { DiagnosticEvent } from '@markii/stdlib';
 import { renderMark } from './render';
 import { createRegistry, type MarkComponentProps } from './registry';
 
@@ -66,5 +67,30 @@ describe('ITEM 1: an inline component that renders empty', () => {
     const container = html('::chip{}\n\n');
     // Directive with a blank body renders no children at all.
     expect(container.querySelector('.mk-inline-empty')).not.toBeNull();
+  });
+});
+
+describe('the empty-inline marker reaches onDiagnostic (React engine)', () => {
+  it('reports one empty-inline event with the tooltip wording', () => {
+    const events: DiagnosticEvent[] = [];
+    const { container } = render(
+      renderMark(':chip[]', registry, undefined, undefined, {
+        onDiagnostic: (event) => events.push(event),
+      }),
+    );
+    expect(events).toHaveLength(1);
+    expect(events[0]?.kind).toBe('empty-inline');
+    expect(events[0]?.directive).toBe('chip');
+    expect(
+      container.querySelector('.mk-inline-empty')?.getAttribute('title'),
+    ).toBe(events[0]?.message);
+  });
+
+  it('reports nothing for a chip with content or a block component', () => {
+    const events: DiagnosticEvent[] = [];
+    const options = { onDiagnostic: (e: DiagnosticEvent) => events.push(e) };
+    render(renderMark(':chip[hi]', registry, undefined, undefined, options));
+    render(renderMark('::box{}', registry, undefined, undefined, options));
+    expect(events).toEqual([]);
   });
 });

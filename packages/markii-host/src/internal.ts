@@ -43,20 +43,7 @@ export {
   MAX_EMBEDDED_IMAGE_BYTES,
   embedImagesInHtml,
 } from './export/image-embed.js';
-export type {
-  CascadeLinkResolver,
-  CascadeNoteReader,
-} from './export/cascade.js';
-export type {
-  CascadeArchiveRequest,
-  CascadeExportOutcome,
-} from './host/cascade-export-behavior.js';
-export {
-  buildCascadeArchive,
-  cascadeDiagnosticLines,
-  cascadeReasonOf,
-  cascadeResultMessage,
-} from './host/cascade-export-behavior.js';
+export { cascadeDiagnosticLines } from './host/cascade-export-behavior.js';
 export {
   componentsWithoutEngineView,
   declaredPackComponents,

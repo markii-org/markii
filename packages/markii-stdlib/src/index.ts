@@ -53,8 +53,10 @@ export {
   invalidEnumAttribute,
   standardNoteCatalog,
   unknownDirectiveMessage,
+  unsafeImageSrcMessage,
   validateNote,
   type NoteCatalogAttribute,
   type NoteCatalogEntry,
   type NoteTreeNode,
+  type ValidateNoteOptions,
 } from './validate-note.js';

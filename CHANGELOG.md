@@ -15,16 +15,39 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
   `buildMarkElement` takes `onRerun`.
 - Neovim plugin: `K` shows hover, `omnifunc` completes, and
   `:checkhealth markii` reports whether the tool is installed.
+- `@markii/host`: `createMarkiiHost(...).exportLinkedSet` exports a note
+  and the notes it links to as one zip archive. A host offers it by
+  declaring `exports.resolveLinkedSetTarget`. Host conformance scenario
+  17 covers it.
+- `@markii/host`: a `ran` run outcome carries `freshCount` and
+  `errorCount`.
+- All three renderers report an inline component that received no content
+  through `onDiagnostic`, as the new `empty-inline` kind.
+- `@markii/stdlib`: `validateNote` takes an `isSafeUrl` option and then
+  reports a `figure` source with a refused scheme. `unsafeImageSrcMessage`
+  is exported.
 
 ### Changed
 
 - **`markii lsp` loads no pack code.** It reads `pack.json` only, and its
   findings no longer depend on the terminal engine. It no longer reports
-  a missing terminal view or an unsafe image source. It checks a pack
-  component's declared attribute values.
+  a missing terminal view. It reports a `figure` source with a refused
+  scheme and checks a pack component's declared attribute values.
 - **Breaking: `@markii/ansi` drops the `reportUnknownDirectives` option**
   and no longer reports `unknown-directive`; `validateNote` does.
   `GlyphSet` gains a required `keyLegendRerun` member.
+- **Breaking: `@markii/host/internal` drops the cascade archive
+  functions** (`buildCascadeArchive`, `cascadeReasonOf` and their types).
+  `cascadeResultMessage` and `CascadeLinkResolver` move to the main entry.
+  The linked-set outcome kind is `exported`, where it was `written`.
+- **Breaking for a hand-written host object or an exhaustive switch:**
+  `MarkiiHost` requires `exportLinkedSet`, a `ran` outcome requires the two
+  counts, and `DiagnosticKind` and `Unsupported.capability` each gain a
+  member.
+
+### Removed
+
+- `@markii/host`: the unused `MarkiiHostOptions.buildPackRegistration`.
 
 ## [0.17.0-next.4] - 2026-11-14
 

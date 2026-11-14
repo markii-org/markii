@@ -325,6 +325,63 @@ describe('runHostScenario: exportHtml', () => {
   });
 });
 
+describe('runHostScenario: exportLinkedSet', () => {
+  it('walks the notes the root links to and reports the archive entries', async () => {
+    const dir = makeScenarioDir();
+    writeFileSync(
+      path.join(dir, 'note.mk.md'),
+      '# root\n\n[second](files/second.mk.md)\n',
+    );
+    mkdirSync(path.join(dir, 'files'), { recursive: true });
+    writeFileSync(path.join(dir, 'files', 'second.mk.md'), '# second\n');
+    const written = new Map<string, Uint8Array>();
+    const adapter = fakeAdapter({
+      readFile: async (p) => new Uint8Array(readFileSync(p)),
+      writeFile: async (p, bytes) => {
+        written.set(p, bytes);
+      },
+      exports: {
+        formats: new Set(),
+        resolveTarget: async () => undefined,
+        resolveLinkedSetTarget: async (name) => path.join(dir, name),
+      },
+    });
+    const scenario: HostScenario = {
+      id: 's',
+      invariant: 'x',
+      clock: 1,
+      actions: [{ type: 'exportLinkedSet' }],
+    };
+    const result = await runHostScenario(adapter, scenario, readNote(dir), dir);
+    const outcome = result.outcomes[0] as {
+      kind: string;
+      noteCount: number;
+      entries: string[];
+    };
+    expect(outcome.kind).toBe('exported');
+    expect(outcome.noteCount).toBe(2);
+    expect(outcome.entries).toEqual(['index.html', 'note.html', 'second.html']);
+  });
+
+  it('is unsupported on an adapter with no linked-set target', async () => {
+    const dir = makeScenarioDir();
+    writeFileSync(path.join(dir, 'note.mk.md'), '# root\n');
+    const scenario: HostScenario = {
+      id: 's',
+      invariant: 'x',
+      clock: 1,
+      actions: [{ type: 'exportLinkedSet' }],
+    };
+    const adapter = fakeAdapter();
+    const result = await runHostScenario(adapter, scenario, readNote(dir), dir);
+    expect(result.outcomes[0]).toMatchObject({
+      kind: 'unsupported',
+      capability: 'linked-set-export',
+    });
+    expect(hostDeclaresCapability(adapter, scenario.actions[0]!)).toBe(false);
+  });
+});
+
 describe('runHostScenario: installPack', () => {
   it('zips a files/ directory into archive bytes and installs it', async () => {
     const dir = makeScenarioDir();

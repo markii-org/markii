@@ -37,16 +37,17 @@
  * Every OTHER action runs through the real, unmocked shared behavior code.
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHtmlExportEngine } from '../html-engine.js';
 import { usesPackTrust } from './pack-trust-behavior.js';
 import { join, relative, sep } from 'node:path';
-import { zipSync } from 'fflate';
+import { unzipSync, zipSync } from 'fflate';
 import { conformanceDir } from '@markii/core/corpus';
 import type { RunTrigger } from '@markii/runtime';
 import {
   createMarkiiHost,
+  type ExportLinkedSetOutcome,
   type ExportOutcome,
   type MarkiiHost,
 } from './create-host.js';
@@ -114,6 +115,7 @@ export type HostScenarioAction =
     }
   | { readonly type: 'exportHtml' }
   | { readonly type: 'exportAnsi' }
+  | { readonly type: 'exportLinkedSet' }
   | {
       readonly type: 'installPack';
       /** A directory under the scenario's own folder (e.g. `"files/ana-1.0.0"`), zipped into `.mkp` bytes by this module — never a committed binary. */
@@ -214,7 +216,12 @@ export function zipArchiveDirectory(archiveDir: string): Uint8Array {
 // --- the capability rule --------------------------------------------------
 
 export type HostScenarioCapability =
-  'isolate' | 'editor' | 'packs' | 'pack-trust' | 'export-format';
+  | 'isolate'
+  | 'editor'
+  | 'packs'
+  | 'pack-trust'
+  | 'export-format'
+  | 'linked-set-export';
 
 /** The one static map from an action's type to the capability it needs. `undefined` means every host supports it (there is nothing to decline). */
 export const ACTION_CAPABILITY: Readonly<
@@ -224,6 +231,7 @@ export const ACTION_CAPABILITY: Readonly<
   run: 'isolate',
   exportHtml: 'export-format',
   exportAnsi: 'export-format',
+  exportLinkedSet: 'linked-set-export',
   installPack: 'packs',
   loadPacks: 'packs',
   removePack: 'packs',
@@ -265,6 +273,9 @@ export function hostDeclaresCapability(
   if (capability === 'pack-trust') return usesPackTrust(adapter);
   if (capability === 'isolate') return adapter.isolate !== undefined;
   if (capability === 'editor') return adapter.editor !== undefined;
+  if (capability === 'linked-set-export') {
+    return adapter.exports?.resolveLinkedSetTarget !== undefined;
+  }
   if (capability === 'packs') {
     if (adapter.packs === undefined) return false;
     if (action.type === 'installPack' || action.type === 'removePack') {
@@ -527,6 +538,24 @@ async function runOneAction(
       return augmentExportOutcome(outcome, ctx.writtenFiles);
     }
 
+    case 'exportLinkedSet': {
+      const outcome = await host.exportLinkedSet({
+        rootPath: ctx.notePath,
+        // A markdown link to a note file that exists beside the linking
+        // note: the same rule for every host, so the archive's contents
+        // do not depend on which host runs the scenario.
+        resolveLink: (link, fromNotePath) => {
+          if (link.kind !== 'markdown') return undefined;
+          const target = resolve(dirname(fromNotePath), link.path);
+          return target.endsWith('.md') && existsSync(target)
+            ? target
+            : undefined;
+        },
+        readValues: () => ({}),
+      });
+      return augmentLinkedSetOutcome(outcome, ctx.writtenFiles);
+    }
+
     case 'installPack': {
       const archiveBytes = zipArchiveDirectory(
         join(ctx.scenarioDir, action.archive),
@@ -574,6 +603,17 @@ async function runOneAction(
     case 'insertComponent':
       return host.insertComponent({ name: action.name });
   }
+}
+
+function augmentLinkedSetOutcome(
+  outcome: ExportLinkedSetOutcome,
+  writtenFiles: ReadonlyMap<string, Uint8Array>,
+): unknown {
+  if (outcome.kind !== 'exported') return outcome;
+  const bytes = writtenFiles.get(outcome.path);
+  const entries =
+    bytes === undefined ? undefined : Object.keys(unzipSync(bytes)).sort();
+  return { ...outcome, noteCount: outcome.notes.length, entries };
 }
 
 function augmentExportOutcome(
@@ -703,6 +743,23 @@ export function outcomeMismatches(
             `render engine: expected "${String(expected['renderEngine'])}", got "${String(render?.engine)}"`,
           );
         }
+      }
+      if (
+        expected['noteCount'] !== undefined &&
+        actualRecord['noteCount'] !== expected['noteCount']
+      ) {
+        mismatches.push(
+          `noteCount: expected ${String(expected['noteCount'])}, got ${String(actualRecord['noteCount'])}`,
+        );
+      }
+      if (
+        expected['entries'] !== undefined &&
+        JSON.stringify(actualRecord['entries']) !==
+          JSON.stringify(expected['entries'])
+      ) {
+        mismatches.push(
+          `archive entries: expected ${JSON.stringify(expected['entries'])}, got ${JSON.stringify(actualRecord['entries'])}`,
+        );
       }
       const content = String(actualRecord['content'] ?? '');
       for (const needle of (expected['contains'] as string[]) ?? []) {

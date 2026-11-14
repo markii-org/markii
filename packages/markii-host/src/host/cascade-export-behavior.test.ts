@@ -52,10 +52,10 @@ function entryNames(bytes: Uint8Array): string[] {
 const render = { engine: 'static', reason: 'no-packs', packCount: 0 } as const;
 
 function written(
-  over: Partial<Extract<CascadeExportOutcome, { kind: 'written' }>> = {},
+  over: Partial<Extract<CascadeExportOutcome, { kind: 'exported' }>> = {},
 ): CascadeExportOutcome {
   return {
-    kind: 'written',
+    kind: 'exported',
     path: '/out/index.zip',
     bytes: 10,
     notes: [

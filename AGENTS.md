@@ -159,7 +159,8 @@ apps/vscode          the Markii VS Code extension, the authoring host. Not publi
                      values-persistence-protocol.probe.test.ts.
 apps/obsidian        the Markii Obsidian plugin, desktop only, the consuming host. Only
                      src/main.ts, src/view.tsx, src/settings-tab.ts, src/run-modals.ts,
-                     src/insert-modals.ts and src/complete-suggest.ts import obsidian;
+                     src/insert-modals.ts, src/complete-suggest.ts and src/reading-view.ts
+                     import obsidian;
                      obsidian-import-guard.test.ts holds that. src/settings.ts is cosmetic
                      only, because plugin data rides Sync. Anything that authorizes
                      execution or network lives in src/local-settings.ts (device-local);
@@ -500,9 +501,9 @@ same commit as the change that triggers them:
   install pack, load packs, complete, hover, insert, diagnostics) → it
   lives in `packages/markii-host/src/host/`, never in an app. An app
   implements `HostAdapter` and calls `createMarkiiHost` for these
-  behaviors. The linked-set (cascade) export still goes around the host
-  object: the apps call `buildCascadeArchive` and its siblings from
-  `@markii/host/internal`, as they do other helpers there. An app never
+  behaviors. The linked-set (cascade) export is the `exportLinkedSet`
+  behavior: an app declares `exports.resolveLinkedSetTarget` and never
+  imports the cascade functions. An app never
   imports the lower-level function a behavior is built on (`installPackFromArchive`,
   `buildExportDocument`, `discoverPacks`, `runOnce`, `spawnRun` and their
   siblings): `eslint.config.js` fails the lint on that for `apps/*/src`,

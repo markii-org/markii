@@ -7,7 +7,7 @@
  *
  * Pack components come from `pack.json` alone, through `packNoteCatalog`.
  */
-import { parse } from '@markii/core';
+import { isSafeUrl, parse } from '@markii/core';
 import { buildComponentCatalog, type LoadPacksOutcome } from '@markii/host';
 import {
   buildNoteCatalog,
@@ -44,5 +44,5 @@ export function noteDiagnostics(
   text: string,
   catalog: readonly NoteCatalogEntry[],
 ): DiagnosticEvent[] {
-  return validateNote(parse(text), catalog);
+  return validateNote(parse(text), catalog, { isSafeUrl });
 }

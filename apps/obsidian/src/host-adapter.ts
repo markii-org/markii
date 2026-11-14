@@ -71,6 +71,8 @@ export interface ObsidianHostAdapterDeps {
   /** The pack source, minus the engine: the plugin renders with React, so the adapter fills `engine: 'react'` itself. */
   readonly packs?: Omit<HostPackSource, 'engine' | 'trust'>;
   readonly exports?: HostExportCapabilities;
+  /** Replaces the default Node file read, for a caller whose reads go through another store (the cascade export reads notes through the vault). */
+  readonly readFile?: (filePath: string) => Promise<Uint8Array>;
   /** Replaces the default Node file write, for a caller whose writes go through another store (the export flow writes through the vault adapter, at vault-relative paths). */
   readonly writeFile?: (filePath: string, bytes: Uint8Array) => Promise<void>;
   /**
@@ -113,9 +115,10 @@ export function createObsidianHostAdapter(
     id: 'obsidian',
     labels: OBSIDIAN_LABELS,
 
-    async readFile(filePath: string): Promise<Uint8Array> {
-      return new Uint8Array(await nodeReadFile(filePath));
-    },
+    readFile:
+      deps.readFile ??
+      (async (filePath: string): Promise<Uint8Array> =>
+        new Uint8Array(await nodeReadFile(filePath))),
     async exists(filePath: string): Promise<boolean> {
       return existsSync(filePath);
     },

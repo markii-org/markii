@@ -600,6 +600,11 @@ function renderDirectiveContent(
   // in the same quiet marker/title, so the two engines produce identical
   // markup for this case.
   if (isRegisteredInline(entry) && childrenHtml.trim() === '') {
+    reportDiagnostic(ctx.onDiagnostic, {
+      kind: 'empty-inline',
+      directive: name,
+      message: emptyInlineTitle(name),
+    });
     const title = escapeHtml(emptyInlineTitle(name));
     return `<span class="${EMPTY_INLINE_MARKER_CLASS}" title="${title}">${rendered}</span>`;
   }

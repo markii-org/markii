@@ -130,6 +130,8 @@ describe('conformance/host/ corpus via the real VS Code HostAdapter', () => {
         exportFormats: new Set(['html']),
         resolveExportTarget: async (suggestedFileName) =>
           path.join(exportDir, suggestedFileName),
+        resolveLinkedSetTarget: async (suggestedFileName) =>
+          path.join(exportDir, suggestedFileName),
         ...fakeVscodeEditor(noteText),
       });
 

@@ -11,9 +11,11 @@
  * `'form-mismatch'` (a block component written inline), and
  * `'invalid-attribute-value'` (a value outside a declared enum). The
  * renderers report the last two themselves when they draw a note, through
- * the same predicates (`invalidEnumAttribute` below); engine-specific
- * findings (`'no-engine-view'`, `'unsafe-image-src'`,
- * `'code-renderer-failed'`) stay in the engines.
+ * the same predicates (`invalidEnumAttribute` below). A fourth,
+ * `'unsafe-image-src'`, is reported only when the caller passes
+ * `isSafeUrl`, because the URL scheme rule belongs to `@markii/core`,
+ * which this package never imports. Engine-specific findings
+ * (`'no-engine-view'`, `'code-renderer-failed'`) stay in the engines.
  *
  * The messages are diagnostics-surface text. They match the wording each
  * engine's failure-presentation module uses for the same finding, and
@@ -29,6 +31,9 @@ import type { DiagnosticEvent, DiagnosticPosition } from './diagnostics.js';
 
 /** The directive name that no catalog needs: `:value[...]` is built into every renderer. */
 const VALUE_DIRECTIVE_NAME = 'value';
+
+/** The standard component whose `src` is a URL the renderers check. */
+const FIGURE_DIRECTIVE_NAME = 'figure';
 
 const DIRECTIVE_NODE_TYPES: ReadonlySet<string> = new Set([
   'textDirective',
@@ -169,6 +174,22 @@ export function invalidAttributeValueMessage(
   return `${directive}: "${value}" is not a valid ${attribute} value (ignored)`;
 }
 
+/** The diagnostic text for a component-built image whose source was refused as an unsafe URL. */
+export function unsafeImageSrcMessage(directive: string): string {
+  return `${directive}: image source was refused as unsafe and was not shown`;
+}
+
+/** What a caller may pass to `validateNote`. */
+export interface ValidateNoteOptions {
+  /**
+   * The URL scheme rule, normally `@markii/core`'s `isSafeUrl`. Given, a
+   * `figure` whose `src` it refuses yields an `'unsafe-image-src'`
+   * finding. Omitted, no source is checked. Only the scheme is judged: a
+   * relative path a host resolves is never a finding here.
+   */
+  readonly isSafeUrl?: (url: string) => boolean;
+}
+
 function positionOf(node: NoteTreeNode): DiagnosticPosition | undefined {
   const range = node.position;
   if (range === undefined) return undefined;
@@ -205,7 +226,9 @@ function stripLayoutKeys(attributes: DirectiveAttributes): DirectiveAttributes {
 export function validateNote(
   tree: NoteTreeNode,
   catalog: readonly NoteCatalogEntry[],
+  options: ValidateNoteOptions = {},
 ): DiagnosticEvent[] {
+  const isSafeUrl = options.isSafeUrl;
   const byName = new Map<string, NoteCatalogEntry>();
   for (const entry of catalog) {
     if (!byName.has(entry.directiveName))
@@ -257,6 +280,23 @@ export function validateNote(
       return;
     }
     const attributes = stripLayoutKeys(node.attributes ?? {});
+    const src = Object.hasOwn(attributes, 'src')
+      ? attributes['src']
+      : undefined;
+    if (
+      isSafeUrl !== undefined &&
+      name === FIGURE_DIRECTIVE_NAME &&
+      typeof src === 'string' &&
+      src !== '' &&
+      !isSafeUrl(src)
+    ) {
+      events.push({
+        kind: 'unsafe-image-src',
+        directive: name,
+        message: unsafeImageSrcMessage(name),
+        ...at,
+      });
+    }
     const invalid = firstInvalidEnum(
       (entry.attributes ?? []).map((a) => [a.name, a.values] as const),
       attributes,

@@ -510,6 +510,11 @@ function renderDirectiveContent(
   // registration, so a component that says nothing about its kind keeps
   // rendering exactly as before this rule existed.
   if (isRegisteredInline(entry) && isEmptyContent(children)) {
+    reportDiagnostic(onDiagnostic, {
+      kind: 'empty-inline',
+      directive: name,
+      message: emptyInlineTitle(name),
+    });
     return (
       <span
         className={EMPTY_INLINE_MARKER_CLASS}

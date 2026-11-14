@@ -9,6 +9,8 @@ function outcome(over: Partial<RanOutcome> = {}): RanOutcome {
     failureDetails: [],
     netDeclarationDiagnostics: [],
     trace: { trigger: 'manual', ranAt: 5, ok: true },
+    freshCount: 0,
+    errorCount: 0,
     ...over,
   };
 }

@@ -21,7 +21,7 @@ without writing it.
 
 The host writes a `HostAdapter` and passes it to `createMarkiiHost` from
 `@markii/host`. The result is a `MarkiiHost` with these behaviors: `open`,
-`run`, `exportNote`, `installPack`, `loadPacks`, `loadTerminalPacks`,
+`run`, `exportNote`, `exportLinkedSet`, `installPack`, `loadPacks`, `loadTerminalPacks`,
 `removePack`, `installedPacks`, `enablePack`, `disablePack`, `completeAt`,
 `completeAtSync`, `hoverAt`, `insertComponent`, `invalidateCatalog` and
 `diagnostics`.
@@ -693,11 +693,20 @@ wikilink that points into the set becomes a markdown link, because Markii
 renders CommonMark, where a wikilink is ordinary text.
 
 The walk, the naming, the rewriting and the archive are host-neutral logic
-in `@markii/host`. A host adopts the command by supplying two functions:
-one that reads a note and one that resolves a link. This path does not go
-through the host object. The reference hosts call it from
-`@markii/host/internal`, which carries no compatibility promise. Exporting
-a linked set to PDF is not offered.
+in `@markii/host`, behind the `exportLinkedSet` behavior of the host
+object. A host offers it by declaring `exports.resolveLinkedSetTarget`,
+which names the archive's path or resolves `undefined` when the user
+cancels. The behavior reads every note through `adapter.readFile`, writes
+one zip through `adapter.writeFile`, and writes its diagnostics lines to
+`adapter.diagnostics`.
+
+The request supplies the root note's path, a function that resolves a link,
+and a function that reads a note's stored values. It also takes the render
+options `exportNote` takes. The outcome is `exported`, `failed`,
+`cancelled` or `unsupported`. `cascadeResultMessage` words the notice for
+any of them. A host that declares no `resolveLinkedSetTarget` gets
+`unsupported`, as the command line tool does. Exporting a linked set to
+PDF is not offered.
 
 ## Limits to know
 

@@ -69,6 +69,10 @@ export interface VSCodeHostAdapterDeps {
     suggestedFileName: string,
     format: HostExportFormat,
   ) => Promise<string | undefined>;
+  /** Shows the save dialog for a linked-set export and returns the chosen archive path, or `undefined` on cancel. Absent when the call site offers no linked-set export. */
+  readonly resolveLinkedSetTarget?: (
+    suggestedFileName: string,
+  ) => Promise<string | undefined>;
   /**
    * The active editor's full text (`vscode.TextEditor.document.getText()`).
    * All four `editor*` deps are read at CALL TIME through these closures,
@@ -138,11 +142,16 @@ export function createVSCodeHostAdapter(
         };
 
   const exports: HostExportCapabilities | undefined =
-    deps.exportFormats === undefined || deps.resolveExportTarget === undefined
+    (deps.exportFormats === undefined ||
+      deps.resolveExportTarget === undefined) &&
+    deps.resolveLinkedSetTarget === undefined
       ? undefined
       : {
-          formats: deps.exportFormats,
-          resolveTarget: deps.resolveExportTarget,
+          formats: deps.exportFormats ?? new Set<HostExportFormat>(),
+          resolveTarget: deps.resolveExportTarget ?? (async () => undefined),
+          ...(deps.resolveLinkedSetTarget !== undefined
+            ? { resolveLinkedSetTarget: deps.resolveLinkedSetTarget }
+            : {}),
         };
 
   const editor: HostEditor | undefined =

@@ -3,6 +3,7 @@ import {
   buildNoteCatalog,
   invalidEnumAttribute,
   standardNoteCatalog,
+  unsafeImageSrcMessage,
   validateNote,
   type NoteCatalogEntry,
   type NoteTreeNode,
@@ -159,6 +160,39 @@ describe('validateNote', () => {
       catalog,
     );
     expect(event?.kind).toBe('unknown-directive');
+  });
+});
+
+describe('validateNote with a URL scheme rule', () => {
+  const catalog = standardNoteCatalog();
+  const isSafeUrl = (url: string): boolean => !url.startsWith('javascript:');
+
+  it('reports a figure whose src the rule refuses, at its range', () => {
+    const events = validateNote(
+      root(directive('leafDirective', 'figure', { src: 'javascript:x' }, 4)),
+      catalog,
+      { isSafeUrl },
+    );
+    expect(events).toEqual([
+      {
+        kind: 'unsafe-image-src',
+        directive: 'figure',
+        message: unsafeImageSrcMessage('figure'),
+        position: { startLine: 4, startColumn: 1, endLine: 4, endColumn: 10 },
+      },
+    ]);
+  });
+
+  it('reports nothing without the rule, and nothing for a safe or relative src', () => {
+    const unsafe = root(
+      directive('leafDirective', 'figure', { src: 'javascript:x' }),
+    );
+    expect(validateNote(unsafe, catalog)).toEqual([]);
+    const safe = root(
+      directive('leafDirective', 'figure', { src: 'images/a.png' }),
+      directive('leafDirective', 'figure', {}),
+    );
+    expect(validateNote(safe, catalog, { isSafeUrl })).toEqual([]);
   });
 });
 

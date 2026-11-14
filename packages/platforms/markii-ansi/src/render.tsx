@@ -701,6 +701,11 @@ function renderDirectiveContentString(
     isRegisteredInline(entry) &&
     safeChildrenText(childrenText).trim() === ''
   ) {
+    reportDiagnostic(wctx.onDiagnostic, {
+      kind: 'empty-inline',
+      directive: name,
+      message: emptyInlineTitle(name),
+    });
     rendered = `${rendered}${dim(` (${emptyInlineTitle(name)})`, wctx.color)}`;
   }
 

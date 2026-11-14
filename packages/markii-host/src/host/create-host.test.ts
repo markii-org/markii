@@ -189,6 +189,15 @@ describe('createMarkiiHost behaviors that decline never throw and always write a
         }),
     ],
     [
+      'exportLinkedSet',
+      () =>
+        createMarkiiHost(fakeAdapter()).exportLinkedSet({
+          rootPath: '/note.mk.md',
+          resolveLink: () => undefined,
+          readValues: () => ({}),
+        }),
+    ],
+    [
       'installPack',
       () =>
         createMarkiiHost(fakeAdapter()).installPack({
@@ -231,6 +240,106 @@ describe('createMarkiiHost.diagnostics', () => {
     const host = createMarkiiHost(adapter);
     host.diagnostics('hello');
     expect(lines).toEqual(['hello']);
+  });
+});
+
+describe('createMarkiiHost.exportLinkedSet', () => {
+  const notes: Record<string, string> = {
+    '/v/root.mk.md': '# Root\n\nSee [other](other.mk.md).\n',
+    '/v/other.mk.md': '# Other\n',
+  };
+
+  function linkedSetAdapter(
+    written: Map<string, Uint8Array>,
+    lines: string[],
+    target: string | null = '/out/root.zip',
+  ): HostAdapter {
+    return fakeAdapter({
+      diagnostics: (line) => lines.push(line),
+      readFile: async (p) => {
+        const text = notes[p];
+        if (text === undefined) throw new Error(`no such note ${p}`);
+        return new TextEncoder().encode(text);
+      },
+      writeFile: async (p, bytes) => {
+        written.set(p, bytes);
+      },
+      exports: {
+        formats: new Set(),
+        resolveTarget: async () => undefined,
+        resolveLinkedSetTarget: async () => target ?? undefined,
+      },
+    });
+  }
+
+  const request = {
+    rootPath: '/v/root.mk.md',
+    resolveLink: (link: { path: string }) =>
+      link.path === 'other.mk.md' ? '/v/other.mk.md' : undefined,
+    readValues: () => ({}),
+  };
+
+  it('reads notes through the adapter, writes one archive through it, and reports the lines', async () => {
+    const written = new Map<string, Uint8Array>();
+    const lines: string[] = [];
+    const outcome = await createMarkiiHost(linkedSetAdapter(written, lines), {
+      htmlEngine: createHtmlExportEngine(),
+    }).exportLinkedSet(request);
+    if (outcome.kind !== 'exported') throw new Error('expected exported');
+    expect(outcome.path).toBe('/out/root.zip');
+    expect(outcome.notes.map((note) => note.path)).toEqual([
+      '/v/root.mk.md',
+      '/v/other.mk.md',
+    ]);
+    expect([...written.keys()]).toEqual(['/out/root.zip']);
+    expect(lines[0]).toContain('Cascade export wrote /out/root.zip');
+  });
+
+  it('is unsupported when the host offers no linked-set target', async () => {
+    const lines: string[] = [];
+    const outcome = await createMarkiiHost(
+      fakeAdapter({ diagnostics: (line) => lines.push(line) }),
+      { htmlEngine: createHtmlExportEngine() },
+    ).exportLinkedSet(request);
+    expect(outcome).toMatchObject({
+      kind: 'unsupported',
+      capability: 'linked-set-export',
+    });
+    expect(lines).toHaveLength(1);
+  });
+
+  it('is cancelled, not thrown, when the picker declines', async () => {
+    const written = new Map<string, Uint8Array>();
+    const lines: string[] = [];
+    const outcome = await createMarkiiHost(
+      linkedSetAdapter(written, lines, null),
+      { htmlEngine: createHtmlExportEngine() },
+    ).exportLinkedSet(request);
+    expect(outcome).toEqual({ kind: 'cancelled' });
+    expect(written.size).toBe(0);
+    expect(lines).toHaveLength(1);
+  });
+
+  it('reports a failed write with its path and reason on the diagnostics surface', async () => {
+    const lines: string[] = [];
+    const adapter = linkedSetAdapter(new Map(), lines);
+    const outcome = await createMarkiiHost(
+      {
+        ...adapter,
+        writeFile: async () => {
+          throw new Error('disk full');
+        },
+      },
+      { htmlEngine: createHtmlExportEngine() },
+    ).exportLinkedSet(request);
+    expect(outcome).toEqual({
+      kind: 'failed',
+      path: '/out/root.zip',
+      reason: 'disk full',
+    });
+    expect(lines).toEqual([
+      'Cascade export failed to /out/root.zip: disk full',
+    ]);
   });
 });
 

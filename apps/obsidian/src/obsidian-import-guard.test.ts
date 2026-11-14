@@ -4,8 +4,9 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 /**
- * `src/main.ts`, `src/view.tsx`, `src/settings-tab.ts`, and
- * `src/run-modals.ts` are the ONLY files allowed to import `obsidian` (see
+ * `src/main.ts`, `src/view.tsx`, `src/settings-tab.ts`,
+ * `src/run-modals.ts`, `src/insert-modals.ts`, `src/complete-suggest.ts`
+ * and `src/reading-view.ts` are the ONLY files allowed to import `obsidian` (see
  * this workspace's package.json comment / the task's architecture rule):
  * Vitest cannot resolve the `obsidian` module, so every piece of testable
  * logic (rendering, settings normalization, the Run path's grant/

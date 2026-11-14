@@ -5,11 +5,12 @@
  * produces. Written once so the hosts cannot drift on what a cascade is
  * or what it says.
  *
- * Deliberately outside `createMarkiiHost`: choosing where the archive goes
- * and writing it are each host's own picker and file-system business, so
- * this module builds the bytes and words the outcome, and the host writes
- * and displays. The per-host nouns (which surface holds the details) come
- * from `HostLabels`, never from a literal here.
+ * `createMarkiiHost`'s `exportLinkedSet` drives it: the host's picker
+ * names the archive's path (`adapter.exports.resolveLinkedSetTarget`), the
+ * notes are read through `adapter.readFile`, the archive is written through
+ * `adapter.writeFile`, and the diagnostics lines go to `adapter.diagnostics`.
+ * The per-host nouns (which surface holds the details) come from
+ * `HostLabels`, never from a literal here.
  *
  * BOUNDS ARE FIXED. The walk always uses `DEFAULT_CASCADE_MAX_DEPTH` and
  * `DEFAULT_CASCADE_MAX_NOTES`; nothing here lets a caller override them.
@@ -53,7 +54,8 @@ import {
   imageEmbedDiagnosticLines,
   renderEngineDiagnosticLine,
 } from './export-behavior.js';
-import type { HostLabels } from './adapter.js';
+import type { HostAdapter, HostLabels } from './adapter.js';
+import type { ExportLinkedSetOutcome } from './create-host.js';
 
 /** One note the cascade exported, for the diagnostics surface. */
 export interface CascadeExportedNote {
@@ -75,7 +77,7 @@ export interface UnreadableCascadeNote {
 /** What one cascade export attempt did, for both the message and the diagnostics lines. */
 export type CascadeExportOutcome =
   | {
-      readonly kind: 'written';
+      readonly kind: 'exported';
       /** The written archive's display path. */
       readonly path: string;
       readonly bytes: number;
@@ -258,11 +260,11 @@ export async function buildCascadeArchive(
  * stack trace.
  */
 export function cascadeResultMessage(
-  outcome: CascadeExportOutcome,
+  outcome: ExportLinkedSetOutcome,
   labels: HostLabels,
   where?: string,
 ): string {
-  if (outcome.kind === 'failed') {
+  if (outcome.kind !== 'exported') {
     return `Markii: could not export this cascade. Open ${labels.diagnosticsSurface} for details.`;
   }
   const name = fileNameOf(outcome.path);
@@ -313,4 +315,73 @@ export function cascadeDiagnosticLines(
     lines.push(`Could not read ${entry.path}, linked from ${entry.from}.`);
   }
   return lines;
+}
+
+/** What `exportLinkedSetViaAdapter` needs beyond the adapter: the static engine and the request's own seams. */
+export interface LinkedSetExportInputs extends Omit<
+  CascadeArchiveRequest,
+  'readNote'
+> {
+  /** The suggested archive file name handed to the host's picker. */
+  readonly suggestedFileName: string;
+}
+
+/**
+ * Exports a note and the notes it links to as one archive: resolves the
+ * target through the adapter's picker, builds the archive reading every
+ * note through `adapter.readFile`, writes it through `adapter.writeFile`,
+ * and sends the diagnostics lines to `adapter.diagnostics`. Resolves
+ * `undefined` when the host has no linked-set target or its picker was
+ * cancelled. Never throws.
+ */
+export async function exportLinkedSetViaAdapter(
+  adapter: HostAdapter,
+  inputs: LinkedSetExportInputs,
+): Promise<CascadeExportOutcome | undefined> {
+  const resolveTarget = adapter.exports?.resolveLinkedSetTarget;
+  if (resolveTarget === undefined) return undefined;
+  const { suggestedFileName, ...archiveRequest } = inputs;
+
+  let path: string | undefined;
+  let outcome: CascadeExportOutcome;
+  try {
+    path = await resolveTarget.call(adapter.exports, suggestedFileName);
+    if (path === undefined) return undefined;
+    const target = path;
+    const archive = await buildCascadeArchive({
+      ...archiveRequest,
+      readNote: async (notePath) => {
+        try {
+          return new TextDecoder().decode(await adapter.readFile(notePath));
+        } catch {
+          return undefined;
+        }
+      },
+    });
+    if (archive.kind === 'failed') {
+      outcome = { kind: 'failed', path: target, reason: archive.reason };
+    } else {
+      await adapter.writeFile(target, archive.bytes);
+      outcome = {
+        kind: 'exported',
+        path: target,
+        bytes: archive.bytes.byteLength,
+        notes: archive.notes,
+        unreadable: archive.unreadable,
+        ...(archive.truncated !== undefined
+          ? { truncated: archive.truncated }
+          : {}),
+      };
+    }
+  } catch (error) {
+    outcome = {
+      kind: 'failed',
+      ...(path !== undefined ? { path } : {}),
+      reason: cascadeReasonOf(error),
+    };
+  }
+  for (const line of cascadeDiagnosticLines(outcome)) {
+    adapter.diagnostics(line);
+  }
+  return outcome;
 }

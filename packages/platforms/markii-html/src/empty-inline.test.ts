@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { DiagnosticEvent } from '@markii/stdlib';
 import { renderMarkToHtml } from './render';
 import {
   createHtmlRegistry,
@@ -52,5 +53,26 @@ describe('ITEM 1: an inline component that renders empty (HTML engine)', () => {
     const html = renderMarkToHtml('::quiet{}', registry);
     expect(html).not.toContain('mk-inline-empty');
     expect(html).toContain('probe-chip');
+  });
+});
+
+describe('the empty-inline marker reaches onDiagnostic (HTML engine)', () => {
+  it('reports one empty-inline event with the tooltip wording', () => {
+    const events: DiagnosticEvent[] = [];
+    const html = renderMarkToHtml(':chip[]', registry, undefined, undefined, {
+      onDiagnostic: (event) => events.push(event),
+    });
+    expect(events).toHaveLength(1);
+    expect(events[0]?.kind).toBe('empty-inline');
+    expect(events[0]?.directive).toBe('chip');
+    expect(html).toContain(`title="${events[0]?.message}"`);
+  });
+
+  it('reports nothing for a chip with content or a block component', () => {
+    const events: DiagnosticEvent[] = [];
+    const options = { onDiagnostic: (e: DiagnosticEvent) => events.push(e) };
+    renderMarkToHtml(':chip[hi]', registry, undefined, undefined, options);
+    renderMarkToHtml('::box{}', registry, undefined, undefined, options);
+    expect(events).toEqual([]);
   });
 });

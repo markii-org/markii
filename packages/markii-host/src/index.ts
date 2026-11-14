@@ -106,10 +106,21 @@ export {
 } from './host/pack-trust-behavior.js';
 export { removePackMessage } from './host/pack-remove.js';
 export { exportResultMessage } from './host/export-behavior.js';
+export { cascadeResultMessage } from './host/cascade-export-behavior.js';
+export type {
+  CascadeLinkResolver,
+  CascadeTruncation,
+} from './export/cascade.js';
+export type {
+  CascadeExportedNote,
+  UnreadableCascadeNote,
+} from './host/cascade-export-behavior.js';
 export { createMarkiiHost } from './host/create-host.js';
 export type {
   CompleteOutcome,
   EditorPositionRequest,
+  ExportLinkedSetOutcome,
+  ExportLinkedSetRequest,
   ExportOutcome,
   ExportRequest,
   HoverOutcome,

@@ -314,6 +314,19 @@ export default tseslint.config(
             {
               name,
               importNames: [
+                'buildCascadeArchive',
+                'exportLinkedSetViaAdapter',
+                'walkNoteCascade',
+                'assignCascadeFileNames',
+                'rewriteCascadeLinks',
+                'zipExportArchive',
+              ],
+              message:
+                'Export a linked set with createMarkiiHost(adapter).exportLinkedSet(...).',
+            },
+            {
+              name,
+              importNames: [
                 'discoverPacks',
                 'discoverConfiguredPacks',
                 'loadPacksViaAdapter',

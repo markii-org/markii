@@ -118,6 +118,8 @@ describe('conformance/host/ corpus via the real Obsidian HostAdapter', () => {
           formats: new Set(['html']),
           resolveTarget: async (suggestedFileName) =>
             path.join(exportDir, suggestedFileName),
+          resolveLinkedSetTarget: async (suggestedFileName) =>
+            path.join(exportDir, suggestedFileName),
         },
         editor: fakeObsidianEditor(noteText),
       });

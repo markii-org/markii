@@ -52,6 +52,12 @@ import type {
   EmbeddedImageReport,
   ExportImageReader,
 } from '../export/image-embed.js';
+import type { CascadeLinkResolver } from '../export/cascade.js';
+import { exportBaseName } from '../export/note-export.js';
+import {
+  exportLinkedSetViaAdapter,
+  type CascadeExportOutcome,
+} from './cascade-export-behavior.js';
 import { buildComponentCatalog } from '../insert/component-catalog.js';
 import {
   formatPackDiagnosticLines,
@@ -99,7 +105,12 @@ import {
 export interface Unsupported {
   readonly kind: 'unsupported';
   readonly capability:
-    'isolate' | 'editor' | 'packs' | 'pack-trust' | 'export-format';
+    | 'isolate'
+    | 'editor'
+    | 'packs'
+    | 'pack-trust'
+    | 'export-format'
+    | 'linked-set-export';
   readonly detail?: string;
 }
 
@@ -179,6 +190,40 @@ export type ExportOutcome =
     }
   | { readonly kind: 'failed'; readonly reason: string }
   /** `adapter.exports.resolveTarget`/`htmlToPdf`/an injected `renderAnsi` was unavailable at the moment of export — a picker cancel, or a seam this host declared but did not wire up. */
+  | { readonly kind: 'cancelled' }
+  | Unsupported;
+
+// --- linked-set export -----------------------------------------------------
+
+export interface ExportLinkedSetRequest {
+  /** The root note's path, in whatever form `adapter.readFile` and `resolveLink` understand. */
+  readonly rootPath: string;
+  /** Resolves one link in a note to the path of a note this host can export, or `undefined` to leave the link as written. */
+  readonly resolveLink: CascadeLinkResolver;
+  /** Reads one note's persisted last-run values, keyed by that note's own path. An empty object exports that note's standard empty states. */
+  readonly readValues: (notePath: string) => Record<string, StoredValue>;
+  /** The host's own render of each note's body. Omitted renders every note with the static engine, and `staticReason` says why. */
+  readonly renderBody?: ExportBodyRenderer;
+  /** Why the static engine renders when `renderBody` is omitted. Defaults to `no-packs`. */
+  readonly staticReason?: StaticExportReason;
+  /** The loaded packs' stylesheets, embedded only when `renderBody` ran. */
+  readonly packStylesheets?: readonly ExportPackStylesheet[];
+  /** How many loaded packs contributed to the render. Diagnostics only. */
+  readonly packCount?: number;
+  /** Installed pack components the static engine cannot draw. */
+  readonly unavailableComponents?: readonly UnavailableComponent[];
+  /** Receives the static engine's render diagnostics for every note. */
+  readonly onDiagnostic?: OnDiagnostic;
+  /** Builds the image reader for one note, bound to that note's own folder. Omitted embeds no images. */
+  readonly embedImagesFor?: (notePath: string) => ExportImageReader;
+  /** Hides the collapsed script marker in every exported note. Defaults to `false`. */
+  readonly hideScriptBlocks?: boolean;
+}
+
+export type ExportLinkedSetOutcome =
+  | Extract<CascadeExportOutcome, { kind: 'exported' }>
+  | { readonly kind: 'failed'; readonly path?: string; readonly reason: string }
+  /** The host's picker was cancelled, so nothing was written. */
   | { readonly kind: 'cancelled' }
   | Unsupported;
 
@@ -327,6 +372,10 @@ export interface MarkiiHost {
   open(request: OpenRequest): Promise<OpenOutcome>;
   run(request: RunRequest): Promise<RunOutcome>;
   exportNote(request: ExportRequest): Promise<ExportOutcome>;
+  /** Exports a note and the notes it links to as one zip archive of HTML files. */
+  exportLinkedSet(
+    request: ExportLinkedSetRequest,
+  ): Promise<ExportLinkedSetOutcome>;
   installPack(request: InstallPackRequest): Promise<InstallPackOutcome>;
   loadPacks(): Promise<LoadPacksOutcome>;
   /**
@@ -375,8 +424,6 @@ export interface MarkiiHostOptions {
   readonly packDiscoveryIo?: PackDiscoveryIo;
   /** `@markii/ansi`'s renderer, injected because this package never depends on `@markii/ansi` (a platform renderer, never a `@markii/host` dependency). A host declaring `'ansi'` in `adapter.exports.formats` without supplying this gets `Unsupported` at export time. */
   readonly renderAnsi?: (text: string) => Promise<string>;
-  /** Composes a pack-aware render registry (webview registration, in-process evaluation, ...). Reserved for a future slice that renders through `exportNote`'s `html` path with packs; unused today, since `buildExportDocument`'s default (no `renderBody`) already produces a correct, pack-free static export. */
-  readonly buildPackRegistration?: unknown;
 }
 
 export function createMarkiiHost(
@@ -544,6 +591,37 @@ export function createMarkiiHost(
         render: outcome.render,
         images: outcome.images,
       };
+    },
+
+    async exportLinkedSet(
+      request: ExportLinkedSetRequest,
+    ): Promise<ExportLinkedSetOutcome> {
+      if (adapter.exports?.resolveLinkedSetTarget === undefined) {
+        return unsupported(
+          adapter,
+          'linked-set-export',
+          `the linked-set export is not available on ${adapter.id}.`,
+        );
+      }
+      if (options.htmlEngine === undefined) {
+        return unsupported(
+          adapter,
+          'linked-set-export',
+          'no HTML export engine was supplied, so the linked-set export cannot render.',
+        );
+      }
+      const outcome = await exportLinkedSetViaAdapter(adapter, {
+        ...request,
+        engine: options.htmlEngine,
+        suggestedFileName: `${exportBaseName(request.rootPath)}.zip`,
+      });
+      if (outcome === undefined) {
+        adapter.diagnostics(
+          `linked-set export declined: no archive target was chosen on ${adapter.id}.`,
+        );
+        return { kind: 'cancelled' };
+      }
+      return outcome;
     },
 
     async installPack(

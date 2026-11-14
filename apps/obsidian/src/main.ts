@@ -36,7 +36,6 @@ import {
   scriptsDisabledConfirmationText,
   scriptsEnabledConfirmationText,
   cascadeDiagnosticLines,
-  cascadeResultMessage,
 } from '@markii/host/internal';
 import { createNetProvider } from '@markii/host/node';
 import type {
@@ -46,11 +45,10 @@ import type {
   HostAdapter,
   HostEditor,
   HostTextEdit,
-} from '@markii/host';
-import type {
-  CascadeExportOutcome,
   CascadeLinkResolver,
-} from '@markii/host/internal';
+  ExportLinkedSetOutcome,
+} from '@markii/host';
+import { cascadeResultMessage } from '@markii/host';
 import type { InsertableComponent } from '@markii/stdlib/editor';
 import {
   bundledDiscoveredPacks,
@@ -562,7 +560,7 @@ export default class MarkiiPlugin extends Plugin {
       return;
     }
 
-    let outcome: CascadeExportOutcome;
+    let outcome: ExportLinkedSetOutcome;
     try {
       const memento = createLocalStorageMemento(
         (key) => this.app.loadLocalStorage(key),
@@ -571,7 +569,9 @@ export default class MarkiiPlugin extends Plugin {
         },
       );
       const packContext = this.exportRegistryContext();
+      const lines: string[] = [];
       outcome = await exportNoteCascade({
+        diagnostics: (line) => lines.push(line),
         rootPath: file.path,
         readNote: this.readNoteText,
         resolveLink: this.cascadeLinkResolver(),
@@ -592,17 +592,19 @@ export default class MarkiiPlugin extends Plugin {
             }
           : { staticReason: 'no-packs' as const }),
       });
+      // The host's lines go to the console: a failure at error level.
+      for (const line of lines) {
+        if (outcome.kind === 'exported') console.info(`[markii] ${line}`);
+        else console.error(`[markii] ${line}`);
+      }
     } catch (error) {
+      // The host reports its own failures. This catches only what went
+      // wrong before it was called, so the reason still reaches the console.
       outcome = {
         kind: 'failed',
         reason: error instanceof Error ? error.message : String(error),
       };
-    }
-
-    for (const line of cascadeDiagnosticLines(outcome)) {
-      if (outcome.kind === 'written') {
-        console.info(`[markii] ${line}`);
-      } else {
+      for (const line of cascadeDiagnosticLines(outcome)) {
         console.error(`[markii] ${line}`);
       }
     }

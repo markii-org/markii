@@ -1,6 +1,9 @@
 BuildBundleSnapshotOptions
 BuildRenderRegistryResult
 BundleSnapshotResult
+CascadeExportedNote
+CascadeLinkResolver
+CascadeTruncation
 CompleteOutcome
 DisablePackOutcome
 DisablePackResult
@@ -17,6 +20,8 @@ ExportBodyRenderer
 ExportBodyResult
 ExportImageReader
 ExportImageResult
+ExportLinkedSetOutcome
+ExportLinkedSetRequest
 ExportOutcome
 ExportPackStylesheet
 ExportRenderInfo
@@ -77,11 +82,13 @@ SpawnRunRequest
 StaticExportReason
 TerminalPackScript
 Thenable
+UnreadableCascadeNote
 Unsupported
 ValuesFailure
 buildBundleSnapshot
 buildComponentCatalog
 buildRenderRegistry
+cascadeResultMessage
 createMarkiiHost
 disablePackMessage
 discoverPacks

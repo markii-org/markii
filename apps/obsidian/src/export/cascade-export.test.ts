@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { Buffer } from 'node:buffer';
 import { inflateRawSync } from 'node:zlib';
-import type {
-  CascadeLinkResolver,
-  CascadeNoteReader,
-} from '@markii/host/internal';
+import type { CascadeLinkResolver } from '@markii/host';
 import { exportNoteCascade } from './cascade-export.js';
-import type { CascadeExportRequest } from './cascade-export.js';
+import type {
+  CascadeExportRequest,
+  CascadeNoteText as CascadeNoteReader,
+} from './cascade-export.js';
 import type { NoteExportFs } from '../export-note.js';
 
 /** An in-memory `NoteExportFs` that records every binary write. */
@@ -139,8 +139,8 @@ describe('exportNoteCascade', () => {
       baseRequest(vault, fs, 'root.mk.md'),
     );
 
-    expect(outcome.kind).toBe('written');
-    if (outcome.kind !== 'written') throw new Error('unreachable');
+    expect(outcome.kind).toBe('exported');
+    if (outcome.kind !== 'exported') throw new Error('unreachable');
     expect(outcome.notes.map((note) => note.path)).toEqual([
       'root.mk.md',
       'b.mk.md',
@@ -187,7 +187,7 @@ describe('exportNoteCascade', () => {
     const outcome = await exportNoteCascade(
       baseRequest(vault, fs, 'root.mk.md'),
     );
-    if (outcome.kind !== 'written') throw new Error('unreachable');
+    if (outcome.kind !== 'exported') throw new Error('unreachable');
 
     const noteEntry = outcome.notes.find((n) => n.path === 'index.mk.md');
     expect(noteEntry?.entryName).not.toBe('index.html');
@@ -210,8 +210,8 @@ describe('exportNoteCascade', () => {
     const { fs } = createFs();
     const outcome = await exportNoteCascade(baseRequest(vault, fs, 'a.mk.md'));
 
-    expect(outcome.kind).toBe('written');
-    if (outcome.kind !== 'written') throw new Error('unreachable');
+    expect(outcome.kind).toBe('exported');
+    if (outcome.kind !== 'exported') throw new Error('unreachable');
     expect(outcome.notes.map((note) => note.path)).toEqual([
       'a.mk.md',
       'b.mk.md',
@@ -233,8 +233,8 @@ describe('exportNoteCascade', () => {
       baseRequest(vault, fs, 'root.mk.md'),
     );
 
-    expect(outcome.kind).toBe('written');
-    if (outcome.kind !== 'written') throw new Error('unreachable');
+    expect(outcome.kind).toBe('exported');
+    if (outcome.kind !== 'exported') throw new Error('unreachable');
     // root through n4 is depth 0..4, five notes; n5 is one hop past the
     // default max depth of 4 and is never reached.
     expect(outcome.notes.map((note) => note.path)).toEqual([
@@ -257,8 +257,8 @@ describe('exportNoteCascade', () => {
       baseRequest(vault, fs, 'root.mk.md'),
     );
 
-    expect(outcome.kind).toBe('written');
-    if (outcome.kind !== 'written') throw new Error('unreachable');
+    expect(outcome.kind).toBe('exported');
+    if (outcome.kind !== 'exported') throw new Error('unreachable');
     expect(outcome.notes.map((note) => note.path)).toEqual([
       'root.mk.md',
       'b.mk.md',
@@ -285,8 +285,8 @@ describe('exportNoteCascade', () => {
       baseRequest(vault, fs, 'root.mk.md'),
     );
 
-    expect(outcome.kind).toBe('written');
-    if (outcome.kind !== 'written') throw new Error('unreachable');
+    expect(outcome.kind).toBe('exported');
+    if (outcome.kind !== 'exported') throw new Error('unreachable');
     const entryNames = outcome.notes.map((note) => note.entryName);
     expect(new Set(entryNames).size).toBe(entryNames.length);
     expect(entryNames).toContain('dup.html');
@@ -315,8 +315,8 @@ describe('exportNoteCascade', () => {
       baseRequest(vault, fs, 'root.mk.md'),
     );
 
-    expect(outcome.kind).toBe('written');
-    if (outcome.kind !== 'written') throw new Error('unreachable');
+    expect(outcome.kind).toBe('exported');
+    if (outcome.kind !== 'exported') throw new Error('unreachable');
     expect(outcome.notes.map((note) => note.path)).toEqual(['root.mk.md']);
     expect(outcome.unreadable).toEqual([
       { path: 'missing.mk.md', from: 'root.mk.md' },
@@ -334,7 +334,7 @@ describe('exportNoteCascade', () => {
     const outcome = await exportNoteCascade(
       baseRequest(vault, fs, 'root.mk.md'),
     );
-    if (outcome.kind !== 'written') throw new Error('unreachable');
+    if (outcome.kind !== 'exported') throw new Error('unreachable');
 
     const entries = archiveEntryNames(binary.get('root.zip')!);
     expect(entries.length).toBe(outcome.notes.length + 1);
