@@ -143,6 +143,8 @@ export function buildViewElement(
   width: number,
   options: RenderNoteOptions & {
     readonly onExit?: () => void;
+    /** `r` in the viewer; the engine lists the key only when this is given. */
+    readonly onRerun?: () => Promise<void>;
     /** The terminal's row count; gives the view a viewport with a pinned status line. Absent, the view is laid out at full height. */
     readonly rows?: number;
   } = {},
@@ -158,6 +160,7 @@ export function buildViewElement(
       ? { unavailableComponents: options.unavailableComponents }
       : {}),
     ...(options.onExit ? { onExit: options.onExit } : {}),
+    ...(options.onRerun ? { onRerun: options.onRerun } : {}),
     ...(options.rows !== undefined ? { viewportRows: options.rows } : {}),
     interactive: true,
   });

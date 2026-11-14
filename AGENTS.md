@@ -130,7 +130,8 @@ packages/platforms/markii-ansi   the terminal renderer, a third platform
                      view's keys, only while focused;
                      pack-focus.probe.test.tsx),
                      details folding, the dim status line with the key
-                     legend; q calls the host's onExit, never process.exit.
+                     legend; q calls the host's onExit and r its onRerun, never
+                     process.exit or a run import.
                      A tabs/details inside a string-framed block (a
                      callout, or any body drawn as a string) gets no
                      focus id: read-only
@@ -200,6 +201,12 @@ packages/markii-stdlib  standard component contracts (docs/integration.md) — n
                      share (array of objects/arrays/primitives, single object)
   src/interactive.ts INTERACTIVE_ATTRIBUTE (data-mk-interactive): the one
                      spelling both engines, and packs, mark a real control with
+  src/validate-note.ts validateNote(tree, catalog): the findings that need
+                     no engine (unknown directive, form mismatch, an
+                     attribute value outside its set). The language
+                     server reports from it; the engines share its
+                     predicates, and a wording test in each engine pins
+                     its text to it
   src/diagnostics.ts DiagnosticEvent/OnDiagnostic/reportDiagnostic: the neutral
                      envelope behind both renderers' onDiagnostic option; the
                      wording stays in each engine's failure-presentation module
@@ -583,8 +590,10 @@ apps/cli             the "markii" command line tool, a third host and a
                      LSP library, none to be added), positions.ts (the one
                      UTF-8/16/32 conversion point), server.ts (the
                      protocol over injected deps, no process access),
-                     note-diagnostics.ts (one ansi render collecting
-                     positioned onDiagnostic events; runs no scripts).
+                     note-diagnostics.ts (@markii/stdlib's validateNote
+                     over the parsed tree, pack components from pack.json
+                     only: no render, no pack code, no scripts;
+                     lsp-pack-code.probe.test.ts is the executed probe).
                      Terminal.openStdio is the only stdio seam and claims
                      stdout for protocol frames. Completion/hover go
                      through createMarkiiHost's editor behaviors

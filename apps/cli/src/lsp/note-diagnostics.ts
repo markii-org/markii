@@ -1,36 +1,48 @@
 /**
- * A note's findings for the language server: one render through
- * `@markii/ansi` with an `onDiagnostic` callback, so the editor shows what
- * the viewer would have drawn as a quiet marker (an invalid attribute
- * value, a block component written inline, an unsafe image source, a pack
- * component with no terminal view) and, with `reportUnknownDirectives`,
- * the directives that name nothing. The wording is the engine's own
- * failure-presentation text; this module adds none.
+ * A note's findings for the language server: the shared validator in
+ * `@markii/stdlib`, run over the tree `@markii/core` parses. Nothing here
+ * renders, runs a script, or loads pack code, so a finding never depends on
+ * which engine would draw the note, and opening a file in an editor cannot
+ * execute anything a pack ships. The wording is the validator's.
  *
- * No store and no vault are passed, so no value resolves and nothing runs:
- * a note's scripts never execute from here.
+ * Pack components come from `pack.json` alone, through `packNoteCatalog`.
  */
-import { renderMarkToAnsi, type AnsiRegistry } from '@markii/ansi';
-import type { DiagnosticEvent, UnavailableComponent } from '@markii/stdlib';
+import { parse } from '@markii/core';
+import { buildComponentCatalog, type LoadPacksOutcome } from '@markii/host';
+import {
+  buildNoteCatalog,
+  validateNote,
+  type DiagnosticEvent,
+  type NoteCatalogEntry,
+} from '@markii/stdlib';
 
-export interface NoteDiagnosticsOptions {
-  readonly registry: AnsiRegistry;
-  readonly unavailable: readonly UnavailableComponent[];
+/**
+ * The catalog the validator checks a note against: the standard set plus
+ * every component the installed packs declare, whichever engine each one
+ * has a view for. A component of a pack that declares nothing for this
+ * host's engine has no manifest entry to read here, so it is named with no
+ * form or attribute rules.
+ */
+export function packNoteCatalog(
+  outcome: Extract<LoadPacksOutcome, { kind: 'loaded' }>,
+): readonly NoteCatalogEntry[] {
+  const declared = buildComponentCatalog(outcome.packs).filter(
+    (entry) => entry.source === 'pack',
+  );
+  const known = new Set(declared.map((entry) => entry.directiveName));
+  const nameOnly: NoteCatalogEntry[] = outcome.components
+    .filter((component) => !known.has(component.directive))
+    .map((component) => ({
+      directiveName: component.directive,
+      kind: 'container',
+      kindDeclared: false,
+    }));
+  return buildNoteCatalog([...declared, ...nameOnly]);
 }
 
-export async function noteDiagnostics(
+export function noteDiagnostics(
   text: string,
-  options: NoteDiagnosticsOptions,
-): Promise<DiagnosticEvent[]> {
-  const events: DiagnosticEvent[] = [];
-  await renderMarkToAnsi(text, options.registry, undefined, undefined, {
-    color: 'never',
-    width: 80,
-    unavailableComponents: options.unavailable,
-    reportUnknownDirectives: true,
-    onDiagnostic: (event) => {
-      events.push(event);
-    },
-  });
-  return events;
+  catalog: readonly NoteCatalogEntry[],
+): DiagnosticEvent[] {
+  return validateNote(parse(text), catalog);
 }

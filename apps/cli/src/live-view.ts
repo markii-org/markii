@@ -29,7 +29,14 @@ export interface LiveViewerOptions {
     width: number,
     onExit: () => void,
     rows: number | undefined,
+    onRerun: (() => Promise<void>) | undefined,
   ) => ReactElement;
+  /**
+   * `r`: runs the note's scripts again and resolves when the new values are
+   * in the store. The viewer redraws once it settles, so `buildElement`
+   * receives a callback that already does that. Absent, the key is not offered.
+   */
+  readonly rerun?: () => Promise<void>;
   /**
    * `--watch`: registers `refresh`, which re-renders the tree at the
    * current width; returns a function that unregisters it. A re-render,
@@ -65,25 +72,39 @@ export async function runLiveViewer(options: LiveViewerOptions): Promise<void> {
     return rows !== undefined && rows > 1 ? rows - 1 : undefined;
   };
 
-  const instance = render(
-    options.buildElement(options.initialWidth, handleExit, currentRows()),
-    {
-      stdout: options.stdout,
-      stdin: options.stdin,
-      exitOnCtrlC: false,
-      patchConsole: false,
-    },
-  );
-  instanceRef.current = instance;
+  // The engine passes this to its `r` key. The redraw is a re-render, not a
+  // remount, so focus and open state survive it. A run that throws still
+  // redraws and never rejects into the engine.
+  const handleRerun =
+    options.rerun === undefined
+      ? undefined
+      : async (): Promise<void> => {
+          try {
+            await options.rerun?.();
+          } catch {
+            // The host reports its own failures.
+          }
+          instanceRef.current?.rerender(build(width));
+        };
+  const build = (columns: number): ReactElement =>
+    options.buildElement(columns, handleExit, currentRows(), handleRerun);
 
   let width = options.initialWidth;
+  const instance = render(build(width), {
+    stdout: options.stdout,
+    stdin: options.stdin,
+    exitOnCtrlC: false,
+    patchConsole: false,
+  });
+  instanceRef.current = instance;
+
   const onResize = (): void => {
     width = options.stdout.columns ?? options.initialWidth;
-    instance.rerender(options.buildElement(width, handleExit, currentRows()));
+    instance.rerender(build(width));
   };
   options.stdout.on('resize', onResize);
   const unsubscribe = options.subscribe?.(() => {
-    instance.rerender(options.buildElement(width, handleExit, currentRows()));
+    instance.rerender(build(width));
   });
 
   try {

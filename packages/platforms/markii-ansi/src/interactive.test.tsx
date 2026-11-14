@@ -85,6 +85,7 @@ async function mountInteractive(
   color: ColorOption = 'never',
   box: BoxStyle = 'unicode',
   viewportRows?: number,
+  onRerun?: () => void | Promise<void>,
 ) {
   const { render } = await import('ink');
   const stdin = makeFakeStdin();
@@ -95,6 +96,7 @@ async function mountInteractive(
     box,
     interactive: true,
     ...(viewportRows !== undefined ? { viewportRows } : {}),
+    ...(onRerun !== undefined ? { onRerun } : {}),
   });
   const instance = render(element, {
     stdout: stdout as unknown as NodeJS.WriteStream,
@@ -642,6 +644,84 @@ describe('the viewport (viewportRows)', () => {
     const rows = raw.split('\n');
     expect(rows[0]).toBe('short');
     expect(rows.findIndex((row) => row.includes('nothing focusable'))).toBe(9);
+    view.unmount();
+  });
+});
+
+describe('the re-run key', () => {
+  const NOTE = 'plain text\n';
+
+  it('calls the host callback, shows running meanwhile, and ignores r while it runs', async () => {
+    let calls = 0;
+    let finish: () => void = () => {};
+    const view = await mountInteractive(
+      NOTE,
+      200,
+      'never',
+      'unicode',
+      undefined,
+      () => {
+        calls += 1;
+        return new Promise<void>((resolve) => {
+          finish = resolve;
+        });
+      },
+    );
+    expect(view.lastFrame()).toContain('r run');
+    await view.press('r');
+    expect(calls).toBe(1);
+    expect(view.lastFrame()).toContain('running');
+    await view.press('r');
+    expect(calls).toBe(1);
+    finish();
+    await tick();
+    expect(view.lastFrame()).not.toContain('running');
+    await view.press('r');
+    expect(calls).toBe(2);
+    view.unmount();
+  });
+
+  it('survives a callback that rejects', async () => {
+    let calls = 0;
+    const view = await mountInteractive(
+      NOTE,
+      200,
+      'never',
+      'unicode',
+      undefined,
+      () => {
+        calls += 1;
+        return Promise.reject(new Error('no'));
+      },
+    );
+    await view.press('r');
+    await tick();
+    expect(view.lastFrame()).not.toContain('running');
+    await view.press('r');
+    expect(calls).toBe(2);
+    view.unmount();
+  });
+
+  it('is absent from the legend and does nothing without a callback', async () => {
+    const view = await mountInteractive(NOTE, 200);
+    expect(view.lastFrame()).not.toContain('r run');
+    await view.press('r');
+    expect(view.lastFrame()).not.toContain('running');
+    view.unmount();
+  });
+
+  it('lists the key in the ascii legend in 7-bit characters', async () => {
+    const view = await mountInteractive(
+      NOTE,
+      200,
+      'never',
+      'ascii',
+      undefined,
+      () => {},
+    );
+    const frame = view.lastFrame();
+    expect(frame).toContain('r run');
+    expect([...frame].filter((ch) => ch.charCodeAt(0) > 0x7f)).toEqual([]);
     view.unmount();
   });
 });

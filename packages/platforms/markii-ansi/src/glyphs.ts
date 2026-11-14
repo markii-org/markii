@@ -74,6 +74,8 @@ export interface GlyphSet {
   readonly emptyValue: string;
   /** The key legend on the live viewer's status line. */
   readonly keyLegend: string;
+  /** The same legend with the re-run key listed second, used only when the host supplies a re-run callback. */
+  readonly keyLegendRerun: string;
 }
 
 const UNICODE: GlyphSet = {
@@ -107,6 +109,8 @@ const UNICODE: GlyphSet = {
   emptyValue: '—',
   keyLegend:
     'q quit  ↑↓/jk focus  ←→/tab switch  enter open/close  space/pgdn scroll  g/G top/end',
+  keyLegendRerun:
+    'q quit  r run  ↑↓/jk focus  ←→/tab switch  enter open/close  space/pgdn scroll  g/G top/end',
 };
 
 const ASCII: GlyphSet = {
@@ -140,6 +144,8 @@ const ASCII: GlyphSet = {
   emptyValue: '-',
   keyLegend:
     'q quit  up/down/jk focus  left/right/tab switch  enter open/close  space/pgdn scroll  g/G top/end',
+  keyLegendRerun:
+    'q quit  r run  up/down/jk focus  left/right/tab switch  enter open/close  space/pgdn scroll  g/G top/end',
 };
 
 const GLYPHS: Readonly<Record<BoxStyle, GlyphSet>> = {

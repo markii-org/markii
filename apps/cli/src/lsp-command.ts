@@ -1,25 +1,29 @@
 /**
  * `markii lsp`: the language server over the terminal's stdio. This module
  * wires the pieces (the shared host for completion and hover, the pack
- * registry for diagnostics, the protocol server) and resolves with the
+ * catalog for diagnostics, the protocol server) and resolves with the
  * process exit code once the client sends `exit` or closes the stream.
  * The protocol itself lives in `./lsp/server.ts`; the Markii behavior
  * lives in `@markii/host` and `@markii/stdlib/editor`.
  *
- * Packs load the way `markii view` loads them (the device-local store and
- * the packs shipped with this tool), lazily on the first check, so a
- * client that only completes never pays for it.
+ * Packs are discovered the way `markii view` discovers them (the
+ * device-local store and the packs shipped with this tool), lazily on the
+ * first check, and only their `pack.json` is read.
  */
 import {
   createMarkiiHost,
   type GrantMemento,
   type HostEditor,
 } from '@markii/host';
-import type { DiagnosticEvent } from '@markii/stdlib';
+import { formatPackDiagnosticLines } from '@markii/host/internal';
+import {
+  standardNoteCatalog,
+  type DiagnosticEvent,
+  type NoteCatalogEntry,
+} from '@markii/stdlib';
 import { createCliHostAdapter } from './host-adapter.js';
-import { loadCliPackRegistry, type CliPackRegistry } from './pack-registry.js';
 import { resolveCliPackOptions } from './pack-store.js';
-import { noteDiagnostics } from './lsp/note-diagnostics.js';
+import { noteDiagnostics, packNoteCatalog } from './lsp/note-diagnostics.js';
 import { createLspServer, type LspServer } from './lsp/server.js';
 import type { Terminal } from './terminal.js';
 
@@ -63,15 +67,29 @@ export async function runLspCommand(
   });
   const host = createMarkiiHost(adapter);
 
-  let packs: Promise<CliPackRegistry> | undefined;
-  const loadPacks = (): Promise<CliPackRegistry> => {
-    packs ??= loadCliPackRegistry(host).then((loaded) => {
-      // A pack that failed to load leaves its directives as a labeled
-      // fallback in the findings; the reason goes to the client's log.
-      for (const line of loaded.failureLines) server?.notice(line);
-      return loaded;
+  // Pack components are read from each pack.json, lazily on the first
+  // check. No pack script is read or evaluated here: a finding about a note
+  // must never run code a pack ships.
+  let catalog: Promise<readonly NoteCatalogEntry[]> | undefined;
+  const loadCatalog = (): Promise<readonly NoteCatalogEntry[]> => {
+    catalog ??= host.loadPacks().then((outcome) => {
+      if (outcome.kind !== 'loaded') return standardNoteCatalog();
+      // A folder that could not be read as a pack leaves its directives
+      // unknown in the findings; the reason goes to the client's log.
+      const failing = outcome.skipped.filter(
+        (entry) => entry.engineUnsupported === undefined,
+      );
+      for (const line of formatPackDiagnosticLines({
+        packs: [],
+        skipped: failing,
+        engine: undefined,
+        cssWarnings: [],
+      })) {
+        server?.notice(line);
+      }
+      return packNoteCatalog(outcome);
     });
-    return packs;
+    return catalog;
   };
 
   let server: LspServer | undefined;
@@ -89,11 +107,7 @@ export async function runLspCommand(
       completeAt: (request) => host.completeAt(request),
       hoverAt: (request) => host.hoverAt(request),
       diagnose: async (text): Promise<DiagnosticEvent[]> => {
-        const loaded = await loadPacks();
-        return noteDiagnostics(text, {
-          registry: loaded.registry,
-          unavailable: loaded.unavailable,
-        });
+        return noteDiagnostics(text, await loadCatalog());
       },
     });
     const running = server;

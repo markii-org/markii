@@ -109,7 +109,8 @@ view flags:
 
 In a terminal, markii view opens the note in a live viewer. Left and right
 (or tab) switch tabs, enter folds a details block open or closed, up and
-down (or j and k) move focus between them, and q quits. Piping or
+down (or j and k) move focus between them, r runs the note's scripts
+again, and q quits. Piping or
 redirecting the output, or passing --static, renders the note once and
 exits instead.
 
@@ -209,6 +210,7 @@ const defaultViewDeps: ViewDeps = {
       width: number,
       onExit: () => void,
       rows: number | undefined,
+      onRerun: (() => Promise<void>) | undefined,
     ) =>
       buildViewElement(text, input.terminal, width, {
         ...(input.colorFlag !== undefined
@@ -222,6 +224,7 @@ const defaultViewDeps: ViewDeps = {
           : {}),
         onDiagnostic: input.onDiagnostic,
         onExit,
+        ...(onRerun !== undefined ? { onRerun } : {}),
         ...(rows !== undefined ? { rows } : {}),
       });
     const onTextChange = input.onTextChange;
@@ -230,6 +233,9 @@ const defaultViewDeps: ViewDeps = {
       stdin: process.stdin,
       initialWidth,
       buildElement,
+      ...(input.onRerun !== undefined
+        ? { rerun: () => input.onRerun?.(text) ?? Promise.resolve() }
+        : {}),
       ...(onTextChange
         ? {
             subscribe: (refresh: () => void) =>
@@ -431,6 +437,34 @@ async function runViewCommand(
     registry,
     unavailableComponents: unavailable,
     onDiagnostic: diagnostics.onDiagnostic,
+    ...(hasScripts
+      ? {
+          onRerun: async (text: string): Promise<void> => {
+            // The same path and grant flow as at open, on the note as it
+            // reads now. Each failure is held like every other line while
+            // the viewer owns the terminal.
+            const result = await runNote({
+              absolutePath,
+              note: { ...note, text },
+              terminal,
+              memento,
+              ...(isolate !== undefined ? { isolate } : {}),
+              onDiagnosticLine: (line) => {
+                if (command.verbose) writeError(`markii: ${line}\n`);
+              },
+            });
+            for (const [name, entry] of Object.entries(result.values)) {
+              store.set(name, entry);
+            }
+            for (const failure of result.failures) {
+              writeError(
+                `markii: script "${failure.name}" failed (${failure.kind})\n`,
+              );
+            }
+            exitCode = result.failures.length > 0 ? 2 : 0;
+          },
+        }
+      : {}),
     ...(command.watch
       ? {
           onTextChange: (listener: (text: string) => void) =>

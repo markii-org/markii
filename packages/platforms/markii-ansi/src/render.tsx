@@ -94,13 +94,12 @@ import {
   invalidAttributeValueLabel,
   invalidAttributeValueTitle,
   unsafeImageSrcLabel,
-  unknownDirectiveTitle,
   unsafeImageSrcTitle,
 } from './failure-presentation.js';
 import {
   createUnavailableComponentLookup,
   formatValue,
-  getContract,
+  invalidEnumAttribute,
   reportDiagnostic,
   type DiagnosticPosition,
   type OnDiagnostic,
@@ -465,23 +464,6 @@ function resolveDataAttribute(
   };
 }
 
-/** Whether one of `name`'s `@markii/stdlib` contract attributes with a closed `enum` is present with a value outside it. */
-function invalidEnumAttribute(
-  name: string,
-  attributes: DirectiveAttributes,
-): { attribute: string; value: string } | undefined {
-  const contract = getContract(name);
-  if (!contract) return undefined;
-  for (const [attribute, schema] of Object.entries(contract.attributes)) {
-    const enumValues = schema.enum;
-    if (!enumValues) continue;
-    const value = attributes[attribute];
-    if (value === undefined || value === null || value === '') continue;
-    if (!enumValues.includes(value)) return { attribute, value };
-  }
-  return undefined;
-}
-
 /** Resolves a `data=`/`:value[]` name against `scope`. Never throws. */
 function resolveValue(scope: ValueScope, name: string): ValueResolution {
   const trimmed = name.trim();
@@ -638,11 +620,6 @@ function renderDirectiveContentString(
         missingView.pack,
       );
     }
-    reportDiagnostic(wctx.onDiagnostic, {
-      kind: 'unknown-directive',
-      directive: name || '(unnamed)',
-      message: unknownDirectiveTitle(name || '(unnamed)'),
-    });
     return unknownDirective(
       name || '(unnamed)',
       inline,
@@ -2363,25 +2340,6 @@ function buildWalkContext(
   };
 }
 
-/**
- * The `onDiagnostic` a render hands its walk: the caller's own, minus
- * `'unknown-directive'` events unless `reportUnknownDirectives` asked for
- * them. The fallback box already marks an unknown directive in the output,
- * so a host that does not place findings in a source (the viewer, an
- * export) keeps the quiet diagnostics surface it always had.
- */
-function diagnosticsFor(
-  options: RenderMarkOptions | undefined,
-): OnDiagnostic | undefined {
-  const downstream = options?.onDiagnostic;
-  if (downstream === undefined || options?.reportUnknownDirectives === true) {
-    return downstream;
-  }
-  return (event) => {
-    if (event.kind !== 'unknown-directive') downstream(event);
-  };
-}
-
 /** The columns assumed when a caller supplies no `width` option. */
 const DEFAULT_WIDTH = 80;
 
@@ -2430,13 +2388,6 @@ export interface RenderMarkOptions {
   readonly resolveImageSrc?: ResolveImageSrc;
   readonly resolveHref?: ResolveHref;
   readonly onDiagnostic?: OnDiagnostic;
-  /**
-   * Also report a directive that names no registered component as an
-   * `'unknown-directive'` event. Off by default: the fallback box already
-   * marks it in the output. A host that places findings in the note's
-   * source (a language server) turns it on.
-   */
-  readonly reportUnknownDirectives?: boolean;
   /**
    * Components of installed packs that this render cannot draw, as plain
    * data from the host. A directive named here renders the usual fallback
@@ -2573,7 +2524,7 @@ export async function renderMarkToAnsi(
       options?.interactive ?? false,
       options?.resolveImageSrc,
       options?.resolveHref,
-      diagnosticsFor(options),
+      options?.onDiagnostic,
       createUnavailableComponentLookup(options?.unavailableComponents),
       options?.width ?? DEFAULT_WIDTH,
       options?.renderCode,
@@ -2608,7 +2559,7 @@ export async function renderMarkNodeToAnsi(
       options?.interactive ?? false,
       options?.resolveImageSrc,
       options?.resolveHref,
-      diagnosticsFor(options),
+      options?.onDiagnostic,
       createUnavailableComponentLookup(options?.unavailableComponents),
       options?.width ?? DEFAULT_WIDTH,
       options?.renderCode,
@@ -2667,6 +2618,8 @@ export function buildMarkElement(
   registry: AnsiRegistry = defaultAnsiRegistry,
   options?: RenderMarkOptions & {
     readonly onExit?: () => void;
+    /** Called when the reader presses `r`; see `InteractiveRoot`'s `onRerun`. The legend lists the key only when this is given. */
+    readonly onRerun?: () => void | Promise<void>;
   },
 ): ReactElement {
   const color = resolveColorOption(options?.color);
@@ -2699,7 +2652,7 @@ export function buildMarkElement(
     interactive,
     options?.resolveImageSrc,
     options?.resolveHref,
-    diagnosticsFor(options),
+    options?.onDiagnostic,
     unavailable,
     width,
     options?.renderCode,
@@ -2741,6 +2694,8 @@ export function buildMarkElement(
     <InteractiveRoot
       focusables={focusables}
       onExit={options?.onExit}
+      onRerun={options?.onRerun}
+      rerunLegend={glyphs.keyLegendRerun}
       color={color}
       theme={theme}
       keyLegend={glyphs.keyLegend}

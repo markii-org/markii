@@ -994,23 +994,29 @@ unknown-component box.
 `markii lsp`, part of the command line tool, is a language server over
 stdio for `.mk.md` documents. It offers completion (with fence lengthening
 as additional edits when a container is inserted), hover, and pushed
-diagnostics. It never runs scripts and never uses the network. Its catalog
-includes the tool's bundled and installed packs, so it loads those packs'
-`terminal.js` in its own process, the same trust boundary as `markii view`.
+diagnostics. It never runs scripts and never uses the network. It learns
+pack components from each installed pack's `pack.json` and loads no pack
+code.
 
 The position encoding is negotiated (UTF-8, UTF-16 or UTF-32), with UTF-16
-as the default the protocol defines. Diagnostics come from the terminal
-engine's render: an invalid attribute value, a form mismatch, an unsafe
-image source, a component with no terminal view, and an unknown directive.
-The React and HTML engines do not report unknown directives through
-`onDiagnostic`; the terminal engine does when asked to with its
-`reportUnknownDirectives` option. The server's diagnostics surface is the
-client's diagnostics list, with pack-loading failures sent as log messages.
+as the default the protocol defines. Diagnostics come from
+`validateNote(tree, catalog)` in `@markii/stdlib`, which needs no renderer:
+a directive that names nothing, a block component written inline or the
+reverse, and an attribute value outside its declared set. A finding
+therefore does not depend on which engine draws the note. The renderers
+report the kinds that do depend on an engine, such as a component with no
+view for it. The server's diagnostics surface is the client's diagnostics
+list, with pack-loading failures sent as log messages.
 
 Helix, Emacs and other LSP clients start the server directly with the
 command `markii lsp`. Neovim has a thin plugin in `apps/nvim` that
 registers the `markii` filetype for `*.mk.md` and starts the server; it
-holds no Markii logic of its own.
+holds no Markii logic of its own. It maps `K` to hover, sets `omnifunc`
+for completion, and answers `:checkhealth markii`.
+
+The terminal viewer's `r` key re-runs a note's scripts. The engine only
+calls the host's `onRerun` callback; the run and its grant flow stay in
+the host.
 
 ### Marking interactive elements
 

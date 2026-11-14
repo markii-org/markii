@@ -4,7 +4,7 @@
  * host behind completion and hover. Not shipped; only `*.test.ts` files
  * import it.
  */
-import { defaultAnsiRegistry } from '@markii/ansi';
+import { standardNoteCatalog } from '@markii/stdlib';
 import { createMarkiiHost } from '@markii/host';
 import { createCliHostAdapter } from '../host-adapter.js';
 import { createFakeTerminal } from '../test-terminal.js';
@@ -74,7 +74,7 @@ export function createHarness(options: { debounceMs?: number } = {}): Harness {
     completeAt: (request) => host.completeAt(request),
     hoverAt: (request) => host.hoverAt(request),
     diagnose: (text) =>
-      noteDiagnostics(text, { registry: defaultAnsiRegistry, unavailable: [] }),
+      Promise.resolve(noteDiagnostics(text, standardNoteCatalog())),
   });
   let nextId = 1;
 

@@ -19,7 +19,8 @@ local defaults = {
   commands = true,
   -- How :MarkiiView opens its terminal.
   view_split = "botright split",
-  -- Passed through to vim.lsp.start; use it for on_attach or capabilities.
+  -- Called after the plugin's own on_attach (the `K` hover mapping and
+  -- omnifunc); use it for more buffer-local mappings.
   on_attach = nil,
   capabilities = nil,
 }
@@ -59,6 +60,20 @@ local function root_dir(buf)
   return folder
 end
 
+--- Buffer-local editing defaults on attach: `K` shows hover and `omnifunc`
+--- completes, each only when the user has not set their own.
+local function on_attach(client, bufnr)
+  if vim.fn.maparg("K", "n") == "" then
+    vim.keymap.set("n", "K", vim.lsp.buf.hover, { buffer = bufnr, desc = "Markii hover" })
+  end
+  if vim.bo[bufnr].omnifunc == "" then
+    vim.bo[bufnr].omnifunc = "v:lua.vim.lsp.omnifunc"
+  end
+  if M.config.on_attach ~= nil then
+    M.config.on_attach(client, bufnr)
+  end
+end
+
 --- Starts (or reuses) the language server for a buffer.
 function M.start(buf)
   buf = buf or vim.api.nvim_get_current_buf()
@@ -66,7 +81,7 @@ function M.start(buf)
   if vim.fn.executable(cmd[1]) == 0 then
     warn_once(
       "executable",
-      ("`%s` was not found on PATH. Install it with `npm install -g @markii/cli`, or set `cmd` in setup()."):format(
+      ("`%s` was not found on PATH. Install it with `npm install -g @markii/cli@next`, or set `cmd` in setup()."):format(
         cmd[1]
       )
     )
@@ -77,7 +92,7 @@ function M.start(buf)
     cmd = cmd,
     root_dir = root_dir(buf),
     capabilities = M.config.capabilities,
-    on_attach = M.config.on_attach,
+    on_attach = on_attach,
   }, { bufnr = buf })
 end
 

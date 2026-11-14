@@ -156,6 +156,52 @@ describe('view: live/static mode selection', () => {
     expect(terminal.outLines.join('')).toBe('');
   });
 
+  it('offers a re-run to a note with scripts and puts the new values in the store', async () => {
+    const dir = makeTempDir();
+    const script = (n: number): string =>
+      [
+        '```lua {name=stars}',
+        `return ${n}`,
+        '```',
+        '',
+        ':value[stars]',
+        '',
+      ].join('\n');
+    const file = writeNote(dir, 'note.mk.md', script(1));
+    const terminal = createFakeTerminal({
+      stdinIsTty: true,
+      stdoutIsTty: true,
+      env: { XDG_CONFIG_HOME: dir },
+    });
+    const view = fakeViewDeps();
+
+    expect(
+      await run(['view', file], terminal, {
+        view,
+        isolate: devNodeHostIsolate(),
+      }),
+    ).toBe(0);
+
+    const input = view.calls[0];
+    expect(input?.onRerun).toBeDefined();
+    expect(input?.store.get('stars')?.value).toBe(1);
+    await input?.onRerun?.(script(2));
+    expect(input?.store.get('stars')?.value).toBe(2);
+  });
+
+  it('offers no re-run to a note without scripts', async () => {
+    const dir = makeTempDir();
+    const file = writeNote(dir, 'note.mk.md', '# Just markdown\n');
+    const terminal = createFakeTerminal({
+      stdinIsTty: true,
+      stdoutIsTty: true,
+      env: { XDG_CONFIG_HOME: dir },
+    });
+    const view = fakeViewDeps();
+    await run(['view', file], terminal, { view });
+    expect(view.calls[0]?.onRerun).toBeUndefined();
+  });
+
   it('--static forces the render-once path even with both streams TTYs', async () => {
     const dir = makeTempDir();
     const file = writeNote(dir, 'note.mk.md', '# Just markdown\n');

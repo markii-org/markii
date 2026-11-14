@@ -40,7 +40,7 @@ import {
 import {
   createUnavailableComponentLookup,
   formatValue,
-  getContract,
+  invalidEnumAttribute,
   reportDiagnostic,
   INTERACTIVE_ATTRIBUTE,
 } from '@markii/stdlib';
@@ -489,28 +489,6 @@ function renderScriptMarker(node: Element): string | undefined {
   } catch {
     return undefined;
   }
-}
-
-/**
- * Whether one of `name`'s `@markii/stdlib` contract attributes with a
- * closed `enum` is present in `attributes` with a value outside that enum.
- * Returns the first offending attribute/value pair found, or `undefined`.
- * Mirrors `@markii/react`'s identical `invalidEnumAttribute`.
- */
-function invalidEnumAttribute(
-  name: string,
-  attributes: DirectiveAttributes,
-): { attribute: string; value: string } | undefined {
-  const contract = getContract(name);
-  if (!contract) return undefined;
-  for (const [attribute, schema] of Object.entries(contract.attributes)) {
-    const enumValues = schema.enum;
-    if (!enumValues) continue;
-    const value = attributes[attribute];
-    if (value === undefined || value === null || value === '') continue;
-    if (!enumValues.includes(value)) return { attribute, value };
-  }
-  return undefined;
 }
 
 /** Resolves one directive (registry component, `:value[...]`, or the fallback) given its layout-stripped attributes. Never throws. */

@@ -536,6 +536,15 @@ belt and braces. A separate check renders at a fixed requested color level
 across every combination of `NO_COLOR`, `FORCE_COLOR`, `TERM` and `CI`, in
 separate processes, and asserts the bytes are identical each time.
 
+### The language server
+
+`markii lsp` reads each installed pack's `pack.json` to learn its
+components and attributes. It loads no `terminal.js` or other pack code,
+runs no note script, renders nothing, and uses no network. Opening a file
+in an editor therefore executes nothing a pack ships. A probe installs a
+pack whose `terminal.js` would leave a marker file and confirms the marker
+never appears.
+
 ### Terminal packs
 
 A pack's terminal views run where the terminal engine runs. In a command

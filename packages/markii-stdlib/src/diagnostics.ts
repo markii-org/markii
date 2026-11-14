@@ -34,11 +34,10 @@
  * the fallback box, labeled as a missing view rather than an unknown
  * component. Only reported when the host passed `unavailableComponents`.
  *
- * `'unknown-directive'` — a directive names no registered component and
- * rendered as the unknown-component fallback box. Reported by the terminal
- * engine only, so a host that wants a finding for every unknown directive
- * (the language server) can place it; the other engines draw the same
- * fallback and stay quiet.
+ * `'unknown-directive'` — a directive names no known component. Reported
+ * only by `validateNote`, for a host that places findings in the note's
+ * source (the language server). The renderers draw the unknown-component
+ * fallback box and report nothing for it.
  *
  * `'code-renderer-failed'` — a host's `renderCode` callback threw for an
  * ordinary fenced code block; the block rendered as usual. Carries no

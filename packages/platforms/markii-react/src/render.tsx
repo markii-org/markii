@@ -13,7 +13,7 @@ import {
 import type { MarkNode } from '@markii/core';
 import {
   createUnavailableComponentLookup,
-  getContract,
+  invalidEnumAttribute,
   reportDiagnostic,
 } from '@markii/stdlib';
 import type {
@@ -307,40 +307,6 @@ function isRegisteredInline(entry: RegistryEntry): boolean {
   } catch {
     return false;
   }
-}
-
-/**
- * Whether one of `name`'s `@markii/stdlib` contract attributes with a
- * closed `enum` is present in `attributes` with a value outside that enum
- * — e.g. `card{text="Hey"}` (`text` only accepts `left`/`center`/`right`).
- * Returns the first offending attribute/value pair found, or `undefined`
- * when `name` has no contract, the contract declares no enum attributes, or
- * every present enum attribute's value is one of its allowed values (which
- * includes every attribute the directive simply didn't write at all —
- * absence is never a violation).
- *
- * Schema-driven and generic on purpose: this checks every standard
- * component's enum attributes from ONE place, rather than each component
- * hand-rolling its own "is this value one I know" test, so a future
- * contract addition is covered automatically. A directive whose resolved
- * name is not a standard component (a pack, or a host's own registration)
- * has no contract and is never checked — packs may use attribute values
- * this format knows nothing about.
- */
-function invalidEnumAttribute(
-  name: string,
-  attributes: DirectiveAttributes,
-): { attribute: string; value: string } | undefined {
-  const contract = getContract(name);
-  if (!contract) return undefined;
-  for (const [attribute, schema] of Object.entries(contract.attributes)) {
-    const enumValues = schema.enum;
-    if (!enumValues) continue;
-    const value = attributes[attribute];
-    if (value === undefined || value === null || value === '') continue;
-    if (!enumValues.includes(value)) return { attribute, value };
-  }
-  return undefined;
 }
 
 /**

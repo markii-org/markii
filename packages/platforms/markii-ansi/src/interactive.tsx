@@ -182,6 +182,16 @@ export interface InteractiveRootProps {
   focusables: readonly FocusableDescriptor[];
   /** Called when the reader presses `q`. The engine owns no process state: it never calls `process.exit` itself. */
   onExit?: () => void;
+  /**
+   * Called when the reader presses `r`. The host runs whatever it runs and
+   * returns when it is done; the engine owns no run, process, or script
+   * state. While the returned promise is pending the status line reads
+   * "running" and further `r` presses are ignored. A rejection ends the
+   * wait like a resolution. Absent, `r` does nothing and the legend omits it.
+   */
+  onRerun?: () => void | Promise<void>;
+  /** The legend to show instead of `keyLegend` when `onRerun` is given: the render's `GlyphSet.keyLegendRerun`. */
+  rerunLegend?: string;
   color: ColorLevel;
   theme: AnsiTheme;
   /** The key legend on the status line, identical regardless of what is focused: the render's `GlyphSet.keyLegend`, so it follows the box style. */
@@ -212,6 +222,8 @@ export interface InteractiveRootProps {
 export function InteractiveRoot({
   focusables,
   onExit,
+  onRerun,
+  rerunLegend,
   color,
   theme,
   keyLegend,
@@ -255,10 +267,39 @@ export function InteractiveRoot({
     setOffset(target === 'top' ? 0 : maxOffset());
   };
 
+  const [running, setRunning] = useState(false);
+  // A ref, not the state: two presses in one tick must start one run.
+  const runningRef = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  const startRerun = (): void => {
+    if (onRerun === undefined || runningRef.current) return;
+    runningRef.current = true;
+    setRunning(true);
+    const finish = (): void => {
+      runningRef.current = false;
+      if (mounted.current) setRunning(false);
+    };
+    try {
+      Promise.resolve(onRerun()).then(finish, finish);
+    } catch {
+      finish();
+    }
+  };
+
   useInput(
     (input, key) => {
       if (input === 'q') {
         onExit?.();
+        return;
+      }
+      if (input === 'r') {
+        startRerun();
         return;
       }
       if (viewport !== undefined) {
@@ -372,16 +413,19 @@ export function InteractiveRoot({
     focused && focusedId !== undefined
       ? (activeLabels[focusedId] ?? focused.label)
       : undefined;
-  const statusLabel = focused
-    ? `${focused.kind} "${focusedLabel}"`
-    : 'nothing focusable';
+  const statusLabel = running
+    ? 'running'
+    : focused
+      ? `${focused.kind} "${focusedLabel}"`
+      : 'nothing focusable';
+  const legend =
+    onRerun !== undefined && rerunLegend !== undefined
+      ? rerunLegend
+      : keyLegend;
   // Cut to the width on plain text: the status line must stay one row (the
   // viewport math counts it as one), and a label or legend that wrapped
   // would push the document up.
-  const statusLine = dim(
-    cutToWidth(`${statusLabel}  ${keyLegend}`, width),
-    color,
-  );
+  const statusLine = dim(cutToWidth(`${statusLabel}  ${legend}`, width), color);
 
   const status = <Text>{statusLine}</Text>;
 

@@ -111,3 +111,14 @@ describe("box: 'ascii' over the whole corpus", () => {
     }
   }
 });
+
+describe('the re-run legend', () => {
+  it('is the plain legend with the r entry added, in both styles', () => {
+    for (const style of ['unicode', 'ascii'] as const) {
+      const set = glyphsFor(style);
+      expect(set.keyLegendRerun).toBe(
+        set.keyLegend.replace('q quit  ', 'q quit  r run  '),
+      );
+    }
+  });
+});

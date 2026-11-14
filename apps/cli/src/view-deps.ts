@@ -26,6 +26,12 @@ export interface MountLiveViewerInput {
    * text after each change on disk, and returns a function that removes it.
    * The viewer re-renders in place, so focus and open state survive.
    */
+  /**
+   * `r`: runs the note's scripts again for `text` (the note as last read)
+   * and puts the new values in `store`. Absent for a note with no scripts,
+   * which then offers no `r` key.
+   */
+  readonly onRerun?: (text: string) => Promise<void>;
   readonly onTextChange?: (listener: (text: string) => void) => () => void;
 }
 

@@ -430,34 +430,17 @@ describe('empty-inline and invalid-enum quiet markers', () => {
     ]);
   });
 
-  it('an unknown directive reports nothing unless asked to', async () => {
+  it('an unknown directive draws the fallback and reports nothing', async () => {
     const diagnostics: DiagnosticEvent[] = [];
-    await renderMarkToAnsi('::nothing{}\n', empty, undefined, undefined, {
-      onDiagnostic: (event) => diagnostics.push(event),
-    });
-    expect(diagnostics).toEqual([]);
-  });
-
-  it('an unknown directive reports an unknown-directive diagnostic with its range', async () => {
-    const diagnostics: DiagnosticEvent[] = [];
-    await renderMarkToAnsi(
+    const text = await renderMarkToAnsi(
       'Intro\n\n::nothing{}\n',
       empty,
       undefined,
       undefined,
-      {
-        onDiagnostic: (event) => diagnostics.push(event),
-        reportUnknownDirectives: true,
-      },
+      { onDiagnostic: (event) => diagnostics.push(event), color: 'never' },
     );
-    expect(diagnostics).toEqual([
-      {
-        kind: 'unknown-directive',
-        directive: 'nothing',
-        message: 'nothing: unknown component, shown as a placeholder',
-        position: { startLine: 3, startColumn: 1, endLine: 3, endColumn: 12 },
-      },
-    ]);
+    expect(text).toContain('nothing');
+    expect(diagnostics).toEqual([]);
   });
 });
 

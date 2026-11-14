@@ -31,6 +31,69 @@ npm run build --workspace @markii/cli
 node apps/cli/dist/markii.mjs --help
 ```
 
+## How to use it
+
+This walk-through takes one note from install to an exported file. Each
+step uses a command from the sections below.
+
+Install the tool and check that it runs:
+
+```
+npm install -g @markii/cli
+markii --version
+```
+
+Save this as `trip.mk.md`. It has one script, a callout that shows the
+script's value, and a component from a pack you have not installed yet:
+
+````
+# Trip
+
+```lua {name=days}
+return 12
+```
+
+:::callout{type="info"}
+Days left: :value[days]
+:::
+
+::ana_timeline{title="Plan"}
+````
+
+Open it in the live viewer with `markii view trip.mk.md`. In a terminal the
+viewer runs the script, then draws the note. A script that reaches the
+network makes the viewer ask for permission first. Press `r` to run the
+script again and `q` to quit. The timeline
+component reads "unknown component" because its pack is not installed.
+
+To run the scripts without the viewer, use `markii run`. It prints nothing
+when the scripts succeed, and it stores the values for the next view:
+
+```
+markii run trip.mk.md
+```
+
+Install the pack from its `.mkp` archive. The command asks before it
+installs, because a pack's code runs with your user permissions:
+
+```
+markii pack install ana-1.0.0.mkp
+markii pack list
+```
+
+Open the note again. The timeline now draws from the pack. Write the note
+to an HTML file with:
+
+```
+markii export trip.mk.md --format html -o trip.html
+```
+
+Diagnostics go to stderr, so a pipe or a file keeps only the note. A script
+that failed, a pack that did not load, and an attribute value the renderer
+ignored each produce one line there. The export above prints one such line,
+because the static HTML engine draws no pack views. Add `--verbose` to see
+which packs loaded.
+
 ## Commands
 
 ### `markii view <file>`
@@ -73,16 +136,28 @@ In a terminal, `markii view` opens the note in a live viewer rather than
 printing it and exiting. Tabs show one panel at a time, and a details block
 starts folded unless it was written with `open`.
 
-| Key              | What it does                                      |
-| ---------------- | ------------------------------------------------- |
-| left, right, tab | Switch to the previous or next tab                |
-| enter            | Fold a details block open or closed               |
-| up, down, j, k   | Move focus to the previous or next foldable block |
-| space, pgdn      | Scroll down one screen                            |
-| b, pgup          | Scroll up one screen                              |
-| g, G             | Jump to the top or the bottom of the note         |
-| ctrl-e, ctrl-y   | Scroll down or up one line                        |
-| q                | Quit                                              |
+| Key                     | What it does                                                   |
+| ----------------------- | -------------------------------------------------------------- |
+| up, down, j, k          | Move focus to the previous or next tabs, details, or pack view |
+| left, right, tab        | Switch tabs, while a tabs block is focused                     |
+| enter                   | Fold a details block open or closed, while it is focused       |
+| space, pagedown, ctrl-f | Scroll down one screen                                         |
+| b, pageup, ctrl-b       | Scroll up one screen                                           |
+| g, home                 | Jump to the top of the note                                    |
+| G, end                  | Jump to the bottom of the note                                 |
+| ctrl-e, ctrl-y          | Scroll down or up one line                                     |
+| r                       | Run the note's scripts again and redraw with the new values    |
+| q                       | Quit                                                           |
+
+The scroll keys work when the terminal reports its height. With nothing to
+focus, j and k scroll one line at a time. The `r` key appears in the status
+line legend only for a note that has scripts.
+
+Pressing `r` runs the scripts at the manual tier, through the same path and
+grant prompts as at open. The status line reads `running` until the run
+ends, and `r` is ignored meanwhile. The note then redraws in place with the
+new values, and a failed script is reported on stderr when the viewer
+closes.
 
 The focused block is marked in the accent color and with a `›` glyph (`>`
 with `--box ascii`) before its heading, so focus is visible even on a theme with no perceptible accent
@@ -169,8 +244,11 @@ so the same note does not re-prompt on every run.
 Runs a language server over stdin and stdout for editors such as Neovim,
 Helix and Emacs: completion, hover, diagnostics, and fence lengthening for
 `.mk.md` documents. It never runs a note's scripts and never uses the
-network. Pack-loading problems go to the editor's log; `--verbose` adds the
-informational pack lines. It exits with 0 after the client's shutdown
+network. It reads each installed pack's `pack.json` to know the pack's
+components and attributes, and it loads no pack code. Its findings do not
+depend on a renderer: a component of a pack with no terminal view is not
+reported. Pack folders that cannot be read go to the editor's log;
+`--verbose` adds the informational pack lines. It exits with 0 after the client's shutdown
 request and 1 otherwise, as the protocol specifies.
 
 ## Where the CLI keeps its state

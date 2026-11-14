@@ -45,3 +45,16 @@ export {
 } from './diagnostics.js';
 
 export { INTERACTIVE_ATTRIBUTE } from './interactive.js';
+
+export {
+  buildNoteCatalog,
+  formMismatchMessage,
+  invalidAttributeValueMessage,
+  invalidEnumAttribute,
+  standardNoteCatalog,
+  unknownDirectiveMessage,
+  validateNote,
+  type NoteCatalogAttribute,
+  type NoteCatalogEntry,
+  type NoteTreeNode,
+} from './validate-note.js';

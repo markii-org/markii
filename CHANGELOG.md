@@ -6,6 +6,26 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `@markii/stdlib`: `validateNote(tree, catalog)` with
+  `standardNoteCatalog` and `buildNoteCatalog`. It reports the findings
+  that need no renderer.
+- `markii view`: `r` re-runs the note's scripts. `@markii/ansi`'s
+  `buildMarkElement` takes `onRerun`.
+- Neovim plugin: `K` shows hover, `omnifunc` completes, and
+  `:checkhealth markii` reports whether the tool is installed.
+
+### Changed
+
+- **`markii lsp` loads no pack code.** It reads `pack.json` only, and its
+  findings no longer depend on the terminal engine. It no longer reports
+  a missing terminal view or an unsafe image source. It checks a pack
+  component's declared attribute values.
+- **Breaking: `@markii/ansi` drops the `reportUnknownDirectives` option**
+  and no longer reports `unknown-directive`; `validateNote` does.
+  `GlyphSet` gains a required `keyLegendRerun` member.
+
 ## [0.17.0-next.4] - 2026-11-14
 
 A prerelease on the npm `next` dist-tag. It narrows `@markii/host` to the
