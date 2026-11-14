@@ -130,7 +130,9 @@ export async function buildBundledPacks(
     });
     if (outcome.kind !== 'written') {
       const reason =
-        outcome.kind === 'failed' ? outcome.reason : 'export was cancelled';
+        outcome.kind === 'failed'
+          ? outcome.reason
+          : 'the overwrite was declined';
       throw new Error(`bundled pack "${name}" failed to build: ${reason}`);
     }
     built.push(name);

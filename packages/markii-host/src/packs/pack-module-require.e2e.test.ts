@@ -18,8 +18,9 @@
  *     -> buildRequire (@markii/lua) running on a real wasmoon engine
  */
 import { describe, expect, it } from 'vitest';
-import { createEmptyLuaEngine, buildRequire } from '@markii/lua';
-import type { RequireConfig } from '@markii/lua';
+import { createEmptyLuaEngine } from '@markii/lua';
+import { buildRequire } from '@markii/lua/internal';
+import type { RequireConfig } from '@markii/lua/internal';
 import { discoverPacks } from './discover.js';
 import type { PackFileReader } from './discover.js';
 import { loadPackModules } from './pack-scripts.js';

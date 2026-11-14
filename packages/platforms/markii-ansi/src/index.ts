@@ -4,6 +4,12 @@
 // wants text with no HTML runtime — plus, for a live viewer, the Ink element
 // tree itself (`buildMarkElement`). It is a third platform renderer alongside
 // @markii/html and @markii/react.
+//
+// This entry is the package's semver promise: the render entry points, the
+// registry and pack-loading seam, the types a pack's terminal view names, and
+// the `TERMINAL_*_GLOBAL` names that form the terminal pack ABI. The escape
+// helpers, failure wording, sanitizers and layout helpers stay inside the
+// package.
 export {
   renderMarkToAnsi,
   renderMarkNodeToAnsi,
@@ -14,83 +20,22 @@ export {
   type RenderMarkOptions,
 } from './render.js';
 export {
-  fg,
-  colorize,
-  bold,
-  dim,
-  italic,
-  underline,
-  inverse,
-  hyperlink,
   detectColorLevel,
   resolveColorOption,
   type ColorLevel,
   type ColorOption,
-  type AnsiColor,
 } from './ansi.js';
 export { defaultAnsiTheme, type AnsiTheme, type Tier1Token } from './theme.js';
-export {
-  BOX_STYLES,
-  isBoxStyle,
-  glyphsFor,
-  type BoxStyle,
-  type FrameEdges,
-  type GlyphSet,
-} from './glyphs.js';
-export { style } from './style.js';
-export {
-  createAnsiRegistry,
-  mergeAnsiRegistries,
-  registryAliases,
-  readRegistryComponent,
-  resolveDirectiveAlias,
-  childrenText,
-  REGISTRY_ALIASES,
-  type DirectiveAttributes,
-  type AnsiRegistry,
-  type AnsiRegistryEntry,
-  type AnsiComponent,
-  type AnsiComponentProps,
-  type AnsiRenderContext,
-  type RegistryAlias,
-  type RegistryAliases,
-  type ResolvedDirective,
-  type ValueResolution,
+export type { BoxStyle, GlyphSet } from './glyphs.js';
+export type {
+  DirectiveAttributes,
+  AnsiRegistry,
+  AnsiRegistryEntry,
+  AnsiComponent,
+  AnsiComponentProps,
+  AnsiRenderContext,
+  ValueResolution,
 } from './registry.js';
-export {
-  resolveStorePath,
-  resolveScopedPath,
-  VAULT_NAME_PREFIX,
-  type StorePathResolution,
-  type ValueScope,
-} from './resolve.js';
-export {
-  failurePhrase,
-  failureTitle,
-  failureToken,
-  dataStateSuffix,
-  emptyInlineTitle,
-  invalidAttributeValueLabel,
-  invalidAttributeValueTitle,
-  unsafeImageSrcLabel,
-  unsafeImageSrcTitle,
-} from './failure-presentation.js';
-export { stringifyStoredValue } from './value-format.js';
-export {
-  stripControlCharacters,
-  sanitizeBlockText,
-  sanitizeUrlText,
-  BLOCK_TAB_WIDTH,
-} from './sanitize.js';
-export {
-  resolveLayoutAttributes,
-  applyLayout,
-  LAYOUT_ATTRIBUTE_KEYS,
-  type ResolvedLayoutAttributes,
-  type ResolvedLayoutPresets,
-  type WidthPreset,
-  type AlignPreset,
-} from './layout.js';
 export { type ResolveImageSrc } from './image-resolve.js';
 export { type ResolveHref } from './href-resolve.js';
 export type {
@@ -102,13 +47,9 @@ export type {
 } from './value-types.js';
 export { defaultAnsiRegistry } from './components/index.js';
 export {
-  ANSI_ENGINE_ID,
-  loadAnsiPack,
   installAnsiPacks,
-  sanitizeValueForPack,
   type AnsiPackComponentModules,
   type AnsiPackToInstall,
-  type LoadAnsiPackResult,
   type InstallAnsiPacksResult,
 } from './pack-loader.js';
 export {

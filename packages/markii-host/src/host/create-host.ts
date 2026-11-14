@@ -135,6 +135,21 @@ function unsupported(
   return { kind: 'unsupported', capability, detail };
 }
 
+/** Writes one diagnostics line for a rejected adapter primitive and returns the `failed` outcome. Never throws. */
+function failedOutcome(
+  adapter: HostAdapter,
+  what: string,
+  err: unknown,
+): { readonly kind: 'failed'; readonly reason: string } {
+  const reason = err instanceof Error ? err.message : String(err);
+  try {
+    adapter.diagnostics(`${what} failed: ${reason}`);
+  } catch {
+    // the diagnostics surface itself is what failed
+  }
+  return { kind: 'failed', reason };
+}
+
 // --- open ------------------------------------------------------------
 
 export interface OpenRequest {
@@ -337,6 +352,8 @@ export type LoadPacksOutcome =
       /** The installed components with no view for this host's engine, for a renderer's `unavailableComponents` option. */
       readonly unavailable: readonly UnavailableComponent[];
     }
+  /** An adapter primitive rejected while the packs were read. The diagnostics line is already written. */
+  | { readonly kind: 'failed'; readonly reason: string }
   | Unsupported;
 
 export type LoadTerminalPacksOutcome =
@@ -360,6 +377,8 @@ export type LoadTerminalPacksOutcome =
        */
       readonly failureLines: readonly string[];
     }
+  /** An adapter primitive rejected while the packs were read. The diagnostics line is already written. */
+  | { readonly kind: 'failed'; readonly reason: string }
   | Unsupported;
 
 export type RemovePackOutcome =
@@ -372,7 +391,10 @@ export type RemovePackOutcome =
   | Unsupported;
 
 export type InstalledPacksOutcome =
-  ({ readonly kind: 'listed' } & InstalledPacksListing) | Unsupported;
+  | ({ readonly kind: 'listed' } & InstalledPacksListing)
+  /** An adapter primitive rejected while the install root was read. The diagnostics line is already written. */
+  | { readonly kind: 'failed'; readonly reason: string }
+  | Unsupported;
 
 export type EnablePackOutcome =
   | { readonly kind: 'enabled'; readonly namespace: string }
@@ -423,6 +445,8 @@ export type CompleteOutcome =
     }
   /** Nothing to offer here: no directive context, or a bare colon run closing an open container. Not a failure. */
   | { readonly kind: 'none' }
+  /** The editor or the catalog threw. The diagnostics line is already written. */
+  | { readonly kind: 'failed'; readonly reason: string }
   | Unsupported;
 
 export type HoverOutcome =
@@ -436,6 +460,8 @@ export type HoverOutcome =
       readonly end: number;
     }
   | { readonly kind: 'none' }
+  /** The editor or the catalog threw. The diagnostics line is already written. */
+  | { readonly kind: 'failed'; readonly reason: string }
   | Unsupported;
 
 export interface InsertComponentRequest {
@@ -457,7 +483,8 @@ export type InsertOutcome =
       readonly cursor: LineColumn;
     }
   | { readonly kind: 'not-found'; readonly name: string }
-  | { readonly kind: 'failed' }
+  /** The edit was not applied, or the editor or the catalog threw. The diagnostics line is already written. */
+  | { readonly kind: 'failed'; readonly reason: string }
   | Unsupported;
 
 // --- the host itself ---------------------------------------------------
@@ -569,7 +596,7 @@ export function createMarkiiHostWithSeams(
   }
 
   /** The pack-aware insert/completion catalog, built fresh from this host's currently authorized folders. Not cached here: `./editor-behavior.js`'s `createCatalogCache` is the caching seam, and a caller wiring a live editor (repeated completion/hover calls per keystroke) is expected to wrap this call in one. */
-  async function currentCatalog(): Promise<readonly InsertableComponent[]> {
+  async function readCatalog(): Promise<readonly InsertableComponent[]> {
     if (!adapter.packs) return buildComponentCatalog([]);
     const { packs } = await loadPacksViaAdapter(
       packSource(adapter.packs),
@@ -579,6 +606,16 @@ export function createMarkiiHostWithSeams(
       [...(adapter.packs.bundledPacks?.() ?? []), ...packs],
       adapter.packs.engine,
     );
+  }
+
+  /** The catalog for the cache. A rejected pack read writes one diagnostics line and leaves the standard set, so completion and hover still answer. */
+  async function currentCatalog(): Promise<readonly InsertableComponent[]> {
+    try {
+      return await readCatalog();
+    } catch (err) {
+      failedOutcome(adapter, 'read the pack catalog', err);
+      return buildComponentCatalog([]);
+    }
   }
 
   /** Completion and hover fire per keystroke, so they read a cached catalog. `insertComponent` stays uncached: it runs once per command. */
@@ -835,34 +872,41 @@ export function createMarkiiHostWithSeams(
         );
       }
       catalogCache.invalidate();
-      const result = await loadPacksViaAdapter(
-        packSource(adapter.packs),
-        packIo,
-      );
-      for (const line of formatPackDiagnosticLines({
-        packs: result.packs,
-        skipped: result.skipped,
-        engine: adapter.packs.engine,
-        cssWarnings: [],
-      })) {
-        adapter.diagnostics(line);
-      }
-      if (usesPackTrust(adapter)) {
-        for (const namespace of (await listInstalledPacks(adapter))
-          .notEnabled) {
-          adapter.diagnostics(
-            notEnabledPackDiagnosticLine(namespace, adapter.labels.deviceNoun),
-          );
+      try {
+        const result = await loadPacksViaAdapter(
+          packSource(adapter.packs),
+          packIo,
+        );
+        for (const line of formatPackDiagnosticLines({
+          packs: result.packs,
+          skipped: result.skipped,
+          engine: adapter.packs.engine,
+          cssWarnings: [],
+        })) {
+          adapter.diagnostics(line);
         }
+        if (usesPackTrust(adapter)) {
+          for (const namespace of (await listInstalledPacks(adapter))
+            .notEnabled) {
+            adapter.diagnostics(
+              notEnabledPackDiagnosticLine(
+                namespace,
+                adapter.labels.deviceNoun,
+              ),
+            );
+          }
+        }
+        return {
+          kind: 'loaded',
+          namespaces: result.namespaces,
+          packs: result.packs,
+          skipped: result.skipped,
+          components: result.components,
+          unavailable: result.unavailable,
+        };
+      } catch (err) {
+        return failedOutcome(adapter, 'load packs', err);
       }
-      return {
-        kind: 'loaded',
-        namespaces: result.namespaces,
-        packs: result.packs,
-        skipped: result.skipped,
-        components: result.components,
-        unavailable: result.unavailable,
-      };
     },
 
     async loadTerminalPacks(): Promise<LoadTerminalPacksOutcome> {
@@ -881,36 +925,40 @@ export function createMarkiiHostWithSeams(
         );
       }
       catalogCache.invalidate();
-      const result = await loadPacksViaAdapter(
-        packSource(adapter.packs),
-        packIo,
-      );
-      const read = await readTerminalPackScripts(adapter, result.packs);
-      for (const line of formatPackDiagnosticLines({
-        packs: result.packs,
-        skipped: result.skipped,
-        engine: 'ansi',
-        cssWarnings: [],
-      })) {
-        adapter.diagnostics(line);
+      try {
+        const result = await loadPacksViaAdapter(
+          packSource(adapter.packs),
+          packIo,
+        );
+        const read = await readTerminalPackScripts(adapter, result.packs);
+        for (const line of formatPackDiagnosticLines({
+          packs: result.packs,
+          skipped: result.skipped,
+          engine: 'ansi',
+          cssWarnings: [],
+        })) {
+          adapter.diagnostics(line);
+        }
+        for (const line of read.problems) adapter.diagnostics(line);
+        const failureLines = [
+          ...result.skipped
+            .filter((entry) => entry.engineUnsupported === undefined)
+            .map(skippedPackFolderLine),
+          ...read.problems,
+        ];
+        return {
+          kind: 'loaded',
+          namespaces: result.namespaces,
+          packs: result.packs,
+          skipped: result.skipped,
+          components: result.components,
+          unavailable: result.unavailable,
+          scripts: read.scripts,
+          failureLines,
+        };
+      } catch (err) {
+        return failedOutcome(adapter, 'load terminal packs', err);
       }
-      for (const line of read.problems) adapter.diagnostics(line);
-      const failureLines = [
-        ...result.skipped
-          .filter((entry) => entry.engineUnsupported === undefined)
-          .map(skippedPackFolderLine),
-        ...read.problems,
-      ];
-      return {
-        kind: 'loaded',
-        namespaces: result.namespaces,
-        packs: result.packs,
-        skipped: result.skipped,
-        components: result.components,
-        unavailable: result.unavailable,
-        scripts: read.scripts,
-        failureLines,
-      };
     },
 
     async removePack(namespace: string): Promise<RemovePackOutcome> {
@@ -948,7 +996,11 @@ export function createMarkiiHostWithSeams(
           'this host does not gate installed packs on a trust list.',
         );
       }
-      return { kind: 'listed', ...(await listInstalledPacks(adapter)) };
+      try {
+        return { kind: 'listed', ...(await listInstalledPacks(adapter)) };
+      } catch (err) {
+        return failedOutcome(adapter, 'list installed packs', err);
+      }
     },
 
     async enablePack(namespace: string): Promise<EnablePackOutcome> {
@@ -988,7 +1040,11 @@ export function createMarkiiHostWithSeams(
           'completion is not available: this host has no live editor.',
         );
       }
-      return completeWith(await catalogCache.get(), request, editor);
+      try {
+        return completeWith(await catalogCache.get(), request, editor);
+      } catch (err) {
+        return failedOutcome(adapter, 'completion', err);
+      }
     },
 
     completeAtSync(request: EditorPositionRequest): CompleteOutcome {
@@ -1000,9 +1056,18 @@ export function createMarkiiHostWithSeams(
           'completion is not available: this host has no live editor.',
         );
       }
-      const warm = catalogCache.peek();
-      if (warm === undefined) void catalogCache.get();
-      return completeWith(warm ?? buildComponentCatalog([]), request, editor);
+      try {
+        const warm = catalogCache.peek();
+        if (warm === undefined) {
+          catalogCache.get().catch((err: unknown) => {
+            failedOutcome(adapter, 'completion catalog', err);
+          });
+        }
+        return completeWith(warm ?? buildComponentCatalog([]), request, editor);
+      } catch (err) {
+        failedOutcome(adapter, 'completion', err);
+        return { kind: 'none' };
+      }
     },
 
     invalidateCatalog(): void {
@@ -1018,25 +1083,29 @@ export function createMarkiiHostWithSeams(
           'hover is not available: this host has no live editor.',
         );
       }
-      const catalog = await catalogCache.get();
-      const hover = hoverAtViaEditor(
-        { documentText: () => documentTextFor(editor, request) },
-        request,
-        catalog,
-      );
-      if (hover === undefined) return { kind: 'none' };
-      // The formatted text (summary, attributes, and the usage example),
-      // not the bare summary sentence: a component's description alone
-      // often never repeats its own directive name (see
-      // `./editor-behavior.js`'s `hoverDocumentationText` doc comment),
-      // while the usage example always does.
-      return {
-        kind: 'hover',
-        text: formatComponentDocumentation(hover.documentation),
-        documentation: hover.documentation,
-        start: hover.start,
-        end: hover.end,
-      };
+      try {
+        const catalog = await catalogCache.get();
+        const hover = hoverAtViaEditor(
+          { documentText: () => documentTextFor(editor, request) },
+          request,
+          catalog,
+        );
+        if (hover === undefined) return { kind: 'none' };
+        // The formatted text (summary, attributes, and the usage example),
+        // not the bare summary sentence: a component's description alone
+        // often never repeats its own directive name (see
+        // `./editor-behavior.js`'s `hoverDocumentationText` doc comment),
+        // while the usage example always does.
+        return {
+          kind: 'hover',
+          text: formatComponentDocumentation(hover.documentation),
+          documentation: hover.documentation,
+          start: hover.start,
+          end: hover.end,
+        };
+      } catch (err) {
+        return failedOutcome(adapter, 'hover', err);
+      }
     },
 
     async insertComponent(
@@ -1049,39 +1118,44 @@ export function createMarkiiHostWithSeams(
           'insert component is not available: this host has no live editor.',
         );
       }
-      const catalog = await currentCatalog();
-      const component = catalog.find(
-        (entry) => entry.directiveName === request.name,
-      );
-      if (component === undefined) {
-        adapter.diagnostics(
-          `insert component: no catalog entry named "${request.name}".`,
+      try {
+        const catalog = await readCatalog();
+        const component = catalog.find(
+          (entry) => entry.directiveName === request.name,
         );
-        return { kind: 'not-found', name: request.name };
-      }
+        if (component === undefined) {
+          adapter.diagnostics(
+            `insert component: no catalog entry named "${request.name}".`,
+          );
+          return { kind: 'not-found', name: request.name };
+        }
 
-      const cursor = adapter.editor.cursor();
-      const documentText = adapter.editor.documentText();
-      const plan = insertComponentPlan(
-        component,
-        documentText,
-        cursor.line,
-        cursor.column,
-      );
-      const edits: HostTextEdit[] = plan.edits.map((edit) => ({
-        line: edit.line,
-        startColumn: edit.startColumn,
-        endColumn: edit.endColumn,
-        text: edit.text,
-      }));
-      const applied = await adapter.editor.applyEdits(edits);
-      if (!applied) {
-        adapter.diagnostics(
-          `insert component: the host declined to apply the edit for "${request.name}".`,
+        const cursor = adapter.editor.cursor();
+        const documentText = adapter.editor.documentText();
+        const plan = insertComponentPlan(
+          component,
+          documentText,
+          cursor.line,
+          cursor.column,
         );
-        return { kind: 'failed' };
+        const edits: HostTextEdit[] = plan.edits.map((edit) => ({
+          line: edit.line,
+          startColumn: edit.startColumn,
+          endColumn: edit.endColumn,
+          text: edit.text,
+        }));
+        const applied = await adapter.editor.applyEdits(edits);
+        if (!applied) {
+          const reason = 'the host declined to apply the edit';
+          adapter.diagnostics(
+            `insert component: the host declined to apply the edit for "${request.name}".`,
+          );
+          return { kind: 'failed', reason };
+        }
+        return { kind: 'inserted', cursor: plan.cursor };
+      } catch (err) {
+        return failedOutcome(adapter, 'insert component', err);
       }
-      return { kind: 'inserted', cursor: plan.cursor };
     },
 
     diagnostics(line: string): void {

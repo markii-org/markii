@@ -110,8 +110,25 @@ export async function listInstalledPacks(
       .filter((entry) => entry.isDirectory)
       .map((entry) => entry.name)
       .sort();
-  } catch {
+  } catch (error) {
     names = [];
+    // A missing install root is the ordinary state before the first
+    // install. Any other failure is reported, so it is not mute.
+    let rootExists = false;
+    try {
+      rootExists = await adapter.exists(installRoot);
+    } catch {
+      rootExists = true;
+    }
+    if (rootExists) {
+      try {
+        adapter.diagnostics(
+          `could not list installed packs: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      } catch {
+        // the diagnostics surface itself is what failed
+      }
+    }
   }
   return selectEnabledPacks(installRoot, names, readPackTrust(adapter));
 }

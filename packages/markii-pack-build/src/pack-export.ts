@@ -101,7 +101,7 @@ export type PackExportOutcome =
       /** The build's pack-CSS lint warnings, passed through unchanged. */
       readonly warnings: readonly string[];
     }
-  | { readonly kind: 'cancelled'; readonly packName: string }
+  | { readonly kind: 'declined'; readonly packName: string }
   | {
       readonly kind: 'failed';
       readonly packName: string;
@@ -151,7 +151,7 @@ function packNameOf(pack: DiscoveredPack): string {
  * NEVER throws: every failure (an unsafe `exportName`, a build failure, an
  * unreadable build output or `pack.json`, a write that fails) comes back as
  * `{ kind: 'failed', reason }`. A declined overwrite comes back as
- * `{ kind: 'cancelled' }` with nothing written.
+ * `{ kind: 'declined' }` with nothing written.
  *
  * Order of operations: resolve the destination folder and every write
  * target inside it (path-jailed against `destinationDir`, including the
@@ -385,7 +385,7 @@ export async function exportPack(
       return { kind: 'failed', packName, reason: describeThrown(err) };
     }
     if (!proceed) {
-      return { kind: 'cancelled', packName };
+      return { kind: 'declined', packName };
     }
   }
 

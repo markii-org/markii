@@ -34,7 +34,8 @@ Every behavior answers with an outcome whose `kind` uses one vocabulary.
 `failed` means an I/O or runtime failure, and it carries a `reason`.
 `invalid` means input was read and judged bad, such as a malformed pack
 archive, and it carries a `reason`. `unsupported` means the host lacks the
-capability.
+capability. No behavior rejects: an adapter primitive that throws becomes a
+`failed` outcome and one diagnostics line.
 
 `run` resolves `failed` when the run threw. The diagnostics line and a
 failed trace are written before it resolves. A completed run carries

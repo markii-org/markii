@@ -251,6 +251,30 @@ reported. Pack folders that cannot be read go to the editor's log;
 `--verbose` adds the informational pack lines. It exits with 0 after the client's shutdown
 request and 1 otherwise, as the protocol specifies.
 
+## Public contract
+
+This table is the tool's contract for scripts and CI. A command, a flag
+or an exit code listed here changes only in a release that says so.
+`markii --help` prints the same commands and flags.
+
+Three flags work with every command: `--help` (`-h`), `--version`
+(`-V`) and `--verbose`. Running `markii` with no arguments prints the
+help text and exits with 0. A flag that the command does not take is a
+usage error, never ignored.
+
+| Command                      | Flags                                                                                                        | Exit codes                                                                                                                       |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| `markii view <file>`         | `--width <n>`, `--color <mode>`, `--box <style>`, `--no-run`, `--static`, `--watch`                          | 0 rendered, 1 file unreadable or render failed, 2 a script failed, 3 usage error (`--watch` without a terminal on stdout is one) |
+| `markii export <file>`       | `--format <html\|ansi\|md-plain>` (required), `-o`, `--output` (required), `--color <mode>`, `--box <style>` | 0 file written, 1 file unreadable or export failed, 3 usage error                                                                |
+| `markii run <file>`          | none                                                                                                         | 0 every script succeeded, 1 file unreadable, 2 a script failed, 3 usage error                                                    |
+| `markii lsp`                 | none                                                                                                         | 0 after the client's shutdown request, 1 otherwise, 3 usage error                                                                |
+| `markii pack install <file>` | `--yes` (`-y`)                                                                                               | 0 installed, 1 archive unreadable, refused, declined or invalid, 3 usage error                                                   |
+| `markii pack list`           | none                                                                                                         | 0 listed, 1 the packs could not be loaded, 3 usage error                                                                         |
+| `markii pack remove <name>`  | none                                                                                                         | 0 removed, 1 not installed, reserved, invalid or failed, 3 usage error                                                           |
+
+`--color` takes `auto`, `never`, `16`, `256` or `truecolor`. `--box` takes
+`unicode` or `ascii`. `--help` and `--version` exit with 0.
+
 ## Where the CLI keeps its state
 
 Everything the CLI remembers between runs lives in one file, `state.json`,

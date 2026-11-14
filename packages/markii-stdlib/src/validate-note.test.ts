@@ -120,6 +120,18 @@ describe('validateNote', () => {
     ]);
   });
 
+  it('treats an entry with no kindDeclared as declared', () => {
+    const pack: NoteCatalogEntry = {
+      directiveName: 'ana_hand',
+      kind: 'leaf',
+    };
+    const events = validateNote(
+      root(directive('textDirective', 'ana_hand')),
+      buildNoteCatalog([pack]),
+    );
+    expect(events.map((e) => e.kind)).toEqual(['form-mismatch']);
+  });
+
   it('skips the form check for a pack kind that was only a default', () => {
     const pack: NoteCatalogEntry = {
       directiveName: 'ana_note',

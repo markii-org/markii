@@ -34,20 +34,6 @@ export {
   hoverAt,
 } from './complete/completion.js';
 export type {
-  AttributeNameParseResult,
-  AttributeValueParseResult,
-  DirectiveForm,
-  DirectiveNameParseResult,
-  DirectiveNameToken,
-  ParsedCompletionContext,
-} from './complete/directive-context.js';
-export {
-  clampColumn,
-  findDirectiveNameTokenAt,
-  parseCompletionContext,
-} from './complete/directive-context.js';
-
-export type {
   EditorComponentAttribute,
   InsertableComponent,
 } from './insert/component-catalog.js';
@@ -63,7 +49,6 @@ export {
   componentSkeleton,
   offsetToLineColumn,
 } from './insert/component-skeleton.js';
-export { firstSentence } from './insert/first-sentence.js';
 
 export type {
   EnclosingContainerFence,

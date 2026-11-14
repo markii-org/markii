@@ -75,8 +75,8 @@ export interface NoteCatalogEntry {
   /** The directive name an author writes, e.g. `callout` or `cat_card`. */
   readonly directiveName: string;
   readonly kind: ComponentKind;
-  /** False when `kind` is only a default (a pack component that declared none); no form check is made then. */
-  readonly kindDeclared: boolean;
+  /** False when `kind` is only a default (a pack component that declared none); no form check is made then. Omitted means `true`. */
+  readonly kindDeclared?: boolean;
   readonly attributes?: readonly NoteCatalogAttribute[];
 }
 
@@ -268,7 +268,7 @@ export function validateNote(
     }
     if (
       node.type === 'textDirective' &&
-      entry.kindDeclared &&
+      entry.kindDeclared !== false &&
       entry.kind !== 'inline'
     ) {
       events.push({

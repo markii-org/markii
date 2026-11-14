@@ -44,6 +44,24 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
   exports.
 - **Breaking: `@markii/pack-build`** no longer exports `computeCacheKey`,
   the CSS lint functions or `resolveExportTarget`.
+- **Breaking: smaller public entries.** `@markii/lua` exports its run API
+  only; the sandbox's assembly parts (`buildCapabilities`, `buildDoc`,
+  `buildJsonTable`, `buildMarshalPrelude`, `wrapUserCode`, `installLimits`,
+  the global lists and their types) are gone, and `buildRequire` moved to
+  `@markii/lua/internal`. `@markii/ansi` drops its SGR helpers, registry
+  internals, failure wording, sanitizers and layout helpers. `@markii/html`
+  drops `failurePhrase`, `failureTitle`, `failureKindClass`,
+  `dataStateClassName` and `resolveStorePath`. `@markii/runtime` drops
+  `sanitizeText`, `utf8ByteLength` and `laterScriptReadMessage`.
+  `@markii/stdlib/editor` drops `clampColumn`, `findDirectiveNameTokenAt`,
+  `parseCompletionContext`, `firstSentence` and their result types.
+- **Breaking for an exhaustive switch:** `loadPacks`, `loadTerminalPacks`,
+  `installedPacks`, `completeAt` and `hoverAt` can answer `failed`, where
+  a rejecting adapter made them throw. `insertComponent`'s `failed`
+  carries a `reason`.
+- **Breaking: `@markii/pack-build`'s `exportPack`** answers `declined` for
+  a refused overwrite, where it answered `cancelled`.
+- `@markii/stdlib`: `NoteCatalogEntry.kindDeclared` is optional.
 - A `.mkp` archive carries a fixed modification time, so the same pack
   gives the same bytes at any hour.
 - The empty-inline marker and its diagnostic need a directive with no

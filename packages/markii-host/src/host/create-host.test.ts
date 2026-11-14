@@ -1047,3 +1047,152 @@ describe('export targetPath', () => {
     });
   });
 });
+
+describe('createMarkiiHost behaviors resolve `failed` when an adapter primitive rejects', () => {
+  const boom = async (): Promise<never> => {
+    throw new Error('boom');
+  };
+
+  function rejectingPacks(
+    overrides: Partial<NonNullable<HostAdapter['packs']>> = {},
+  ): NonNullable<HostAdapter['packs']> {
+    return {
+      trust: 'none',
+      engine: 'ansi',
+      authorizedFolders: boom,
+      reservedNamespaces: () => new Set(),
+      ...overrides,
+    };
+  }
+
+  it('loadPacks', async () => {
+    const lines: string[] = [];
+    const adapter = fakeAdapter({
+      diagnostics: (line) => lines.push(line),
+      packs: rejectingPacks(),
+    });
+    const outcome = await createMarkiiHost(adapter).loadPacks();
+    expect(outcome).toEqual({ kind: 'failed', reason: 'boom' });
+    expect(lines).toEqual(['load packs failed: boom']);
+  });
+
+  it('loadTerminalPacks', async () => {
+    const lines: string[] = [];
+    const adapter = fakeAdapter({
+      diagnostics: (line) => lines.push(line),
+      packs: rejectingPacks(),
+    });
+    const outcome = await createMarkiiHost(adapter).loadTerminalPacks();
+    expect(outcome).toEqual({ kind: 'failed', reason: 'boom' });
+    expect(lines).toEqual(['load terminal packs failed: boom']);
+  });
+
+  it('installedPacks', async () => {
+    const lines: string[] = [];
+    const adapter = fakeAdapter({
+      diagnostics: (line) => lines.push(line),
+      packs: rejectingPacks({
+        trust: 'device-list',
+        installRoot: () => {
+          throw new Error('boom');
+        },
+      }),
+    });
+    const outcome = await createMarkiiHost(adapter).installedPacks();
+    expect(outcome).toEqual({ kind: 'failed', reason: 'boom' });
+    expect(lines).toEqual(['list installed packs failed: boom']);
+  });
+
+  it('completeAt and hoverAt when the editor rejects', async () => {
+    const lines: string[] = [];
+    const editor: HostEditor = {
+      ...fakeEditor(':::cal', 0, 6),
+      documentText: () => {
+        throw new Error('boom');
+      },
+    };
+    const host = createMarkiiHost(
+      fakeAdapter({ diagnostics: (line) => lines.push(line), editor }),
+    );
+    expect(await host.completeAt({ line: 0, column: 6 })).toEqual({
+      kind: 'failed',
+      reason: 'boom',
+    });
+    expect(await host.hoverAt({ line: 0, column: 6 })).toEqual({
+      kind: 'failed',
+      reason: 'boom',
+    });
+    expect(lines).toEqual(['completion failed: boom', 'hover failed: boom']);
+  });
+
+  it('completeAt and completeAtSync still answer, and say why, when the pack read rejects', async () => {
+    const lines: string[] = [];
+    const host = createMarkiiHost(
+      fakeAdapter({
+        diagnostics: (line) => lines.push(line),
+        editor: fakeEditor(':::cal', 0, 6),
+        packs: rejectingPacks(),
+      }),
+    );
+    expect((await host.completeAt({ line: 0, column: 6 })).kind).toBe(
+      'completions',
+    );
+    expect(lines).toEqual(['read the pack catalog failed: boom']);
+  });
+
+  it('completeAtSync returns none and writes a line when the editor throws', () => {
+    const lines: string[] = [];
+    const editor: HostEditor = {
+      ...fakeEditor(':::cal', 0, 6),
+      documentText: () => {
+        throw new Error('boom');
+      },
+    };
+    const host = createMarkiiHost(
+      fakeAdapter({ diagnostics: (line) => lines.push(line), editor }),
+    );
+    expect(host.completeAtSync({ line: 0, column: 6 })).toEqual({
+      kind: 'none',
+    });
+    expect(lines).toEqual(['completion failed: boom']);
+  });
+
+  it('insertComponent when the pack read rejects, and when applyEdits rejects', async () => {
+    const lines: string[] = [];
+    const rejectedRead = createMarkiiHost(
+      fakeAdapter({
+        diagnostics: (line) => lines.push(line),
+        editor: fakeEditor('', 0, 0),
+        packs: rejectingPacks(),
+      }),
+    );
+    expect(await rejectedRead.insertComponent({ name: 'callout' })).toEqual({
+      kind: 'failed',
+      reason: 'boom',
+    });
+    const rejectedEdit = createMarkiiHost(
+      fakeAdapter({
+        diagnostics: (line) => lines.push(line),
+        editor: { ...fakeEditor('', 0, 0), applyEdits: boom },
+      }),
+    );
+    expect(await rejectedEdit.insertComponent({ name: 'callout' })).toEqual({
+      kind: 'failed',
+      reason: 'boom',
+    });
+    expect(lines).toEqual([
+      'insert component failed: boom',
+      'insert component failed: boom',
+    ]);
+  });
+
+  it('insertComponent carries a reason when the host declines the edit', async () => {
+    const outcome = await createMarkiiHost(
+      fakeAdapter({
+        editor: { ...fakeEditor('', 0, 0), applyEdits: async () => false },
+      }),
+    ).insertComponent({ name: 'callout' });
+    expect(outcome.kind).toBe('failed');
+    expect(outcome).toHaveProperty('reason');
+  });
+});

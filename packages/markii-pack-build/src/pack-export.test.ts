@@ -318,7 +318,7 @@ describe('exportPack', () => {
     expect(outcome.kind).toBe('written');
   });
 
-  it('declined overwrite writes nothing and returns cancelled', async () => {
+  it('declined overwrite writes nothing and returns declined', async () => {
     const pack = packAt('/packs/ana');
     const fs = fakeFs(
       { '/packs/ana/pack.json': '{}', '/cache/ana.js': 'script' },
@@ -337,7 +337,7 @@ describe('exportPack', () => {
       confirmOverwrite: neverConfirm,
     });
 
-    expect(outcome).toEqual({ kind: 'cancelled', packName: 'ana' });
+    expect(outcome).toEqual({ kind: 'declined', packName: 'ana' });
     expect(fs.written.size).toBe(0);
     expect(fs.dirsCreated).toEqual([]);
   });

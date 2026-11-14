@@ -104,7 +104,9 @@ packages/markii-pack    PUBLISHED. The pack contract: manifest validation, names
                      @markii/bundle's zip reader and jail, never a second jail. No React.
 packages/markii-lua     PUBLISHED. The wasmoon Lua sandbox: whitelisted globals, tiered
                      capabilities, limits, sandboxed require, marshalling. SECURITY
-                     CRITICAL. No React, no parsing. Probes: capability-stub.probe.test.ts,
+                     CRITICAL. No React, no parsing. The main entry is the run API;
+                     the sandbox's assembly parts are not exported, and the internal
+                     entry carries no semver promise. Probes: capability-stub.probe.test.ts,
                      doc.probe.test.ts, require.probe.test.ts, require-pass3.probe.test.ts.
 packages/markii-host    PUBLISHED. The one shared, host-neutral script-running layer: tier
                      gating, the grant model, address pinning, the terminatable-isolate
@@ -430,6 +432,8 @@ live in `guards/` and run first in root `npm test` (`npm run test:guards`):
 - `guards/prose-rules.test.ts`: em dashes, the word list, machine paths,
   hashes, issue numbers and dates in docs/ and the READMEs.
 - `guards/agents-paths.test.ts`: every path this file names exists.
+- `guards/published-surface.test.ts`: the exported names of every published
+  package except `@markii/host`, which pins its own.
 
 ## Maintenance map (what to update when something changes)
 
@@ -569,6 +573,11 @@ same commit as the change that triggers them:
   until the snapshot in `src/published-surface/` is regenerated with
   `UPDATE_HOST_SURFACE=1 npm test -w @markii/host`. The change needs a
   CHANGELOG entry.
+- **A change to the exported names of any other published package** (any
+  entry of its exports map) → `guards/published-surface.test.ts` fails
+  until the snapshots in `guards/published-surface/` are regenerated with
+  `UPDATE_SURFACE=1 npm run test:guards`. The change needs a CHANGELOG
+  entry. `@markii/host` pins its own entries, as above.
 - **Rename/move of any top-level doc** → fix every cross-reference in the
   same commit: `README.md`, this file, `TODO.md`, `docs/`, and source
   comments (grep for the old name).

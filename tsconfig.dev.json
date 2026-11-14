@@ -35,6 +35,7 @@
       "@markii/bundle/fs": ["packages/markii-bundle/src/fs.ts"],
       "@markii/pack": ["packages/markii-pack/src/index.ts"],
       "@markii/lua": ["packages/markii-lua/src/index.ts"],
+      "@markii/lua/internal": ["packages/markii-lua/src/internal.ts"],
       "@markii/react": ["packages/platforms/markii-react/src/index.ts"],
       "@markii/react/components": [
         "packages/platforms/markii-react/src/components/index.ts"

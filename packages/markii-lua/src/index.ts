@@ -3,6 +3,12 @@
 // filesystem). No React, no @markii/core, no @markii/react — see AGENTS.md's
 // import rule and the ESLint guard in the root config. May depend on
 // @markii/bundle for the `ScriptView` capability type only.
+//
+// This entry is the package's semver promise. The sandbox's assembly parts
+// (the capability, document, require, marshalling and limit builders and the
+// global lists) stay inside the package, so hardening the sandbox never
+// changes a public name. `@markii/lua/internal` carries the one assembly
+// part another workspace here builds on, with no semver promise.
 
 export type {
   ScriptFailure,
@@ -18,23 +24,17 @@ export {
 
 export type { CreateEmptyLuaEngineOptions } from './globals.js';
 export {
-  ALLOWED_GLOBALS,
-  DENIED_GLOBALS,
   MISSING_WASM_URI_MESSAGE,
   MissingWasmUriError,
   createEmptyLuaEngine,
-  isNodeEnvironment,
 } from './globals.js';
 
-export type { LimitHandle, ScriptLimits } from './limits.js';
-export { DEFAULT_LIMITS, installLimits } from './limits.js';
+export type { ScriptLimits } from './limits.js';
+export { DEFAULT_LIMITS } from './limits.js';
 
 export type {
   CacheEntry,
   CacheProvider,
-  CapabilityConfig,
-  CapabilityDenial,
-  CapabilityDenials,
   CapabilityTier,
   NetGrants,
   NetProvider,
@@ -42,30 +42,14 @@ export type {
 } from './capabilities.js';
 export {
   DEFAULT_MAX_FETCH_BYTES,
-  bytesToLuaString,
-  buildCapabilities,
   isNetProviderDenial,
-  luaStringToBytes,
   netProviderDenial,
 } from './capabilities.js';
 
-export type { DocConfig } from './doc.js';
-export { buildDoc } from './doc.js';
-
-export type { JsonTableConfig } from './json-table.js';
-export { buildJsonTable } from './json-table.js';
-
 export type { MarshalLimits } from './marshal.js';
-export {
-  DEFAULT_MARSHAL_LIMITS,
-  buildMarshalPrelude,
-  checkJsonWithinLimits,
-  finalizeMarshaledValue,
-  wrapUserCode,
-} from './marshal.js';
+export { DEFAULT_MARSHAL_LIMITS } from './marshal.js';
 
-export type { PackModuleResolver, RequireConfig } from './require.js';
-export { buildRequire } from './require.js';
+export type { PackModuleResolver } from './require.js';
 
 export type { RunScriptOptions, RunScriptResult } from './sandbox.js';
 export { runScript } from './sandbox.js';
