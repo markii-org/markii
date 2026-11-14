@@ -6,6 +6,11 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.17.0-next.4] - 2026-11-14
+
+A prerelease on the npm `next` dist-tag. It narrows `@markii/host` to the
+surface a host needs and fixes what the first outside consumers found.
+
 ### Added
 
 - `@markii/host`: `installPack` reports `installedDir`. `exportNote` takes

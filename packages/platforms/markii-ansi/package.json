@@ -1,6 +1,6 @@
 {
   "name": "@markii/ansi",
-  "version": "0.17.0-next.3",
+  "version": "0.17.0-next.4",
   "description": "The terminal renderer for Markii (.mk.md): a registry-driven hast-to-terminal engine built on Ink. Renders a note once as a string with optional color, for a pipe or a log, or as a live Ink tree a host can mount.",
   "keywords": [
     "markdown",
@@ -51,15 +51,15 @@
     "regenerate:fixtures": "npm run build:dist && node scripts/regenerate-ansi-fixtures.ts"
   },
   "dependencies": {
-    "@markii/core": "^0.17.0-next.3",
-    "@markii/pack": "^0.17.0-next.3",
-    "@markii/stdlib": "^0.17.0-next.3",
+    "@markii/core": "^0.17.0-next.4",
+    "@markii/pack": "^0.17.0-next.4",
+    "@markii/stdlib": "^0.17.0-next.4",
     "ink": "^7.1.1",
     "react": "^19.2.0"
   },
   "devDependencies": {
     "@types/hast": "^3.0.4",
-    "@markii/runtime": "^0.17.0-next.3",
+    "@markii/runtime": "^0.17.0-next.4",
     "@types/react": "^19.2.0"
   }
 }
