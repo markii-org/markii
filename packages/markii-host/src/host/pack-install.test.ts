@@ -349,4 +349,41 @@ describe('wording', () => {
       }
     }
   });
+
+  it('words an outcome from createMarkiiHost(...).installPack the same way', () => {
+    expect(
+      installPackMessage(
+        {
+          kind: 'installed',
+          namespace: 'ana',
+          installedDir: '/x/ana',
+          replaced: true,
+        },
+        '/x/ana.mkp',
+        OBSIDIAN_LABELS,
+        true,
+      ),
+    ).toBe('Markii: reinstalled pack "ana". Markii packs reloaded.');
+    expect(
+      installPackMessage(
+        { kind: 'declined', step: 'replace', namespace: 'ana' },
+        '/x/ana.mkp',
+        VSCODE_LABELS,
+      ),
+    ).toBe('Markii: install of "ana" cancelled. The existing pack was kept.');
+    expect(
+      installPackMessage(
+        { kind: 'reserved', namespace: 'read' },
+        '/x/read.mkp',
+        VSCODE_LABELS,
+      ),
+    ).toContain('"read" is built in');
+    expect(
+      installPackMessage(
+        { kind: 'unsupported', capability: 'packs' },
+        '/x/ana.mkp',
+        VSCODE_LABELS,
+      ),
+    ).toContain('could not install a pack');
+  });
 });

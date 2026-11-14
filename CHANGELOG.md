@@ -6,6 +6,22 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `@markii/host`: `installPack` reports `installedDir`. `exportNote` takes
+  `renderBody`, `staticReason`, `packStylesheets`, `packCount`,
+  `embedImages` and `hideScriptBlocks`, and its `exported` outcome carries
+  `valueCount`, `hasScripts`, `render` and `images`.
+
+### Changed
+
+- The VS Code extension and the Obsidian plugin install packs, export
+  notes and discover packs through `createMarkiiHost`, the path the host
+  conformance corpus tests. Their export diagnostics lines use the shared
+  wording.
+- VS Code: a pack with no `react` views is listed as unavailable and no
+  longer counts as a pack that failed to load.
+
 ## [0.17.0-next.3] - 2026-11-10
 
 A prerelease on the npm `next` dist-tag that repairs `@markii/host` for

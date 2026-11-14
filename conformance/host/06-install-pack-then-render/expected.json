@@ -1,7 +1,12 @@
 {
   "outcomes": [
     { "kind": "opened" },
-    { "kind": "installed", "namespace": "ana", "replaced": false },
+    {
+      "kind": "installed",
+      "namespace": "ana",
+      "replaced": false,
+      "installedDirName": "ana"
+    },
     { "kind": "loaded", "namespaces": ["ana"] },
     { "kind": "installed", "namespace": "ana", "replaced": true }
   ],

@@ -263,6 +263,40 @@ describe('createMarkiiHost.exportNote', () => {
     expect(lines.length).toBeGreaterThan(0);
   });
 
+  it('threads the render options through and reports what the document held', async () => {
+    const written: Uint8Array[] = [];
+    const adapter = fakeAdapter({
+      writeFile: async (_p, bytes) => {
+        written.push(bytes);
+      },
+      exports: {
+        formats: new Set(['html']),
+        resolveTarget: async (name) => `/exports/${name}`,
+      },
+    });
+    const outcome = await createMarkiiHost(adapter, {
+      htmlEngine: createHtmlExportEngine(),
+    }).exportNote({
+      format: 'html',
+      notePath: '/note.mk.md',
+      text: '# hello\n\n```lua {name=calc}\nreturn 1\n```\n',
+      renderBody: async () => ({ ok: true, html: '<h1>from the host</h1>' }),
+      packStylesheets: [{ namespace: 'ana', cssText: '.x { color: red; }' }],
+      packCount: 1,
+    });
+    if (outcome.kind !== 'exported') throw new Error('expected exported');
+    expect(outcome.valueCount).toBe(0);
+    expect(outcome.hasScripts).toBe(true);
+    expect(outcome.render).toEqual({
+      engine: 'react',
+      packCount: 1,
+      stylesheetCount: 1,
+    });
+    const html = new TextDecoder().decode(written[0]);
+    expect(html).toContain('from the host');
+    expect(html).toContain('.x { color: red; }');
+  });
+
   it('is cancelled, not thrown, when the picker declines', async () => {
     const adapter = fakeAdapter({
       exports: {
@@ -305,6 +339,7 @@ describe('createMarkiiHost.installPack', () => {
     expect(outcome).toEqual({
       kind: 'installed',
       namespace: 'ana',
+      installedDir: path.join(installRoot, 'ana'),
       replaced: false,
     });
     expect(lines.length).toBeGreaterThan(0);

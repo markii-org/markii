@@ -10,7 +10,7 @@
  *      runtime, which is what keeps `script-src` nonce-only). React,
  *      react-dom, `@markii/*` and `doc.css` are all bundled in.
  *   3. `dist/run/worker.js`  — the `worker_thread` entry for the v2 Run arc
- *      (`@markii/host`'s `src/run/worker-entry.ts`, GitHub issue #1's
+ *      (`@markii/host/node-worker`, GitHub issue #1's
  *      locked design comment; the shared host layer moved to that
  *      workspace so a second host can reuse it — see AGENTS.md's
  *      `packages/markii-host` entry). Platform `node`, format `cjs`,
@@ -130,16 +130,9 @@ const webviewBuild = {
 /** @type {import('esbuild').BuildOptions} */
 const workerBuild = {
   ...shared,
-  entryPoints: [
-    path.join(
-      repoRoot,
-      'packages',
-      'markii-host',
-      'src',
-      'run',
-      'worker-entry.ts',
-    ),
-  ],
+  // The package's public worker entry, resolved through the same
+  // `@markii/*` alias map as every other import in this file.
+  entryPoints: ['@markii/host/node-worker'],
   outfile: path.join(here, 'dist', 'run', 'worker.js'),
   platform: 'node',
   format: 'cjs',

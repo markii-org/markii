@@ -1,4 +1,3 @@
-import { existsSync } from 'node:fs';
 import { readFile as nodeReadFile, rm as nodeRm } from 'node:fs/promises';
 import {
   FileSystemAdapter,
@@ -28,9 +27,6 @@ import {
   OBSIDIAN_LABELS,
   buildComponentCatalog,
   createMarkiiHost,
-  discoverConfiguredPacks,
-  installPackDiagnosticLines,
-  installPackFromArchive,
   installPackMessage,
   MARK_EXTENSION,
   readPersistedValues,
@@ -44,7 +40,6 @@ import {
 import {
   createNetProvider,
   createNodeArchiveExtractFs,
-  createNodePackDiscoveryIo,
 } from '@markii/host/node';
 import type {
   CascadeExportOutcome,
@@ -163,6 +158,8 @@ export default class MarkiiPlugin extends Plugin {
    * temporarily incomplete, catalog before the first load settles.
    */
   private completionCatalog: readonly InsertableComponent[] = [];
+  /** The installed packs the last `loadPacks` discovered, for the completion catalog. */
+  private installedDiscovery: readonly DiscoveredPack[] = [];
 
   override async onload(): Promise<void> {
     await this.loadSettings();
@@ -866,14 +863,32 @@ export default class MarkiiPlugin extends Plugin {
         this.packContext.stylesheets.map((sheet) => sheet.namespace),
       );
     }
-    const { loadable, notEnabled } = await this.installedPackFolders();
+    const { notEnabled } = await this.installedPackFolders();
     this.notEnabledPackNamespaces = notEnabled;
 
-    const context = await loadPackContext(
-      loadable.map((entry) => entry.folder),
-      defaultRegistry,
-      { bundledPacks: bundledPackAssets() },
-    );
+    // The shared host discovers the trusted installed folders. Its own
+    // diagnostics lines are not written here: `logPackDiagnostics` writes
+    // the same facts together with the evaluation results only this host
+    // has, so a quiet sink avoids printing every load twice.
+    const discovered = await createMarkiiHost(
+      createObsidianHostAdapter({
+        prompt: async () => false,
+        loadLocalStorage: (key) => this.app.loadLocalStorage(key),
+        saveLocalStorage: (key, value) => {
+          this.app.saveLocalStorage(key, value);
+        },
+        diagnostics: () => undefined,
+        packs: this.packSource(),
+      }),
+    ).loadPacks();
+    const installed =
+      discovered.kind === 'loaded'
+        ? discovered
+        : { packs: [], skipped: [], components: [] };
+    this.installedDiscovery = installed.packs;
+    const context = await loadPackContext(installed, defaultRegistry, {
+      bundledPacks: bundledPackAssets(),
+    });
     this.packContext = context;
     applyPackStylesheets(document, context.stylesheets);
   }
@@ -888,21 +903,8 @@ export default class MarkiiPlugin extends Plugin {
    * `discoverConfiguredPacks` already degrades quietly.
    */
   private async refreshCompletionCatalog(): Promise<void> {
-    const { loadable } = await this.installedPackFolders();
-    let packs: readonly DiscoveredPack[] = [];
-    try {
-      packs = (
-        await discoverConfiguredPacks(
-          loadable.map((entry) => entry.folder),
-          createNodePackDiscoveryIo(),
-          'react',
-        )
-      ).packs;
-    } catch {
-      packs = [];
-    }
     this.completionCatalog = buildComponentCatalog(
-      [...bundledDiscoveredPacks(), ...packs],
+      [...bundledDiscoveredPacks(), ...this.installedDiscovery],
       'react',
     );
     this.completionHostInstance?.invalidateCatalog();
@@ -1022,18 +1024,11 @@ export default class MarkiiPlugin extends Plugin {
       return;
     }
 
-    const outcome = await installPackFromArchive(this.hostAdapter(), {
-      archiveBytes,
-      archivePath,
-      installRoot,
-      exists: async (dir) => existsSync(dir),
-      extractFs: createNodeArchiveExtractFs(),
-      reservedNamespaces: this.bundledNamespaces(),
-    });
+    const outcome = await createMarkiiHost(this.hostAdapter(), {
+      archiveExtractFs: createNodeArchiveExtractFs(),
+    }).installPack({ archiveBytes, archivePath });
+    if (outcome.kind === 'unsupported') return; // already diagnosed
 
-    for (const line of installPackDiagnosticLines(outcome, archivePath)) {
-      console.info(`[markii] ${line}`);
-    }
     // Obsidian reloads every open view's packs automatically on a
     // successful install (below); VS Code's does not.
     new Notice(installPackMessage(outcome, archivePath, OBSIDIAN_LABELS, true));

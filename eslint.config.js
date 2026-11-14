@@ -272,4 +272,59 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    // An app implements HostAdapter and calls createMarkiiHost's behaviors;
+    // it never reaches for the lower-level function a behavior is built
+    // on, or the conformance corpus would prove a path production skips.
+    // Tests, the adapters themselves, and build-time scripts are exempt.
+    files: ['apps/*/src/**/*.{ts,tsx}'],
+    ignores: [
+      'apps/*/src/**/*.test.{ts,tsx}',
+      'apps/*/src/**/host-adapter.ts',
+      'apps/*/src/packs/build-bundled-packs.ts',
+    ],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: ['@markii/host', '@markii/host/node'].flatMap((name) => [
+            {
+              name,
+              importNames: [
+                'installPackFromArchive',
+                'installPackDiagnosticLines',
+              ],
+              message:
+                'Install a pack with createMarkiiHost(adapter).installPack(...).',
+            },
+            {
+              name,
+              importNames: [
+                'buildExportDocument',
+                'buildNoteExport',
+                'exportNoteFileViaAdapter',
+              ],
+              message:
+                'Export a note with createMarkiiHost(adapter).exportNote(...).',
+            },
+            {
+              name,
+              importNames: [
+                'discoverPacks',
+                'discoverConfiguredPacks',
+                'loadPacksViaAdapter',
+              ],
+              message:
+                'Discover packs with createMarkiiHost(adapter).loadPacks().',
+            },
+            {
+              name,
+              importNames: ['runOnce', 'spawnRun', 'runViaAdapter'],
+              message: 'Run a note with createMarkiiHost(adapter).run(...).',
+            },
+          ]),
+        },
+      ],
+    },
+  },
 );

@@ -3,7 +3,14 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { createRegistry } from '@markii/react';
+import { createNodePackDiscoveryIo } from '@markii/host/node';
+import { discoverConfiguredPacks } from '@markii/host';
 import { loadPackContext } from './pack-context.js';
+
+/** What the shared host's `loadPacks` hands the plugin for these folders: the same discovery call it makes over the trusted installed ones. */
+function discover(folders: string[]) {
+  return discoverConfiguredPacks(folders, createNodePackDiscoveryIo(), 'react');
+}
 import type { BundledPackAsset } from './bundled-packs.js';
 
 const tempDirs: string[] = [];
@@ -56,7 +63,10 @@ describe('loadPackContext', () => {
     );
     await writeFile(path.join(packDir, 'scripts', 'util.lua'), 'return 1');
 
-    const context = await loadPackContext([packDir], createRegistry());
+    const context = await loadPackContext(
+      await discover([packDir]),
+      createRegistry(),
+    );
 
     expect(context.namespaces).toEqual(['demo']);
     expect(context.packs).toHaveLength(1);
@@ -82,7 +92,7 @@ describe('loadPackContext', () => {
     }
 
     const context = await loadPackContext(
-      [path.join(root, 'mix'), path.join(root, 'term')],
+      await discover([path.join(root, 'mix'), path.join(root, 'term')]),
       createRegistry(),
     );
 
@@ -103,7 +113,7 @@ describe('loadPackContext', () => {
     await writePackManifest(packDir, 'nopreview');
 
     const base = createRegistry();
-    const context = await loadPackContext([packDir], base);
+    const context = await loadPackContext(await discover([packDir]), base);
 
     expect(context.packs).toHaveLength(1); // still discovered
     expect(context.registry).toBe(base);
@@ -115,7 +125,10 @@ describe('loadPackContext', () => {
   it('quietly skips a folder with no pack.json', async () => {
     const root = await makeTempDir();
     const missing = path.join(root, 'missing');
-    const context = await loadPackContext([missing], createRegistry());
+    const context = await loadPackContext(
+      await discover([missing]),
+      createRegistry(),
+    );
     expect(context.packs).toEqual([]);
     expect(context.skipped).toHaveLength(1);
   });
@@ -129,7 +142,10 @@ describe('loadPackContext', () => {
       'throw new Error("boom");',
     );
 
-    const context = await loadPackContext([packDir], createRegistry());
+    const context = await loadPackContext(
+      await discover([packDir]),
+      createRegistry(),
+    );
 
     expect(context.packs).toHaveLength(1); // still discovered
     expect(context.skipped).toHaveLength(1);
@@ -152,7 +168,10 @@ describe('loadPackContext — prebuilt pack shape', () => {
       '.mk-styled-widget { color: var(--mk-fg); }',
     );
 
-    const context = await loadPackContext([packDir], createRegistry());
+    const context = await loadPackContext(
+      await discover([packDir]),
+      createRegistry(),
+    );
 
     expect(context.registry['styled_widget']).toBeDefined();
     expect(context.stylesheets).toEqual([
@@ -174,7 +193,10 @@ describe('loadPackContext — prebuilt pack shape', () => {
       registeringScript('plain'),
     );
 
-    const context = await loadPackContext([packDir], createRegistry());
+    const context = await loadPackContext(
+      await discover([packDir]),
+      createRegistry(),
+    );
 
     expect(context.registry['plain_widget']).toBeDefined();
     expect(context.stylesheets).toEqual([]);
@@ -193,7 +215,10 @@ describe('loadPackContext — prebuilt pack shape', () => {
       'export default function Widget() { return null; }',
     );
 
-    const context = await loadPackContext([packDir], createRegistry());
+    const context = await loadPackContext(
+      await discover([packDir]),
+      createRegistry(),
+    );
 
     expect(context.registry['shadowed_widget']).toBeDefined();
     expect(context.prebuiltShadowedPacks).toEqual([
@@ -215,7 +240,10 @@ describe('loadPackContext — folder name and namespace must agree', () => {
       registeringScript('other'),
     );
 
-    const context = await loadPackContext([packDir], createRegistry());
+    const context = await loadPackContext(
+      await discover([packDir]),
+      createRegistry(),
+    );
 
     expect(context.packs).toHaveLength(0);
     expect(context.namespaces).toEqual([]);
@@ -233,7 +261,10 @@ describe('loadPackContext — namespace collision', () => {
     await writePackManifest(a, 'demo');
     await writePackManifest(b, 'demo');
 
-    const context = await loadPackContext([a, b], createRegistry());
+    const context = await loadPackContext(
+      await discover([a, b]),
+      createRegistry(),
+    );
 
     expect(context.packs).toEqual([]); // discover.ts itself already rejects the collision
     expect(context.skipped).toHaveLength(2);
@@ -263,9 +294,13 @@ function bundledAsset(
 
 describe('loadPackContext — bundled packs', () => {
   it('folds a bundled pack in even with no installed packs, ahead of the base registry', async () => {
-    const context = await loadPackContext([], createRegistry(), {
-      bundledPacks: [bundledAsset('read')],
-    });
+    const context = await loadPackContext(
+      await discover([]),
+      createRegistry(),
+      {
+        bundledPacks: [bundledAsset('read')],
+      },
+    );
 
     expect(context.namespaces).toEqual(['read']);
     expect(context.packs).toHaveLength(1);
@@ -283,9 +318,13 @@ describe('loadPackContext — bundled packs', () => {
       registeringScript('demo'),
     );
 
-    const context = await loadPackContext([demoDir], createRegistry(), {
-      bundledPacks: [bundledAsset('read'), bundledAsset('dash')],
-    });
+    const context = await loadPackContext(
+      await discover([demoDir]),
+      createRegistry(),
+      {
+        bundledPacks: [bundledAsset('read'), bundledAsset('dash')],
+      },
+    );
 
     expect(context.namespaces).toEqual(['read', 'dash', 'demo']);
     expect(context.packs.map((pack) => pack.manifest.name)).toEqual([
@@ -312,9 +351,13 @@ describe('loadPackContext — bundled packs', () => {
       );`,
     );
 
-    const context = await loadPackContext([userReadDir], createRegistry(), {
-      bundledPacks: [bundledAsset('read')],
-    });
+    const context = await loadPackContext(
+      await discover([userReadDir]),
+      createRegistry(),
+      {
+        bundledPacks: [bundledAsset('read')],
+      },
+    );
 
     // Bundled pack wins the namespace outright.
     expect(context.packs).toHaveLength(1);
@@ -337,22 +380,30 @@ describe('loadPackContext — bundled packs', () => {
     await mkdir(path.join(demoDir, 'scripts'), { recursive: true });
     await writeFile(path.join(demoDir, 'scripts', 'a.lua'), 'return "user"');
 
-    const context = await loadPackContext([demoDir], createRegistry(), {
-      bundledPacks: [
-        bundledAsset('read', { luaModules: { 'b.lua': 'return "bundled"' } }),
-      ],
-    });
+    const context = await loadPackContext(
+      await discover([demoDir]),
+      createRegistry(),
+      {
+        bundledPacks: [
+          bundledAsset('read', { luaModules: { 'b.lua': 'return "bundled"' } }),
+        ],
+      },
+    );
 
     expect(context.packModules.read).toEqual({ 'b.lua': 'return "bundled"' });
     expect(context.packModules.demo).toEqual({ 'a.lua': 'return "user"' });
   });
 
   it('a bundled pack whose script throws is skipped, with a reason, and never crashes the load', async () => {
-    const context = await loadPackContext([], createRegistry(), {
-      bundledPacks: [
-        bundledAsset('read', { scriptText: 'throw new Error("boom");' }),
-      ],
-    });
+    const context = await loadPackContext(
+      await discover([]),
+      createRegistry(),
+      {
+        bundledPacks: [
+          bundledAsset('read', { scriptText: 'throw new Error("boom");' }),
+        ],
+      },
+    );
 
     expect(context.packs).toHaveLength(1); // still discovered
     expect(context.skipped).toHaveLength(1);
@@ -361,9 +412,13 @@ describe('loadPackContext — bundled packs', () => {
   });
 
   it('a malformed bundled manifest is recorded as invalid rather than crashing the load', async () => {
-    const context = await loadPackContext([], createRegistry(), {
-      bundledPacks: [bundledAsset('bad', { manifestJson: 'not json' })],
-    });
+    const context = await loadPackContext(
+      await discover([]),
+      createRegistry(),
+      {
+        bundledPacks: [bundledAsset('bad', { manifestJson: 'not json' })],
+      },
+    );
 
     expect(context.packs).toEqual([]);
     expect(context.skipped).toHaveLength(1);
@@ -379,7 +434,10 @@ describe('loadPackContext — bundled packs', () => {
       registeringScript('demo'),
     );
 
-    const context = await loadPackContext([demoDir], createRegistry());
+    const context = await loadPackContext(
+      await discover([demoDir]),
+      createRegistry(),
+    );
 
     expect(context.packs).toHaveLength(1);
     expect(context.packs[0]!.manifest.name).toBe('demo');

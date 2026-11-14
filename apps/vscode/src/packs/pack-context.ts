@@ -1,5 +1,5 @@
 /**
- * Composes the pack-loading pieces (`@markii/host`'s `discoverPacks`,
+ * Composes the pack-loading pieces (`@markii/host`'s `loadPacks`,
  * `loadPackModules`, `resolvePackPaths`, `buildPackRegistrationScript`)
  * into the one thing `preview-panel.ts` needs: everything about the
  * currently configured, installed packs, loaded once per panel.
@@ -8,23 +8,18 @@
  * module only takes the already-read setting value, workspace root, and
  * (optionally) an extension-owned cache directory as plain strings.
  */
-import {
-  createNodeDirectoryLister,
-  createNodePackScriptsReader,
-} from '@markii/host/node';
+import { createNodePackScriptsReader } from '@markii/host/node';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import {
   componentsWithoutEngineView,
   declaredPackComponents,
-  discoverPacks,
   installedNamespaces,
   loadPackModules,
   relativePackEntries,
   resolvePackPaths,
   resolvePrebuiltPack,
 } from '@markii/host';
-import { createNodeFileReader } from '@markii/host/node';
 import { REACT_ENGINE_ID } from '@markii/react';
 import type { UnavailableComponent } from '@markii/stdlib';
 import type {
@@ -34,6 +29,7 @@ import type {
   SkippedPackFolder,
 } from '@markii/host';
 import type { PackBuildOutcome } from '@markii/pack-build';
+import { discoverFoldersViaHost } from './host-discovery.js';
 import { discoverBundledPacks, mergeBundledPacks } from './bundled-packs.js';
 
 export interface PackContext {
@@ -178,11 +174,7 @@ export async function loadPackContext(
     homeDir,
   );
   const relativeEntries = relativePackEntries(configuredPacks, homeDir);
-  const userResult = await discoverPacks(
-    resolvedPaths,
-    createNodeFileReader(),
-    createNodeDirectoryLister(),
-  );
+  const userResult = await discoverFoldersViaHost(resolvedPaths);
   const bundled =
     extensionPath !== undefined
       ? await discoverBundledPacks(extensionPath)
@@ -193,8 +185,14 @@ export async function loadPackContext(
     createNodePackScriptsReader(),
   );
 
+  // A pack with nothing for this engine is an expected state, never a
+  // failure: its components are listed as unavailable below instead of
+  // counting toward the preview's "packs failed to load" marker.
+  const engineDropped = userResult.skipped.flatMap(
+    (entry) => entry.engineUnsupported?.components ?? [],
+  );
   const skipped: SkippedPackFolder[] = [
-    ...userResult.skipped,
+    ...userResult.skipped.filter((entry) => !entry.engineUnsupported),
     ...merged.skipped,
   ];
   const webviewPacks: DiscoveredPack[] = [];
@@ -246,7 +244,12 @@ export async function loadPackContext(
     webviewPacks,
     namespaces: installedNamespaces(merged.packs),
     unavailableComponents: componentsWithoutEngineView(
-      merged.packs.flatMap((pack) => declaredPackComponents(pack.manifest)),
+      [
+        ...merged.packs.flatMap((pack) =>
+          declaredPackComponents(pack.manifest),
+        ),
+        ...engineDropped,
+      ],
       REACT_ENGINE_ID,
     ),
     skipped,

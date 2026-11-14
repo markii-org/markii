@@ -22,6 +22,7 @@ import { openPackArchive } from '@markii/pack';
 import { describeArchiveError, writeArchiveContents } from './pack-archive.js';
 import type { ArchiveExtractFs } from './pack-archive.js';
 import type { HostAdapter, HostLabels } from './adapter.js';
+import type { InstallPackOutcome as HostInstallPackOutcome } from './create-host.js';
 import { trustInstalledPack } from './pack-trust-behavior.js';
 
 /** Whether a directory already exists under the install root, injected so this module needs no real disk to test. */
@@ -57,6 +58,39 @@ export type InstallPackOutcome =
     }
   | { readonly kind: 'reserved'; readonly packName: string }
   | { readonly kind: 'rejected'; readonly reason: string };
+
+/** The outcome `createMarkiiHost(...).installPack` returns, as the message wording reads it. */
+function toInstallOutcome(
+  outcome: InstallPackOutcome | HostInstallPackOutcome,
+): InstallPackOutcome {
+  if (!('namespace' in outcome) && outcome.kind !== 'unsupported') {
+    return outcome;
+  }
+  switch (outcome.kind) {
+    case 'installed':
+      return {
+        kind: 'installed',
+        packName: outcome.namespace,
+        installedDir: outcome.installedDir,
+        replaced: outcome.replaced,
+      };
+    case 'declined':
+      return {
+        kind: 'declined',
+        step: outcome.step,
+        packName: outcome.namespace,
+      };
+    case 'reserved':
+      return { kind: 'reserved', packName: outcome.namespace };
+    case 'unsupported':
+      return {
+        kind: 'rejected',
+        reason: outcome.detail ?? 'this host cannot install packs.',
+      };
+    default:
+      return outcome;
+  }
+}
 
 function describeThrown(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -205,11 +239,12 @@ export function installReplaceConfirmMessage(packName: string): string {
  * `false`.
  */
 export function installPackMessage(
-  outcome: InstallPackOutcome,
+  hostOutcome: InstallPackOutcome | HostInstallPackOutcome,
   archivePath: string,
   labels: HostLabels,
   reloadsAutomatically = false,
 ): string {
+  const outcome = toInstallOutcome(hostOutcome);
   if (outcome.kind === 'rejected') {
     return `Markii: could not install a pack from "${archivePath}". Open ${labels.diagnosticsSurface} for details.`;
   }

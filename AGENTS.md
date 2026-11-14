@@ -339,6 +339,9 @@ packages/markii-host    PUBLISHED (user-approved 2026-11-09; in build:dist and
                      @markii/react or @markii/html at runtime.
                      apps/vscode/src/browser-entry.probe.test.ts bundles it
                      for a browser and checks the module inputs
+  src/node-worker.ts the @markii/host/node-worker entry: loading it starts
+                     the worker_threads isolate; apps bundle it by that
+                     specifier, never by a path inside this package
   src/node.ts        @markii/host/node: createNodeHostIsolate (the
                      worker_threads isolate over the packaged
                      dist/node-worker.js, run/node-isolate.ts), the pinned
@@ -484,6 +487,9 @@ apps/vscode          the "Markii" VS Code extension (preview + Run + packs) — 
                      pre-read and the worker-side resolver all live in
                      packages/markii-host/src/packs/ and
                      packages/markii-host/src/run/lua-resolver.ts;
+                     host-discovery.ts is the one way this extension
+                     reads pack folders (host.loadPacks() over an adapter
+                     that authorizes exactly those folders);
                      pack-context.ts
                      composes them; export-pack.ts backs the
                      markii.exportPack command (issue #16), which
@@ -975,7 +981,11 @@ same commit as the change that triggers them:
 - **A host behavior** (anything in createMarkiiHost: open, run, export,
   install pack, load packs, complete, hover, insert, diagnostics) → it
   lives in `packages/markii-host/src/host/`, never in an app. An app
-  implements `HostAdapter` and nothing else. Adding a behavior means a
+  implements `HostAdapter` and nothing else. It never imports the
+  lower-level function a behavior is built on (`installPackFromArchive`,
+  `buildExportDocument`, `discoverPacks`, `runOnce`, `spawnRun` and their
+  siblings): `eslint.config.js` fails the lint on that for `apps/*/src`,
+  except tests, `host-adapter.ts` and build-time pack scripts. Adding a behavior means a
   `conformance/host/` scenario plus its expected outcome in the same
   commit, and each app's adapter test picks it up automatically. A host
   that does not offer the behavior declares the capability absent rather

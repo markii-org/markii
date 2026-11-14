@@ -695,6 +695,23 @@ export function outcomeMismatches(
       break;
     }
     case 'exported': {
+      if (
+        expected['valueCount'] !== undefined &&
+        actualRecord['valueCount'] !== expected['valueCount']
+      ) {
+        mismatches.push(
+          `valueCount: expected ${String(expected['valueCount'])}, got ${String(actualRecord['valueCount'])}`,
+        );
+      }
+      if (expected['renderEngine'] !== undefined) {
+        const render = actualRecord['render'] as
+          { engine?: unknown } | undefined;
+        if (render?.engine !== expected['renderEngine']) {
+          mismatches.push(
+            `render engine: expected "${String(expected['renderEngine'])}", got "${String(render?.engine)}"`,
+          );
+        }
+      }
       const content = String(actualRecord['content'] ?? '');
       for (const needle of (expected['contains'] as string[]) ?? []) {
         if (!content.includes(needle)) {
@@ -709,6 +726,15 @@ export function outcomeMismatches(
       break;
     }
     case 'installed': {
+      if (expected['installedDirName'] !== undefined) {
+        const dir = String(actualRecord['installedDir'] ?? '');
+        const name = dir.split(/[/\\]/).pop();
+        if (name !== expected['installedDirName']) {
+          mismatches.push(
+            `installedDir: expected a folder named "${String(expected['installedDirName'])}", got "${dir}"`,
+          );
+        }
+      }
       if (
         expected['namespace'] !== undefined &&
         actualRecord['namespace'] !== expected['namespace']

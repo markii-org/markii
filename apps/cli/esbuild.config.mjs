@@ -11,7 +11,7 @@
  *      `package.json` has no `"type": "module"` field — see the note on
  *      `cliBuild.outfile` below for why that field is not added instead.
  *   2. `dist/run/worker.js` — the `worker_thread` entry for the shared Run
- *      path (`@markii/host`'s `src/run/worker-entry.ts`), exactly like the
+ *      path (`@markii/host/node-worker`), exactly like the
  *      VS Code extension's own worker bundle. `dist/run/glue.wasm` is
  *      copied next to it (wasmoon's real WASM binary, which cannot be
  *      bundled into JS source). This bundle never imports ink, stays
@@ -191,16 +191,9 @@ const cliBuild = {
 /** @type {import('esbuild').BuildOptions} */
 const workerBuild = {
   ...shared,
-  entryPoints: [
-    path.join(
-      repoRoot,
-      'packages',
-      'markii-host',
-      'src',
-      'run',
-      'worker-entry.ts',
-    ),
-  ],
+  // The package's public worker entry, resolved through the same
+  // `@markii/*` alias map as every other import in this file.
+  entryPoints: ['@markii/host/node-worker'],
   outfile: path.join(here, 'dist', 'run', 'worker.js'),
   platform: 'node',
   format: 'cjs',

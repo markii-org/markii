@@ -99,10 +99,9 @@ function makeHost(
 async function loadInstalled(host: MarkiiHost) {
   const listing = await host.installedPacks();
   if (listing.kind !== 'listed') throw new Error('trust not declared');
-  const context = await loadPackContext(
-    listing.enabled.map((entry) => entry.folder),
-    createRegistry(),
-  );
+  const discovered = await host.loadPacks();
+  if (discovered.kind !== 'loaded') throw new Error('packs not declared');
+  const context = await loadPackContext(discovered, createRegistry());
   return { context, notEnabled: listing.notEnabled };
 }
 

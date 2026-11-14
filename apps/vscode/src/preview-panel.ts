@@ -26,12 +26,7 @@ import {
   EXPORT_HTML_SAVE_DIALOG_TITLE,
   EXPORT_HTML_SAVE_LABEL,
 } from './export-html.js';
-import {
-  exportDefaultFileName,
-  exportDiagnosticLines,
-  exportResultMessage,
-} from '@markii/host';
-import type { NoteFileExportOutcome } from '@markii/host';
+import { exportDefaultFileName, exportResultMessage } from '@markii/host';
 import {
   EXPORT_CASCADE_FILTERS,
   EXPORT_CASCADE_NO_DOCUMENT_MESSAGE,
@@ -74,8 +69,6 @@ import {
   decodeBundleCacheFromStorage,
   encodeBundleCacheForStorage,
   withPersistedCache,
-  buildNoteExport,
-  noteHasScripts,
   MAX_EMBEDDED_IMAGE_BYTES,
   MIN_REFRESH_INTERVAL_SECONDS,
   scheduledRefreshNotStartedLine,
@@ -91,7 +84,9 @@ import type {
   CascadeNoteReader,
   ExportBodyResult,
   ExportImageReader,
+  ExportRequest,
   HostPromptRequest,
+  MarkiiHost,
   RunOnceOptions,
 } from '@markii/host';
 import { createVSCodeHostAdapter } from './host-adapter.js';
@@ -1818,14 +1813,8 @@ function requestExportBody(
  * failure's two homes (AGENTS.md's "clean is not silent"). The popup carries
  * the short sentence; the verbatim reason only ever lands here.
  */
-function logExportDiagnostics(outcome: NoteFileExportOutcome): void {
-  if (!diagnosticsChannel) return;
-  diagnosticsChannel.appendLine(
-    `Markii: HTML export at ${new Date().toISOString()}`,
-  );
-  for (const line of exportDiagnosticLines(outcome)) {
-    diagnosticsChannel.appendLine(`  ${line}`);
-  }
+function exportDiagnosticsSink(): (line: string) => void {
+  return (line) => diagnosticsChannel?.appendLine(`  ${line}`);
 }
 
 /**
@@ -1843,7 +1832,7 @@ function panelHasWebviewPacks(preview: ActivePreview): boolean {
  * issue #28): writes the active note as ONE self-contained `.html` file, at
  * a path the user picks, defaulting to the note's own name beside it.
  *
- * ENGINE. Built through `@markii/host`'s `buildNoteExport`, which chooses
+ * ENGINE. Built through `createMarkiiHost(adapter).exportNote`, which chooses
  * between two engines:
  *
  * - React, through the OPEN preview panel's own webview, when a panel is
@@ -1913,7 +1902,7 @@ export async function exportHtml(
     context.workspaceState,
     document.uri.toString(),
   );
-  let outcome: NoteFileExportOutcome;
+  let outcome: Awaited<ReturnType<MarkiiHost['exportNote']>>;
   try {
     // Issue #28 slice 2 follow-up: rendering pack components needs the
     // preview webview, and the original design silently fell back to the
@@ -1935,68 +1924,64 @@ export async function exportHtml(
     const useReact = preview !== undefined && panelHasWebviewPacks(preview);
     const embedImages = createExportImageReader(documentFolder(document));
 
-    let exportRequest: Parameters<typeof buildNoteExport>[0];
-    if (useReact && preview) {
-      const packStylesheets = await packExportStylesheets(
-        preview.packContext.webviewPacks,
-        (path) => readFile(path, 'utf8'),
-      );
-      exportRequest = {
-        engine: htmlEngine,
-        text: document.getText(),
-        fileName: defaultName,
-        values,
-        renderBody: (text, vals) => requestExportBody(preview, text, vals),
-        packStylesheets,
-        packCount: preview.packContext.webviewPacks.length,
-        embedImages,
-        hideScriptBlocks: configuredHideScriptBlocks(),
-      };
-    } else {
-      // No panel open at all -> 'no-renderer' when at least one pack folder
-      // is configured (there WOULD be pack components to render if a panel
-      // were open), 'no-packs' otherwise. A panel open with zero webview
-      // packs is 'no-packs' regardless of configuration, since nothing about
-      // opening a panel would change what this export renders.
-      const staticReason =
-        preview === undefined && configuredPackFolders().length > 0
-          ? 'no-renderer'
-          : 'no-packs';
-      exportRequest = {
-        engine: htmlEngine,
-        text: document.getText(),
-        fileName: defaultName,
-        values,
-        staticReason,
-        embedImages,
-        hideScriptBlocks: configuredHideScriptBlocks(),
-      };
-    }
+    const render: Pick<
+      ExportRequest,
+      'renderBody' | 'staticReason' | 'packStylesheets' | 'packCount'
+    > =
+      useReact && preview
+        ? {
+            renderBody: (text, vals) => requestExportBody(preview, text, vals),
+            packStylesheets: await packExportStylesheets(
+              preview.packContext.webviewPacks,
+              (path) => readFile(path, 'utf8'),
+            ),
+            packCount: preview.packContext.webviewPacks.length,
+          }
+        : {
+            // No panel open at all -> 'no-renderer' when at least one pack
+            // folder is configured (there WOULD be pack components to
+            // render if a panel were open), 'no-packs' otherwise. A panel
+            // open with zero webview packs is 'no-packs' regardless of
+            // configuration, since nothing about opening a panel would
+            // change what this export renders.
+            staticReason:
+              preview === undefined && configuredPackFolders().length > 0
+                ? 'no-renderer'
+                : 'no-packs',
+          };
 
-    const exportDocument = await buildNoteExport(exportRequest);
-
-    const bytes = new TextEncoder().encode(exportDocument.html);
-    await vscode.workspace.fs.writeFile(target, bytes);
-    outcome = {
-      kind: 'written',
-      path: target.fsPath,
-      bytes: bytes.byteLength,
-      valueCount: exportDocument.valueCount,
-      hasScripts: noteHasScripts(document.getText()),
-      render: exportDocument.render,
-      images: exportDocument.images,
-    };
+    diagnosticsChannel?.appendLine(
+      `Markii: HTML export at ${new Date().toISOString()}`,
+    );
+    const adapter = createVSCodeHostAdapter({
+      memento: context.workspaceState,
+      prompt: promptViaModal,
+      diagnostics: exportDiagnosticsSink(),
+      writeFile: async (_path, bytes) => {
+        await vscode.workspace.fs.writeFile(target, bytes);
+      },
+      exportFormats: new Set(['html']),
+      resolveExportTarget: async () => target.fsPath,
+    });
+    outcome = await createMarkiiHost(adapter, { htmlEngine }).exportNote({
+      format: 'html',
+      notePath: defaultName,
+      text: document.getText(),
+      values,
+      embedImages,
+      hideScriptBlocks: configuredHideScriptBlocks(),
+      ...render,
+    });
   } catch (error) {
     outcome = {
       kind: 'failed',
-      path: target.fsPath,
       reason: error instanceof Error ? error.message : String(error),
     };
+    exportDiagnosticsSink()(`Export failed: ${outcome.reason}`);
   }
 
-  logExportDiagnostics(outcome);
   const message = exportResultMessage(outcome, VSCODE_LABELS);
-  if (outcome.kind === 'failed') {
+  if (outcome.kind !== 'exported') {
     void vscode.window.showWarningMessage(message);
     return;
   }
@@ -2032,7 +2017,7 @@ function logCascadeDiagnostics(outcome: CascadeExportOutcome): void {
  * its own.
  *
  * SAME RENDER AS ONE NOTE. Every note in the cascade goes through the
- * exact `buildNoteExport` path `exportHtml` uses, including opening the
+ * same render `exportHtml` uses, including opening the
  * preview when pack folders are configured, revealing a hidden panel, and
  * waiting for `ready` before asking the webview to render. The webview
  * renders whatever text it is handed, so one open panel renders every note

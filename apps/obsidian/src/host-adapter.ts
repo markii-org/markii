@@ -70,6 +70,8 @@ export interface ObsidianHostAdapterDeps {
   /** The pack source, minus the engine: the plugin renders with React, so the adapter fills `engine: 'react'` itself. */
   readonly packs?: Omit<HostPackSource, 'engine' | 'trust'>;
   readonly exports?: HostExportCapabilities;
+  /** Replaces the default Node file write, for a caller whose writes go through another store (the export flow writes through the vault adapter, at vault-relative paths). */
+  readonly writeFile?: (filePath: string, bytes: Uint8Array) => Promise<void>;
   /**
    * The live editor surface, built at the call site from the Obsidian
    * `Editor` API (`view.editor`): `documentText`/`documentPath` from
@@ -116,10 +118,12 @@ export function createObsidianHostAdapter(
     async exists(filePath: string): Promise<boolean> {
       return existsSync(filePath);
     },
-    async writeFile(filePath: string, bytes: Uint8Array): Promise<void> {
-      await nodeMkdir(path.dirname(filePath), { recursive: true });
-      await nodeWriteFile(filePath, bytes);
-    },
+    writeFile:
+      deps.writeFile ??
+      (async (filePath: string, bytes: Uint8Array): Promise<void> => {
+        await nodeMkdir(path.dirname(filePath), { recursive: true });
+        await nodeWriteFile(filePath, bytes);
+      }),
     listFolder,
 
     prompt: deps.prompt,

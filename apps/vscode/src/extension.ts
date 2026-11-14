@@ -37,8 +37,6 @@ import {
   buildComponentCatalog,
   createMarkiiHost,
   isContainerCompletionItem,
-  installPackDiagnosticLines,
-  installPackFromArchive,
   installPackMessage,
   parseRefreshIntervalSeconds,
   removePackMessage,
@@ -143,7 +141,7 @@ async function addPackFolder(
  * already makes, and for the same reason: a workspace can never install a
  * pack on the reader's behalf. Every decision worth testing (validation,
  * the collision check, the wording) lives in `@markii/host`'s
- * `installPackFromArchive`; this function is `vscode` wiring only, over
+ * `createMarkiiHost(adapter).installPack`; this function is `vscode` wiring only, over
  * `./host-adapter.ts`'s `HostAdapter`.
  */
 async function installPackCommand(
@@ -179,12 +177,6 @@ async function installPackCommand(
     memento: context.workspaceState,
     prompt: (request) => promptViaModal(request),
     diagnostics: (line) => diagnosticsChannel.appendLine(line),
-  });
-
-  const outcome = await installPackFromArchive(adapter, {
-    archiveBytes,
-    archivePath,
-    installRoot: installedPacksDir(context),
     exists: async (absolutePath) => {
       try {
         await vscode.workspace.fs.stat(vscode.Uri.file(absolutePath));
@@ -193,13 +185,15 @@ async function installPackCommand(
         return false;
       }
     },
-    extractFs: createNodeArchiveExtractFs(),
-    reservedNamespaces: new Set(),
+    authorizedFolders: async () => [],
+    installRoot: () => installedPacksDir(context),
   });
 
-  for (const line of installPackDiagnosticLines(outcome, archivePath)) {
-    diagnosticsChannel.appendLine(line);
-  }
+  const outcome = await createMarkiiHost(adapter, {
+    archiveExtractFs: createNodeArchiveExtractFs(),
+  }).installPack({ archiveBytes, archivePath });
+
+  if (outcome.kind === 'unsupported') return; // already diagnosed
   const message = installPackMessage(outcome, archivePath, adapter.labels);
   if (outcome.kind === 'rejected' || outcome.kind === 'reserved') {
     void vscode.window.showWarningMessage(message);

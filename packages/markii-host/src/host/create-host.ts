@@ -42,7 +42,17 @@ import {
   packDiscoveryIoFromAdapter,
   type PackDiscoveryIo,
 } from './pack-load.js';
-import type { HtmlExportEngine } from '../export/note-export.js';
+import type {
+  ExportBodyRenderer,
+  ExportPackStylesheet,
+  ExportRenderInfo,
+  HtmlExportEngine,
+  StaticExportReason,
+} from '../export/note-export.js';
+import type {
+  EmbeddedImageReport,
+  ExportImageReader,
+} from '../export/image-embed.js';
 import { buildComponentCatalog } from '../insert/component-catalog.js';
 import {
   formatPackDiagnosticLines,
@@ -140,10 +150,34 @@ export interface ExportRequest {
   readonly unavailableComponents?: readonly UnavailableComponent[];
   /** Receives the static engine's render diagnostics, such as the `no-engine-view` event. */
   readonly onDiagnostic?: OnDiagnostic;
+  /** The host's own render of the body (a React pass bound to its loaded packs). Omitted means the static engine renders, and `staticReason` says why. Used by the `html` and `pdf` formats. */
+  readonly renderBody?: ExportBodyRenderer;
+  /** Why the static engine renders when `renderBody` is omitted. Defaults to `no-packs`. */
+  readonly staticReason?: StaticExportReason;
+  /** The loaded packs' stylesheets, embedded only when `renderBody` ran. */
+  readonly packStylesheets?: readonly ExportPackStylesheet[];
+  /** How many loaded packs contributed to the render. Diagnostics only. */
+  readonly packCount?: number;
+  /** Reads one of the note's local images so the export embeds it as a `data:` URI. Omitted leaves every image source as written. */
+  readonly embedImages?: ExportImageReader;
+  /** Hides the collapsed script marker in the exported file. Defaults to `false`. */
+  readonly hideScriptBlocks?: boolean;
 }
 
 export type ExportOutcome =
-  | { readonly kind: 'exported'; readonly path: string; readonly bytes: number }
+  | {
+      readonly kind: 'exported';
+      readonly path: string;
+      readonly bytes: number;
+      /** How many last-run values were baked into the file. */
+      readonly valueCount: number;
+      /** `true` when the note contains a script fence. */
+      readonly hasScripts?: boolean;
+      /** Which engine rendered the body, and why when it was the static one. */
+      readonly render: ExportRenderInfo;
+      /** What image embedding did. */
+      readonly images: EmbeddedImageReport;
+    }
   | { readonly kind: 'failed'; readonly reason: string }
   /** `adapter.exports.resolveTarget`/`htmlToPdf`/an injected `renderAnsi` was unavailable at the moment of export — a picker cancel, or a seam this host declared but did not wire up. */
   | { readonly kind: 'cancelled' }
@@ -161,6 +195,8 @@ export type InstallPackOutcome =
   | {
       readonly kind: 'installed';
       readonly namespace: string;
+      /** The folder the pack now lives in, under the adapter's install root. */
+      readonly installedDir: string;
       readonly replaced: boolean;
     }
   | {
@@ -464,6 +500,24 @@ export function createMarkiiHost(
           ...(request.onDiagnostic !== undefined
             ? { onDiagnostic: request.onDiagnostic }
             : {}),
+          ...(request.renderBody !== undefined
+            ? { renderBody: request.renderBody }
+            : {}),
+          ...(request.staticReason !== undefined
+            ? { staticReason: request.staticReason }
+            : {}),
+          ...(request.packStylesheets !== undefined
+            ? { packStylesheets: request.packStylesheets }
+            : {}),
+          ...(request.packCount !== undefined
+            ? { packCount: request.packCount }
+            : {}),
+          ...(request.embedImages !== undefined
+            ? { embedImages: request.embedImages }
+            : {}),
+          ...(request.hideScriptBlocks !== undefined
+            ? { hideScriptBlocks: request.hideScriptBlocks }
+            : {}),
         },
         options.renderAnsi,
       );
@@ -482,7 +536,17 @@ export function createMarkiiHost(
       if (outcome.kind === 'failed') {
         return { kind: 'failed', reason: outcome.reason };
       }
-      return { kind: 'exported', path: outcome.path, bytes: outcome.bytes };
+      return {
+        kind: 'exported',
+        path: outcome.path,
+        bytes: outcome.bytes,
+        valueCount: outcome.valueCount,
+        ...(outcome.hasScripts !== undefined
+          ? { hasScripts: outcome.hasScripts }
+          : {}),
+        render: outcome.render,
+        images: outcome.images,
+      };
     },
 
     async installPack(
@@ -523,6 +587,7 @@ export function createMarkiiHost(
         return {
           kind: 'installed',
           namespace: outcome.packName,
+          installedDir: outcome.installedDir,
           replaced: outcome.replaced,
         };
       }

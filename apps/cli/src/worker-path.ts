@@ -5,7 +5,7 @@
  *
  * Resolves in the same two environments this CLI runs in:
  * - the PACKAGED CLI: `esbuild.config.mjs`'s worker build bundles
- *   `@markii/host`'s `run/worker-entry.ts` to `dist/run/worker.js`; since
+ *   `@markii/host/node-worker` to `dist/run/worker.js`; since
  *   this file (bundled into `dist/markii.mjs`) resolves `here` to `dist/`
  *   at runtime, `dist/run/worker.js` is exactly
  *   `path.join(here, 'run', 'worker.js')`. `here` is computed from

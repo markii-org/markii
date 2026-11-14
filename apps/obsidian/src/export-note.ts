@@ -28,13 +28,12 @@
  */
 import { createHtmlExportEngine } from '@markii/host/node';
 import {
-  noteHasScripts,
-  buildExportDocument,
-  imageEmbedDiagnosticLines,
-  renderEngineDiagnosticLine,
+  createMarkiiHost,
   exportedSiblingPath,
   fileNameOf,
 } from '@markii/host';
+import type { ExportRequest, HostExportFormat, MarkiiHost } from '@markii/host';
+import { createObsidianHostAdapter } from './host-adapter.js';
 import type { UnavailableComponent } from '@markii/stdlib';
 import type {
   EmbeddedImageReport,
@@ -188,6 +187,8 @@ export interface NoteExportRequest {
    * this vault's preview was showing. Defaults to `false`.
    */
   readonly hideScriptBlocks?: boolean;
+  /** Where the shared export's own diagnostics lines go. Defaults to the console, this host's diagnostics surface. */
+  readonly diagnostics?: (line: string) => void;
 }
 
 /** `exportNoteAsPdf`'s extra inputs: the printer, and the folder it may print from. */
@@ -200,104 +201,183 @@ export interface NotePdfExportRequest extends NoteExportRequest {
 /** The static HTML engine this plugin exports with. */
 const htmlEngine = createHtmlExportEngine();
 
+/** The two file extensions this plugin's exports land under, by the shared format name. */
+const EXPORT_EXTENSION = { html: '.html', pdf: '.pdf' } as const;
+
 /**
- * Builds the standalone document for one note, over `@markii/host`'s
- * shared `buildExportDocument` (the same pure composition
- * `apps/vscode`'s and `apps/cli`'s export paths use, so the
- * three hosts cannot build a differently-shaped document from the same
- * inputs). Never throws: a failing `renderBody` degrades to the static
- * engine rather than propagating.
+ * The shared host over the vault: `resolveTarget` names the vault-relative
+ * file beside the note, and `writeFile` goes through the injected
+ * `NoteExportFs`. `printer` is the PDF seam; the host calls it with the
+ * finished HTML. Every decision about building the document, and the
+ * diagnostics lines for a written file, belong to `@markii/host`.
  */
-async function buildDocument(request: NoteExportRequest): Promise<{
-  html: string;
-  valueCount: number;
-  render: ExportRenderInfo;
-  images: EmbeddedImageReport;
-}> {
-  // `NoteExportRequest` carries the shared request's fields under the same
-  // names; the extras (`fs`) are never read by `buildExportDocument`.
-  const document = await buildExportDocument({
-    ...request,
-    engine: htmlEngine,
+function exportHost(
+  request: NoteExportRequest,
+  printer?: (html: string) => Promise<Uint8Array>,
+): MarkiiHost {
+  const adapter = createObsidianHostAdapter({
+    prompt: async () => false,
+    loadLocalStorage: () => undefined,
+    saveLocalStorage: () => undefined,
+    diagnostics: request.diagnostics ?? ((line) => console.log(line)),
+    writeFile: async (path, bytes) => {
+      if (path.endsWith(EXPORT_EXTENSION.pdf)) {
+        await request.fs.writeBinary(path, bytes);
+      } else {
+        await request.fs.writeText(path, new TextDecoder().decode(bytes));
+      }
+    },
+    exports: {
+      formats: new Set<HostExportFormat>(printer ? ['html', 'pdf'] : ['html']),
+      resolveTarget: async (_suggested, format) =>
+        exportedSiblingPath(
+          request.notePath,
+          format === 'pdf' ? EXPORT_EXTENSION.pdf : EXPORT_EXTENSION.html,
+        ),
+      ...(printer ? { htmlToPdf: printer } : {}),
+    },
   });
+  return createMarkiiHost(adapter, { htmlEngine });
+}
+
+/** `createMarkiiHost(...).exportNote`'s request for one note, from this plugin's request. */
+function hostRequest(
+  request: NoteExportRequest,
+  format: 'html' | 'pdf',
+): ExportRequest {
   return {
-    html: document.html,
-    valueCount: document.valueCount,
-    render: document.render,
-    images: document.images,
+    format,
+    notePath: request.notePath,
+    text: request.text,
+    ...(request.values !== undefined ? { values: request.values } : {}),
+    ...(request.unavailableComponents !== undefined
+      ? { unavailableComponents: request.unavailableComponents }
+      : {}),
+    ...(request.renderBody !== undefined
+      ? { renderBody: request.renderBody }
+      : {}),
+    ...(request.staticReason !== undefined
+      ? { staticReason: request.staticReason }
+      : {}),
+    ...(request.packStylesheets !== undefined
+      ? { packStylesheets: request.packStylesheets }
+      : {}),
+    ...(request.packCount !== undefined
+      ? { packCount: request.packCount }
+      : {}),
+    ...(request.embedImages !== undefined
+      ? { embedImages: request.embedImages }
+      : {}),
+    ...(request.hideScriptBlocks !== undefined
+      ? { hideScriptBlocks: request.hideScriptBlocks }
+      : {}),
   };
 }
 
 /**
  * Writes the note as one self-contained `.html` file beside itself in the
- * vault. The exported file keeps the note's own relative image sources, so
- * a sibling file resolves them exactly as the note does.
+ * vault, through `createMarkiiHost(...).exportNote`. The exported file keeps
+ * the note's own relative image sources, so a sibling file resolves them
+ * exactly as the note does. Never throws.
  */
 export async function exportNoteAsHtml(
   request: NoteExportRequest,
 ): Promise<NoteExportOutcome> {
-  const path = exportedSiblingPath(request.notePath, '.html');
-  const hasScripts = noteHasScripts(request.text);
-  try {
-    const { html, valueCount, render, images } = await buildDocument(request);
-    await request.fs.writeText(path, html);
-    return { kind: 'html', path, valueCount, hasScripts, render, images };
-  } catch (error) {
-    return { kind: 'failed', reason: reasonOf(error) };
+  const outcome = await exportHost(request).exportNote(
+    hostRequest(request, 'html'),
+  );
+  if (outcome.kind === 'exported') {
+    return {
+      kind: 'html',
+      path: outcome.path,
+      valueCount: outcome.valueCount,
+      ...(outcome.hasScripts !== undefined
+        ? { hasScripts: outcome.hasScripts }
+        : {}),
+      render: outcome.render,
+      images: outcome.images,
+    };
   }
+  return { kind: 'failed', reason: failureReason(outcome) };
+}
+
+/** The reason an export outcome other than `exported` carries. */
+function failureReason(
+  outcome: Exclude<
+    Awaited<ReturnType<MarkiiHost['exportNote']>>,
+    { kind: 'exported' }
+  >,
+): string {
+  if (outcome.kind === 'failed') return outcome.reason;
+  if (outcome.kind === 'cancelled') return 'the export had nowhere to write.';
+  return outcome.detail ?? 'this export format is not available.';
 }
 
 /**
  * Writes the note as one `.pdf` file beside itself in the vault, printed
- * from exactly the document `exportNoteAsHtml` would have written.
+ * from exactly the document `exportNoteAsHtml` would have written. The
+ * printer is this plugin's own seam, handed to the shared host as the
+ * adapter's `htmlToPdf`.
  *
  * DEGRADATION. If the printer is unavailable or throws, this writes the
- * HTML file instead and says which of the two happened, so the user always
- * ends up with an export. Only a failure of THAT fallback write leaves
- * nothing behind, and that is the one outcome reported as an outright
- * failure.
+ * HTML file instead, through the same host, and says which of the two
+ * happened, so the user always ends up with an export. Only a failure of
+ * THAT fallback write leaves nothing behind, and that is the one outcome
+ * reported as an outright failure. A failure before the document existed
+ * (the printer never ran) is also an outright failure.
  */
 export async function exportNoteAsPdf(
   request: NotePdfExportRequest,
 ): Promise<NoteExportOutcome> {
-  const pdfPath = exportedSiblingPath(request.notePath, '.pdf');
-  const hasScripts = noteHasScripts(request.text);
+  let printed = false;
+  let printError: unknown;
+  const outcome = await exportHost(request, async (html) => {
+    printed = true;
+    try {
+      return await request.htmlToPdf({ html, baseDir: request.baseDir });
+    } catch (error) {
+      printError = error;
+      throw error;
+    }
+  }).exportNote(hostRequest(request, 'pdf'));
 
-  let html: string;
-  let valueCount: number;
-  let render: ExportRenderInfo;
-  let images: EmbeddedImageReport;
-  try {
-    ({ html, valueCount, render, images } = await buildDocument(request));
-  } catch (error) {
-    return { kind: 'failed', reason: reasonOf(error) };
-  }
-
-  try {
-    const pdf = await request.htmlToPdf({ html, baseDir: request.baseDir });
-    await request.fs.writeBinary(pdfPath, pdf);
+  if (outcome.kind === 'exported') {
     return {
       kind: 'pdf',
-      path: pdfPath,
-      valueCount,
-      hasScripts,
-      render,
-      images,
+      path: outcome.path,
+      valueCount: outcome.valueCount,
+      ...(outcome.hasScripts !== undefined
+        ? { hasScripts: outcome.hasScripts }
+        : {}),
+      render: outcome.render,
+      images: outcome.images,
     };
-  } catch (error) {
-    const kind = isPdfUnavailable(error) ? 'pdf-unavailable' : 'pdf-failed';
-    const reason = reasonOf(error);
-    const htmlPath = exportedSiblingPath(request.notePath, '.html');
-    try {
-      await request.fs.writeText(htmlPath, html);
-    } catch (fallbackError) {
-      return {
-        kind: 'failed',
-        reason: `${reason}; the HTML fallback also failed: ${reasonOf(fallbackError)}`,
-      };
-    }
-    return { kind, path: htmlPath, valueCount, reason, render, images };
   }
+  const reason = failureReason(outcome);
+  if (!printed) return { kind: 'failed', reason };
+
+  // The printer ran and something after it failed: the PDF write, or the
+  // printer itself. Either way the user still gets the HTML.
+  const printReason = printError === undefined ? reason : reasonOf(printError);
+  const kind =
+    printError !== undefined && isPdfUnavailable(printError)
+      ? 'pdf-unavailable'
+      : 'pdf-failed';
+  const fallback = await exportNoteAsHtml(request);
+  if (fallback.kind !== 'html') {
+    return {
+      kind: 'failed',
+      reason: `${printReason}; the HTML fallback also failed: ${fallback.kind === 'failed' ? fallback.reason : ''}`,
+    };
+  }
+  return {
+    kind,
+    path: fallback.path,
+    valueCount: fallback.valueCount,
+    reason: printReason,
+    render: fallback.render,
+    images: fallback.images,
+  };
 }
 
 // `fileNameOf` (the last path segment, for naming a file in a notice) is
@@ -332,38 +412,28 @@ export function exportNoticeText(outcome: NoteExportOutcome): string {
 }
 
 /**
- * The console lines for one outcome — this host's diagnostics surface, per
- * docs/integration.md. Every failure reaches here in full, including the
- * reason the notice deliberately omits, so a user can always find out why
- * without opening developer tools on a hunch.
+ * The console lines this plugin adds for one outcome, beyond what the shared
+ * host already wrote while exporting (the written file, how the body was
+ * rendered, what image embedding did, and a failed write). A written file
+ * adds none. A PDF that fell back to HTML adds the reason and how to get a
+ * PDF. Every failure reaches the console in full, including the reason the
+ * notice deliberately omits, so a user can always find out why without
+ * opening developer tools on a hunch.
  */
 export function exportDiagnosticLines(outcome: NoteExportOutcome): string[] {
   switch (outcome.kind) {
     case 'html':
-      return [
-        `Exported ${outcome.path} as HTML with ${String(outcome.valueCount)} stored values baked in.`,
-        renderEngineDiagnosticLine(outcome.render),
-        ...imageEmbedDiagnosticLines(outcome.images),
-      ];
     case 'pdf':
-      return [
-        `Exported ${outcome.path} as PDF with ${String(outcome.valueCount)} stored values baked in.`,
-        renderEngineDiagnosticLine(outcome.render),
-        ...imageEmbedDiagnosticLines(outcome.images),
-      ];
+      return [];
     case 'pdf-unavailable':
       return [
         `PDF export is unavailable on this device: ${outcome.reason}`,
         `Wrote ${outcome.path} as HTML instead. Open it in a browser and print from there to get a PDF.`,
-        renderEngineDiagnosticLine(outcome.render),
-        ...imageEmbedDiagnosticLines(outcome.images),
       ];
     case 'pdf-failed':
       return [
         `PDF export failed: ${outcome.reason}`,
         `Wrote ${outcome.path} as HTML instead. Open it in a browser and print from there to get a PDF.`,
-        renderEngineDiagnosticLine(outcome.render),
-        ...imageEmbedDiagnosticLines(outcome.images),
       ];
     case 'failed':
       return [`Export failed: ${outcome.reason}`];

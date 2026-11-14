@@ -1,5 +1,5 @@
 /**
- * Composes every pack-loading piece (`@markii/host`'s `discoverPacks`,
+ * Composes every pack-loading piece (`@markii/host`'s `loadPacks` outcome,
  * `loadPackModules`, `resolvePrebuiltPack`, `buildRenderRegistry`,
  * `./pack-runtime.ts`) into the one thing `../main.ts` needs: everything
  * about the currently loadable, installed packs, loaded once and shared by
@@ -30,10 +30,7 @@
  * module only takes already-resolved, absolute pack folders and a base
  * `Registry`, all as plain values.
  */
-import {
-  createNodeDirectoryLister,
-  createNodePackScriptsReader,
-} from '@markii/host/node';
+import { createNodePackScriptsReader } from '@markii/host/node';
 import { existsSync } from 'node:fs';
 import * as path from 'node:path';
 import { readFile as nodeReadFile } from 'node:fs/promises';
@@ -44,14 +41,13 @@ import {
   buildRenderRegistry,
   componentsWithoutEngineView,
   declaredPackComponents,
-  discoverPacks,
   installedNamespaces,
   loadPackModules,
   resolvePrebuiltPack,
 } from '@markii/host';
-import { createNodeFileReader } from '@markii/host/node';
 import type {
   DiscoveredPack,
+  LoadPacksOutcome,
   PackModulesMap,
   PackPathExists,
   SkippedPackFolder,
@@ -229,13 +225,23 @@ async function resolveInstalledPacks(
 }
 
 /**
- * Loads everything about the packs found under `installedFolders` (already
- * resolved, absolute, trusted-on-this-device folders — `../main.ts`'s
- * `@markii/host`'s `installedPacks`). Never throws: every step it composes
+ * What `createMarkiiHost(adapter).loadPacks()` found: the installed packs
+ * this device trusts, the folders that produced none, and every installed
+ * component with the engines it has a view for. The host owns discovery;
+ * this module owns what happens to a pack afterwards on this host.
+ */
+export type InstalledPackDiscovery = Pick<
+  Extract<LoadPacksOutcome, { kind: 'loaded' }>,
+  'packs' | 'skipped' | 'components'
+>;
+
+/**
+ * Loads everything about the installed packs `installed` names (the host's
+ * discovery of the trusted-on-this-device folders). Never throws: every step it composes
  * already degrades quietly.
  */
 export async function loadPackContext(
-  installedFolders: readonly string[],
+  installed: InstalledPackDiscovery,
   defaultRegistry: Registry,
   options: LoadPackContextOptions = {},
 ): Promise<PackContext> {
@@ -258,12 +264,7 @@ export async function loadPackContext(
   );
   const skipped: SkippedPackFolder[] = [...bundledInvalid];
 
-  const discovery = await discoverPacks(
-    installedFolders,
-    createNodeFileReader(),
-    createNodeDirectoryLister(),
-    REACT_ENGINE_ID,
-  );
+  const discovery = installed;
   skipped.push(...discovery.skipped);
 
   // An installed pack claiming a namespace a bundled pack already holds is
@@ -389,8 +390,11 @@ export async function loadPackContext(
 
   const installedComponents = [
     ...packs.flatMap((pack) => declaredPackComponents(pack.manifest)),
-    ...discovery.skipped.flatMap(
-      (entry) => entry.engineUnsupported?.components ?? [],
+    // Components of a pack dropped whole because it has nothing for this
+    // engine: the host's list minus the ones a discovered pack declares.
+    ...discovery.components.filter(
+      (component) =>
+        !discovery.packs.some((pack) => pack.manifest.name === component.pack),
     ),
   ];
 

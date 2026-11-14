@@ -138,8 +138,10 @@ coarse, matching each `kind`:
   compares the recorded run trace's `ok` flag.
 - `exported`: `contains`/`excludes` are substrings checked against the
   written file's content, never the whole document — the render corpora
-  already pin bytes.
-- `installed`: `namespace` and `replaced`.
+  already pin bytes. `valueCount` is how many last-run values were baked
+  in, and `renderEngine` (`static` or `react`) is which engine drew the body.
+- `installed`: `namespace` and `replaced`, and `installedDirName`, the name
+  of the folder the pack was unzipped into.
 - `declined`: `step` (`'consent'`/`'replace'`, or absent for the
   scripts-disabled synthetic outcome) and `reasonContains`, a substring of
   the user-facing reason.

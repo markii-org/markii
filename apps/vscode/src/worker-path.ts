@@ -6,7 +6,7 @@
  *
  * Resolves in the same two environments this extension itself runs in:
  * - the PACKAGED extension: `esbuild.config.mjs`'s worker build bundles
- *   `@markii/host`'s `run/worker-entry.ts` to `dist/run/worker.js`; since
+ *   `@markii/host/node-worker` to `dist/run/worker.js`; since
  *   this file (bundled into `dist/extension.js`) has `__dirname === dist/`
  *   at runtime (esbuild flattens a whole bundle into one file, so every
  *   module inside it shares the bundle's own `__dirname` — verified

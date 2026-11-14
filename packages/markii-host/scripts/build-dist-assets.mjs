@@ -69,7 +69,7 @@ await build({
 });
 
 await build({
-  entryPoints: [path.join(pkgRoot, 'src', 'run', 'worker-entry.ts')],
+  entryPoints: [path.join(pkgRoot, 'src', 'node-worker.ts')],
   outfile: path.join(dist, 'node-worker.js'),
   bundle: true,
   platform: 'node',

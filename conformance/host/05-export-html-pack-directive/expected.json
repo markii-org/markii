@@ -2,6 +2,8 @@
   "outcomes": [
     {
       "kind": "exported",
+      "valueCount": 0,
+      "renderEngine": "static",
       "contains": ["mk-unknown", "ana_timeline"],
       "excludes": ["<script"]
     }

@@ -3,9 +3,8 @@ import { createElement } from 'react';
 import type { StoredValue } from '@markii/runtime';
 import { createRegistry } from '@markii/react';
 import { defaultRegistry } from '@markii/react/components';
-import { EMPTY_IMAGE_REPORT, MAX_EMBEDDED_IMAGE_BYTES } from '@markii/host';
+import { EMPTY_IMAGE_REPORT } from '@markii/host';
 import type {
-  EmbeddedImageReport,
   ExportBodyRenderer,
   ExportImageReader,
   ExportRenderInfo,
@@ -363,16 +362,16 @@ describe('exportNoticeText', () => {
     expect(text).not.toContain('value');
   });
 
-  it('still puts the count on the diagnostics surface', () => {
-    const lines = exportDiagnosticLines({
-      kind: 'html',
-      path: 'reports/week.html',
-      valueCount: 4,
-      hasScripts: true,
-      render: RENDER_STATIC_NO_PACKS,
-      images: EMPTY_IMAGE_REPORT,
+  it('still puts the count on the diagnostics surface', async () => {
+    const { fs } = createFs();
+    const lines: string[] = [];
+    await exportNoteAsHtml({
+      ...NOTE,
+      values: VALUES,
+      fs,
+      diagnostics: (line) => lines.push(line),
     });
-    expect(lines[0]).toContain('4 stored values baked in');
+    expect(lines.join('\n')).toContain('1 stored values baked in');
   });
 
   it('says PDF is unavailable on this device and names the file written instead', () => {
@@ -503,225 +502,46 @@ describe('exportDiagnosticLines', () => {
     expect(lines.join('\n')).toContain('print from there');
   });
 
-  it('produces at least one line for every outcome', () => {
+  it('adds nothing for a written file, which the shared export already reported', () => {
     for (const outcome of OUTCOMES) {
-      expect(exportDiagnosticLines(outcome).length).toBeGreaterThan(0);
+      const lines = exportDiagnosticLines(outcome);
+      if (outcome.kind === 'html' || outcome.kind === 'pdf') {
+        expect(lines).toEqual([]);
+      } else {
+        expect(lines.length).toBeGreaterThan(0);
+      }
     }
   });
 
-  it('describes a React render with the pack and stylesheet counts, pluralized', () => {
-    const lines = exportDiagnosticLines({
-      kind: 'html',
-      path: 'reports/week.html',
-      valueCount: 0,
-      render: { engine: 'react', packCount: 1, stylesheetCount: 1 },
-      images: EMPTY_IMAGE_REPORT,
+  it('writes the render and image lines through the diagnostics sink', async () => {
+    const { fs } = createFs();
+    const lines: string[] = [];
+    const embedImages: ExportImageReader = () => ({
+      kind: 'bytes',
+      bytes: new Uint8Array([1, 2, 3]),
     });
-    expect(lines.join('\n')).toContain("preview's React engine");
-    expect(lines.join('\n')).toContain('1 pack');
-    expect(lines.join('\n')).toContain('1 stylesheet');
-
-    const pluralLines = exportDiagnosticLines({
-      kind: 'html',
-      path: 'reports/week.html',
-      valueCount: 0,
-      render: { engine: 'react', packCount: 2, stylesheetCount: 3 },
-      images: EMPTY_IMAGE_REPORT,
+    await exportNoteAsHtml({
+      notePath: 'reports/pic.mk.md',
+      text: '# Report\n\n![a picture](pic.png)\n',
+      fs,
+      embedImages,
+      diagnostics: (line) => lines.push(line),
     });
-    expect(pluralLines.join('\n')).toContain('2 packs');
-    expect(pluralLines.join('\n')).toContain('3 stylesheets');
+    const joined = lines.join('\n');
+    expect(joined).toContain('Export wrote reports/pic.html');
+    expect(joined).toContain('no pack components are loaded');
+    expect(joined).toContain('Embedded 1 image');
   });
 
-  it('says a static render matches the preview when no packs are loaded', () => {
-    const lines = exportDiagnosticLines({
-      kind: 'html',
-      path: 'reports/week.html',
-      valueCount: 0,
-      render: RENDER_STATIC_NO_PACKS,
-      images: EMPTY_IMAGE_REPORT,
+  it('reports a failed write on the sink too', async () => {
+    const { fs } = createFs({ failText: true });
+    const lines: string[] = [];
+    await exportNoteAsHtml({
+      ...NOTE,
+      fs,
+      diagnostics: (line) => lines.push(line),
     });
-    expect(lines.join('\n')).toContain('no pack components are loaded');
-    expect(lines.join('\n')).toContain('matches what the preview shows');
-  });
-
-  it('says a failed React render fell back and carries the verbatim detail', () => {
-    const lines = exportDiagnosticLines({
-      kind: 'html',
-      path: 'reports/week.html',
-      valueCount: 0,
-      render: {
-        engine: 'static',
-        reason: 'render-failed',
-        detail: 'component exploded',
-      },
-      images: EMPTY_IMAGE_REPORT,
-    });
-    expect(lines.join('\n')).toContain('the preview could not render the note');
-    expect(lines.join('\n')).toContain('exported as labeled boxes');
-    expect(lines.join('\n')).toContain('component exploded');
-  });
-
-  it('handles every StaticExportReason without throwing, including the unreachable ones', () => {
-    const reasons: readonly ExportRenderInfo[] = [
-      { engine: 'static', reason: 'no-packs' },
-      { engine: 'static', reason: 'no-renderer' },
-      { engine: 'static', reason: 'timeout' },
-      { engine: 'static', reason: 'render-failed' },
-    ];
-    for (const render of reasons) {
-      const lines = exportDiagnosticLines({
-        kind: 'html',
-        path: 'reports/week.html',
-        valueCount: 0,
-        render,
-        images: EMPTY_IMAGE_REPORT,
-      });
-      expect(lines.length).toBeGreaterThan(0);
-    }
-  });
-
-  it('the new render line contains no em dash and no parentheses', () => {
-    const renders: readonly ExportRenderInfo[] = [
-      { engine: 'react', packCount: 2, stylesheetCount: 1 },
-      { engine: 'static', reason: 'no-packs' },
-      { engine: 'static', reason: 'no-renderer' },
-      { engine: 'static', reason: 'timeout', detail: 'worker did not answer' },
-      { engine: 'static', reason: 'render-failed', detail: 'boom' },
-    ];
-    for (const render of renders) {
-      const lines = exportDiagnosticLines({
-        kind: 'html',
-        path: 'reports/week.html',
-        valueCount: 0,
-        render,
-        images: EMPTY_IMAGE_REPORT,
-      });
-      const renderLine = lines[lines.length - 1]!;
-      expect(renderLine).not.toContain('—');
-      expect(renderLine).not.toMatch(/[()]/);
-    }
-  });
-
-  it('adds an embedded-images line with the count and bytes added', () => {
-    const images: EmbeddedImageReport = {
-      embedded: ['pic.png', 'chart.png'],
-      embeddedBytes: 51200,
-      skipped: [],
-      remote: 0,
-    };
-    const lines = exportDiagnosticLines({
-      kind: 'html',
-      path: 'reports/week.html',
-      valueCount: 0,
-      render: RENDER_STATIC_NO_PACKS,
-      images,
-    });
-    expect(lines.join('\n')).toContain('Embedded 2 images');
-    expect(lines.join('\n')).toContain('50.0 KB');
-  });
-
-  it('names a too-large skip with its size', () => {
-    const images: EmbeddedImageReport = {
-      embedded: [],
-      embeddedBytes: 0,
-      skipped: [
-        {
-          src: 'assets/huge.png',
-          reason: 'too-large',
-          byteLength: 3 * 1024 * 1024,
-        },
-      ],
-      remote: 0,
-    };
-    const lines = exportDiagnosticLines({
-      kind: 'html',
-      path: 'reports/week.html',
-      valueCount: 0,
-      render: RENDER_STATIC_NO_PACKS,
-      images,
-    });
-    expect(lines.join('\n')).toContain('huge.png');
-    expect(lines.join('\n')).toContain('3.0 MB');
-    // The embed limit itself, named in the same line.
-    expect(MAX_EMBEDDED_IMAGE_BYTES).toBe(2 * 1024 * 1024);
-    expect(lines.join('\n')).toContain('2.0 MB');
-  });
-
-  it('names an unsupported-type skip', () => {
-    const images: EmbeddedImageReport = {
-      embedded: [],
-      embeddedBytes: 0,
-      skipped: [{ src: 'assets/scan.tiff', reason: 'unsupported-type' }],
-      remote: 0,
-    };
-    const lines = exportDiagnosticLines({
-      kind: 'html',
-      path: 'reports/week.html',
-      valueCount: 0,
-      render: RENDER_STATIC_NO_PACKS,
-      images,
-    });
-    expect(lines.join('\n')).toContain('scan.tiff');
-    expect(lines.join('\n')).toContain('not supported for embedding');
-  });
-
-  it('carries the verbatim detail for an unreadable skip', () => {
-    const images: EmbeddedImageReport = {
-      embedded: [],
-      embeddedBytes: 0,
-      skipped: [
-        {
-          src: 'assets/gone.png',
-          reason: 'unreadable',
-          detail: 'ENOENT no such file',
-        },
-      ],
-      remote: 0,
-    };
-    const lines = exportDiagnosticLines({
-      kind: 'html',
-      path: 'reports/week.html',
-      valueCount: 0,
-      render: RENDER_STATIC_NO_PACKS,
-      images,
-    });
-    expect(lines.join('\n')).toContain('ENOENT no such file');
-  });
-
-  it('adds no image lines at all when a note has no local images', () => {
-    const before = exportDiagnosticLines({
-      kind: 'html',
-      path: 'reports/week.html',
-      valueCount: 0,
-      render: RENDER_STATIC_NO_PACKS,
-      images: EMPTY_IMAGE_REPORT,
-    });
-    // Exactly the export line and the render line, nothing about images.
-    expect(before.length).toBe(2);
-  });
-
-  it('every new image diagnostics line contains no em dash and no parentheses', () => {
-    const images: EmbeddedImageReport = {
-      embedded: ['pic.png'],
-      embeddedBytes: 2048,
-      skipped: [
-        { src: 'huge.png', reason: 'too-large', byteLength: 3 * 1024 * 1024 },
-        { src: 'scan.tiff', reason: 'unsupported-type' },
-        { src: 'gone.png', reason: 'unreadable', detail: 'not found' },
-      ],
-      remote: 1,
-    };
-    const lines = exportDiagnosticLines({
-      kind: 'html',
-      path: 'reports/week.html',
-      valueCount: 0,
-      render: RENDER_STATIC_NO_PACKS,
-      images,
-    });
-    for (const line of lines) {
-      expect(line).not.toContain('—');
-      expect(line).not.toMatch(/[()]/);
-    }
+    expect(lines.join('\n')).toContain('disk is full');
   });
 });
 

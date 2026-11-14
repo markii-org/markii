@@ -100,10 +100,18 @@ export function fileNameOf(path: string): string {
  * a stack trace — the verbatim reason goes there instead.
  */
 export function exportResultMessage(
-  outcome: NoteFileExportOutcome,
+  outcome:
+    | NoteFileExportOutcome
+    | {
+        readonly kind: 'exported';
+        readonly path: string;
+        readonly valueCount: number;
+        readonly hasScripts?: boolean;
+      }
+    | { readonly kind: 'failed' | 'cancelled' | 'unsupported' },
   labels: HostLabels,
 ): string {
-  if (outcome.kind === 'failed') {
+  if (outcome.kind !== 'written' && outcome.kind !== 'exported') {
     return `Markii: could not export this note. Open ${labels.diagnosticsSurface} for details.`;
   }
   const name = fileNameOf(outcome.path);
