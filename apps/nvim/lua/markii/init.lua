@@ -81,7 +81,7 @@ function M.start(buf)
   if vim.fn.executable(cmd[1]) == 0 then
     warn_once(
       "executable",
-      ("`%s` was not found on PATH. Install it with `npm install -g @markii/cli@next`, or set `cmd` in setup()."):format(
+      ("`%s` was not found on PATH. Install it with `npm install -g @markii/cli`, or set `cmd` in setup()."):format(
         cmd[1]
       )
     )

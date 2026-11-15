@@ -21,7 +21,7 @@ the same completion and hover code as the VS Code extension.
 - The Markii command line tool, which carries the language server:
 
 ```sh
-npm install -g @markii/cli@next
+npm install -g @markii/cli
 ```
 
 The plugin only runs `markii lsp`; it reads no note content itself.
@@ -65,7 +65,7 @@ git clone https://github.com/markii-org/markii ~/src/markii
 Install the tool, add the plugin, and check the setup:
 
 ```sh
-npm install -g @markii/cli@next
+npm install -g @markii/cli
 ```
 
 ```vim

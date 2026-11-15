@@ -142,7 +142,7 @@ check(report:find("version ", 1, true) ~= nil, "health reports the version")
 require("markii").config.cmd = { "markii-not-installed", "lsp" }
 report = health_text()
 check(report:find("was not found on PATH", 1, true) ~= nil, "health reports a missing tool")
-check(report:find("npm install -g @markii/cli@next", 1, true) ~= nil, "health gives the install command")
+check(report:find("npm install -g @markii/cli", 1, true) ~= nil, "health gives the install command")
 require("markii").config.cmd = cmd
 
 vim.lsp.stop_client(client.id)

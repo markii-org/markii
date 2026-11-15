@@ -7,7 +7,7 @@ local ok = health.ok or health.report_ok
 local warn = health.warn or health.report_warn
 local err = health.error or health.report_error
 
-local INSTALL = "npm install -g @markii/cli@next"
+local INSTALL = "npm install -g @markii/cli"
 
 local function run(cmd)
   local output = vim.fn.system(cmd)
