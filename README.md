@@ -100,8 +100,9 @@ Ways to use Markii with no coding:
   </tr>
 </table>
 
-Neovim has a plugin inside this repository, in `apps/nvim`. It is installed
-from a checkout and has no separate plugin repository. See the
+Neovim has a plugin, installed from
+[markii-org/markii-nvim](https://github.com/markii-org/markii-nvim). Its
+source is `apps/nvim` in this repository. See the
 [Neovim README](apps/nvim/README.md).
 
 To render Markii documents in your own React app:

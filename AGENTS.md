@@ -192,7 +192,9 @@ apps/cli             the markii command line tool, published as @markii/cli, bui
                      run-note.probe.test.ts and pack-commands.test.ts.
 apps/nvim            a thin Neovim plugin in Lua, not a workspace. It starts markii lsp and
                      holds no Markii logic. test/run.sh is the headless test; CI is
-                     nvim.yml. There is no mirror repository.
+                     nvim.yml. nvim-release.yml copies it, without test/, to the
+                     one-way mirror markii-org/markii-nvim on an nvim-v* tag, as a new
+                     commit and never a force-push.
 ```
 
 Platform renderers live under `packages/platforms/*` (a workspace root alongside

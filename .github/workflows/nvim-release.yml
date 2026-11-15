@@ -1,0 +1,118 @@
+# Fires on a pushed `nvim-v*` tag (or a manual dispatch naming one) and
+# publishes the Neovim plugin through a one-way mirror repository,
+# markii-org/markii-nvim. This repository stays the source of truth. The
+# mirror exists so a plugin manager can install the plugin from a
+# repository root, with no subdirectory option.
+#
+# What it does, in order:
+#   1. Runs the plugin's headless test on Neovim 0.9.5 and stable against
+#      the command line tool built from this commit.
+#   2. Copies apps/nvim (without its test folder, which needs this
+#      repository) and the root LICENSE into a checkout of the mirror.
+#   3. Commits the result on the mirror's main branch as a NEW commit and
+#      tags it v<version>. It never force-pushes: a plugin manager updates
+#      a clone with a fast-forward, and a rewritten history would make that
+#      fail for every user.
+#
+# Prerequisites:
+#   - The mirror repository markii-org/markii-nvim exists.
+#   - The NVIM_MIRROR_TOKEN secret is set on this repository: a fine-grained
+#     token with contents read and write on markii-org/markii-nvim only.
+
+name: Neovim release
+
+on:
+  push:
+    tags:
+      - 'nvim-v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release, e.g. nvim-v0.17.0'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        neovim: [v0.9.5, stable]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: ${{ matrix.neovim }}
+
+      - run: npm ci
+      - run: npm run generate:doc-css -w @markii/html
+      - run: npm run build -w @markii/cli
+      - run: ./apps/nvim/test/run.sh
+
+  mirror:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Read the version from the tag
+        id: version
+        env:
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          case "$TAG" in
+            nvim-v*) ;;
+            *) echo "tag $TAG does not start with nvim-v" >&2; exit 1 ;;
+          esac
+          echo "version=${TAG#nvim-v}" >> "$GITHUB_OUTPUT"
+
+      - name: Push the plugin to the mirror
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          NVIM_MIRROR_TOKEN: ${{ secrets.NVIM_MIRROR_TOKEN }}
+        run: |
+          set -euo pipefail
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          REMOTE="https://x-access-token:${NVIM_MIRROR_TOKEN}@github.com/markii-org/markii-nvim.git"
+
+          git clone "$REMOTE" mirror
+          cd mirror
+          git checkout -B main
+
+          # The mirror holds exactly the plugin: replace everything but .git.
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -R ../apps/nvim/. .
+          rm -rf test
+          cp ../LICENSE LICENSE
+
+          git add -A
+          if git diff --cached --quiet; then
+            echo "the plugin is unchanged since the last mirror commit"
+          else
+            git -c user.name="github-actions[bot]" \
+                -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+                commit -m "markii-nvim ${VERSION} from markii-org/markii@${SHORT_SHA}"
+          fi
+
+          if git ls-remote --exit-code --tags origin "refs/tags/v${VERSION}" > /dev/null; then
+            echo "tag v${VERSION} already exists on the mirror" >&2
+            exit 1
+          fi
+          git tag "v${VERSION}"
+          git push origin main
+          git push origin "v${VERSION}"

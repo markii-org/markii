@@ -28,37 +28,34 @@ The plugin only runs `markii lsp`; it reads no note content itself.
 
 ## Install
 
-The plugin lives in the `apps/nvim` folder of the Markii repository. No
-separate plugin repository exists, so a plugin manager clones the whole
-repository and the plugin's folder is added to the runtime path.
-
-With lazy.nvim, point a spec at the repository and add the subfolder in
-`config`:
+Install the plugin from
+[markii-org/markii-nvim](https://github.com/markii-org/markii-nvim). With
+lazy.nvim:
 
 ```lua
 {
-  "markii-org/markii",
+  "markii-org/markii-nvim",
   lazy = false,
-  config = function(plugin)
-    vim.opt.rtp:append(plugin.dir .. "/apps/nvim")
+  config = function()
     require("markii").setup()
   end,
 }
 ```
 
-With no plugin manager, clone the repository and add the folder to the
-runtime path in your `init.lua`:
-
-```lua
-vim.opt.rtp:append(vim.fn.expand("~/src/markii/apps/nvim"))
-require("markii").setup()
-```
-
-The clone is one command:
+Any other plugin manager takes the same repository name. With no plugin
+manager, clone it into a package folder:
 
 ```sh
-git clone https://github.com/markii-org/markii ~/src/markii
+git clone https://github.com/markii-org/markii-nvim \
+  ~/.local/share/nvim/site/pack/markii/start/markii-nvim
 ```
+
+Then call `require("markii").setup()` in your `init.lua`.
+
+The plugin's source is the `apps/nvim` folder of the
+[Markii repository](https://github.com/markii-org/markii). A release
+workflow copies that folder to markii-org/markii-nvim, so report issues and
+send changes to the Markii repository.
 
 ## How to use it
 
@@ -167,8 +164,8 @@ hosts.
 
 ## Tests
 
-`apps/nvim/test/run.sh` starts Neovim headless against the CLI built in
-this repository. It checks the filetype, the client attaching, completion
+In the Markii repository, `apps/nvim/test/run.sh` starts Neovim headless
+against the CLI built there. It checks the filetype, the client attaching, completion
 after `:::` and `:`, the completion trigger characters, hover, the `K`
 mapping, diagnostics, and `:checkhealth markii`. Build the CLI first with
 `npm run build -w @markii/cli`. The `Neovim plugin` workflow runs it on

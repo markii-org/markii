@@ -30,6 +30,11 @@ fence lengthening all come from the server.
 ==============================================================================
 3. Setup                                                           *markii-setup*
 
+Install the plugin from the `markii-org/markii-nvim` repository with any
+plugin manager. With lazy.nvim: >lua
+    { "markii-org/markii-nvim", lazy = false,
+      config = function() require("markii").setup() end }
+<
 Call |markii.setup()| from your configuration: >lua
     require("markii").setup()
 <
