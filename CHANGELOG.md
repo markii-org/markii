@@ -6,6 +6,53 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-11-15
+
+The stable release of the 0.17.0 prereleases. It ships on the npm `latest`
+dist-tag for all twelve packages, together with the VS Code extension 0.17.0
+and the Obsidian plugin 0.14.0. The sections for 0.17.0-next.0 to
+0.17.0-next.6 below list every change in detail, breaking ones marked.
+
+### Added
+
+- `@markii/host` is published. It holds the script-running layer every app
+  shares: tier gating, grants, address pinning and the isolate watchdog. A
+  host writes a `HostAdapter` and calls `createMarkiiHost`, which runs
+  scripts, installs and loads packs, exports notes and linked sets, and
+  answers completion and hover. `docs/hosts.md` describes the contract.
+- `@markii/pack-build` is published. `buildPackArchive` builds a `.mkp`
+  from a pack folder in one call, and the same pack gives the same bytes on
+  any machine.
+- `@markii/cli` is published. It adds `markii view` with a live viewer and
+  an `r` key that re-runs scripts, `markii export`, `markii pack` and
+  `markii lsp`, a language server that reads `pack.json` only and runs no
+  pack code.
+- A Neovim plugin in `apps/nvim` starts the language server and maps hover,
+  completion and `:checkhealth markii`.
+- `@markii/stdlib` adds `validateNote`, one validator for the findings that
+  need no renderer.
+- The terminal engine loads terminal packs, scrolls, draws an ASCII box
+  style and focuses pack views.
+- All three renderers take `renderCode` for fenced code blocks, and
+  `@markii/react` accepts React 19.
+
+### Changed
+
+- The public entries of every package are pinned by a test and trimmed to
+  what outside code uses. `@markii/lua` exports its run API only.
+- Every host behavior answers with an outcome and never rejects. The kinds
+  use one vocabulary: `declined`, `failed`, `invalid` and `unsupported`.
+- The VS Code extension, the Obsidian plugin and the command line tool run
+  every behavior through `createMarkiiHost`.
+
+### Security
+
+- The browser worker removes its network globals on the global and on its
+  prototype chain before the first script runs, and refuses to run when a
+  name cannot be removed.
+- Killing a run aborts its open network requests, and a network outage is
+  reported as a failure, never as a refusal.
+
 ## [0.17.0-next.6] - 2026-11-15
 
 ### Security
