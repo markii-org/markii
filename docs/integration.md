@@ -102,10 +102,24 @@ not the main entry, so an application that brings its own registry never
 pulls the standard components into its bundle. Adding your own component is
 one registry entry, built with `createRegistry` or merged over the default
 set with `mergeRegistries`; its attributes arrive as props and its inner
-markdown arrives pre-rendered as children. `renderMark` also accepts an
-optional value store and vault store for documents that use scripting, and
-`renderMarkNode` renders a single block from a parsed document under the
-same contract, for hosts that need block-level granularity.
+markdown arrives pre-rendered as children. `renderMarkNode` renders a
+single block from a parsed document under the same contract, for hosts that
+need block-level granularity.
+
+A note that uses scripting needs its values. `renderMark` takes the note's
+`ValueStore` and the `VaultStore` from `@markii/runtime`, either as its
+third and fourth arguments or as `store` and `vault` on the options object,
+its fifth:
+
+```ts
+renderMark(text, registry, store, vault);
+renderMark(text, registry, undefined, undefined, { store, vault, renderCode });
+```
+
+`createValueStore(values)` builds the first from the values a run returned.
+The vault store holds what other notes published, which a note reads with
+an `@` prefix. "Rendering a note with its values" in `docs/scripting.md`
+describes both.
 
 A bundle reaches `@markii/bundle` through one of three storage forms, all
 satisfying the same `BundleStorage` contract. `openZipBundle` reads the zip
