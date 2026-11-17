@@ -28,8 +28,9 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
   raise one. All three engines show `network unavailable` with a hint to
   run again later. `@markii/lua` exports `netTransportFailure` and
   `isNetTransportFailure` for a host's own provider. (#79)
-- `resolveImageSrc` may return `{ src, width, height, srcset, sizes,
-loading }` in `@markii/react` and `@markii/html`. Every `srcset`
+- `resolveImageSrc` may return an object in `@markii/react` and
+  `@markii/html`, with `src` and optional `width`, `height`, `srcset`,
+  `sizes` and `loading`. Every `srcset`
   candidate gets the same scheme check as `src`; one refused candidate
   drops the `srcset`, and the image keeps its `src` with a quiet marker.
   The terminal engine reads only `src`. (#85)
