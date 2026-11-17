@@ -23,6 +23,26 @@ function renderFixture(name: string, registry: Registry = defaultRegistry) {
   return render(renderMark(readFixture(name), registry));
 }
 
+/**
+ * Markup with every element's attributes sorted by name. React 19 writes an
+ * `<img>`'s `src` and `srcset` after its other attributes and React 18 does
+ * not, so a cross-check against the HTML engine's fixtures compares
+ * attribute sets, not attribute order. The HTML engine's own fixture test
+ * stays byte for byte.
+ */
+function sortedAttributes(html: string): string {
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  for (const element of template.content.querySelectorAll('*')) {
+    const attributes = [...element.attributes]
+      .map((attribute) => [attribute.name, attribute.value] as const)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    for (const [name] of attributes) element.removeAttribute(name);
+    for (const [name, value] of attributes) element.setAttribute(name, value);
+  }
+  return template.innerHTML;
+}
+
 describe('renderMark', () => {
   it('renders plain markdown passthrough with no components involved', () => {
     const { container } = renderFixture('01-plain-markdown.mk.md');
@@ -1125,7 +1145,7 @@ describe('renderMark — render-level conformance fixtures (conformance/render/)
     expect(images).toEqual(['cat.png', 'dog.png']);
   });
 
-  it('06-image: the markup matches the committed HTML fixture byte for byte', () => {
+  it('06-image: the markup matches the committed HTML fixture, attribute order aside', () => {
     const { container } = render(
       renderMark(readRenderFixture('06-image'), defaultRegistry),
     );
@@ -1133,7 +1153,9 @@ describe('renderMark — render-level conformance fixtures (conformance/render/)
       join(conformanceDir(), 'render', '06-image.html'),
       'utf8',
     );
-    expect(container.innerHTML).toBe(expected.replace(/\n$/, ''));
+    expect(sortedAttributes(container.innerHTML)).toBe(
+      sortedAttributes(expected.replace(/\n$/, '')),
+    );
   });
 
   it("06-image WITH a resolveImageSrc option: a plain markdown image and Figure's own <img> both resolve", () => {
@@ -1641,18 +1663,22 @@ describe('renderMark: image attributes', () => {
   const input =
     '![a cat](cat.png)\n\n:::figure{src="dog.png" alt="A dog"}\nCap\n:::';
 
-  it('emits the object form on a markdown image and on a figure, in a fixed attribute order', () => {
+  it('emits the object form on a markdown image and on a figure', () => {
     const { container } = render(
       renderMark(input, defaultRegistry, undefined, undefined, {
         resolveImageSrc: () => resolved,
       }),
     );
     const [markdown, figure] = [...container.querySelectorAll('img')];
-    expect(markdown?.outerHTML).toBe(
-      '<img src="https://cdn.test/cat-640.png" alt="a cat" width="640" height="480" srcset="https://cdn.test/cat-320.png 320w, https://cdn.test/cat-640.png 640w" sizes="(max-width: 600px) 100vw, 640px" loading="eager" decoding="async">',
+    expect(sortedAttributes(markdown?.outerHTML ?? '')).toBe(
+      sortedAttributes(
+        '<img src="https://cdn.test/cat-640.png" alt="a cat" width="640" height="480" srcset="https://cdn.test/cat-320.png 320w, https://cdn.test/cat-640.png 640w" sizes="(max-width: 600px) 100vw, 640px" loading="eager" decoding="async">',
+      ),
     );
-    expect(figure?.outerHTML).toBe(
-      '<img class="mk-figure__img" src="https://cdn.test/cat-640.png" alt="A dog" width="640" height="480" srcset="https://cdn.test/cat-320.png 320w, https://cdn.test/cat-640.png 640w" sizes="(max-width: 600px) 100vw, 640px" loading="eager" decoding="async">',
+    expect(sortedAttributes(figure?.outerHTML ?? '')).toBe(
+      sortedAttributes(
+        '<img class="mk-figure__img" src="https://cdn.test/cat-640.png" alt="A dog" width="640" height="480" srcset="https://cdn.test/cat-320.png 320w, https://cdn.test/cat-640.png 640w" sizes="(max-width: 600px) 100vw, 640px" loading="eager" decoding="async">',
+      ),
     );
   });
 
@@ -1681,8 +1707,12 @@ describe('renderMark: image attributes', () => {
           }) as never,
       }),
     );
-    expect(container.querySelector('img')?.outerHTML).toBe(
-      '<img src="x.png" alt="a" loading="lazy" decoding="async">',
+    expect(
+      sortedAttributes(container.querySelector('img')?.outerHTML ?? ''),
+    ).toBe(
+      sortedAttributes(
+        '<img src="x.png" alt="a" loading="lazy" decoding="async">',
+      ),
     );
   });
 
