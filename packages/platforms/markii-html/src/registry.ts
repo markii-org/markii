@@ -72,6 +72,8 @@ export interface HtmlRenderContext {
    */
   valueMarker(name: string, format?: string, decimals?: string): string;
   data?: unknown;
+  /** The `data=` name as authored, when the directive had a non-empty one. */
+  dataName?: string;
   dataStatus?: ValueStatus;
   dataError?: string;
   dataFailureKind?: FailureKind;

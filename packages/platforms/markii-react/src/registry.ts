@@ -46,6 +46,8 @@ export interface MarkComponentProps {
   attributes: DirectiveAttributes;
   children?: ReactNode;
   data?: unknown;
+  /** The `data=` name as authored, when the directive had a non-empty one. A component may use it as an accessible name. */
+  dataName?: string;
   dataStatus?: ValueStatus;
   dataError?: string;
   dataFailureKind?: FailureKind;

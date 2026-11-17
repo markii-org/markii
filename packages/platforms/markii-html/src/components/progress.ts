@@ -65,7 +65,7 @@ function readProgressFields(data: unknown): ProgressFields {
  * Markup and class names match `@markii/react`'s `Progress` byte-for-byte.
  */
 export const Progress: HtmlComponent = (attributes, _childrenHtml, ctx) => {
-  const { data, dataStatus, dataError, dataFailureKind } = ctx;
+  const { data, dataName, dataStatus, dataError, dataFailureKind } = ctx;
 
   const bound = safeRead<ProgressFields>(
     () =>
@@ -101,12 +101,14 @@ export const Progress: HtmlComponent = (attributes, _childrenHtml, ctx) => {
   );
   const title = failureTitle(dataError ?? bound.fault, dataFailureKind);
   const titleAttr = title ? ` title="${ctx.esc(title)}"` : '';
+  const accessibleName = label ? label : (dataName ?? '');
   const labelHtml = label
     ? `<span class="mk-progress__label">${ctx.esc(label)}</span>`
     : '';
 
   return (
     `<div class="${className}"${titleAttr} role="progressbar" ` +
+    (accessibleName ? `aria-label="${ctx.esc(accessibleName)}" ` : '') +
     `aria-valuenow="${String(value)}" aria-valuemin="0" aria-valuemax="${String(max)}">` +
     `${labelHtml}` +
     `<div class="mk-progress__track">` +

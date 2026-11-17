@@ -5,7 +5,17 @@
  * sit correctly in the flow with zero per-component tuning.
  */
 :where(.doc, [data-mk-root]) > * + * {
-  margin-block-start: 1rem;
+  margin-block-start: var(--mk-rhythm, 1rem);
+}
+
+/*
+ * A heading may take its own gap above it. `:where()` keeps the rule at zero
+ * specificity, so a host rule still wins, and it sits after the rule above,
+ * so it wins that tie. With no Tier 3 property set the value is 1rem, the same
+ * as the rule above.
+ */
+:where(.doc, [data-mk-root]) > * + :where(h2, h3) {
+  margin-block-start: var(--mk-rhythm-heading, var(--mk-rhythm, 1rem));
 }
 
 /*
@@ -357,7 +367,7 @@
 
 .mk-callout {
   border: 1px solid var(--mk-callout-border, var(--mk-border));
-  border-left-width: 4px;
+  border-left-width: var(--mk-callout-accent-width, 4px);
   border-radius: 6px;
   padding: 0.75rem 1rem;
   background: var(--mk-callout-bg, var(--mk-surface));
@@ -555,6 +565,7 @@
 
 .mk-script__summary {
   cursor: pointer;
+  min-height: var(--mk-control-min-size, auto);
   padding: 0.5rem 0.75rem;
   font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
   font-size: 0.85em;
@@ -589,6 +600,7 @@
 
 .mk-details__summary {
   cursor: pointer;
+  min-height: var(--mk-control-min-size, auto);
   font-weight: 600;
 }
 
@@ -613,10 +625,10 @@
 /* ---------- card ---------- */
 
 .mk-card {
-  border: 1px solid var(--mk-border);
-  border-radius: 8px;
-  padding: 1rem;
-  background: var(--mk-raised);
+  border: var(--mk-card-border-width, 1px) solid var(--mk-border);
+  border-radius: var(--mk-card-radius, 8px);
+  padding: var(--mk-card-padding, 1rem);
+  background: var(--mk-card-bg, var(--mk-raised));
 }
 
 .mk-card__title {
@@ -710,6 +722,7 @@
 
 .mk-tabs__button {
   cursor: pointer;
+  min-height: var(--mk-control-min-size, auto);
   border: none;
   background: none;
   padding: 0.5rem 0.9rem;
@@ -749,13 +762,14 @@
 }
 
 .mk-stat__value {
-  font-size: 1.8em;
-  font-weight: 700;
+  font-size: var(--mk-stat-value-size, 1.8em);
+  font-weight: var(--mk-stat-value-weight, 700);
+  font-family: var(--mk-stat-value-font, inherit);
   line-height: 1.2;
 }
 
 .mk-stat__label {
-  font-size: 0.85em;
+  font-size: var(--mk-stat-label-size, 0.85em);
   color: var(--mk-muted);
 }
 
@@ -890,7 +904,7 @@
 .mk-progress--stale,
 .mk-chart--stale,
 .mk-table--stale {
-  opacity: 0.8;
+  opacity: var(--mk-stale-opacity, 0.82);
 }
 
 .mk-stat--script-error,

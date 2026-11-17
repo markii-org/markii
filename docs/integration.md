@@ -410,6 +410,43 @@ fails if its theme layer leaves a palette entry unmapped. Adding a token to
 the palette therefore breaks every host until it is mapped, which is the
 intended behavior.
 
+### Component properties
+
+A host may also set the component properties below on `.doc` or on its
+`data-mk-root` container. A host never has to. `doc.css` only reads them,
+each with a fallback equal to its default, so setting none changes nothing.
+They hold sizes, widths and opacities, never colors. Pack stylesheets do not
+read them.
+
+| Property | Default | What it changes |
+|---|---|---|
+| `--mk-stat-value-size` | `1.8em` | font size of a stat's value |
+| `--mk-stat-value-weight` | `700` | font weight of a stat's value |
+| `--mk-stat-value-font` | `inherit` | font family of a stat's value |
+| `--mk-stat-label-size` | `0.85em` | font size of a stat's label |
+| `--mk-callout-accent-width` | `4px` | width of a callout's left border |
+| `--mk-card-border-width` | `1px` | width of a card's border |
+| `--mk-card-radius` | `8px` | corner radius of a card |
+| `--mk-card-padding` | `1rem` | padding inside a card |
+| `--mk-card-bg` | `var(--mk-raised)` | background of a card |
+| `--mk-stale-opacity` | `0.82` | opacity of a stale stat, progress bar, chart or table |
+| `--mk-control-min-size` | `auto` | minimum height of a details summary, a script marker summary and a tab button |
+| `--mk-rhythm` | `1rem` | gap between top-level blocks |
+| `--mk-rhythm-heading` | `var(--mk-rhythm, 1rem)` | gap above a top-level `h2` or `h3` |
+
+A property for one component is named `--mk-<component>-<part>-<css property>`.
+A property that spans components has no component segment. Setting
+`--mk-card-border-width` to `0` and `--mk-card-bg` to `transparent` keeps a
+card's title and drops its box. `--mk-control-min-size` sets only
+`min-height`, so a host that wants a label centered in a taller control
+styles that itself.
+
+The stale opacity default is the lowest value that keeps a stat's label and
+value at 4.5:1 contrast over the page, a card and a filled block, in both the
+light and the dark palette. A test in `@markii/react` computes those ratios.
+A host that lowers it, or that changes the palette, should check its own
+contrast.
+
 A host preference about what the reader sees, rather than about what a
 component is, belongs in the host's own theme layer, not in the renderer.
 Put a class on the document root and write one rule for it beside the token

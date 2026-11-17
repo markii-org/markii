@@ -6,6 +6,28 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `doc.css` reads component properties a host may set: stat value size,
+  weight and font, stat label size, callout accent width, card border
+  width, radius, padding and background, stale opacity, control minimum
+  height, and the block and heading rhythm. With none set, a note renders
+  as before apart from the stale opacity change below. (#81, #82, #83,
+  #84, #87, #88)
+- `@markii/react`'s `MarkComponentProps` and the `@markii/html` render
+  context carry `dataName`, the `data=` name as written.
+
+### Changed
+
+- A stale stat, progress bar, chart or table renders at opacity 0.82
+  instead of 0.8, so its text keeps 4.5:1 contrast on every default
+  ground. (#84)
+- `progress` carries an `aria-label`: its `label`, else its `data=` name.
+  (#86)
+- The collapsed script marker draws its gear as its own `mk-script__icon`
+  element, hidden from assistive technology, in the React and HTML engines.
+  (#89)
+
 ## [0.17.0] - 2026-11-15
 
 The stable release of the 0.17.0 prereleases. It ships on the npm `latest`

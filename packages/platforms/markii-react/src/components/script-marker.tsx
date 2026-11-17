@@ -31,13 +31,16 @@ export function ScriptMarker({
   open = false,
 }: ScriptMarkerProps): ReactElement {
   const detail = src ?? lang;
-  const summary = detail ? `⚙ ${name} · ${detail}` : `⚙ ${name}`;
+  const summaryText = detail ? ` ${name} · ${detail}` : ` ${name}`;
 
   return (
     <details className="mk-script" open={open}>
       {/* `data-mk-interactive` matches `@markii/stdlib`'s `INTERACTIVE_ATTRIBUTE` (#53); see `tabs.tsx`'s top comment for why it is a literal here. */}
       <summary className="mk-script__summary" data-mk-interactive="">
-        {summary}
+        <span className="mk-script__icon" aria-hidden="true">
+          ⚙
+        </span>
+        {summaryText}
       </summary>
       {code ? (
         <pre className="mk-script__code">

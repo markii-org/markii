@@ -16,6 +16,25 @@ describe('Progress', () => {
     expect(html).toContain('aria-valuemax="5"');
   });
 
+  it('names the bar with the label, else the bound value name, else an empty name', () => {
+    const store = createValueStore({ done: { value: 1, status: 'fresh' } });
+    const labelled = renderMarkToHtml(
+      '::progress{data=done label="tasks"}\n',
+      defaultHtmlRegistry,
+      store,
+    );
+    expect(labelled).toContain('role="progressbar" aria-label="tasks"');
+    expect(labelled).not.toContain('aria-labelledby');
+    const bound = renderMarkToHtml(
+      '::progress{data=done}\n',
+      defaultHtmlRegistry,
+      store,
+    );
+    expect(bound).toContain('role="progressbar" aria-label="done"');
+    const bare = renderMarkToHtml('::progress{value=1}\n', defaultHtmlRegistry);
+    expect(bare).not.toContain('aria-label');
+  });
+
   it('renders a quiet 0% bar with no value at all', () => {
     const html = renderMarkToHtml('::progress\n', defaultHtmlRegistry);
     expect(html).toContain('<span class="mk-progress__percent">0%</span>');

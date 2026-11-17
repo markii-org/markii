@@ -483,6 +483,16 @@ same commit as the change that triggers them:
   host theme layer mapping it (each host's coverage test fails until they
   do), and a CHANGELOG entry. Renaming or removing one is a breaking
   change: pack stylesheets consume these names.
+- **New component property in `doc.css`** (Tier 3: a size, width or
+  opacity a host may set and never has to) → `doc.css` only reads it as
+  `var(--mk-x, <default>)` and never declares it. Add it to
+  `COMPONENT_PROPS` in
+  `packages/platforms/markii-react/src/doc-css-component-props.ts`, to the
+  component properties table in `docs/integration.md`, and to CHANGELOG.
+  No host theme layer maps it. `doc-css-component-props.test.ts` fails on
+  a read missing from the table, an entry never read, a declared name or a
+  default that differs from the fallback. Renaming or removing one is
+  breaking; changing a default is a visible change.
 - **New `ScriptExecutor` implementation** (any engine adapted behind
   `@markii/runtime`'s seam) → it MUST pass `conformance/executor/` plus an
   independent adversarial pass before merge, and that pass's findings update

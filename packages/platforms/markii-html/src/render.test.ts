@@ -183,7 +183,7 @@ describe('script-fence folding', () => {
     );
     expect(html).toContain('<details class="mk-script">');
     expect(html).toContain(
-      '<summary class="mk-script__summary" data-mk-interactive="">⚙ stars · lua</summary>',
+      '<summary class="mk-script__summary" data-mk-interactive=""><span class="mk-script__icon" aria-hidden="true">⚙</span> stars · lua</summary>',
     );
     expect(html).toContain('<code>return 1</code>');
   });
@@ -198,7 +198,9 @@ describe('script-fence folding', () => {
       '```lua {name=s src=scripts/etl.lua}\n\n```\n',
       empty,
     );
-    expect(html).toContain('⚙ s · scripts/etl.lua');
+    expect(html).toContain(
+      '<span class="mk-script__icon" aria-hidden="true">⚙</span> s · scripts/etl.lua',
+    );
   });
 
   it('a fence whose name is invalid (a dot) stays ordinary code, never a marker', () => {

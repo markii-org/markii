@@ -199,6 +199,7 @@ function withDataBinding(
   return {
     ...ctx,
     data: binding.data,
+    dataName: binding.dataName,
     dataStatus: binding.dataStatus,
     dataError: binding.dataError,
     dataFailureKind: binding.dataFailureKind,
@@ -208,6 +209,7 @@ function withDataBinding(
 interface ResolvedDataBinding {
   attributes: DirectiveAttributes;
   data?: unknown;
+  dataName?: string;
   dataStatus?: ValueResolution['status'];
   dataError?: string;
   dataFailureKind?: ValueResolution['failureKind'];
@@ -237,6 +239,7 @@ function resolveDataAttribute(
   const resolved = resolveScopedPath(scope, rawName);
   return {
     attributes: rest,
+    dataName: rawName,
     data: resolved.value,
     dataStatus: resolved.status,
     dataError: resolved.error,
@@ -471,7 +474,7 @@ function renderScriptMarker(node: Element): string | undefined {
 
     const src = attrs.src || undefined;
     const detail = src ?? getLanguage(codeNode);
-    const summary = detail ? `⚙ ${name} · ${detail}` : `⚙ ${name}`;
+    const summaryText = detail ? ` ${name} · ${detail}` : ` ${name}`;
     const open = isBareAttribute(meta, OPEN_ATTRIBUTE_KEY);
     const code = getCodeText(codeNode);
 
@@ -483,7 +486,8 @@ function renderScriptMarker(node: Element): string | undefined {
 
     return (
       `<details class="mk-script"${open ? ' open' : ''}>` +
-      `<summary class="mk-script__summary" ${INTERACTIVE_ATTRIBUTE}="">${escapeHtml(summary)}</summary>` +
+      `<summary class="mk-script__summary" ${INTERACTIVE_ATTRIBUTE}="">` +
+      `<span class="mk-script__icon" aria-hidden="true">⚙</span>${escapeHtml(summaryText)}</summary>` +
       `${body}</details>`
     );
   } catch {

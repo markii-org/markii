@@ -163,6 +163,7 @@ const DATA_ATTRIBUTE_KEY = 'data';
 interface ResolvedDataBinding {
   attributes: DirectiveAttributes;
   data?: unknown;
+  dataName?: string;
   dataStatus?: ValueStatus;
   dataError?: string;
   dataFailureKind?: FailureKind;
@@ -208,6 +209,7 @@ function resolveDataAttribute(
   const resolved = resolveScopedPath({ store, vault }, rawName);
   return {
     attributes: rest,
+    dataName: rawName,
     data: resolved.value,
     dataStatus: resolved.status,
     dataError: resolved.error,
@@ -449,6 +451,7 @@ function renderDirectiveContent(
     'data' in binding
       ? {
           data: binding.data,
+          dataName: binding.dataName,
           dataStatus: binding.dataStatus,
           dataError: binding.dataError,
           dataFailureKind: binding.dataFailureKind,

@@ -22,6 +22,27 @@ describe('Progress', () => {
     );
   });
 
+  it('names the bar with the label, else the bound value name, else an empty name', () => {
+    const store = createValueStore({ done: { value: 1, status: 'fresh' } });
+    const labelled = render(
+      renderMark('::progress{data=done label="tasks"}', defaultRegistry, store),
+    );
+    const named = labelled.container.querySelector('.mk-progress');
+    expect(named).toHaveAttribute('aria-label', 'tasks');
+    expect(named).not.toHaveAttribute('aria-labelledby');
+    const bound = render(
+      renderMark('::progress{data=done}', defaultRegistry, store),
+    );
+    expect(bound.container.querySelector('.mk-progress')).toHaveAttribute(
+      'aria-label',
+      'done',
+    );
+    const bare = render(renderMark('::progress{value=1}', defaultRegistry));
+    expect(bare.container.querySelector('.mk-progress')).not.toHaveAttribute(
+      'aria-label',
+    );
+  });
+
   it('defaults max to 1 when absent', () => {
     const { container } = render(
       renderMark('::progress{value=0.5}', defaultRegistry),

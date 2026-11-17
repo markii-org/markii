@@ -453,6 +453,10 @@ describe('renderMark — collapsed script marker (docs/scripting.md)', () => {
     const summary = marker?.querySelector('.mk-script__summary');
     expect(summary).toHaveTextContent('stars');
     expect(summary).toHaveTextContent('lua');
+    // The gear is its own decorative element, hidden from assistive tech.
+    const icon = summary?.querySelector('span.mk-script__icon');
+    expect(icon).toHaveAttribute('aria-hidden', 'true');
+    expect(icon?.textContent).toBe('⚙');
 
     // Expanding reveals the exact original code: internal indentation and
     // line breaks intact, byte-for-byte.

@@ -85,6 +85,7 @@ function readProgressFields(data: unknown): ProgressFields {
 export function Progress({
   attributes,
   data,
+  dataName,
   dataStatus,
   dataError,
   dataFailureKind,
@@ -111,6 +112,9 @@ export function Progress({
 
   const percent = clamp((value / max) * 100, 0, 100);
   const label = attributes.label ?? null;
+  // The bar's accessible name: the `label` text when set, otherwise the
+  // bound value's name. Always set directly, never through `aria-labelledby`.
+  const accessibleName = label ? label : (dataName ?? '');
 
   // `format`/`decimals` (docs/format.md) format the fraction `value/max`
   // (e.g. `format=percent decimals=1` -> `42.3%`) in place of the default
@@ -127,6 +131,7 @@ export function Progress({
       className={dataStateClassName('mk-progress', dataStatus, dataFailureKind)}
       title={failureTitle(dataError ?? bound.fault, dataFailureKind)}
       role="progressbar"
+      aria-label={accessibleName || undefined}
       aria-valuenow={value}
       aria-valuemin={0}
       aria-valuemax={max}
