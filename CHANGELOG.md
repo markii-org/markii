@@ -6,6 +6,8 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.18.0-next.0] - 2026-11-17
+
 ### Added
 
 - `doc.css` reads component properties a host may set: stat value size,
