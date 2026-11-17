@@ -61,6 +61,7 @@ needs, is the runner's own `ACTION_CAPABILITY` map:
 | `disablePack` | `pack-trust` |
 | `completeAt` | `editor` |
 | `hoverAt` | `editor` |
+| `typedOpenerAt` | `editor` |
 | `insertComponent` | `editor` |
 
 `pack-trust` is declared by an adapter whose pack source sets

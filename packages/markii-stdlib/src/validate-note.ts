@@ -14,7 +14,9 @@
  * the same predicates (`invalidEnumAttribute` below). A fourth,
  * `'unsafe-image-src'`, is reported only when the caller passes
  * `isSafeUrl`, because the URL scheme rule belongs to `@markii/core`,
- * which this package never imports. Engine-specific findings
+ * which this package never imports. A fifth, `'unsafe-url'`, covers a
+ * Markdown image, link, autolink or reference definition under the same
+ * condition. Engine-specific findings
  * (`'no-engine-view'`, `'code-renderer-failed'`) stay in the engines.
  *
  * The messages are diagnostics-surface text. They match the wording each
@@ -49,6 +51,8 @@ const DIRECTIVE_NODE_TYPES: ReadonlySet<string> = new Set([
 export interface NoteTreeNode {
   readonly type: string;
   readonly name?: string;
+  /** The target of an mdast `image`, `link` or `definition` node. */
+  readonly url?: string;
   readonly attributes?: Readonly<
     Record<string, string | null | undefined>
   > | null;
@@ -179,12 +183,24 @@ export function unsafeImageSrcMessage(directive: string): string {
   return `${directive}: image source was refused as unsafe and was not shown`;
 }
 
+/** The diagnostic text for a Markdown image whose source uses a refused scheme. */
+function unsafeMarkdownImageMessage(): string {
+  return 'image: source uses a scheme that is not allowed';
+}
+
+/** The diagnostic text for a Markdown link, autolink or reference definition whose target uses a refused scheme. */
+function unsafeLinkTargetMessage(): string {
+  return 'link: target uses a scheme that is not allowed';
+}
+
 /** What a caller may pass to `validateNote`. */
 export interface ValidateNoteOptions {
   /**
    * The URL scheme rule, normally `@markii/core`'s `isSafeUrl`. Given, a
    * `figure` whose `src` it refuses yields an `'unsafe-image-src'`
-   * finding. Omitted, no source is checked. Only the scheme is judged: a
+   * finding, and a Markdown `image`, `link` or `definition` whose URL it
+   * refuses yields an `'unsafe-url'` finding. Omitted, no source is
+   * checked. Only the scheme is judged: a
    * relative path a host resolves is never a finding here.
    */
   readonly isSafeUrl?: (url: string) => boolean;
@@ -244,6 +260,25 @@ export function validateNote(
       node.name !== VALUE_DIRECTIVE_NAME
     ) {
       check(node);
+    }
+    if (
+      isSafeUrl !== undefined &&
+      (node.type === 'image' ||
+        node.type === 'link' ||
+        node.type === 'definition') &&
+      typeof node.url === 'string' &&
+      node.url !== '' &&
+      !isSafeUrl(node.url)
+    ) {
+      const position = positionOf(node);
+      events.push({
+        kind: 'unsafe-url',
+        message:
+          node.type === 'image'
+            ? unsafeMarkdownImageMessage()
+            : unsafeLinkTargetMessage(),
+        ...(position === undefined ? {} : { position }),
+      });
     }
     if (Array.isArray(node.children)) {
       for (const child of node.children) visit(child);

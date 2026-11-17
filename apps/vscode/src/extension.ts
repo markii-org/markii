@@ -72,6 +72,7 @@ import {
   snippetText,
 } from './completion.js';
 import { isPreviewableDocument } from './mark-document.js';
+import { typedNewlineLine } from './typed-opener.js';
 import {
   insertComponentQuickPickItems,
   INSERT_COMPONENT_QUICK_PICK_PLACEHOLDER,
@@ -1057,6 +1058,50 @@ export function activate(context: vscode.ExtensionContext): void {
     MARKII_DOCUMENT_SELECTOR,
     hoverProvider,
   );
+  // A hand-typed container opener lengthens the enclosing fences. Only a
+  // typed Enter counts (see ./typed-opener.ts), so undo, redo and a paste
+  // never rewrite text the author did not just type.
+  const typedOpenerListener = vscode.workspace.onDidChangeTextDocument(
+    (event) => {
+      try {
+        const line = typedNewlineLine(event.reason, event.contentChanges);
+        if (line === undefined) return;
+        const document = event.document;
+        if (vscode.languages.match(MARKII_DOCUMENT_SELECTOR, document) === 0) {
+          return;
+        }
+        const outcome = editorHost.typedOpenerAt({
+          line,
+          documentText: document.getText(),
+        });
+        if (outcome.kind !== 'fence-edits') return;
+        const editor = vscode.window.visibleTextEditors.find(
+          (candidate) => candidate.document === document,
+        );
+        if (editor === undefined) return;
+        void editor.edit(
+          (builder) => {
+            for (const edit of outcome.fenceEdits) {
+              builder.replace(
+                new vscode.Range(
+                  edit.line,
+                  edit.startColumn,
+                  edit.line,
+                  edit.endColumn,
+                ),
+                edit.text,
+              );
+            }
+          },
+          { undoStopBefore: false, undoStopAfter: false },
+        );
+      } catch (error) {
+        diagnosticsChannel.appendLine(
+          `fence lengthening failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    },
+  );
   const packsConfigChangeListener = vscode.workspace.onDidChangeConfiguration(
     (event) => {
       if (event.affectsConfiguration('markii.packs')) {
@@ -1088,6 +1133,7 @@ export function activate(context: vscode.ExtensionContext): void {
     exportHtmlCascadeCommandHandle,
     completionProviderHandle,
     hoverProviderHandle,
+    typedOpenerListener,
     packsConfigChangeListener,
     workspaceFoldersChangeListener,
   );

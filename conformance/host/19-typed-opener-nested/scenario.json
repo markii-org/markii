@@ -1,0 +1,11 @@
+{
+  "id": "typed-opener-nested",
+  "invariant": "a hand-typed container opener inside an equal-length container lengthens the enclosing fence pair",
+  "clock": 1700000000000,
+  "actions": [
+    {
+      "type": "typedOpenerAt",
+      "line": 3
+    }
+  ]
+}

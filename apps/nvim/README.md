@@ -116,6 +116,11 @@ left alone when you already set your own.
 | `K`        | `vim.lsp.buf.hover`      | Show documentation for the directive |
 | `omnifunc` | `v:lua.vim.lsp.omnifunc` | Complete with `<C-x><C-o>`           |
 
+When you press Enter after a container opener typed inside another
+container, the plugin asks the server to lengthen the enclosing fences. It
+watches the key without mapping `<CR>`, so a completion plugin's own
+mapping keeps working.
+
 ## Configuration
 
 These are the defaults. Pass only what you change.

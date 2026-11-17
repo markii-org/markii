@@ -95,7 +95,9 @@ documents whose name ends in `.mk.md` and offers:
   unsafe image source, a pack component with no terminal view, and a
   directive that names no component
 - fence lengthening through additional text edits when a completed container
-  would close an enclosing one early
+  would close an enclosing one early, and on Enter after a container opener
+  typed by hand (the plugin sends the request itself)
+- diagnostics for a markdown image or link whose URL uses a refused scheme
 
 It never runs a note's scripts and never uses the network.
 

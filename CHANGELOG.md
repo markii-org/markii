@@ -40,6 +40,16 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 - `@markii/react` exports `evaluatePackScripts`, the in-page loader for
   prebuilt pack scripts, and `readPackRegistrationQueue` for a page that
   adds the scripts itself. The e2e fixture and Obsidian use it. (#74)
+- `@markii/stdlib/editor`: `typedContainerOpenerEdits`, and the
+  `typedOpenerAt` behavior on `MarkiiHost` with `TypedOpenerRequest` and
+  `TypedOpenerOutcome`. A container opener typed by hand inside another
+  container lengthens the enclosing fences when the author presses Enter,
+  in VS Code, Obsidian and Neovim. (#69)
+- `markii lsp` answers `textDocument/onTypeFormatting` for a newline.
+- `validateNote` in `@markii/stdlib` reports a markdown image, link,
+  autolink or reference definition whose URL uses a refused scheme, as the
+  new `unsafe-url` diagnostic kind, when `isSafeUrl` is passed. `markii lsp`
+  lists it. (#71)
 - The host conformance corpus can mark a `loadPacks` action
   `requiresInstall`, which reports `unsupported` on a host with no install
   folder. (#78)

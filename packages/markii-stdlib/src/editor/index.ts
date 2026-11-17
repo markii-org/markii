@@ -59,4 +59,5 @@ export {
   enclosingContainerFences,
   fenceExtensionEdits,
   insertedContainerColonCount,
+  typedContainerOpenerEdits,
 } from './fences/container-fences.js';

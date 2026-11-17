@@ -56,6 +56,7 @@ import {
 } from './packs/bundled-packs.js';
 import { pickInsertableComponent } from './insert-modals.js';
 import { MarkiiCompletionSuggest } from './complete-suggest.js';
+import { typedOpenerChanges } from './typed-opener.js';
 import {
   NO_ACTIVE_NOTE_NOTICE,
   exportDiagnosticLines,
@@ -240,6 +241,42 @@ export default class MarkiiPlugin extends Plugin {
 
     this.registerEditorSuggest(
       new MarkiiCompletionSuggest(this.app, () => this.completionHost()),
+    );
+
+    // A hand-typed container opener lengthens the enclosing fences. The
+    // editor reports no change kind, so the Enter keypress is the signal:
+    // undo, redo and a paste carry none and are never rewritten. The flag
+    // is cleared right after the change that follows the key has been seen.
+    let enterTyped = false;
+    this.registerDomEvent(
+      document,
+      'keydown',
+      (event: KeyboardEvent) => {
+        enterTyped =
+          event.key === 'Enter' && !event.isComposing && !event.ctrlKey;
+        if (enterTyped) window.setTimeout(() => (enterTyped = false), 0);
+      },
+      true,
+    );
+    this.registerEvent(
+      this.app.workspace.on('editor-change', (editor, info) => {
+        if (!enterTyped) return;
+        enterTyped = false;
+        if (!info.file?.path.endsWith(MARK_EXTENSION)) return;
+        const changes = typedOpenerChanges(
+          this.completionHost(),
+          editor.getValue(),
+          editor.getCursor().line,
+        );
+        if (changes.length === 0) return;
+        editor.transaction({
+          changes: changes.map((change) => ({
+            from: change.from,
+            to: change.to,
+            text: change.text,
+          })),
+        });
+      }),
     );
 
     // A plain `callback`, not a `checkCallback`: an export command that

@@ -32,6 +32,7 @@ describe('lifecycle', () => {
         resolveProvider: false,
       },
       hoverProvider: true,
+      documentOnTypeFormattingProvider: { firstTriggerCharacter: '\n' },
     });
     expect(reply.result.serverInfo).toEqual({
       name: 'markii',
@@ -286,6 +287,55 @@ describe('hover', () => {
       position: { line: 0, character: 0 },
     });
     expect(away.result).toBeNull();
+  });
+});
+
+describe('on-type formatting', () => {
+  const NESTED = ':::card\n:::callout\n\n:::';
+
+  it('lengthens the enclosing fences after a newline typed below a nested opener', async () => {
+    const h = await ready({}, NESTED);
+    const reply = await h.request('textDocument/onTypeFormatting', {
+      textDocument: { uri: URI },
+      position: { line: 2, character: 0 },
+      ch: '\n',
+      options: { tabSize: 2, insertSpaces: true },
+    });
+    expect(reply.result).toEqual([
+      {
+        range: {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 3 },
+        },
+        newText: '::::',
+      },
+      {
+        range: {
+          start: { line: 3, character: 0 },
+          end: { line: 3, character: 3 },
+        },
+        newText: '::::',
+      },
+    ]);
+  });
+
+  it('answers null when nothing needs to change, and for another trigger', async () => {
+    const h = await ready({}, 'plain\n\nmore');
+    const none = await h.request('textDocument/onTypeFormatting', {
+      textDocument: { uri: URI },
+      position: { line: 1, character: 0 },
+      ch: '\n',
+      options: {},
+    });
+    expect(none.result).toBeNull();
+    const other = await ready({}, NESTED);
+    const wrong = await other.request('textDocument/onTypeFormatting', {
+      textDocument: { uri: URI },
+      position: { line: 2, character: 0 },
+      ch: ';',
+      options: {},
+    });
+    expect(wrong.result).toBeNull();
   });
 });
 

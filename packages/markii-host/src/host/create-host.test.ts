@@ -769,6 +769,28 @@ describe('createMarkiiHost editor behaviors', () => {
     expect(outcome.fenceEdits.every((edit) => edit.line !== 1)).toBe(true);
   });
 
+  it('typedOpenerAt returns the fence edits for a hand-typed nested opener', () => {
+    const text = ':::card\n:::callout\n:::';
+    const adapter = fakeAdapter({ editor: fakeEditor(text, 1, 10) });
+    const outcome = createMarkiiHost(adapter).typedOpenerAt({ line: 1 });
+    if (outcome.kind !== 'fence-edits') throw new Error('expected edits');
+    expect(outcome.fenceEdits).toEqual([
+      { line: 0, startColumn: 0, endColumn: 3, text: '::::' },
+      { line: 2, startColumn: 0, endColumn: 3, text: '::::' },
+    ]);
+  });
+
+  it('typedOpenerAt says none for a closing fence and unsupported without an editor', () => {
+    const text = ':::card\nbody\n:::';
+    const adapter = fakeAdapter({ editor: fakeEditor(text, 2, 3) });
+    expect(createMarkiiHost(adapter).typedOpenerAt({ line: 2 })).toEqual({
+      kind: 'none',
+    });
+    expect(
+      createMarkiiHost(fakeAdapter()).typedOpenerAt({ line: 0 }).kind,
+    ).toBe('unsupported');
+  });
+
   it('completeAtSync answers from the standard set cold, and sees packs once warm', async () => {
     const adapter = fakeAdapter({ editor: fakeEditor(':::cal', 0, 6) });
     const host = createMarkiiHost(adapter);

@@ -26,6 +26,7 @@ import {
   componentDocumentation,
   fenceExtensionEdits,
   insertedContainerColonCount,
+  typedContainerOpenerEdits,
   formatComponentDocumentation,
   hoverAt,
   offsetToLineColumn,
@@ -219,6 +220,27 @@ export function completionPlanAt(
     };
   } catch {
     return undefined;
+  }
+}
+
+/**
+ * The fence rewrites for a container opener the author just typed on
+ * `line`, as `HostTextEdit`s in pre-edit coordinates. Empty when there is
+ * nothing to lengthen. Never throws.
+ */
+export function typedOpenerFenceEdits(
+  documentText: string,
+  line: number,
+): readonly HostTextEdit[] {
+  try {
+    return typedContainerOpenerEdits(documentText, line).map((edit) => ({
+      line: edit.line,
+      startColumn: edit.column,
+      endColumn: edit.column + edit.oldText.length,
+      text: edit.newText,
+    }));
+  } catch {
+    return [];
   }
 }
 

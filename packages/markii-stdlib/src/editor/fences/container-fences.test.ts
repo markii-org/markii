@@ -4,6 +4,7 @@ import {
   enclosingContainerFences,
   fenceExtensionEdits,
   insertedContainerColonCount,
+  typedContainerOpenerEdits,
 } from './container-fences.js';
 
 /** The container skeleton `componentSkeleton` builds for a component with no required attributes. */
@@ -368,5 +369,107 @@ describe('closesOpenContainerFence', () => {
   it('is false when the document has a dangling opener above it', () => {
     const text = doc(':::card', 'body', ':::inner', '', ':::');
     expect(closesOpenContainerFence(text, 4, ':::')).toBe(false);
+  });
+});
+
+/** Applies colon-run edits to a document, so a test can check the result and idempotence. */
+function apply(
+  text: string,
+  edits: readonly {
+    line: number;
+    column: number;
+    oldText: string;
+    newText: string;
+  }[],
+): string {
+  const lines = text.split('\n');
+  for (const e of edits) {
+    const l = lines[e.line] ?? '';
+    lines[e.line] =
+      l.slice(0, e.column) + e.newText + l.slice(e.column + e.oldText.length);
+  }
+  return lines.join('\n');
+}
+
+describe('typedContainerOpenerEdits', () => {
+  it('lengthens the one enclosing pair', () => {
+    const text = doc(':::card', ':::callout', ':::');
+    const edits = typedContainerOpenerEdits(text, 1);
+    expect(apply(text, edits)).toBe(doc('::::card', ':::callout', '::::'));
+    expect(edits.every((e) => e.line !== 1)).toBe(true);
+  });
+
+  it('cascades through two enclosing containers', () => {
+    // The typed opener (line 2) has no closer yet: the closers belong to b and a.
+    const text = doc('::::a', ':::b', ':::c', ':::', '::::');
+    expect(apply(text, typedContainerOpenerEdits(text, 2))).toBe(
+      doc(':::::a', '::::b', ':::c', '::::', ':::::'),
+    );
+  });
+
+  it('cascades through three enclosing containers', () => {
+    const text = doc(
+      ':::::a',
+      '::::b',
+      ':::c',
+      '::::d',
+      ':::',
+      '::::',
+      ':::::',
+    );
+    // d (4 colons) is typed inside c (3), inside b (4), inside a (5)
+    expect(apply(text, typedContainerOpenerEdits(text, 3))).toBe(
+      doc(
+        ':::::::a',
+        '::::::b',
+        ':::::c',
+        '::::d',
+        ':::::',
+        '::::::',
+        ':::::::',
+      ),
+    );
+  });
+
+  it('stops growing where an outer pair is already long enough', () => {
+    const text = doc('::::::a', ':::b', ':::c', ':::', '::::::');
+    expect(apply(text, typedContainerOpenerEdits(text, 2))).toBe(
+      doc('::::::a', '::::b', ':::c', '::::', '::::::'),
+    );
+  });
+
+  it('is idempotent', () => {
+    const text = doc('::::a', ':::b', ':::c', ':::', '::::');
+    const once = apply(text, typedContainerOpenerEdits(text, 2));
+    expect(typedContainerOpenerEdits(once, 2)).toEqual([]);
+  });
+
+  it('does nothing for a closing fence', () => {
+    const text = doc(':::a', 'x', ':::');
+    expect(typedContainerOpenerEdits(text, 2)).toEqual([]);
+  });
+
+  it('does nothing inside a fenced code block', () => {
+    const text = doc(':::a', '```', ':::b', '```', ':::');
+    expect(typedContainerOpenerEdits(text, 2)).toEqual([]);
+  });
+
+  it('does nothing for a plain line, a top-level opener and bad input', () => {
+    expect(typedContainerOpenerEdits(doc('hello', ':::a', ':::'), 0)).toEqual(
+      [],
+    );
+    expect(typedContainerOpenerEdits(doc(':::a', 'x', ':::'), 0)).toEqual([]);
+    expect(typedContainerOpenerEdits(':::a', 5)).toEqual([]);
+    expect(typedContainerOpenerEdits(':::a', -1)).toEqual([]);
+  });
+
+  it('leaves an already longer outer pair alone', () => {
+    const text = doc('::::a', ':::b', '::::');
+    expect(typedContainerOpenerEdits(text, 1)).toEqual([]);
+  });
+
+  it('handles CRLF documents', () => {
+    const text = [':::a', ':::b', ':::'].join('\r\n');
+    expect(typedContainerOpenerEdits(text, 1).length).toBe(2);
   });
 });

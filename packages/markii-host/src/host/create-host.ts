@@ -108,6 +108,7 @@ import {
   completionPlanAt,
   createCatalogCache,
   hoverAtViaEditor,
+  typedOpenerFenceEdits,
   insertComponentPlan,
 } from './editor-behavior.js';
 
@@ -429,6 +430,24 @@ export interface EditorPositionRequest {
   readonly documentText?: string;
 }
 
+export interface TypedOpenerRequest {
+  /** Zero-based line the author just finished typing. */
+  readonly line: number;
+  /** The document the line belongs to. Omitted, the adapter's own `editor.documentText()` is read. */
+  readonly documentText?: string;
+}
+
+export type TypedOpenerOutcome =
+  /** Fence lines to lengthen, in pre-edit coordinates, to apply in one undo step. The typed line itself is never in the list. */
+  | {
+      readonly kind: 'fence-edits';
+      readonly fenceEdits: readonly HostTextEdit[];
+    }
+  /** The line is not a container opener inside another container, or nothing needs to grow. Not a failure. */
+  | { readonly kind: 'none' }
+  | { readonly kind: 'failed'; readonly reason: string }
+  | Unsupported;
+
 export type CompleteOutcome =
   | {
       readonly kind: 'completions';
@@ -534,6 +553,13 @@ export interface MarkiiHost {
    * so the next request sees installed packs.
    */
   completeAtSync(request: EditorPositionRequest): CompleteOutcome;
+  /**
+   * The fence lengthening a hand-typed container opener needs. A host calls
+   * it after the author finishes a line, for an edit the author typed and
+   * never for undo, redo or a pasted block, and applies the edits in one
+   * undo step.
+   */
+  typedOpenerAt(request: TypedOpenerRequest): TypedOpenerOutcome;
   /** Drops the cached completion/hover catalog, for a host whose pack folders just changed. `installPack` and `loadPacks` do this themselves. */
   invalidateCatalog(): void;
   hoverAt(request: EditorPositionRequest): Promise<HoverOutcome>;
@@ -1071,6 +1097,28 @@ export function createMarkiiHostWithSeams(
       } catch (err) {
         failedOutcome(adapter, 'completion', err);
         return { kind: 'none' };
+      }
+    },
+
+    typedOpenerAt(request: TypedOpenerRequest): TypedOpenerOutcome {
+      const editor = adapter.editor;
+      if (!editor) {
+        return unsupported(
+          adapter,
+          'editor',
+          'fence lengthening is not available: this host has no live editor.',
+        );
+      }
+      try {
+        const fenceEdits = typedOpenerFenceEdits(
+          request.documentText ?? editor.documentText(),
+          request.line,
+        );
+        return fenceEdits.length === 0
+          ? { kind: 'none' }
+          : { kind: 'fence-edits', fenceEdits };
+      } catch (err) {
+        return failedOutcome(adapter, 'fence lengthening', err);
       }
     },
 

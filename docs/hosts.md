@@ -24,8 +24,8 @@ The host writes a `HostAdapter` and passes it to `createMarkiiHost` from
 `run`, `lastRun`, `forgetGrants`, `exportNote`, `exportLinkedSet`,
 `installPack`, `loadPacks`, `loadTerminalPacks`, `removePack`,
 `installedPacks`, `enablePack`, `disablePack`, `completeAt`,
-`completeAtSync`, `hoverAt`, `insertComponent`, `invalidateCatalog` and
-`diagnostics`.
+`completeAtSync`, `hoverAt`, `insertComponent`, `typedOpenerAt`,
+`invalidateCatalog` and `diagnostics`.
 
 ### Outcomes
 
@@ -604,8 +604,28 @@ re-derives directive parsing of its own.
 Nesting a container inside a container needs the outer fence pair to carry
 more colons than the inner one. When a host inserts a container, through
 Insert Component or by accepting one from the completion popup, it
-lengthens the enclosing fences in the same undoable edit. This happens in
-those two places only, never while typing.
+lengthens the enclosing fences in the same undoable edit.
+
+A container opener the author types by hand gets the same treatment when
+they press Enter after it. `typedOpenerAt({ line, documentText })` on
+`MarkiiHost` takes the line just finished and returns the fence edits,
+built on `typedContainerOpenerEdits` in `@markii/stdlib/editor`. It never
+edits the typed line itself. It returns nothing for a closing fence, a
+line in a code block or a top-level opener, and nothing on a second call
+after the edits are applied.
+
+A host calls it for a typed Enter only, never for undo, redo, a paste or
+another program's edit, and applies the edits in the same undo step:
+
+- VS Code acts on a document change that inserts one bare newline with no
+  change reason.
+- Obsidian takes the Enter keypress as the signal, because its change
+  event carries no change kind.
+- The language server advertises `documentOnTypeFormattingProvider` with a
+  newline as the trigger and answers `textDocument/onTypeFormatting`.
+- The Neovim plugin sends that request itself after Enter, because Neovim
+  does not. It watches the key and leaves `<CR>` unmapped, so a completion
+  plugin's own mapping keeps working.
 
 The scanner in `@markii/stdlib/editor` acts only on a document whose
 fences pair cleanly from the top of the file. It leaves anything ambiguous
@@ -689,7 +709,11 @@ The position encoding is negotiated (UTF-8, UTF-16 or UTF-32), with UTF-16
 as the default the protocol defines. Diagnostics come from
 `validateNote(tree, catalog)` in `@markii/stdlib`, which needs no renderer.
 It reports a directive that names nothing, a block component written
-inline or the reverse, and an attribute value outside its declared set. A
+inline or the reverse, and an attribute value outside its declared set.
+Given `isSafeUrl`, it also reports a markdown image, link, autolink or
+reference definition whose URL uses a refused scheme, as the `unsafe-url`
+kind. The renderers drop such a URL and show the text, so the editor is
+where an author learns about it. A
 finding therefore does not depend on which engine draws the note. The
 renderers report the kinds that do depend on an engine, such as a
 component with no view for it. The server's diagnostics surface is the

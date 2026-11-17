@@ -73,6 +73,7 @@ export function createHarness(options: { debounceMs?: number } = {}): Harness {
     exit: (code) => exits.push(code),
     completeAt: (request) => host.completeAt(request),
     hoverAt: (request) => host.hoverAt(request),
+    typedOpenerAt: (request) => host.typedOpenerAt(request),
     diagnose: (text) =>
       Promise.resolve(noteDiagnostics(text, standardNoteCatalog())),
   });

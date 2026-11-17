@@ -160,6 +160,7 @@ export type HostScenarioAction =
       readonly column: number;
     }
   | { readonly type: 'hoverAt'; readonly line: number; readonly column: number }
+  | { readonly type: 'typedOpenerAt'; readonly line: number }
   | { readonly type: 'insertComponent'; readonly name: string };
 
 export interface HostScenario {
@@ -254,6 +255,7 @@ export const ACTION_CAPABILITY: Readonly<
   disablePack: 'pack-trust',
   completeAt: 'editor',
   hoverAt: 'editor',
+  typedOpenerAt: 'editor',
   insertComponent: 'editor',
 };
 
@@ -647,6 +649,9 @@ async function runOneAction(
     case 'hoverAt':
       return host.hoverAt({ line: action.line, column: action.column });
 
+    case 'typedOpenerAt':
+      return host.typedOpenerAt({ line: action.line });
+
     case 'insertComponent':
       return host.insertComponent({ name: action.name });
   }
@@ -1036,6 +1041,19 @@ export function outcomeMismatches(
           );
         }
       }
+      if (expected['fenceEditCount'] !== undefined) {
+        const got = Array.isArray(actualRecord['fenceEdits'])
+          ? actualRecord['fenceEdits'].length
+          : 0;
+        if (got !== expected['fenceEditCount']) {
+          mismatches.push(
+            `fenceEditCount: expected ${String(expected['fenceEditCount'])}, got ${String(got)}`,
+          );
+        }
+      }
+      break;
+    }
+    case 'fence-edits': {
       if (expected['fenceEditCount'] !== undefined) {
         const got = Array.isArray(actualRecord['fenceEdits'])
           ? actualRecord['fenceEdits'].length

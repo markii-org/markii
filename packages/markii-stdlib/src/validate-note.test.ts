@@ -208,6 +208,77 @@ describe('validateNote with a URL scheme rule', () => {
   });
 });
 
+describe('validateNote with Markdown URLs', () => {
+  const catalog = standardNoteCatalog();
+  const isSafeUrl = (url: string): boolean => !url.startsWith('javascript:');
+  const at = range(2, 1, 20);
+  const node = (type: string, url: string): NoteTreeNode => ({
+    type,
+    url,
+    position: at,
+  });
+
+  it('reports an image, a link and a definition with one wording each', () => {
+    const events = validateNote(
+      root(
+        node('image', 'javascript:x'),
+        node('link', 'javascript:x'),
+        node('definition', 'javascript:x'),
+      ),
+      catalog,
+      { isSafeUrl },
+    );
+    const position = {
+      startLine: 2,
+      startColumn: 1,
+      endLine: 2,
+      endColumn: 20,
+    };
+    expect(events).toEqual([
+      {
+        kind: 'unsafe-url',
+        message: 'image: source uses a scheme that is not allowed',
+        position,
+      },
+      {
+        kind: 'unsafe-url',
+        message: 'link: target uses a scheme that is not allowed',
+        position,
+      },
+      {
+        kind: 'unsafe-url',
+        message: 'link: target uses a scheme that is not allowed',
+        position,
+      },
+    ]);
+  });
+
+  it('finds a node nested inside other nodes', () => {
+    const tree: NoteTreeNode = root({
+      type: 'paragraph',
+      children: [
+        { type: 'emphasis', children: [node('link', 'javascript:x')] },
+      ],
+    });
+    expect(validateNote(tree, catalog, { isSafeUrl })).toHaveLength(1);
+  });
+
+  it('reports nothing without the rule, for a safe or empty URL', () => {
+    const unsafe = root(
+      node('image', 'javascript:x'),
+      node('link', 'javascript:x'),
+    );
+    expect(validateNote(unsafe, catalog)).toEqual([]);
+    const fine = root(
+      node('image', 'a.png'),
+      node('link', 'https://example.com'),
+      node('link', ''),
+      { type: 'link', position: at },
+    );
+    expect(validateNote(fine, catalog, { isSafeUrl })).toEqual([]);
+  });
+});
+
 describe('invalidEnumAttribute', () => {
   it('finds the first offending standard attribute', () => {
     expect(invalidEnumAttribute('card', { text: 'Hey' })).toEqual({

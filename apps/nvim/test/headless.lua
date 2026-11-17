@@ -66,6 +66,10 @@ end
 
 local client = get_clients({ bufnr = 0, name = "markii" })[1]
 check(client.server_capabilities.hoverProvider == true, "server advertises hover")
+check(
+  client.server_capabilities.documentOnTypeFormattingProvider ~= nil,
+  "server advertises on-type formatting"
+)
 check(client.config.root_dir == dir, "root is the folder holding .git")
 
 -- Completion on the `:::cal` line, cursor at its end.
@@ -127,6 +131,41 @@ for _, diagnostic in ipairs(vim.diagnostic.get(0)) do
 end
 check(codes["invalid-attribute-value"] == true, "diagnostic for the invalid attribute value")
 check(codes["unknown-directive"] == true, "diagnostic for the unknown directive")
+
+-- A newline typed under a nested container opener lengthens the outer fences.
+do
+  local fence_note = dir .. "/fence.mk.md"
+  vim.fn.writefile({ ":::card", ":::callout", "", ":::" }, fence_note)
+  vim.cmd("edit " .. vim.fn.fnameescape(fence_note))
+  local fence_buf = vim.api.nvim_get_current_buf()
+  vim.wait(5000, function()
+    return #get_clients({ bufnr = fence_buf, name = "markii" }) > 0
+  end, 50)
+  vim.api.nvim_win_set_cursor(0, { 3, 0 })
+  require("markii").on_newline(fence_buf)
+  local lengthened = vim.wait(5000, function()
+    return vim.api.nvim_buf_get_lines(fence_buf, 0, 1, false)[1] == "::::card"
+  end, 50)
+  check(lengthened, "a typed newline lengthens the enclosing fences")
+  check(vim.api.nvim_buf_get_lines(fence_buf, 3, 4, false)[1] == "::::", "the closing fence grows too")
+
+  -- The same through a real Enter keypress, with no <CR> mapping installed.
+  check(vim.fn.maparg("<CR>", "i") == "", "the plugin does not map <CR>")
+  local typed_note = dir .. "/typed.mk.md"
+  vim.fn.writefile({ ":::card", ":::callout", ":::" }, typed_note)
+  vim.cmd("edit " .. vim.fn.fnameescape(typed_note))
+  local typed_buf = vim.api.nvim_get_current_buf()
+  vim.wait(5000, function()
+    return #get_clients({ bufnr = typed_buf, name = "markii" }) > 0
+  end, 50)
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+  vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("A<CR><Esc>", true, false, true), "x", false)
+  local typed = vim.wait(5000, function()
+    return vim.api.nvim_buf_get_lines(typed_buf, 0, 1, false)[1] == "::::card"
+  end, 50)
+  check(typed, "pressing Enter after a typed opener lengthens the enclosing fences")
+  vim.cmd("buffer " .. vim.fn.bufnr(note))
+end
 
 -- :checkhealth markii reports the tool, with it installed and with it missing.
 local function health_text()

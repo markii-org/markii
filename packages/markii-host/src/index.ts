@@ -103,6 +103,8 @@ export type {
   ExportRenderOptions,
   ExportRequest,
   HoverOutcome,
+  TypedOpenerOutcome,
+  TypedOpenerRequest,
   InsertComponentRequest,
   InsertOutcome,
   InstallPackOutcome,

@@ -18,6 +18,8 @@ import {
   type CompleteOutcome,
   type EditorPositionRequest,
   type HoverOutcome,
+  type TypedOpenerOutcome,
+  type TypedOpenerRequest,
 } from '@markii/host';
 import {
   completionOriginTag,
@@ -70,6 +72,7 @@ export interface LspServerDeps {
   exit(code: number): void;
   completeAt(request: EditorPositionRequest): Promise<CompleteOutcome>;
   hoverAt(request: EditorPositionRequest): Promise<HoverOutcome>;
+  typedOpenerAt(request: TypedOpenerRequest): TypedOpenerOutcome;
   /** The render's findings for a note. Never run scripts, never touch the network. */
   diagnose(text: string): Promise<readonly DiagnosticEvent[]>;
   readonly serverVersion: string;
@@ -310,6 +313,56 @@ export function createLspServer(deps: LspServerDeps): LspServer {
     });
   }
 
+  // ---- on-type formatting ------------------------------------------------
+
+  /**
+   * A newline typed after a container opener lengthens the enclosing
+   * fences. The client sends this request only for a typed newline, never
+   * for undo, redo or a paste, which is how an edit the author did not type
+   * is kept out.
+   */
+  function handleOnTypeFormatting(id: Id, params: unknown): void {
+    const uri = readUri(params);
+    const position = isRecord(params)
+      ? readPosition(params.position)
+      : undefined;
+    if (uri === undefined || position === undefined) {
+      respondError(
+        id,
+        ERROR_INVALID_PARAMS,
+        'textDocument and position are required',
+      );
+      return;
+    }
+    const document = documents.get(uri);
+    if (
+      document === undefined ||
+      !isMarkiiUri(uri) ||
+      !isRecord(params) ||
+      params.ch !== '\n' ||
+      position.line < 1
+    ) {
+      respond(id, null);
+      return;
+    }
+    const outcome = deps.typedOpenerAt({
+      line: position.line - 1,
+      documentText: document.text,
+    });
+    if (outcome.kind !== 'fence-edits') {
+      respond(id, null);
+      return;
+    }
+    const lines = document.text.split('\n');
+    respond(
+      id,
+      outcome.fenceEdits.map((edit) => ({
+        range: lspRange(lines, edit.line, edit.startColumn, edit.endColumn),
+        newText: edit.text,
+      })),
+    );
+  }
+
   // ---- diagnostics -------------------------------------------------------
 
   function diagnosticFor(
@@ -416,6 +469,7 @@ export function createLspServer(deps: LspServerDeps): LspServer {
           resolveProvider: false,
         },
         hoverProvider: true,
+        documentOnTypeFormattingProvider: { firstTriggerCharacter: '\n' },
       },
       serverInfo: { name: 'markii', version: deps.serverVersion },
     });
@@ -555,6 +609,9 @@ export function createLspServer(deps: LspServerDeps): LspServer {
         return;
       case 'textDocument/hover':
         if (hasId) await handleHover(id, params);
+        return;
+      case 'textDocument/onTypeFormatting':
+        if (hasId) handleOnTypeFormatting(id, params);
         return;
       default:
         if (hasId) {

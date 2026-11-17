@@ -22,3 +22,4 @@ hoverAt
 insertedContainerColonCount
 offsetToLineColumn
 standardComponentCatalog
+typedContainerOpenerEdits

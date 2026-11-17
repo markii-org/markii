@@ -106,6 +106,7 @@ export async function runLspCommand(
       },
       completeAt: (request) => host.completeAt(request),
       hoverAt: (request) => host.hoverAt(request),
+      typedOpenerAt: (request) => host.typedOpenerAt(request),
       diagnose: async (text): Promise<DiagnosticEvent[]> => {
         return noteDiagnostics(text, await loadCatalog());
       },

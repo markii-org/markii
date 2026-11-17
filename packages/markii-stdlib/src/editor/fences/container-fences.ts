@@ -276,6 +276,41 @@ export function insertedContainerColonCount(
 }
 
 /**
+ * The one rule for how much a fence grows: walking outward, each enclosing
+ * pair ends up with `max(current, deepest inside + 1)` colons.
+ */
+function lengthenEnclosing(
+  enclosing: readonly EnclosingContainerFence[],
+  innerColons: number,
+): readonly FenceLineEdit[] {
+  const edits: FenceLineEdit[] = [];
+  let deepestInside = innerColons;
+  for (let i = enclosing.length - 1; i >= 0; i--) {
+    const pair = enclosing[i];
+    if (!pair) continue;
+    const nextCount = Math.max(pair.colonCount, deepestInside + 1);
+    if (nextCount !== pair.colonCount) {
+      const oldText = ':'.repeat(pair.colonCount);
+      const newText = ':'.repeat(nextCount);
+      edits.push({
+        line: pair.openLine,
+        column: pair.openColumn,
+        oldText,
+        newText,
+      });
+      edits.push({
+        line: pair.closeLine,
+        column: pair.closeColumn,
+        oldText,
+        newText,
+      });
+    }
+    deepestInside = nextCount;
+  }
+  return edits.sort((a, b) => a.line - b.line);
+}
+
+/**
  * The minimal set of fence lines to lengthen so that inserting
  * `insertedText` at `insertionLine` still nests legally, or an empty array
  * when there is nothing to do (and for every "do not touch" case).
@@ -302,33 +337,7 @@ export function fenceExtensionEdits(
   const enclosing = enclosingContainerFences(documentText, insertionLine);
   if (enclosing === undefined || enclosing.length === 0) return [];
 
-  const edits: FenceLineEdit[] = [];
-  let deepestInside = insertedColons;
-
-  for (let i = enclosing.length - 1; i >= 0; i--) {
-    const pair = enclosing[i];
-    if (!pair) continue;
-    const nextCount = Math.max(pair.colonCount, deepestInside + 1);
-    if (nextCount !== pair.colonCount) {
-      const oldText = ':'.repeat(pair.colonCount);
-      const newText = ':'.repeat(nextCount);
-      edits.push({
-        line: pair.openLine,
-        column: pair.openColumn,
-        oldText,
-        newText,
-      });
-      edits.push({
-        line: pair.closeLine,
-        column: pair.closeColumn,
-        oldText,
-        newText,
-      });
-    }
-    deepestInside = nextCount;
-  }
-
-  return edits.sort((a, b) => a.line - b.line);
+  return lengthenEnclosing(enclosing, insertedColons);
 }
 
 /**
@@ -400,4 +409,50 @@ export function closesOpenContainerFence(
 
   const top = stack[stack.length - 1];
   return top !== undefined && top.colonCount === classified.fence.colonCount;
+}
+
+/**
+ * The fence edits for a container opener the author typed by hand.
+ *
+ * `line` is the zero-based line the author just finished (a host calls this
+ * on Enter, or on an equivalent "line completed" signal). When that line is
+ * a container opener (`:::name`, three or more colons then a name) inside
+ * other containers, the enclosing fences grow by the same rule as
+ * `fenceExtensionEdits`, so the opener's own close no longer ends an outer
+ * container early. The typed line is never edited. The result is empty for
+ * a closing fence, a line inside a fenced code block, a line that is not an
+ * opener, a document whose fences do not pair cleanly, and a second call
+ * after the edits were applied.
+ */
+export function typedContainerOpenerEdits(
+  documentText: string,
+  line: number,
+): readonly FenceLineEdit[] {
+  if (typeof documentText !== 'string') return [];
+  if (!Number.isInteger(line) || line < 0) return [];
+
+  const lines = documentText.split('\n');
+  if (line >= lines.length) return [];
+
+  let codeFence: CodeFenceState | undefined;
+  let typedIsCode = false;
+  for (let i = 0; i <= line; i++) {
+    const stepped = stepCodeFence(
+      codeFence,
+      stripCarriageReturn(lines[i] ?? ''),
+    );
+    codeFence = stepped.state;
+    if (i === line) typedIsCode = stepped.isCode;
+  }
+  if (typedIsCode) return [];
+
+  const classified = classifyFenceLine(
+    stripCarriageReturn(lines[line] ?? ''),
+    line,
+  );
+  if (classified?.kind !== 'open') return [];
+
+  const enclosing = enclosingContainerFences(documentText, line);
+  if (enclosing === undefined || enclosing.length === 0) return [];
+  return lengthenEnclosing(enclosing, classified.fence.colonCount);
 }

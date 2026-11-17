@@ -68,6 +68,8 @@ SpawnIsolateOptions
 StaticExportReason
 TerminalPackScript
 Thenable
+TypedOpenerOutcome
+TypedOpenerRequest
 UnreadableCascadeNote
 Unsupported
 ValuesFailure

@@ -24,6 +24,11 @@
  * had its `src` refused as an unsafe URL scheme; the component rendered
  * without the image, with a quiet marker.
  *
+ * `'unsafe-url'` — a Markdown image, link, autolink or reference
+ * definition whose URL uses a scheme the sanitizer refuses. Reported only
+ * by `validateNote`, and only when the caller passes `isSafeUrl`. Carries
+ * no directive.
+ *
  * `'form-mismatch'` — a registered block component was written as an
  * inline directive (`:callout[x]`); it rendered as the inline fallback
  * marker instead of the component.
@@ -51,6 +56,7 @@
 export type DiagnosticKind =
   | 'invalid-attribute-value'
   | 'unsafe-image-src'
+  | 'unsafe-url'
   | 'form-mismatch'
   | 'no-engine-view'
   | 'unknown-directive'

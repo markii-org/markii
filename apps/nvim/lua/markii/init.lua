@@ -60,6 +60,52 @@ local function root_dir(buf)
   return folder
 end
 
+--- After a typed Enter, asks the server whether the line above is a container
+--- opener that needs its enclosing fences lengthened, and applies the edits.
+--- Neovim never sends `textDocument/onTypeFormatting` on its own.
+function M.on_newline(bufnr)
+  local row = vim.api.nvim_win_get_cursor(0)[1] - 1
+  local params = {
+    textDocument = vim.lsp.util.make_text_document_params(bufnr),
+    position = { line = row, character = 0 },
+    ch = "\n",
+    options = { tabSize = vim.bo[bufnr].shiftwidth, insertSpaces = vim.bo[bufnr].expandtab },
+  }
+  vim.lsp.buf_request(bufnr, "textDocument/onTypeFormatting", params, function(err, result, ctx)
+    if err ~= nil or result == nil or not vim.api.nvim_buf_is_valid(bufnr) then
+      return
+    end
+    local client = vim.lsp.get_client_by_id(ctx.client_id)
+    vim.lsp.util.apply_text_edits(result, bufnr, client and client.offset_encoding or "utf-16")
+  end)
+end
+
+--- Watches for Enter in insert mode without mapping it, so a completion
+--- plugin's own <CR> mapping keeps working. After the key is handled, the
+--- server is asked about the line the author just finished, in a buffer
+--- the server attached to. Registered once.
+local enter_ns = nil
+local function watch_enter()
+  if enter_ns ~= nil then
+    return
+  end
+  enter_ns = vim.api.nvim_create_namespace("markii_enter")
+  vim.on_key(function(key)
+    if key ~= "\r" or vim.api.nvim_get_mode().mode ~= "i" then
+      return
+    end
+    local bufnr = vim.api.nvim_get_current_buf()
+    if vim.b[bufnr].markii_fence_on_enter ~= true then
+      return
+    end
+    vim.schedule(function()
+      if vim.api.nvim_buf_is_valid(bufnr) then
+        M.on_newline(bufnr)
+      end
+    end)
+  end, enter_ns)
+end
+
 --- Buffer-local editing defaults on attach: `K` shows hover and `omnifunc`
 --- completes, each only when the user has not set their own.
 local function on_attach(client, bufnr)
@@ -68,6 +114,10 @@ local function on_attach(client, bufnr)
   end
   if vim.bo[bufnr].omnifunc == "" then
     vim.bo[bufnr].omnifunc = "v:lua.vim.lsp.omnifunc"
+  end
+  if client.server_capabilities.documentOnTypeFormattingProvider ~= nil then
+    vim.b[bufnr].markii_fence_on_enter = true
+    watch_enter()
   end
   if M.config.on_attach ~= nil then
     M.config.on_attach(client, bufnr)
