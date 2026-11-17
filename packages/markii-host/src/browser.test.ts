@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createBrowserHostIsolate, createFetchNetProvider } from './browser.js';
-import { isNetRefusal } from './run/net-refusal.js';
+import { isNetRefusal, isNetTransport } from './run/net-refusal.js';
 
 function okFetch(body = 'hello', status = 200): typeof fetch {
   return vi.fn(async () => new Response(body, { status })) as typeof fetch;
@@ -37,7 +37,7 @@ describe('createFetchNetProvider failure kinds', () => {
     expect(isNetRefusal(error)).toBe(true);
   });
 
-  it('leaves a network failure as a plain failure with the reason', async () => {
+  it('marks a network failure as a transport failure with the reason', async () => {
     const failing = vi.fn(async () => {
       throw new TypeError('Failed to fetch');
     }) as unknown as typeof fetch;
@@ -48,7 +48,24 @@ describe('createFetchNetProvider failure kinds', () => {
     );
     const error = await failureOf(provider.get('https://api.example.com/'));
     expect(isNetRefusal(error)).toBe(false);
+    expect(isNetTransport(error)).toBe(true);
     expect(error.message).toBe('request failed: Failed to fetch');
+  });
+
+  it('does not mark a fetch the ended run aborted as a transport failure', async () => {
+    const controller = new AbortController();
+    const aborting = vi.fn(async () => {
+      controller.abort();
+      throw new DOMException('aborted', 'AbortError');
+    }) as unknown as typeof fetch;
+    const provider = createFetchNetProvider({ ...options, fetch: aborting })(
+      ['api.example.com'],
+      1024,
+      {},
+      controller.signal,
+    );
+    const error = await failureOf(provider.get('https://api.example.com/'));
+    expect(isNetTransport(error)).toBe(false);
   });
 
   it('leaves an aborted run as a plain failure', async () => {

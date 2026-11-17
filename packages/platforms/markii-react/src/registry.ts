@@ -1,7 +1,7 @@
 import type { ComponentType, ReactNode } from 'react';
 import type { FailureKind, ValueStatus } from '@markii/runtime';
 import type { LayoutAxis, OnDiagnostic } from '@markii/stdlib';
-import type { ResolveImageSrc } from './image-resolve.js';
+import type { ImageLoading, ResolveImageSrc } from './image-resolve.js';
 
 /**
  * Attributes parsed off a directive, e.g. `{type=warning title="Careful"}`.
@@ -74,6 +74,12 @@ export interface MarkComponentProps {
    * component must leave its `src` exactly as authored.
    */
   resolveImageSrc?: ResolveImageSrc;
+  /**
+   * `renderMark`'s `imageLoading` option. `'eager'` means every `<img>` the
+   * render draws, this component's included, loads eagerly. A component that
+   * builds its own `<img>` passes it to `resolveImageAttributes` as `force`.
+   */
+  imageLoading?: ImageLoading;
   /**
    * `renderMark`'s `onDiagnostic` option (`render.tsx`'s
    * `RenderMarkOptions`), handed to every component so one that decides for

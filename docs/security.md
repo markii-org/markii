@@ -215,6 +215,21 @@ that a later-script read fails as specified and cannot be forged; and that
 the table exposes exactly `directives`, `value`, and `truncated`, each
 entry exposing exactly `name`, `form`, `attributes`, and `text`.
 
+## Network failures
+
+A run fails with the `network` kind only when it ends with a transport
+failure the host's network provider recorded. The provider marks a request
+that got no response: a name that does not resolve, a refused or reset
+connection, a TLS error. The run's error text is never read. Each recorded
+failure carries a token that Lua cannot read or create, and the run is
+classified `network` only when the error that ended it carries one. A
+script that copies the failure text into its own `error()`, or catches the
+failure and then fails another way, is a `script-error`. A policy refusal
+stays `capability-denied`, a run the watchdog stopped stays a script error,
+and an HTTP status is a response. The probes are
+`packages/markii-lua/src/network-failure.probe.test.ts` and
+`packages/markii-host/src/run/network-failure.probe.test.ts`.
+
 ## Triggers cap capabilities
 
 How a run was triggered limits what it may do, independent of what was
@@ -474,6 +489,19 @@ step asking for consent, and where its pack folder can receive packs it did
 not install, it keeps a device trust list so a folder that merely arrived
 is never evaluated. A sandboxed iframe per pack would contain a pack's code
 further; that is not implemented.
+
+`evaluatePackScripts` in `@markii/react` is the shared loader. It needs
+`'unsafe-eval'` in the page's `script-src`. A page that cannot allow it
+loads each script as a nonce'd element, as the VS Code webview does.
+
+An image resolver's answer is checked on `src` and on every `srcset`
+candidate. The check refuses `javascript:` and `vbscript:` as a browser
+would read them, and any `data:` URL that is not an image. Candidates are
+read the way the HTML parser reads them. A second pass tests every token
+between commas and whitespace, with and without tabs and line breaks
+removed. One refused candidate drops the whole `srcset` and its `sizes`.
+The srcset suites in the `url-resolve.probe.test.ts` files of
+`@markii/react` and `@markii/html` hold this.
 
 ## Escape sequences in terminal output
 

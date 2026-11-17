@@ -106,3 +106,21 @@ describe('isSafeResolvedUrl: the raw predicate behind both seams', () => {
     expect(isSafeResolvedUrl('notes/a.md')).toBe(true);
   });
 });
+
+describe('resolveImageAttribute: object-form result (executed probe)', () => {
+  it('reads only the src of the object form', () => {
+    expect(
+      resolveImageAttribute('photo.png', () => ({
+        src: 'https://cdn.test/p.png',
+      })),
+    ).toBe('https://cdn.test/p.png');
+  });
+
+  it('refuses a dangerous src in the object form', () => {
+    expect(
+      resolveImageAttribute('photo.png', () => ({
+        src: 'javascript:alert(1)',
+      })),
+    ).toBe('photo.png');
+  });
+});

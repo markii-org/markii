@@ -10,12 +10,13 @@ describe('normalizeFailureKind', () => {
     expect(normalizeFailureKind(kind)).toBe(kind);
   });
 
-  it('FAILURE_KINDS lists exactly the four union members, no more, no fewer', () => {
+  it('FAILURE_KINDS lists exactly the five union members, no more, no fewer', () => {
     expect(FAILURE_KINDS).toEqual([
       'script-error',
       'capability-denied',
       'tier-blocked',
       'limit',
+      'network',
     ]);
   });
 

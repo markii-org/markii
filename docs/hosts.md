@@ -330,6 +330,10 @@ prompt, and the outcome each action must produce. It records the exact
 questions a run asks, in order. Agreeing on what is asked before code runs
 matters more than agreeing on anything else.
 
+The pack scenarios load packs the scenario installs. `bundledPacks` feeds
+completion, hover and insert, and `loadPacks` does not read it, so a host
+with no install folder reports those scenarios as `unsupported`.
+
 Expected text names the adapter's labels as placeholders, such as
 `{noteNoun}` and `{deviceNoun}`, and the runner fills them from the
 adapter's `labels` before it compares. A host with its own wording passes
@@ -763,6 +767,10 @@ two megabytes keeps its original source, and so does one whose extension
 the embedder does not recognize or one that could not be read. Each of
 those is named on the diagnostics surface, with its size where size is the
 reason. None of them is a failure, and none belongs in the notice.
+
+Images in an export load eagerly, because a file may print from a hidden
+window that never scrolls. `createHtmlExportEngine` renders that way, and a
+host that exports through its own React pass sets `imageLoading: 'eager'`.
 
 PDF is a host capability, not a format feature. A host that runs inside a
 browser engine can print the exported document directly, and Obsidian does

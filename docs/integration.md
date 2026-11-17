@@ -496,7 +496,48 @@ resource path. What the renderers do refuse is a `javascript:` or `vbscript:`
 result, so a resolver cannot turn an image reference into a way to run code.
 That refusal reads the value the way a browser's URL parser does, ignoring
 tabs, newlines, and leading control characters, because a check that trusted
-the raw text would pass a disguised scheme straight through.
+the raw text would pass a disguised scheme straight through. A `data:`
+result must be an image (`data:image/`).
+
+A resolver may also return an object, for a host that knows the file:
+
+```ts
+resolveImageSrc: (src) => ({ src: url, width: 736, height: 414, loading: 'eager' })
+```
+
+`width` and `height` become attributes when they are positive integers, so
+the page reserves the space before the image arrives. `srcset` and `sizes`
+pass through together, and every `srcset` candidate gets the same check as
+`src`. One refused candidate drops the whole `srcset`: the image keeps its
+`src` and carries a quiet marker. The terminal renderer reads only `src`.
+
+Images render with `loading="lazy"` and `decoding="async"`. A resolver's
+`loading: 'eager'` overrides that for one image, such as the first image of
+a note. The render option `imageLoading: 'eager'` makes every image eager,
+for a page that prints without scrolling. Exports set it.
+
+## Loading prebuilt packs in a page
+
+A web page that draws pack components evaluates each pack's prebuilt
+`webview.js` and passes what the packs register to `buildRenderRegistry`
+from `@markii/host`:
+
+```ts
+const { registrations, failures } = evaluatePackScripts(scripts, { react: React });
+const registry = buildRenderRegistry(registrations, defaultRegistry, reactPackEngine);
+```
+
+`evaluatePackScripts` comes from `@markii/react`. Each script is a
+`{ namespace, source }` pair. A script that throws is a failure for its
+namespace, and the others still run. The function leaves
+`window.__markiiReact` set, because pack components read it each time they
+render. Where no `window` exists, as in a server render, it defines
+`globalThis.window` as `globalThis`. It runs each source with
+`new Function`, so the page's `script-src` must allow `'unsafe-eval'`. A
+page under a nonce-only policy adds each script as a nonce'd `<script>`
+element itself and passes the registration queue to
+`readPackRegistrationQueue`. Either way the scripts run with the page's
+privileges, so pass only scripts from the host's own store.
 
 `resolveHref` is the same seam for an ordinary markdown link's `href`: the
 same rule about which values are offered to it, the same refusal of a

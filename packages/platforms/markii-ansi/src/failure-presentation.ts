@@ -36,10 +36,17 @@ const FAILURE_PHRASE: Record<string, string> = Object.assign(
     'capability-denied': 'needs permission',
     'tier-blocked': 'requires manual run',
     limit: 'limit exceeded',
+    network: 'network unavailable',
   } satisfies Record<FailureKind, string>,
 );
 
-/** The short phrase for `kind`, or `undefined` if absent or not one of the four taxonomy members. */
+/** A second sentence for the kinds whose fix is to wait and run again. Null-prototype for the same reason as `FAILURE_PHRASE`. */
+const FAILURE_HINT: Record<string, string> = Object.assign(
+  Object.create(null) as Record<string, string>,
+  { network: 'A request did not complete. Run again later.' },
+);
+
+/** The short phrase for `kind`, or `undefined` if absent or not one of the five taxonomy members. */
 export function failurePhrase(
   kind: FailureKind | undefined,
 ): string | undefined {
@@ -54,6 +61,12 @@ export function failureTitle(
 ): string | undefined {
   const phrase = failurePhrase(kind);
   if (!phrase) return error ? error : undefined;
+  const hint =
+    kind !== undefined && Object.hasOwn(FAILURE_HINT, kind)
+      ? FAILURE_HINT[kind]
+      : undefined;
+  if (hint)
+    return error ? `${phrase}: ${error}. ${hint}` : `${phrase}. ${hint}`;
   return error ? `${phrase}: ${error}` : phrase;
 }
 
@@ -63,7 +76,7 @@ export function failureTitle(
  * and `capability-denied` both read as `--mk-danger` (the note asked for
  * something and could not get it, one way or another), `tier-blocked` reads
  * as `--mk-warning` (a manual run would fix it, nothing is actually broken),
- * `limit` reads as `--mk-limit`'s dedicated purple. `undefined` for an
+ * `limit` reads as `--mk-limit`'s dedicated purple, `network` reads as `--mk-warning` (running again later fixes it). `undefined` for an
  * absent or out-of-taxonomy `kind`, in which case a caller applies no color
  * at all rather than guessing one.
  */
@@ -74,6 +87,7 @@ export function failureToken(
     return '--mk-danger';
   if (kind === 'tier-blocked') return '--mk-warning';
   if (kind === 'limit') return '--mk-limit';
+  if (kind === 'network') return '--mk-warning';
   return undefined;
 }
 

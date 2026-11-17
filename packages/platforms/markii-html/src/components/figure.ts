@@ -1,8 +1,11 @@
 import { isSafeUrl } from '@markii/core';
 import { reportDiagnostic } from '@markii/stdlib';
 import type { HtmlComponent } from '../registry.js';
-import { resolveImageAttribute } from '../image-resolve.js';
-import { unsafeImageSrcTitle } from '../failure-presentation.js';
+import { resolveImageAttributes } from '../image-resolve.js';
+import {
+  unsafeImageSrcTitle,
+  unsafeImageSrcsetTitle,
+} from '../failure-presentation.js';
 
 const DEFAULT_ALT = '';
 const DIRECTIVE_NAME = 'figure';
@@ -34,20 +37,33 @@ export const Figure: HtmlComponent = (attributes, childrenHtml, ctx) => {
   const alt = attributes.alt ?? DEFAULT_ALT;
   const refused = Boolean(rawSrc) && !isSafeUrl(rawSrc as string);
   const safeSrc = rawSrc && !refused ? rawSrc : null;
-  const src = safeSrc
-    ? resolveImageAttribute(safeSrc, ctx.resolveImageSrc)
+  const image = safeSrc
+    ? resolveImageAttributes(
+        safeSrc,
+        ctx.resolveImageSrc,
+        'lazy',
+        ctx.imageLoading,
+      )
     : null;
+  const srcsetRefused = image?.srcsetRefused ?? false;
 
-  const imgHtml = src
-    ? `<img class="mk-figure__img" src="${ctx.esc(src)}" alt="${ctx.esc(alt)}">`
+  const imgHtml = image
+    ? `<img class="mk-figure__img" src="${ctx.esc(image.src)}" alt="${ctx.esc(alt)}"` +
+      (image.width === undefined ? '' : ` width="${image.width}"`) +
+      (image.height === undefined ? '' : ` height="${image.height}"`) +
+      (image.srcset === undefined ? '' : ` srcset="${ctx.esc(image.srcset)}"`) +
+      (image.sizes === undefined ? '' : ` sizes="${ctx.esc(image.sizes)}"`) +
+      ` loading="${image.loading}" decoding="async">`
     : '';
   const figcaptionHtml = `<figcaption class="mk-figure__caption">${childrenHtml}</figcaption>`;
 
   // AGENTS.md "clean is not silent": a refused `src` used to render a
   // caption with no image and no explanation. Mirrors `@markii/react`'s
   // `Figure`.
-  if (refused) {
-    const message = unsafeImageSrcTitle(DIRECTIVE_NAME);
+  if (refused || srcsetRefused) {
+    const message = refused
+      ? unsafeImageSrcTitle(DIRECTIVE_NAME)
+      : unsafeImageSrcsetTitle(DIRECTIVE_NAME);
     reportDiagnostic(ctx.onDiagnostic, {
       kind: 'unsafe-image-src',
       directive: DIRECTIVE_NAME,

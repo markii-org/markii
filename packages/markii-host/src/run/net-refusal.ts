@@ -26,3 +26,28 @@ export function isNetRefusal(error: unknown): boolean {
     (error as { [NET_REFUSAL]?: unknown })[NET_REFUSAL] === true
   );
 }
+
+/**
+ * Marks an `Error` as a transport failure: the request got no response
+ * (an unresolved name, a refused or reset connection, a TLS error). An abort,
+ * a policy refusal and an HTTP status are never marked.
+ *
+ * The brand is the same global `Symbol.for` key `@markii/lua` reads, so this
+ * module needs no runtime import of it.
+ */
+const NET_TRANSPORT: unique symbol = Symbol.for(
+  'markii.net.transport',
+) as never;
+
+/** Returns `error` marked as a transport failure. */
+export function netTransport(error: Error): Error {
+  return Object.assign(error, { [NET_TRANSPORT]: true as const });
+}
+
+/** True when `error` was marked by {@link netTransport}. */
+export function isNetTransport(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error as { [NET_TRANSPORT]?: unknown })[NET_TRANSPORT] === true
+  );
+}

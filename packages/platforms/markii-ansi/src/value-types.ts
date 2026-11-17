@@ -20,7 +20,7 @@ export type ValueStatus = 'fresh' | 'stale' | 'error' | 'missing';
 
 /** The closed script-failure taxonomy. Mirrors `@markii/runtime`'s `FailureKind` exactly. */
 export type FailureKind =
-  'script-error' | 'capability-denied' | 'tier-blocked' | 'limit';
+  'script-error' | 'capability-denied' | 'tier-blocked' | 'limit' | 'network';
 
 /** One named value plus its freshness bookkeeping. Mirrors `@markii/runtime`'s `StoredValue`'s readable fields. */
 export interface StoredValue {

@@ -9,7 +9,7 @@
  *
  * - `'script-error'`      — the script itself threw, had a syntax error, or
  *   returned a value that couldn't be marshaled back out. The default/
- *   fallback bucket: anything not clearly one of the other three lands here,
+ *   fallback bucket: anything not clearly one of the other four lands here,
  *   INCLUDING a value this package cannot trust (see `normalizeFailureKind`).
  * - `'capability-denied'` — the grant was absent, or the host actively
  *   refused (an ungranted net host, a bundle path-jail rejection, a
@@ -22,9 +22,13 @@
  *   succeed.
  * - `'limit'`             — a resource limit was breached: instruction
  *   count, wall-clock, or memory. The run was killed, not refused.
+ * - `'network'`           — the run ended with a transport failure: a
+ *   request got no response (DNS, refused connection, timeout, TLS). The
+ *   host's net provider records it out of band; the message text is never
+ *   consulted. An HTTP status is a response, not this kind.
  */
 export type FailureKind =
-  'script-error' | 'capability-denied' | 'tier-blocked' | 'limit';
+  'script-error' | 'capability-denied' | 'tier-blocked' | 'limit' | 'network';
 
 /** Every valid `FailureKind`, for exhaustive iteration/validation. Keep in sync with the `FailureKind` union by construction — see `normalizeFailureKind`'s runtime check against this exact tuple. */
 export const FAILURE_KINDS = [
@@ -32,6 +36,7 @@ export const FAILURE_KINDS = [
   'capability-denied',
   'tier-blocked',
   'limit',
+  'network',
 ] as const satisfies readonly FailureKind[];
 
 /**

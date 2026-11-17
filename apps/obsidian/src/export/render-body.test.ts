@@ -9,6 +9,14 @@ import {
 
 const NOTE = '# Hello\n\nTotal: :value[total]\n';
 
+describe('renderNoteBodyToHtml images', () => {
+  it('prints every image eager, since the export window never scrolls', () => {
+    const html = renderNoteBodyToHtml('![a cat](cat.png)', {});
+    expect(html).toContain('loading="eager"');
+    expect(html).not.toContain('loading="lazy"');
+  });
+});
+
 describe('renderNoteBodyToHtml', () => {
   it('renders a plain note through the standard registry', () => {
     const html = renderNoteBodyToHtml(NOTE, {});

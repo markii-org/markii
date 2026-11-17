@@ -57,6 +57,8 @@ function toRuntimeFailureKind(failure: ScriptFailure): FailureKind {
       return failure.capability === 'tier-blocked'
         ? 'tier-blocked'
         : 'capability-denied';
+    case 'network':
+      return 'network';
     case 'marshal':
     case 'runtime':
       return 'script-error';

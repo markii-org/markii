@@ -13,6 +13,9 @@ export function createHtmlExportEngine(): HtmlExportEngine {
   return {
     renderBody: (text, store, diagnostics) =>
       renderMarkToHtml(text, defaultHtmlRegistry, store, undefined, {
+        // An export prints from a hidden window that may never scroll, so no
+        // image is left to lazy loading.
+        imageLoading: 'eager',
         ...(diagnostics.unavailableComponents !== undefined
           ? { unavailableComponents: diagnostics.unavailableComponents }
           : {}),

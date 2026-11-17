@@ -7,7 +7,7 @@
  * package's `test-fixtures/packs/tsxpack-helpers/` fixture, which this one
  * mirrors). Compiled by the real `buildPackRegistrationScript` (in a
  * separate `node` process — see the fixture test's top doc comment for
- * why), then evaluated in-process via `src/packs/pack-runtime.ts`, the
+ * why), then evaluated in-process via `@markii/react`'s `evaluatePackScripts`, the
  * same path a real vault takes.
  */
 import { useState } from 'react';

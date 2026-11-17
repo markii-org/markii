@@ -97,11 +97,15 @@ export type ScriptMarshalReason =
  *   truncates a Lua string at its first NUL when converting to JS, so this
  *   is rejected on the Lua side before that truncation can happen).
  *   `reason` says which.
+ * - `'network'` — the run ended with a transport failure the net provider
+ *   recorded (no response arrived). Decided by error identity, never by
+ *   message text; a script that catches the failure and then fails some
+ *   other way is `'runtime'`.
  * - `'runtime'` — an ordinary Lua error (syntax error, `error()` call,
  *   type error, stack overflow, etc.) not covered by the above.
  */
 export interface ScriptFailure {
-  kind: 'limit' | 'capability' | 'marshal' | 'runtime';
+  kind: 'limit' | 'capability' | 'marshal' | 'runtime' | 'network';
   message: string;
   limit?: ScriptLimitKind;
   reason?: ScriptMarshalReason;

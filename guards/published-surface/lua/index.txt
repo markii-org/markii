@@ -26,5 +26,7 @@ ScriptMarshalReason
 createEmptyLuaEngine
 createLuaExecutor
 isNetProviderDenial
+isNetTransportFailure
 netProviderDenial
+netTransportFailure
 runScript

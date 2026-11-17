@@ -9,7 +9,7 @@
 
 import type { FailureKind, ValueStatus } from '@markii/runtime';
 import type { LayoutAxis, OnDiagnostic } from '@markii/stdlib';
-import type { ResolveImageSrc } from './image-resolve.js';
+import type { ImageLoading, ResolveImageSrc } from './image-resolve.js';
 
 /**
  * Attributes parsed off a directive, e.g. `{type=warning title="Careful"}`. A
@@ -97,6 +97,13 @@ export interface HtmlRenderContext {
    * component must leave its `src` exactly as authored.
    */
   resolveImageSrc?: ResolveImageSrc;
+  /**
+   * `renderMarkToHtml`'s `imageLoading` option. `'eager'` means every
+   * `<img>` the render draws, this component's included, loads eagerly. A
+   * component that builds its own `<img>` passes it to
+   * `resolveImageAttributes` as `force`.
+   */
+  imageLoading?: ImageLoading;
   /**
    * `renderMarkToHtml`'s `onDiagnostic` option (`render.ts`'s
    * `RenderMarkOptions`), carried on `ctx` so a component that decides for

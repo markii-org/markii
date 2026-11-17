@@ -47,11 +47,23 @@ describe('failure-presentation helpers', () => {
       'capability-denied',
       'tier-blocked',
       'limit',
+      'network',
     ];
     for (const kind of kinds) {
       expect(failurePhrase(kind)).toBeTruthy();
     }
     expect(failurePhrase('tier-blocked')).toBe('requires manual run');
+    expect(failurePhrase('network')).toBe('network unavailable');
+  });
+
+  it('adds the retry hint to a network failure tooltip', () => {
+    const hint = 'A request did not complete. Run again later.';
+    expect(failureTitle(undefined, 'network')).toBe(
+      `network unavailable. ${hint}`,
+    );
+    expect(failureTitle('ECONNREFUSED', 'network')).toBe(
+      `network unavailable: ECONNREFUSED. ${hint}`,
+    );
   });
 
   it('leads the tooltip with the phrase and keeps the underlying message', () => {

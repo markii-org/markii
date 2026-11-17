@@ -20,11 +20,12 @@ import {
   type AnsiPackToInstall,
   type AnsiRegistry,
 } from '@markii/ansi';
-import { type MarkiiHost } from '@markii/host';
+import { type HostLabels, type MarkiiHost } from '@markii/host';
 import {
   terminalScriptNamespaceMismatchLine,
   terminalScriptRejectedLine,
 } from '@markii/host/internal';
+import { CLI_LABELS } from './labels.js';
 
 export interface CliPackRegistry {
   readonly registry: AnsiRegistry;
@@ -38,6 +39,7 @@ export interface CliPackRegistry {
 
 export async function loadCliPackRegistry(
   host: MarkiiHost,
+  labels: HostLabels = CLI_LABELS,
 ): Promise<CliPackRegistry> {
   const outcome = await host.loadTerminalPacks();
   if (outcome.kind !== 'loaded') {
@@ -76,7 +78,11 @@ export async function loadCliPackRegistry(
     if (discovered === undefined) continue;
     const loaded = await loadTerminalPackScript(script.text);
     if (!loaded.ok) {
-      const line = terminalScriptRejectedLine(script.namespace, loaded.reason);
+      const line = terminalScriptRejectedLine(
+        script.namespace,
+        loaded.reason,
+        labels,
+      );
       host.diagnostics(line);
       failureLines.push(line);
       markLoadFailed(script.namespace);
@@ -86,6 +92,7 @@ export async function loadCliPackRegistry(
       const line = terminalScriptNamespaceMismatchLine(
         script.namespace,
         loaded.pack.manifest.name,
+        labels,
       );
       host.diagnostics(line);
       failureLines.push(line);

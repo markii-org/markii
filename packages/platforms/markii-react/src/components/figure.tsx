@@ -2,8 +2,11 @@ import type { ReactElement } from 'react';
 import { isSafeUrl } from '@markii/core';
 import { reportDiagnostic } from '@markii/stdlib';
 import type { MarkComponentProps } from '../registry.js';
-import { resolveImageAttribute } from '../image-resolve.js';
-import { unsafeImageSrcTitle } from './failure-presentation.js';
+import { resolveImageAttributes } from '../image-resolve.js';
+import {
+  unsafeImageSrcTitle,
+  unsafeImageSrcsetTitle,
+} from './failure-presentation.js';
 
 // Matches `failure-presentation.ts`'s `NOTICE_ATTRIBUTE` — kept as a JSX
 // literal (not the imported constant) because TypeScript only special-cases
@@ -41,16 +44,30 @@ export function Figure({
   attributes,
   children,
   resolveImageSrc,
+  imageLoading,
   onDiagnostic,
 }: MarkComponentProps): ReactElement {
   const rawSrc = attributes.src ?? null;
   const alt = attributes.alt ?? DEFAULT_ALT;
   const refused = Boolean(rawSrc) && !isSafeUrl(rawSrc as string);
   const safeSrc = rawSrc && !refused ? rawSrc : null;
-  const src = safeSrc ? resolveImageAttribute(safeSrc, resolveImageSrc) : null;
+  const image = safeSrc
+    ? resolveImageAttributes(safeSrc, resolveImageSrc, 'lazy', imageLoading)
+    : null;
+  const srcsetRefused = image?.srcsetRefused ?? false;
 
-  const imgEl = src ? (
-    <img className="mk-figure__img" src={src} alt={alt} />
+  const imgEl = image ? (
+    <img
+      className="mk-figure__img"
+      src={image.src}
+      alt={alt}
+      width={image.width}
+      height={image.height}
+      srcSet={image.srcset}
+      sizes={image.sizes}
+      loading={image.loading}
+      decoding="async"
+    />
   ) : null;
   const captionEl = (
     <figcaption className="mk-figure__caption">{children}</figcaption>
@@ -60,8 +77,10 @@ export function Figure({
   // caption with no image and no explanation. The marker's `title` carries
   // the reason out of the text flow; `onDiagnostic` gives a host the same
   // event for its own diagnostics surface.
-  if (refused) {
-    const message = unsafeImageSrcTitle(DIRECTIVE_NAME);
+  if (refused || srcsetRefused) {
+    const message = refused
+      ? unsafeImageSrcTitle(DIRECTIVE_NAME)
+      : unsafeImageSrcsetTitle(DIRECTIVE_NAME);
     reportDiagnostic(onDiagnostic, {
       kind: 'unsafe-image-src',
       directive: DIRECTIVE_NAME,

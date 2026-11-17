@@ -52,6 +52,7 @@ export function renderNoteBodyToHtml(
       undefined,
       undefined,
       unavailableComponents,
+      'eager',
     ),
   );
 }

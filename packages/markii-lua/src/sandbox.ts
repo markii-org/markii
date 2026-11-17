@@ -308,8 +308,8 @@ export async function runScript(
   let guardTimer: ReturnType<typeof setTimeout> | undefined;
 
   try {
-    const { rawGlobals, preludeLua, denials, recordDenial } = buildCapabilities(
-      {
+    const { rawGlobals, preludeLua, denials, transportFailures, recordDenial } =
+      buildCapabilities({
         tier: options.tier,
         net: options.net,
         netGrants: options.netGrants,
@@ -317,8 +317,7 @@ export async function runScript(
         bundle: options.bundle,
         maxFetchBytes: options.maxFetchBytes,
         marshalLimits,
-      },
-    );
+      });
     for (const [name, fn] of Object.entries(rawGlobals)) {
       engine.global.set(name, fn);
     }
@@ -526,6 +525,16 @@ export async function runScript(
             capability: denial.reason,
             message: denial.message,
           },
+        };
+      }
+      // A transport failure, identified by object identity: the run ended
+      // with the very `Error` the net provider raised and `./capabilities`
+      // recorded. Message text is never consulted. Checked after the denial
+      // handle, so a denial still wins.
+      if (transportFailures.recorded(runResult.err)) {
+        return {
+          ok: false,
+          error: { kind: 'network', message: describeError(runResult.err) },
         };
       }
       // A refused `doc` read (`./doc`, GitHub issue #33), recorded the

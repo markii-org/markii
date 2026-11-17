@@ -62,6 +62,7 @@ describe('value-types drift: FailureKind arity and membership', () => {
       'capability-denied',
       'tier-blocked',
       'limit',
+      'network',
     ];
     expect(ansiKinds).toHaveLength(FAILURE_KINDS.length);
     expect(new Set(ansiKinds)).toEqual(new Set(FAILURE_KINDS));

@@ -41,6 +41,9 @@ import type { ValueStore } from '@markii/runtime';
  * this is how the reason reaches the plugin's diagnostics surface instead
  * of living only in a tooltip.
  *
+ * `imageLoading` is `renderMark`'s option of the same name: an export passes
+ * `'eager'` so no image waits on a scroll that never happens.
+ *
  * `unavailableComponents` is the host's list of installed pack components
  * with no view in this engine: a directive naming one reads "no preview
  * view" instead of "unknown component", and `onDiagnostic` hears why.
@@ -52,10 +55,12 @@ export function renderDocument(
   resolveImageSrc?: RenderMarkOptions['resolveImageSrc'],
   onDiagnostic?: RenderMarkOptions['onDiagnostic'],
   unavailableComponents?: RenderMarkOptions['unavailableComponents'],
+  imageLoading?: RenderMarkOptions['imageLoading'],
 ): ReactElement {
   return renderMark(text, registry, store, undefined, {
     resolveImageSrc,
     onDiagnostic,
     unavailableComponents,
+    imageLoading,
   });
 }

@@ -19,6 +19,14 @@ import { createHtmlExportEngine } from '../html-engine.js';
 
 const engine = createHtmlExportEngine();
 
+describe('the HTML export engine', () => {
+  it('renders every image eager, since the export window never scrolls', () => {
+    const html = engine.renderBody('![a cat](cat.png)', undefined, {});
+    expect(html).toContain('loading="eager"');
+    expect(html).not.toContain('loading="lazy"');
+  });
+});
+
 describe('exportBaseName', () => {
   it('drops a .mk.md extension', () => {
     expect(exportBaseName('notes.mk.md')).toBe('notes');

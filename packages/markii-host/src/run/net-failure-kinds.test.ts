@@ -2,7 +2,7 @@ import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createNetProvider } from './net-provider.js';
-import { isNetRefusal } from './net-refusal.js';
+import { isNetRefusal, isNetTransport } from './net-refusal.js';
 import { serveNetRequest, type NetBridgeReply } from './net-bridge.js';
 
 const servers: http.Server[] = [];
@@ -107,7 +107,34 @@ describe('createNetProvider failure kinds', () => {
       provider.get(`http://127.0.0.1:${String(port)}/`),
     );
     expect(isNetRefusal(error)).toBe(false);
+    expect(isNetTransport(error)).toBe(true);
     expect(error.message).toMatch(/^request failed: /);
+  });
+
+  it('marks a refused connection as a transport failure on the wire', async () => {
+    const port = await closedLoopbackPort();
+    const provider = createNetProvider(
+      ['127.0.0.1'],
+      1024,
+      allowLoopback,
+      plain,
+    );
+    const reply = await replyFor(provider, `http://127.0.0.1:${String(port)}/`);
+    expect(reply.ok).toBe(false);
+    expect(reply.transport).toBe(true);
+    expect(reply.denied).toBe(false);
+  });
+
+  it('does not mark a policy refusal as a transport failure', async () => {
+    const provider = createNetProvider(
+      ['127.0.0.1'],
+      1024,
+      allowLoopback,
+      plain,
+    );
+    const reply = await replyFor(provider, 'http://other.example/');
+    expect(reply.denied).toBe(true);
+    expect(reply.transport).toBeUndefined();
   });
 
   it('leaves a name that does not resolve as a plain failure', async () => {

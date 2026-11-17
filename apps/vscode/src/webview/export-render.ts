@@ -47,15 +47,11 @@ export function renderExportBody(
   const store =
     Object.keys(values).length > 0 ? createValueStore(values) : undefined;
   return renderToStaticMarkup(
-    renderMark(
-      text,
-      registry,
-      store,
-      undefined,
-      unavailableComponents !== undefined
-        ? { unavailableComponents }
-        : undefined,
-    ),
+    renderMark(text, registry, store, undefined, {
+      // An export prints from a hidden window that may never scroll.
+      imageLoading: 'eager',
+      ...(unavailableComponents !== undefined ? { unavailableComponents } : {}),
+    }),
   );
 }
 

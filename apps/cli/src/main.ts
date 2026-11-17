@@ -167,7 +167,10 @@ async function loadPackRegistry(
       if (verbose) emit(`markii: ${line}\n`);
     },
   });
-  const loaded = await loadCliPackRegistry(createMarkiiHost(adapter));
+  const loaded = await loadCliPackRegistry(
+    createMarkiiHost(adapter),
+    adapter.labels,
+  );
   if (!verbose) {
     for (const line of loaded.failureLines) emit(`markii: ${line}\n`);
   }

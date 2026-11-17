@@ -6,6 +6,7 @@ import { render, screen } from '@testing-library/react';
 import { conformanceDir } from '@markii/core/corpus';
 import { parse } from '@markii/core';
 import { createValueStore, createVaultStore } from '@markii/runtime';
+import type { DiagnosticEvent } from '@markii/stdlib';
 import { renderMark, renderMarkNode, renderMarkInline } from './render';
 import { defaultRegistry } from './components';
 import type {
@@ -1124,6 +1125,17 @@ describe('renderMark — render-level conformance fixtures (conformance/render/)
     expect(images).toEqual(['cat.png', 'dog.png']);
   });
 
+  it('06-image: the markup matches the committed HTML fixture byte for byte', () => {
+    const { container } = render(
+      renderMark(readRenderFixture('06-image'), defaultRegistry),
+    );
+    const expected = readFileSync(
+      join(conformanceDir(), 'render', '06-image.html'),
+      'utf8',
+    );
+    expect(container.innerHTML).toBe(expected.replace(/\n$/, ''));
+  });
+
   it("06-image WITH a resolveImageSrc option: a plain markdown image and Figure's own <img> both resolve", () => {
     const { container } = render(
       renderMark(
@@ -1613,5 +1625,95 @@ describe('renderMark — store and vault on the options object', () => {
       }),
     );
     expect(container.querySelector('.mk-value')).toHaveTextContent('hello');
+  });
+});
+
+describe('renderMark: image attributes', () => {
+  const resolved = {
+    src: 'https://cdn.test/cat-640.png',
+    width: 640,
+    height: 480,
+    srcset:
+      'https://cdn.test/cat-320.png 320w, https://cdn.test/cat-640.png 640w',
+    sizes: '(max-width: 600px) 100vw, 640px',
+    loading: 'eager' as const,
+  };
+  const input =
+    '![a cat](cat.png)\n\n:::figure{src="dog.png" alt="A dog"}\nCap\n:::';
+
+  it('emits the object form on a markdown image and on a figure, in a fixed attribute order', () => {
+    const { container } = render(
+      renderMark(input, defaultRegistry, undefined, undefined, {
+        resolveImageSrc: () => resolved,
+      }),
+    );
+    const [markdown, figure] = [...container.querySelectorAll('img')];
+    expect(markdown?.outerHTML).toBe(
+      '<img src="https://cdn.test/cat-640.png" alt="a cat" width="640" height="480" srcset="https://cdn.test/cat-320.png 320w, https://cdn.test/cat-640.png 640w" sizes="(max-width: 600px) 100vw, 640px" loading="eager" decoding="async">',
+    );
+    expect(figure?.outerHTML).toBe(
+      '<img class="mk-figure__img" src="https://cdn.test/cat-640.png" alt="A dog" width="640" height="480" srcset="https://cdn.test/cat-320.png 320w, https://cdn.test/cat-640.png 640w" sizes="(max-width: 600px) 100vw, 640px" loading="eager" decoding="async">',
+    );
+  });
+
+  it('imageLoading eager overrides the default and a resolver lazy', () => {
+    const { container } = render(
+      renderMark(input, defaultRegistry, undefined, undefined, {
+        imageLoading: 'eager',
+        resolveImageSrc: () => ({ src: 'x.png', loading: 'lazy' }),
+      }),
+    );
+    for (const img of container.querySelectorAll('img')) {
+      expect(img.getAttribute('loading')).toBe('eager');
+    }
+  });
+
+  it('drops sizes without srcset and ignores bad width, height and loading', () => {
+    const { container } = render(
+      renderMark('![a](a.png)', defaultRegistry, undefined, undefined, {
+        resolveImageSrc: () =>
+          ({
+            src: 'x.png',
+            sizes: '100vw',
+            width: -1,
+            height: 1.5,
+            loading: 'auto',
+          }) as never,
+      }),
+    );
+    expect(container.querySelector('img')?.outerHTML).toBe(
+      '<img src="x.png" alt="a" loading="lazy" decoding="async">',
+    );
+  });
+
+  it('refuses a srcset with a dangerous candidate: keeps src, marks the image, reports once', () => {
+    const events: DiagnosticEvent[] = [];
+    const { container } = render(
+      renderMark(input, defaultRegistry, undefined, undefined, {
+        onDiagnostic: (event) => events.push(event),
+        resolveImageSrc: () => ({
+          src: 'x.png',
+          srcset: 'a.png 1x, javascript:alert(1) 2x',
+          sizes: '100vw',
+        }),
+      }),
+    );
+    const [markdown, figure] = [...container.querySelectorAll('img')];
+    expect(markdown?.getAttribute('src')).toBe('x.png');
+    expect(markdown?.hasAttribute('srcset')).toBe(false);
+    expect(markdown?.hasAttribute('sizes')).toBe(false);
+    expect(markdown).toHaveAttribute('data-mk-notice');
+    expect(markdown?.getAttribute('title')).toMatch(
+      /only the main source is shown/,
+    );
+    expect(container.querySelector('figure')?.getAttribute('title')).toMatch(
+      /only the main source is shown/,
+    );
+    expect(figure?.hasAttribute('srcset')).toBe(false);
+    expect(container.querySelector('figure')).toHaveAttribute('data-mk-notice');
+    expect(events.map((e) => e.kind)).toEqual([
+      'unsafe-image-src',
+      'unsafe-image-src',
+    ]);
   });
 });

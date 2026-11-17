@@ -31,12 +31,19 @@ const FAILURE_PHRASE: Record<string, string> = Object.assign(
     'capability-denied': 'needs permission',
     'tier-blocked': 'requires manual run',
     limit: 'limit exceeded',
+    network: 'network unavailable',
   } satisfies Record<FailureKind, string>,
+);
+
+/** A second sentence for the kinds whose fix is to wait and run again. Null-prototype for the same reason as `FAILURE_PHRASE`. */
+const FAILURE_HINT: Record<string, string> = Object.assign(
+  Object.create(null) as Record<string, string>,
+  { network: 'A request did not complete. Run again later.' },
 );
 
 /**
  * The short phrase for `kind`, or `undefined` if `kind` is absent or is not
- * one of the four taxonomy members. `kind` is typed as `FailureKind` at
+ * one of the five taxonomy members. `kind` is typed as `FailureKind` at
  * every call site, but it originates in a `ValueStore` entry — which a host
  * app, a test fixture, or a pre-taxonomy persisted document can populate by
  * hand — so it is validated here at runtime rather than trusted. An
@@ -65,6 +72,12 @@ export function failureTitle(
 ): string | undefined {
   const phrase = failurePhrase(kind);
   if (!phrase) return error ? error : undefined;
+  const hint =
+    kind !== undefined && Object.hasOwn(FAILURE_HINT, kind)
+      ? FAILURE_HINT[kind]
+      : undefined;
+  if (hint)
+    return error ? `${phrase}: ${error}. ${hint}` : `${phrase}. ${hint}`;
   return error ? `${phrase}: ${error}` : phrase;
 }
 
@@ -165,6 +178,11 @@ export function invalidAttributeValueTitle(
  */
 export function unsafeImageSrcTitle(directive: string): string {
   return `${directive}: image source was refused as unsafe and was not shown`;
+}
+
+/** The marker text for an image whose `srcset` was refused as unsafe; its `src` is still shown. Identical in `@markii/react` and `@markii/html`. */
+export function unsafeImageSrcsetTitle(directive: string): string {
+  return `${directive}: alternate image sources were refused as unsafe, so only the main source is shown`;
 }
 
 /** The diagnostic text for a host `renderCode` callback that threw; the code block rendered as usual. Identical across the engines. */

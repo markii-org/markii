@@ -21,12 +21,40 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 - `@markii/host`'s main entry exports `mergeRunValue`, which folds one
   arriving value into a value record and keeps a good value when a refresh
   fails, plus `staleValuesForRehydration` and `noteHasScripts`. (#75, #77)
+- A `network` failure kind in `@markii/runtime`: a script that ends with a
+  request that got no response (the name did not resolve, the connection
+  was refused or reset, TLS failed). It is decided from the network
+  provider's own record, never from the error text, so a script cannot
+  raise one. All three engines show `network unavailable` with a hint to
+  run again later. `@markii/lua` exports `netTransportFailure` and
+  `isNetTransportFailure` for a host's own provider. (#79)
+- `resolveImageSrc` may return `{ src, width, height, srcset, sizes,
+  loading }` in `@markii/react` and `@markii/html`. Every `srcset`
+  candidate gets the same scheme check as `src`; one refused candidate
+  drops the `srcset`, and the image keeps its `src` with a quiet marker.
+  The terminal engine reads only `src`. (#85)
+- An `imageLoading: 'eager'` render option in `@markii/react` and
+  `@markii/html`. HTML exports, and the VS Code and Obsidian exports, use
+  it. (#85)
+- `@markii/react` exports `evaluatePackScripts`, the in-page loader for
+  prebuilt pack scripts, and `readPackRegistrationQueue` for a page that
+  adds the scripts itself. The e2e fixture and Obsidian use it. (#74)
 - The host conformance corpus can mark a `loadPacks` action
   `requiresInstall`, which reports `unsupported` on a host with no install
   folder. (#78)
 
 ### Changed
 
+- Breaking at the type level: `FailureKind` gains `network`, so an
+  exhaustive switch over it must handle the new kind. A renderer that does
+  not know it shows `script-error`. (#79)
+- The browser network provider (`createFetchNetProvider`) marks a failed
+  `fetch` as a transport failure unless the run was stopped.
+- The command line tool's pack notices use its own labels.
+- Markdown images and `figure` render with `loading="lazy"` and
+  `decoding="async"`. (#85)
+- An image resolver's `data:` answer must be a `data:image/` URL. Any other
+  `data:` answer is refused like a `javascript:` one.
 - Breaking: `@markii/host`'s `HostPromptRequest` is a union on `kind`.
   `grant-host` carries `host` and `declaredHosts`, and
   `grant-unknown-hosts` and `grant-many-hosts` carry `hosts`, so a host

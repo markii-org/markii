@@ -23,7 +23,7 @@ import * as https from 'node:https';
 import * as dns from 'node:dns';
 
 import type { NetProvider, NetResponse } from '@markii/lua';
-import { netRefusal } from './net-refusal.js';
+import { netRefusal, netTransport } from './net-refusal.js';
 import {
   pinHostAddress,
   pinnedLookup,
@@ -195,14 +195,18 @@ function issueRequest(
             body: Buffer.concat(chunks).toString('utf8'),
           });
         });
-        res.on('error', (err) => settleReject(err));
+        res.on('error', (err) =>
+          settleReject(netTransport(new Error(describeThrown(err)))),
+        );
       },
     );
 
     req.on('error', (err) => {
       // A transport failure (connection refused, reset, timeout): an
       // ordinary runtime failure with the reason, not a policy refusal.
-      settleReject(new Error(`request failed: ${describeThrown(err)}`));
+      settleReject(
+        netTransport(new Error(`request failed: ${describeThrown(err)}`)),
+      );
     });
 
     if (signal !== undefined) {
@@ -329,7 +333,7 @@ export function createNetProvider(
         // A name that does not resolve is a transport failure; an address
         // the policy refuses is a policy refusal.
         throw pinResult.kind === 'unresolved'
-          ? new Error(pinResult.reason)
+          ? netTransport(new Error(pinResult.reason))
           : refuse(pinResult.reason);
       }
 

@@ -36,7 +36,9 @@ import {
   invalidAttributeValueTitle,
   NO_ENGINE_VIEW_LABEL,
   noEngineViewTitle,
+  unsafeImageSrcsetTitle,
 } from './failure-presentation.js';
+
 import {
   createUnavailableComponentLookup,
   formatValue,
@@ -49,10 +51,13 @@ import type {
   UnavailableComponent,
   UnavailableComponentLookup,
 } from '@markii/stdlib';
-import { resolveImageAttribute } from './image-resolve.js';
-import type { ResolveImageSrc } from './image-resolve.js';
+import { resolveImageAttributes } from './image-resolve.js';
+import type { ImageLoading, ResolveImageSrc } from './image-resolve.js';
 import { resolveHrefAttribute } from './href-resolve.js';
 import type { ResolveHref } from './href-resolve.js';
+
+/** The directive name an ordinary markdown image reports under. */
+const IMAGE_NAME = 'image';
 
 /**
  * A whole parsed document, as `@markii/core`'s `parse` returns it — the
@@ -155,6 +160,7 @@ function createBaseContext(
   scope: ValueScope,
   resolveImageSrc: ResolveImageSrc | undefined,
   onDiagnostic: OnDiagnostic | undefined,
+  imageLoading: ImageLoading | undefined,
 ): HtmlRenderContext {
   return {
     esc: escapeHtml,
@@ -171,6 +177,7 @@ function createBaseContext(
       return buildValueMarker(trimmed, resolved, format, decimals);
     },
     resolveImageSrc,
+    imageLoading,
     onDiagnostic,
   };
 }
@@ -686,13 +693,35 @@ function renderDirective(
  * this is a no-op, so a fixture rendered without one produces byte-
  * identical output to before this option existed.
  */
-function applyImageResolver(
-  node: Element,
-  resolveImageSrc: ResolveImageSrc | undefined,
-): void {
+function applyImageResolver(node: Element, ctx: HtmlRenderContext): void {
   const src = node.properties.src;
-  if (typeof src === 'string') {
-    node.properties.src = resolveImageAttribute(src, resolveImageSrc);
+  if (typeof src !== 'string') return;
+  const attributes = resolveImageAttributes(
+    src,
+    ctx.resolveImageSrc,
+    'lazy',
+    ctx.imageLoading,
+  );
+  node.properties.src = attributes.src;
+  if (attributes.width !== undefined) node.properties.width = attributes.width;
+  if (attributes.height !== undefined) {
+    node.properties.height = attributes.height;
+  }
+  if (attributes.srcset !== undefined) {
+    node.properties.srcSet = attributes.srcset;
+  }
+  if (attributes.sizes !== undefined) node.properties.sizes = attributes.sizes;
+  node.properties.loading = attributes.loading;
+  node.properties.decoding = 'async';
+  if (attributes.srcsetRefused) {
+    const message = unsafeImageSrcsetTitle(IMAGE_NAME);
+    reportDiagnostic(ctx.onDiagnostic, {
+      kind: 'unsafe-image-src',
+      directive: IMAGE_NAME,
+      message,
+    });
+    node.properties['data-mk-notice'] = '';
+    node.properties.title = message;
   }
 }
 
@@ -766,7 +795,7 @@ function makeTransform(
       if (custom !== undefined) return raw(custom);
     }
     if (node.tagName === 'img') {
-      applyImageResolver(node, ctx.resolveImageSrc);
+      applyImageResolver(node, ctx);
     }
     if (node.tagName === 'a') {
       applyHrefResolver(node, resolveHref);
@@ -795,8 +824,14 @@ function renderRoot(
   onDiagnostic: OnDiagnostic | undefined,
   unavailable: UnavailableComponentLookup | undefined,
   renderCode: RenderCode | undefined,
+  imageLoading: ImageLoading | undefined,
 ): string {
-  const ctx = createBaseContext(scope, resolveImageSrc, onDiagnostic);
+  const ctx = createBaseContext(
+    scope,
+    resolveImageSrc,
+    onDiagnostic,
+    imageLoading,
+  );
   const transform = makeTransform(
     registry,
     ctx,
@@ -888,6 +923,12 @@ export interface RenderMarkOptions {
    */
   readonly renderCode?: RenderCode;
   readonly resolveImageSrc?: ResolveImageSrc;
+  /**
+   * `'eager'` makes every `<img>` load eagerly, overriding the default
+   * `loading="lazy"` and a resolver's own `loading`. A caller that prints
+   * the page from a window that never scrolls, such as an export, sets it.
+   */
+  readonly imageLoading?: ImageLoading;
   readonly resolveHref?: ResolveHref;
   readonly onDiagnostic?: OnDiagnostic;
   /**
@@ -926,6 +967,7 @@ export function renderMarkToHtml(
       options?.onDiagnostic,
       createUnavailableComponentLookup(options?.unavailableComponents),
       options?.renderCode,
+      options?.imageLoading,
     );
   } catch (error) {
     return renderFailureFallback(error);
@@ -962,6 +1004,7 @@ export function renderMarkNodeToHtml(
       options?.onDiagnostic,
       createUnavailableComponentLookup(options?.unavailableComponents),
       options?.renderCode,
+      options?.imageLoading,
     );
   } catch (error) {
     return renderFailureFallback(error);

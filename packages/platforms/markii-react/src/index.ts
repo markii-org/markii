@@ -17,8 +17,22 @@ export {
   type RenderCodeBlock,
   type RenderMarkOptions,
 } from './render.js';
-export { type ResolveImageSrc } from './image-resolve.js';
+export {
+  type ImageLoading,
+  type ImageResolution,
+  type ResolvedImage,
+  type ResolveImageSrc,
+} from './image-resolve.js';
 export { type ResolveHref } from './href-resolve.js';
+export {
+  evaluatePackScripts,
+  readPackRegistrationQueue,
+  type EvaluatePackScriptsOptions,
+  type EvaluatePackScriptsResult,
+  type PackScriptFailure,
+  type PackScriptRegistration,
+  type PackScriptSource,
+} from './pack-scripts.js';
 export {
   createRegistry,
   mergeRegistries,

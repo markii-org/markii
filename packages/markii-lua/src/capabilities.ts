@@ -145,6 +145,49 @@ export function isNetProviderDenial(err: unknown): err is Error {
   );
 }
 
+/**
+ * Brand marking an `Error` a {@link NetProvider} throws when a request failed
+ * in transport and no response arrived (DNS, refused connection, reset, TLS).
+ * It is a global `Symbol.for` key so the host's provider can set it without
+ * importing this package. A script has no path to JavaScript, so it can
+ * neither read nor set the brand. A policy refusal, an abort and an HTTP
+ * status are never marked.
+ */
+const NET_TRANSPORT_FAILURE: unique symbol = Symbol.for(
+  'markii.net.transport',
+) as never;
+
+/** Returns `error` marked as a transport failure. */
+export function netTransportFailure(error: Error): Error {
+  return Object.assign(error, { [NET_TRANSPORT_FAILURE]: true as const });
+}
+
+/** True when `err` was marked by {@link netTransportFailure}. */
+export function isNetTransportFailure(err: unknown): err is Error {
+  return (
+    err instanceof Error &&
+    (err as { [NET_TRANSPORT_FAILURE]?: unknown })[NET_TRANSPORT_FAILURE] ===
+      true
+  );
+}
+
+/**
+ * Out-of-band record of the transport failures a run's provider raised.
+ *
+ * The VM does not return the thrown object itself. When an `Error` ends a
+ * run, the VM builds a new one and copies only the original's `stack`. Each
+ * recorded failure therefore gets a unique `stack` token, and a run that
+ * ends with an error carrying a recorded token ended with that failure. A
+ * script sees an error value only through `message` and `tostring`, so it
+ * can read no token. `error(tostring(e))` makes a plain string, which has no
+ * token. Re-raising the caught value itself keeps it, and that is the same
+ * failure ending the run.
+ */
+export interface TransportFailures {
+  /** True when `err` carries a stack token this run recorded. */
+  recorded(err: unknown): boolean;
+}
+
 function describeThrown(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
@@ -241,6 +284,8 @@ export function buildCapabilities(config: CapabilityConfig): {
   rawGlobals: Record<string, (...args: never[]) => Promise<unknown>>;
   preludeLua: string;
   denials: CapabilityDenials;
+  /** Transport failures the provider raised, kept by identity (never by message). */
+  transportFailures: TransportFailures;
   /**
    * The same recording function `denials` reads from, exposed so a SIBLING
    * capability builder assembled in the same `runScript` call (currently
@@ -314,10 +359,22 @@ export function buildCapabilities(config: CapabilityConfig): {
    * smuggling a secret classification tag through the Lua-visible error text
    * (P2-c — see `netProviderDenial`).
    */
+  const transportTokens = new Set<string>();
+  const transportFailures: TransportFailures = {
+    recorded: (err) =>
+      err instanceof Error && transportTokens.has(err.stack ?? ''),
+  };
   async function callNetProvider<T>(op: () => Promise<T>): Promise<T> {
     try {
       return await op();
     } catch (err) {
+      if (isNetTransportFailure(err)) {
+        // Give this failure a unique token in the one field the VM copies
+        // onto the error that ends a run, then rethrow the same object.
+        const token = `markii-net-transport-${String(transportTokens.size + 1)}`;
+        err.stack = token;
+        transportTokens.add(token);
+      }
       if (isNetProviderDenial(err)) {
         recordDenial('denied', err.message);
         throw capabilityError(err.message);
@@ -781,6 +838,7 @@ bundle.write = function(path, data) return __smd_bundle_write_blocked(path, data
     rawGlobals,
     preludeLua: preludeParts.join('\n'),
     denials,
+    transportFailures,
     recordDenial,
   };
 }

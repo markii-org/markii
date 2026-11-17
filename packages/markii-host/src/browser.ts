@@ -17,7 +17,7 @@
 import type { NetProvider, NetResponse } from '@markii/lua';
 import type { HostIsolate } from './host/adapter.js';
 import { createBrowserIsolate } from './run/browser-isolate.js';
-import { netRefusal } from './run/net-refusal.js';
+import { netRefusal, netTransport } from './run/net-refusal.js';
 import type { IsolateSpawner } from './run/isolate.js';
 
 /** Builds the provider for one run from the job's host allowlist, byte cap and pin policy (the policy is meaningless in a browser and ignored). */
@@ -169,12 +169,12 @@ export function createFetchNetProvider(
           ...(signal !== undefined ? { signal } : {}),
         });
       } catch (error) {
-        // A transport failure (network down, connection refused, CORS,
-        // abort): an ordinary runtime failure with the reason, not a policy
-        // refusal.
-        throw new Error(
-          `request failed: ${error instanceof Error ? error.message : String(error)}`,
-        );
+        const reason = `request failed: ${error instanceof Error ? error.message : String(error)}`;
+        // The run ended (watchdog abort): an ordinary runtime failure.
+        if (signal?.aborted) throw new Error(reason);
+        // No response at all (network down, connection refused, CORS): a
+        // transport failure, which a run reports as the `network` kind.
+        throw netTransport(new Error(reason));
       }
       if (response.type === 'opaqueredirect') {
         throw denial('redirects are not followed in a browser');

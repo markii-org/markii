@@ -172,7 +172,9 @@ itself is not passed in `attributes`. When the binding failed or is stale,
 `ctx.dataSuffix` holds the engine's own quiet marker, such as
 ` (script error)` or ` (stale)`, and an empty string otherwise. Append it
 rather than writing your own wording, so a failure reads the same in a pack
-as in a standard component.
+as in a standard component. A view that switches on a failure kind treats
+a kind it does not recognize as `script-error`, because later releases may
+add kinds.
 
 ## Names and namespaces
 

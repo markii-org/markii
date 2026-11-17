@@ -43,7 +43,9 @@ export type {
 export {
   DEFAULT_MAX_FETCH_BYTES,
   isNetProviderDenial,
+  isNetTransportFailure,
   netProviderDenial,
+  netTransportFailure,
 } from './capabilities.js';
 
 export type { MarshalLimits } from './marshal.js';

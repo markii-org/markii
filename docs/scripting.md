@@ -194,6 +194,12 @@ consuming component shows a "requires manual run" hint in its tooltip. The
 tier limits are enforced by the host, not promised by convention; the
 security details live in [security.md](security.md).
 
+A request that gets no response at all is a different failure. The service
+was unreachable, refused the connection or timed out. The consuming
+component then shows `network unavailable`, and running the note again
+later usually fixes it. An HTTP error response, such as a 404 or a 500, is
+a response: the script receives it and decides what to do.
+
 Schedules live in the application, never inside a script. There are no
 timers in the sandbox.
 

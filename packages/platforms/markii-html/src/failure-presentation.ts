@@ -24,10 +24,17 @@ const FAILURE_PHRASE: Record<string, string> = Object.assign(
     'capability-denied': 'needs permission',
     'tier-blocked': 'requires manual run',
     limit: 'limit exceeded',
+    network: 'network unavailable',
   } satisfies Record<FailureKind, string>,
 );
 
-/** The short phrase for `kind`, or `undefined` if absent or not one of the four taxonomy members. */
+/** A second sentence for the kinds whose fix is to wait and run again. Null-prototype for the same reason as `FAILURE_PHRASE`. */
+const FAILURE_HINT: Record<string, string> = Object.assign(
+  Object.create(null) as Record<string, string>,
+  { network: 'A request did not complete. Run again later.' },
+);
+
+/** The short phrase for `kind`, or `undefined` if absent or not one of the five taxonomy members. */
 export function failurePhrase(
   kind: FailureKind | undefined,
 ): string | undefined {
@@ -42,6 +49,12 @@ export function failureTitle(
 ): string | undefined {
   const phrase = failurePhrase(kind);
   if (!phrase) return error ? error : undefined;
+  const hint =
+    kind !== undefined && Object.hasOwn(FAILURE_HINT, kind)
+      ? FAILURE_HINT[kind]
+      : undefined;
+  if (hint)
+    return error ? `${phrase}: ${error}. ${hint}` : `${phrase}. ${hint}`;
   return error ? `${phrase}: ${error}` : phrase;
 }
 
@@ -108,6 +121,11 @@ export function invalidAttributeValueTitle(
 /** The `title` tooltip for `NOTICE_ATTRIBUTE` on a `figure` with a refused `src`. Ported verbatim from `@markii/react`. */
 export function unsafeImageSrcTitle(directive: string): string {
   return `${directive}: image source was refused as unsafe and was not shown`;
+}
+
+/** The marker text for an image whose `srcset` was refused as unsafe; its `src` is still shown. Identical in `@markii/react` and `@markii/html`. */
+export function unsafeImageSrcsetTitle(directive: string): string {
+  return `${directive}: alternate image sources were refused as unsafe, so only the main source is shown`;
 }
 
 /** The diagnostic text for a host `renderCode` callback that threw; the code block rendered as usual. Identical across the engines. */

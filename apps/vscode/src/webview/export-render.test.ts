@@ -22,6 +22,14 @@ function registryWithFakePack(): Registry {
   );
 }
 
+describe('renderExportBody images', () => {
+  it('prints every image eager, since the export window never scrolls', () => {
+    const html = renderExportBody('![a cat](cat.png)', {}, defaultRegistry);
+    expect(html).toContain('loading="eager"');
+    expect(html).not.toContain('loading="lazy"');
+  });
+});
+
 describe('renderExportBody', () => {
   it('renders a pack component as itself, not as the unknown-component fallback', () => {
     const registry = registryWithFakePack();

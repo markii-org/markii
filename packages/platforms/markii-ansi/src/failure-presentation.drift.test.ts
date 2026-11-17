@@ -6,6 +6,7 @@ import {
   emptyInlineTitle,
   formMismatchTitle,
   failurePhrase,
+  failureTitle,
   invalidAttributeValueTitle,
   unsafeImageSrcTitle,
 } from './failure-presentation.js';
@@ -83,9 +84,15 @@ describe('failure-presentation drift: FAILURE_PHRASE table', () => {
   const htmlSource = readFileSync(HTML_FAILURE_PRESENTATION_PATH, 'utf8');
   const table = extractFailurePhraseTable(htmlSource);
 
-  it('self-test: the extraction actually finds all four phrases', () => {
+  it('self-test: the extraction actually finds all five phrases', () => {
     expect(Object.keys(table).sort()).toEqual(
-      ['capability-denied', 'limit', 'script-error', 'tier-blocked'].sort(),
+      [
+        'capability-denied',
+        'limit',
+        'network',
+        'script-error',
+        'tier-blocked',
+      ].sort(),
     );
   });
 
@@ -94,6 +101,7 @@ describe('failure-presentation drift: FAILURE_PHRASE table', () => {
     'capability-denied',
     'tier-blocked',
     'limit',
+    'network',
   ] as const;
 
   for (const kind of kinds) {
@@ -101,6 +109,24 @@ describe('failure-presentation drift: FAILURE_PHRASE table', () => {
       expect(failurePhrase(kind)).toBe(table[kind]);
     });
   }
+});
+
+describe('failure-presentation drift: network hint', () => {
+  const htmlSource = readFileSync(HTML_FAILURE_PRESENTATION_PATH, 'utf8');
+  const hint = 'A request did not complete. Run again later.';
+
+  it("carries the same hint sentence as @markii/html's source", () => {
+    expect(htmlSource).toContain(hint);
+  });
+
+  it('leads the tooltip with the phrase, then the hint', () => {
+    expect(failureTitle(undefined, 'network')).toBe(
+      `network unavailable. ${hint}`,
+    );
+    expect(failureTitle('ECONNREFUSED', 'network')).toBe(
+      `network unavailable: ECONNREFUSED. ${hint}`,
+    );
+  });
 });
 
 describe('failure-presentation drift: title templates', () => {

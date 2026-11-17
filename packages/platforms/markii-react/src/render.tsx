@@ -43,8 +43,8 @@ import { ScriptMarker } from './components/script-marker.js';
 import { UnknownDirective } from './components/unknown-directive.js';
 import { ValueDirective } from './components/value-directive.js';
 import { resolveScopedPath } from './store-path.js';
-import { resolveImageAttribute } from './image-resolve.js';
-import type { ResolveImageSrc } from './image-resolve.js';
+import { resolveImageAttributes } from './image-resolve.js';
+import type { ImageLoading, ResolveImageSrc } from './image-resolve.js';
 import { resolveHrefAttribute } from './href-resolve.js';
 import type { ResolveHref } from './href-resolve.js';
 import {
@@ -54,8 +54,13 @@ import {
   formMismatchTitle,
   invalidAttributeValueTitle,
   noEngineViewTitle,
+  unsafeImageSrcsetTitle,
 } from './components/failure-presentation.js';
+
 import { isEmptyContent } from './components/is-empty-content.js';
+
+/** The directive name an ordinary markdown image reports under. */
+const IMAGE_NAME = 'image';
 
 // The wrapper below uses the literal `data-mk-notice` attribute name,
 // matching `failure-presentation.ts`'s `NOTICE_ATTRIBUTE` (see `figure.tsx`'s
@@ -330,6 +335,7 @@ function renderDirectiveContent(
   vault: VaultStore | undefined,
   layoutClassName: string | undefined,
   resolveImageSrc: ResolveImageSrc | undefined,
+  imageLoading: ImageLoading | undefined,
   onDiagnostic: OnDiagnostic | undefined,
   unavailable: UnavailableComponentLookup | undefined,
 ): ReactElement {
@@ -470,6 +476,7 @@ function renderDirectiveContent(
       {...dataProps}
       {...layoutProps}
       resolveImageSrc={resolveImageSrc}
+      imageLoading={imageLoading}
       onDiagnostic={onDiagnostic}
     >
       {children}
@@ -558,6 +565,7 @@ function createDirectiveElement(
   store: ValueStore | undefined,
   vault: VaultStore | undefined,
   resolveImageSrc: ResolveImageSrc | undefined,
+  imageLoading: ImageLoading | undefined,
   onDiagnostic: OnDiagnostic | undefined,
   unavailable: UnavailableComponentLookup | undefined,
 ): (props: DirectiveElementProps) => ReactElement {
@@ -619,6 +627,7 @@ function createDirectiveElement(
       vault,
       isLayoutScope ? layoutClassName : undefined,
       resolveImageSrc,
+      imageLoading,
       onDiagnostic,
       unavailable,
     );
@@ -805,17 +814,43 @@ type ImgElementProps = ComponentProps<'img'> & { node?: HastElement };
  */
 function createImgElement(
   resolveImageSrc: ResolveImageSrc | undefined,
+  imageLoading: ImageLoading | undefined,
+  onDiagnostic: OnDiagnostic | undefined,
 ): (props: ImgElementProps) => ReactElement {
   return function ImgElement({
     node: _node,
     src,
     ...rest
   }: ImgElementProps): ReactElement {
-    const resolvedSrc =
-      typeof src === 'string'
-        ? resolveImageAttribute(src, resolveImageSrc)
-        : src;
-    return <img src={resolvedSrc} {...rest} />;
+    const attributes = resolveImageAttributes(
+      typeof src === 'string' ? src : '',
+      resolveImageSrc,
+      'lazy',
+      imageLoading,
+    );
+    let notice: { 'data-mk-notice': string; title: string } | undefined;
+    if (attributes.srcsetRefused) {
+      const message = unsafeImageSrcsetTitle(IMAGE_NAME);
+      reportDiagnostic(onDiagnostic, {
+        kind: 'unsafe-image-src',
+        directive: IMAGE_NAME,
+        message,
+      });
+      notice = { 'data-mk-notice': '', title: message };
+    }
+    return (
+      <img
+        src={typeof src === 'string' ? attributes.src : src}
+        {...rest}
+        width={attributes.width ?? rest.width}
+        height={attributes.height ?? rest.height}
+        srcSet={attributes.srcset}
+        sizes={attributes.sizes}
+        loading={attributes.loading}
+        decoding="async"
+        {...notice}
+      />
+    );
   };
 }
 
@@ -863,12 +898,14 @@ function hastToReactTree(
   onDiagnostic: OnDiagnostic | undefined,
   unavailable: UnavailableComponentLookup | undefined,
   renderCode?: RenderCode,
+  imageLoading?: ImageLoading,
 ): ReactElement {
   const DirectiveElement = createDirectiveElement(
     registry,
     store,
     vault,
     resolveImageSrc,
+    imageLoading,
     onDiagnostic,
     unavailable,
   );
@@ -880,7 +917,7 @@ function hastToReactTree(
     components: {
       'mk-directive': DirectiveElement,
       pre: createPreElement(renderCode, onDiagnostic),
-      img: createImgElement(resolveImageSrc),
+      img: createImgElement(resolveImageSrc, imageLoading, onDiagnostic),
       a: createAnchorElement(resolveHref),
     },
   }) as ReactElement;
@@ -1009,6 +1046,12 @@ export interface RenderMarkOptions {
    */
   readonly renderCode?: RenderCode;
   readonly resolveImageSrc?: ResolveImageSrc;
+  /**
+   * `'eager'` makes every `<img>` load eagerly, overriding the default
+   * `loading="lazy"` and a resolver's own `loading`. A caller that prints
+   * the page from a window that never scrolls, such as an export, sets it.
+   */
+  readonly imageLoading?: ImageLoading;
   readonly resolveHref?: ResolveHref;
   readonly onDiagnostic?: OnDiagnostic;
   /**
@@ -1049,6 +1092,7 @@ export function renderMark(
       options?.onDiagnostic,
       createUnavailableComponentLookup(options?.unavailableComponents),
       options?.renderCode,
+      options?.imageLoading,
     );
   } catch (error) {
     return renderFailureFallback(error);
@@ -1108,6 +1152,7 @@ export function renderMarkNode(
       options?.onDiagnostic,
       createUnavailableComponentLookup(options?.unavailableComponents),
       options?.renderCode,
+      options?.imageLoading,
     );
   } catch (error) {
     return renderFailureFallback(error);

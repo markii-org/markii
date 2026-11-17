@@ -854,3 +854,115 @@ describe('renderMarkToHtml — store and vault on the options object', () => {
     expect(html).toContain('<span class="mk-value">hello</span>');
   });
 });
+
+describe('renderMarkToHtml: image attributes', () => {
+  const resolved = {
+    src: 'https://cdn.test/cat-640.png',
+    width: 640,
+    height: 480,
+    srcset:
+      'https://cdn.test/cat-320.png 320w, https://cdn.test/cat-640.png 640w',
+    sizes: '(max-width: 600px) 100vw, 640px',
+    loading: 'eager' as const,
+  };
+  const input =
+    '![a cat](cat.png)\n\n:::figure{src="dog.png" alt="A dog"}\nCap\n:::';
+  const withObject = (extra: Record<string, unknown> = {}) =>
+    renderMarkToHtml(input, defaultHtmlRegistry, undefined, undefined, {
+      resolveImageSrc: () => resolved,
+      ...extra,
+    });
+
+  it('emits the object form on a markdown image and on a figure, in a fixed attribute order', () => {
+    const html = withObject();
+    expect(html).toContain(
+      '<img src="https://cdn.test/cat-640.png" alt="a cat" width="640" height="480" srcset="https://cdn.test/cat-320.png 320w, https://cdn.test/cat-640.png 640w" sizes="(max-width: 600px) 100vw, 640px" loading="eager" decoding="async">',
+    );
+    expect(html).toContain(
+      '<img class="mk-figure__img" src="https://cdn.test/cat-640.png" alt="A dog" width="640" height="480" srcset="https://cdn.test/cat-320.png 320w, https://cdn.test/cat-640.png 640w" sizes="(max-width: 600px) 100vw, 640px" loading="eager" decoding="async">',
+    );
+  });
+
+  it('imageLoading eager overrides the default and a resolver lazy', () => {
+    const html = renderMarkToHtml(
+      input,
+      defaultHtmlRegistry,
+      undefined,
+      undefined,
+      {
+        imageLoading: 'eager',
+        resolveImageSrc: () => ({ src: 'x.png', loading: 'lazy' }),
+      },
+    );
+    expect(html).not.toContain('loading="lazy"');
+    expect(html.match(/loading="eager"/g)).toHaveLength(2);
+  });
+
+  it('escapes sizes and srcset as free text', () => {
+    const html = renderMarkToHtml(
+      '![a](a.png)',
+      defaultHtmlRegistry,
+      undefined,
+      undefined,
+      {
+        resolveImageSrc: () => ({
+          src: 'x.png',
+          srcset: 'a.png 1x',
+          sizes: '"><script>alert(1)</script>',
+        }),
+      },
+    );
+    // The value stays inside one quoted attribute: the quote is escaped.
+    expect(html).toContain('sizes="&#x22;>');
+    expect(html).not.toContain('sizes="">');
+  });
+
+  it('drops sizes without srcset and ignores bad width, height and loading', () => {
+    const html = renderMarkToHtml(
+      '![a](a.png)',
+      defaultHtmlRegistry,
+      undefined,
+      undefined,
+      {
+        resolveImageSrc: () =>
+          ({
+            src: 'x.png',
+            sizes: '100vw',
+            width: -1,
+            height: 1.5,
+            loading: 'auto',
+          }) as never,
+      },
+    );
+    expect(html).toContain(
+      '<img src="x.png" alt="a" loading="lazy" decoding="async">',
+    );
+  });
+
+  it('refuses a srcset with a dangerous candidate: keeps src, marks the image, reports once per image', () => {
+    const events: { kind: string }[] = [];
+    const html = renderMarkToHtml(
+      input,
+      defaultHtmlRegistry,
+      undefined,
+      undefined,
+      {
+        onDiagnostic: (event) => events.push(event),
+        resolveImageSrc: () => ({
+          src: 'x.png',
+          srcset: 'a.png 1x, javascript:alert(1) 2x',
+          sizes: '100vw',
+        }),
+      },
+    );
+    expect(html).not.toContain('srcset');
+    expect(html).not.toContain('javascript');
+    expect(html).toContain('src="x.png"');
+    expect(html.match(/data-mk-notice/g)).toHaveLength(2);
+    expect(events.map((e) => e.kind)).toEqual([
+      'unsafe-image-src',
+      'unsafe-image-src',
+    ]);
+    expect(html.match(/only the main source is shown/g)).toHaveLength(2);
+  });
+});

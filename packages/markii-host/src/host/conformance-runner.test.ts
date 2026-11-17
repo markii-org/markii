@@ -10,6 +10,8 @@ import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { CLI_LABELS } from './labels.fixture.js';
+import { createMarkiiHost } from './create-host.js';
+import type { DiscoveredPack } from '../packs/discover.js';
 import type { GrantMemento, Thenable } from '../run/grant-flow.js';
 import type { HostAdapter, HostPromptRequest } from './adapter.js';
 import {
@@ -630,4 +632,49 @@ describe('a host with no pack install destination', () => {
       expect(kinds).toContain('unsupported');
     });
   }
+});
+
+describe('a host that ships packs only through bundledPacks', () => {
+  const bundled: DiscoveredPack = {
+    folder: '',
+    manifest: { name: 'shipped', engine: 'react', components: {} },
+    componentPaths: {},
+    scriptsDir: '',
+    scriptPath: '',
+  };
+  const shippedOnly = (): HostAdapter =>
+    fakeAdapter({
+      packs: {
+        trust: 'none',
+        engine: 'react',
+        authorizedFolders: async () => [],
+        reservedNamespaces: () => new Set(['shipped']),
+        bundledPacks: () => [bundled],
+      },
+    });
+
+  for (const name of [
+    '06-install-pack-then-render',
+    '13-install-pack-declined',
+    '14-remove-pack',
+    '15-load-packs-engine-views',
+  ]) {
+    it(`reports ${name} as unsupported, never as a faked load`, async () => {
+      const { dir, noteText, scenario, expected } = loadHostScenario(name);
+      const adapter = shippedOnly();
+      const result = await runHostScenario(adapter, scenario, noteText, dir);
+      expect(assertHostScenario(adapter, scenario, expected, result)).toEqual(
+        [],
+      );
+      const kinds = result.outcomes.map(
+        (outcome) => (outcome as { kind: string }).kind,
+      );
+      expect(kinds).toContain('unsupported');
+    });
+  }
+
+  it('loadPacks reports folder packs only: a bundled pack is already in the host build, never loaded a second time', async () => {
+    const outcome = await createMarkiiHost(shippedOnly()).loadPacks();
+    expect(outcome).toMatchObject({ kind: 'loaded', packs: [] });
+  });
 });

@@ -29,7 +29,9 @@ import { isResolvableRelativeValue, isSafeResolvedUrl } from './url-resolve.js';
  */
 
 /** The shape `renderMarkToAnsi`/`renderMarkNodeToAnsi` accept, and the one carried on `AnsiRenderContext` for a component that resolves its own image reference. */
-export type ResolveImageSrc = (src: string) => string | undefined;
+export type ResolveImageSrc = (
+  src: string,
+) => string | { readonly src: string } | undefined;
 
 /**
  * The value one image reference should actually carry: `value` unchanged
@@ -49,12 +51,16 @@ export function resolveImageAttribute(
   if (!resolveImageSrc) return value;
   if (!isResolvableRelativeValue(value)) return value;
 
-  let resolved: string | undefined;
+  let resolved: ReturnType<ResolveImageSrc>;
   try {
     resolved = resolveImageSrc(value);
   } catch {
     return value;
   }
-  if (resolved === undefined) return value;
-  return isSafeResolvedUrl(resolved) ? resolved : value;
+  if (resolved === undefined || resolved === null) return value;
+  // The terminal has no use for width, height, srcset, sizes or loading: it
+  // reads the object form's `src` and nothing else.
+  const src = typeof resolved === 'string' ? resolved : resolved.src;
+  if (typeof src !== 'string') return value;
+  return isSafeResolvedUrl(src) ? src : value;
 }

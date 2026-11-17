@@ -28,19 +28,16 @@
  * `mergePacksKeepingFirstClaim`, so the guard can no longer be present on
  * one host's path and absent on the other's.
  *
- * What STAYS local to this file, and why: reading
- * `window.__markiiPackRegistrations` itself. `@markii/host` knows nothing
- * about this global — it is this webview's own bootstrap convention (see
- * `../webview-html.ts`), not something a host-neutral package could own —
- * so this module still owns the `declare global` block and the small
- * shape-normalizing step that turns each raw queue entry into a
- * `QueuedPackRegistration` before handing the batch to the shared
- * `buildRenderRegistry`. That normalizing step deliberately does not
- * pre-filter: a raw entry that isn't even a plain object is normalized into
- * a `QueuedPackRegistration` with `undefined` fields and left for the
- * shared `toPackToInstall` to reject structurally (via its existing
- * `manifestJson`-is-a-string check), so every malformed entry produces the
- * same kind of recorded reason instead of two different discard paths.
+ * What STAYS local to this file, and why: the `declare global` block and
+ * the read of `window.__markiiPackRegistrations`. The webview cannot use
+ * `@markii/react`'s `evaluatePackScripts`: that runs each script with the
+ * `Function` constructor and needs `'unsafe-eval'`, which this page's
+ * nonce-only policy forbids. The page loads each pack script as a
+ * `<script nonce>` element instead (see `../webview-html.ts`), and
+ * `readPackRegistrationQueue` turns the queue they filled into the batch
+ * the shared `buildRenderRegistry` takes. It does not pre-filter: a raw
+ * entry that is not an object becomes a registration with `undefined`
+ * fields, which `buildRenderRegistry` rejects with a recorded reason.
  *
  * Every entry here crossed a JS boundary from a SEPARATELY LOADED script
  * file (a pack's prebuilt `webview.js`, not code this bundle compiled) —
@@ -52,13 +49,10 @@
  * `loadPack` (an empty contribution, never a crash), not bring down the
  * rest of the preview.
  */
-import { reactPackEngine } from '@markii/react';
+import { reactPackEngine, readPackRegistrationQueue } from '@markii/react';
 import type { Registry } from '@markii/react';
 import { buildRenderRegistry as buildRenderRegistryShared } from '@markii/host';
-import type {
-  BuildRenderRegistryResult,
-  QueuedPackRegistration,
-} from '@markii/host';
+import type { BuildRenderRegistryResult } from '@markii/host';
 
 declare global {
   interface Window {
@@ -95,26 +89,6 @@ declare global {
   }
 }
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-/**
- * Turns one raw queue entry into a `QueuedPackRegistration`, without
- * filtering: a raw entry that isn't even a plain object becomes a
- * registration with `undefined` `manifestJson`/`componentModules`, which the
- * shared `toPackToInstall` (below, via `buildRenderRegistry`) rejects
- * structurally and records a reason for, the same as any other malformed
- * entry. This keeps every entry's position in `queued` stable, so the
- * recorded `pack registration #N` reasons stay accurate.
- */
-function toQueuedPackRegistration(raw: unknown): QueuedPackRegistration {
-  if (!isPlainObject(raw)) {
-    return { manifestJson: undefined, componentModules: undefined };
-  }
-  return { manifestJson: raw.manifest, componentModules: raw.componentModules };
-}
-
 /**
  * Builds the render registry: `defaultRegistry` merged with every
  * successfully validated, non-colliding pack registration collected in
@@ -138,8 +112,11 @@ function toQueuedPackRegistration(raw: unknown): QueuedPackRegistration {
 export function buildRenderRegistry(
   defaultRegistry: Registry,
 ): BuildRenderRegistryResult<Registry> {
-  const queued = window.__markiiPackRegistrations ?? [];
-  const normalized = queued.map(toQueuedPackRegistration);
+  // A raw entry that is not an object is blanked, not dropped, so the
+  // recorded `pack registration #N` reasons keep their positions.
+  const normalized = readPackRegistrationQueue(
+    window.__markiiPackRegistrations,
+  );
   const result = buildRenderRegistryShared(
     normalized,
     defaultRegistry,

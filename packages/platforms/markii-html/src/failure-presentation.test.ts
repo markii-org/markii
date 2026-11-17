@@ -42,6 +42,7 @@ describe('failurePhrase', () => {
     expect(failurePhrase('capability-denied')).toBe('needs permission');
     expect(failurePhrase('tier-blocked')).toBe('requires manual run');
     expect(failurePhrase('limit')).toBe('limit exceeded');
+    expect(failurePhrase('network')).toBe('network unavailable');
   });
 
   it('returns undefined for an absent or out-of-taxonomy kind', () => {
@@ -62,6 +63,16 @@ describe('failureTitle', () => {
 
   it('is undefined with neither an error nor a kind', () => {
     expect(failureTitle(undefined, undefined)).toBeUndefined();
+  });
+
+  it('adds the retry hint to a network failure', () => {
+    const hint = 'A request did not complete. Run again later.';
+    expect(failureTitle(undefined, 'network')).toBe(
+      `network unavailable. ${hint}`,
+    );
+    expect(failureTitle('ECONNREFUSED', 'network')).toBe(
+      `network unavailable: ECONNREFUSED. ${hint}`,
+    );
   });
 
   it('is just the phrase with a kind but no error message', () => {

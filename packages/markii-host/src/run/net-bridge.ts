@@ -21,7 +21,7 @@
  * the pinned request itself.
  */
 import type { NetProvider, NetResponse } from '@markii/lua';
-import { isNetRefusal } from './net-refusal.js';
+import { isNetRefusal, isNetTransport } from './net-refusal.js';
 
 /** Worker -> host. `id` correlates the reply; `method` selects the provider call. */
 export interface NetBridgeRequest {
@@ -47,6 +47,8 @@ export interface NetBridgeReply {
   response?: NetResponse;
   error?: string;
   denied?: boolean;
+  /** The request got no response: the worker rebuilds a marked transport failure. */
+  transport?: boolean;
 }
 
 export function isNetBridgeRequest(value: unknown): value is NetBridgeRequest {
@@ -112,6 +114,7 @@ export async function serveNetRequest(
       // (DNS, connection, timeout, abort) is unmarked and crosses as an
       // ordinary failure with its reason. Both reach the script as errors.
       denied: isNetRefusal(error),
+      ...(isNetTransport(error) ? { transport: true } : {}),
     });
   }
 }

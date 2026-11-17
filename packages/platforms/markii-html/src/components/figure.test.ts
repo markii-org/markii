@@ -8,7 +8,7 @@ describe('Figure', () => {
   it('renders an image when src is given', () => {
     const html = Figure({ src: 'cat.png', alt: 'A cat' }, 'caption', ctx);
     expect(html).toContain(
-      '<img class="mk-figure__img" src="cat.png" alt="A cat">',
+      '<img class="mk-figure__img" src="cat.png" alt="A cat" loading="lazy" decoding="async">',
     );
     expect(html).toContain(
       '<figcaption class="mk-figure__caption">caption</figcaption>',

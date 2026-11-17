@@ -1,7 +1,7 @@
 /**
  * Composes every pack-loading piece (`@markii/host`'s `loadPacks` outcome,
  * `loadPackModules`, `resolvePrebuiltPack`, `buildRenderRegistry`,
- * `./pack-runtime.ts`) into the one thing `../main.ts` needs: everything
+ * `@markii/react`'s `evaluatePackScripts`) into the one thing `../main.ts` needs: everything
  * about the currently loadable, installed packs, loaded once and shared by
  * every view (the preview pane, Reading view, export, Insert Component,
  * completion) rather than each reloading its own copy.
@@ -20,7 +20,7 @@
  * VS Code version: that one only builds a webview registration artifact
  * and hands its URI to a webview to load itself; this one goes one step
  * further and actually EVALUATES the compiled script in-process
- * (`./pack-runtime.ts`) and folds the result into a `Registry`
+ * (`@markii/react`'s `evaluatePackScripts`) and folds the result into a `Registry`
  * (`@markii/host`'s `buildRenderRegistry`), since there is no separate
  * webview process to do that on this host.
  *
@@ -36,7 +36,12 @@ import * as path from 'node:path';
 import { readFile as nodeReadFile } from 'node:fs/promises';
 import type { Registry } from '@markii/react';
 import type { UnavailableComponent } from '@markii/stdlib';
-import { REACT_ENGINE_ID, reactPackEngine } from '@markii/react';
+import {
+  REACT_ENGINE_ID,
+  evaluatePackScripts,
+  reactPackEngine,
+} from '@markii/react';
+import * as React from 'react';
 import { buildRenderRegistry } from '@markii/host';
 import {
   componentsWithoutEngineView,
@@ -52,11 +57,6 @@ import type {
   SkippedPackFolder,
 } from '@markii/host';
 import type { PackPathExists } from '@markii/host/internal';
-import {
-  collectPackRegistrations,
-  evaluatePackScript,
-  installPackRuntime,
-} from './pack-runtime.js';
 import { resolveBundledPacks } from './bundled-packs.js';
 import type { BundledPackAsset } from './bundled-packs.js';
 
@@ -330,32 +330,38 @@ export async function loadPackContext(
     pathExists,
   );
 
-  installPackRuntime();
-  const evalFailureNames = new Set<string>();
   // Bundled packs evaluate FIRST, so their registrations land first in the
   // queue `buildRenderRegistry` folds left-to-right (docs/packs.md: "They
   // are registered before any installed pack").
-  for (const { pack, scriptText } of bundledResolved) {
-    const result = evaluatePackScript(scriptText);
-    if (!result.ok) {
-      skipped.push({
-        folder: pack.folder,
-        reason: `bundled pack "${pack.manifest.name}" registration script failed to run (${result.reason})`,
-      });
-      evalFailureNames.add(pack.manifest.name);
-    }
+  const evaluated = evaluatePackScripts(
+    [
+      ...bundledResolved.map(({ pack, scriptText }) => ({
+        namespace: pack.manifest.name,
+        source: scriptText,
+      })),
+      ...resolvedInstalledPacks.map(({ pack, scriptText }) => ({
+        namespace: pack.manifest.name,
+        source: scriptText,
+      })),
+    ],
+    { react: React },
+  );
+  const evalFailureNames = new Set<string>();
+  const bundledNames = new Set(
+    bundledResolved.map((entry) => entry.pack.manifest.name),
+  );
+  for (const failure of evaluated.failures) {
+    const bundled = bundledNames.has(failure.namespace);
+    const entry = [...bundledResolved, ...resolvedInstalledPacks].find(
+      (candidate) => candidate.pack.manifest.name === failure.namespace,
+    );
+    skipped.push({
+      folder: entry?.pack.folder ?? failure.namespace,
+      reason: `${bundled ? 'bundled pack' : 'pack'} "${failure.namespace}" registration script failed to run (${failure.reason})`,
+    });
+    evalFailureNames.add(failure.namespace);
   }
-  for (const { pack, scriptText } of resolvedInstalledPacks) {
-    const result = evaluatePackScript(scriptText);
-    if (!result.ok) {
-      skipped.push({
-        folder: pack.folder,
-        reason: `pack "${pack.manifest.name}" registration script failed to run (${result.reason})`,
-      });
-      evalFailureNames.add(pack.manifest.name);
-    }
-  }
-  const registrations = collectPackRegistrations();
+  const registrations = evaluated.registrations;
 
   const stylesheets: PackStylesheet[] = [
     ...bundledResolved

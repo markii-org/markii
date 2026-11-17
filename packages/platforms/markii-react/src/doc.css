@@ -537,7 +537,7 @@
  * with the full message still available via the `title` tooltip.
  *
  * Failure kinds map onto the Tier 1 semantic hues: script-error -> danger,
- * capability-denied -> warning, tier-blocked -> info, limit -> limit.
+ * capability-denied -> warning, tier-blocked -> info, limit -> limit, network -> warning.
  */
 .mk-value--script-error {
   border-bottom: 1px dashed var(--mk-danger-ink);
@@ -553,6 +553,10 @@
 
 .mk-value--limit {
   border-bottom: 1px dashed var(--mk-limit-ink);
+}
+
+.mk-value--network {
+  border-bottom: 1px dashed var(--mk-warning-ink);
 }
 
 /* ---------- script marker ---------- */
@@ -926,6 +930,13 @@
 .mk-chart--tier-blocked,
 .mk-table--tier-blocked {
   border-bottom: 2px solid var(--mk-info-ink);
+}
+
+.mk-stat--network,
+.mk-progress--network,
+.mk-chart--network,
+.mk-table--network {
+  border-bottom: 2px solid var(--mk-warning-ink);
 }
 
 .mk-stat--limit,

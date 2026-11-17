@@ -7,7 +7,11 @@
  * that import pulls the whole WebAssembly Lua engine in behind it. The
  * worker bundle contains that engine anyway; a host bundle must not.
  */
-import { netProviderDenial, type NetProvider } from '@markii/lua';
+import {
+  netProviderDenial,
+  netTransportFailure,
+  type NetProvider,
+} from '@markii/lua';
 import { isNetBridgeReply, type NetBridgeRequest } from './net-bridge.js';
 import type { NetResponse } from '@markii/lua';
 
@@ -72,7 +76,13 @@ export function createNetBridge(post: (message: NetBridgeRequest) => void): {
       const text = message.error ?? 'network request failed';
       // Rebrand a host-side policy refusal so `@markii/lua` classifies it
       // exactly as it would have inside a Node worker.
-      waiter.reject(message.denied ? netProviderDenial(text) : new Error(text));
+      waiter.reject(
+        message.denied
+          ? netProviderDenial(text)
+          : message.transport === true
+            ? netTransportFailure(new Error(text))
+            : new Error(text),
+      );
     },
   };
 }

@@ -6,7 +6,7 @@
  * pack. `@markii/host`'s own `pack-build.fixture.test.ts` doc comment
  * explains why a flat fixture is exactly what let a resolution regression
  * through: this file exists so this HOST's own wiring (evaluate the
- * compiled artifact via `./pack-runtime.ts`, merge it via
+ * compiled artifact via `evaluatePackScripts`, merge it via
  * `./pack-render-registry.ts`) gets the same real-fixture proof, not just
  * `@markii/host`'s own build step.
  *
@@ -16,7 +16,7 @@
  * (in-process WebAssembly) entry fails an internal startup invariant check
  * when evaluated inside Vitest's per-file `vm` module-transform context.
  * Everything AFTER the build (reading the compiled script, evaluating it
- * via `./pack-runtime.ts`, merging it via `./pack-render-registry.ts`,
+ * via `evaluatePackScripts`, merging it via `./pack-render-registry.ts`,
  * rendering the resulting component) runs in this file's own process, using
  * the exact modules a real preview open would use.
  */
@@ -26,14 +26,14 @@ import { writeFileSync } from 'node:fs';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
+import * as React from 'react';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { createRegistry, reactPackEngine } from '@markii/react';
 import {
-  collectPackRegistrations,
-  evaluatePackScript,
-  installPackRuntime,
-} from './pack-runtime.js';
+  createRegistry,
+  evaluatePackScripts,
+  reactPackEngine,
+} from '@markii/react';
 import { buildRenderRegistry } from '@markii/host';
 import type { PackBuildOutcome } from '@markii/pack-build';
 
@@ -119,11 +119,11 @@ describe('demo fixture pack — the real build, evaluated the way a preview open
     // This is the exact sequence `view.tsx`'s `loadPacks` runs for a
     // real preview open: reset the runtime globals, evaluate the
     // compiled script, collect what it registered.
-    installPackRuntime();
-    const evalResult = evaluatePackScript(scriptText);
-    expect(evalResult.ok).toBe(true);
-
-    const registrations = collectPackRegistrations();
+    const { registrations, failures } = evaluatePackScripts(
+      [{ namespace: 'demo', source: scriptText }],
+      { react: React },
+    );
+    expect(failures).toEqual([]);
     expect(registrations).toHaveLength(1);
 
     const { registry, invalidReasons, collisions } = buildRenderRegistry(
@@ -136,7 +136,7 @@ describe('demo fixture pack — the real build, evaluated the way a preview open
     expect(registry['demo_badge']).toBeDefined();
 
     // Render it for real, through the SAME React instance
-    // `installPackRuntime` installed as `window.__markiiReact` — proof
+    // `evaluatePackScripts` installed as `window.__markiiReact` — proof
     // there is no second React copy involved.
     const entry = registry['demo_badge']!;
     const html = renderToStaticMarkup(

@@ -1,4 +1,9 @@
-import { isResolvableRelativeValue, isSafeResolvedUrl } from './url-resolve.js';
+import {
+  forSchemeTest,
+  isResolvableRelativeValue,
+  isSafeResolvedUrl,
+  schemeOf,
+} from './url-resolve.js';
 
 /**
  * The shared logic behind `renderMark`'s `resolveImageSrc` option (see
@@ -36,33 +41,200 @@ import { isResolvableRelativeValue, isSafeResolvedUrl } from './url-resolve.js';
  * of the author-facing allowlist.
  */
 
-/** The shape `renderMark`/`renderMarkNode` accept, and the one every component that emits its own `<img>` receives as a prop. */
-export type ResolveImageSrc = (src: string) => string | undefined;
+/** How the browser is told to fetch an image: `lazy` defers it until it nears the viewport. */
+export type ImageLoading = 'lazy' | 'eager';
 
 /**
- * The value one `<img src>` should actually carry: `value` unchanged unless
- * `resolveImageSrc` is present, `value` is worth resolving at all, the
- * resolver returns something, and that something passes
- * `isSafeResolvedUrl` — so a resolver can never smuggle a
- * `javascript:` URL past the sanitizer that already ran on everything else
- * in the document, while a legitimate `data:`/`app:`/host-scheme result
- * still reaches the page. A resolver that throws is treated exactly like
- * one that returned `undefined`: `value` is kept, and the render is never
- * broken over one image.
+ * The object form a `resolveImageSrc` callback may return instead of a bare
+ * string. `width` and `height` become attributes. `srcset` and `sizes` pass
+ * through together (`sizes` alone is dropped). `loading` overrides the
+ * default for this one image.
+ */
+export interface ResolvedImage {
+  readonly src: string;
+  readonly width?: number;
+  readonly height?: number;
+  readonly srcset?: string;
+  readonly sizes?: string;
+  readonly loading?: ImageLoading;
+}
+
+/** What a `resolveImageSrc` callback returns: a string, the object form, or `undefined` to leave the source as written. */
+export type ImageResolution = string | ResolvedImage;
+
+/** The shape the render options accept, and the one every component that emits its own `<img>` receives. */
+export type ResolveImageSrc = (src: string) => ImageResolution | undefined;
+
+/** Every attribute one `<img>` carries once the resolver has answered. */
+export interface ImageAttributes {
+  readonly src: string;
+  readonly width?: number;
+  readonly height?: number;
+  readonly srcset?: string;
+  readonly sizes?: string;
+  readonly loading: ImageLoading;
+  /** True when the resolver's `srcset` named a refused candidate and was dropped. */
+  readonly srcsetRefused: boolean;
+}
+
+/**
+ * The scheme check for one resolved image URL, used for `src` and for every
+ * `srcset` candidate alike: `isSafeResolvedUrl`'s denylist, plus a refusal of
+ * a `data:` URL that is not an image. A `data:text/html` URL never runs in an
+ * `<img>`, but an image reference has no reason to carry one.
+ */
+export function isSafeResolvedImageUrl(value: string): boolean {
+  if (!isSafeResolvedUrl(value)) return false;
+  const scheme = schemeOf(forSchemeTest(value));
+  if (scheme !== 'data') return true;
+  return /^data:image\//i.test(forSchemeTest(value));
+}
+
+const WHITESPACE = /\s/;
+
+/**
+ * The candidate URLs of a `srcset` value, read the way the HTML parser reads
+ * it: whitespace and commas separate candidates, a URL is the next run of
+ * non-whitespace characters (trailing commas removed), and descriptors run
+ * to the next comma outside parentheses. A URL may itself contain commas, as
+ * a `data:` URL does, which is why a plain split on commas is not used.
+ */
+export function srcsetCandidateUrls(srcset: string): string[] {
+  const urls: string[] = [];
+  let position = 0;
+  const length = srcset.length;
+  while (position < length) {
+    while (
+      position < length &&
+      (WHITESPACE.test(srcset[position]!) || srcset[position] === ',')
+    ) {
+      position += 1;
+    }
+    if (position >= length) break;
+
+    const start = position;
+    while (position < length && !WHITESPACE.test(srcset[position]!)) {
+      position += 1;
+    }
+    let url = srcset.slice(start, position);
+    if (url.endsWith(',')) {
+      url = url.replace(/,+$/, '');
+    } else {
+      let depth = 0;
+      while (position < length) {
+        const character = srcset[position]!;
+        if (character === '(') depth += 1;
+        else if (character === ')' && depth > 0) depth -= 1;
+        else if (character === ',' && depth === 0) break;
+        position += 1;
+      }
+    }
+    if (url !== '') urls.push(url);
+  }
+  return urls;
+}
+
+/**
+ * True when every candidate of `srcset` passes `isSafeResolvedImageUrl`. A
+ * second, blunter pass also tests every run between whitespace and commas, so
+ * a scheme hidden behind a comma trick the parser would read as one odd URL
+ * still refuses the whole value.
+ */
+export function isSafeSrcset(srcset: string): boolean {
+  for (const url of srcsetCandidateUrls(srcset)) {
+    if (!isSafeResolvedImageUrl(url)) return false;
+  }
+  // The blunt pass runs on the value as written and with tab, line feed and
+  // carriage return removed, since a URL parser deletes those inside a scheme.
+  const stripped = srcset.replace(/[\t\n\r]/g, '');
+  for (const text of [srcset, stripped]) {
+    for (const token of text.split(/[\s,]+/)) {
+      if (token !== '' && !isSafeResolvedImageUrl(token)) return false;
+    }
+  }
+  return true;
+}
+
+function positiveInteger(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0
+    ? value
+    : undefined;
+}
+
+/**
+ * The attributes one `<img>` should carry. `value` is the source as written.
+ * The resolver is consulted only for a source worth resolving. Its answer is
+ * used only when its `src` passes `isSafeResolvedImageUrl`, otherwise the
+ * whole answer is ignored and `value` is kept. A `srcset` with any refused
+ * candidate is dropped with its `sizes`, and `srcsetRefused` says so. A
+ * resolver that throws is treated like one that returned `undefined`.
+ * `defaultLoading` applies unless the resolver names `loading`; `force`
+ * overrides both.
+ */
+export function resolveImageAttributes(
+  value: string,
+  resolveImageSrc: ResolveImageSrc | undefined,
+  defaultLoading: ImageLoading = 'lazy',
+  force?: ImageLoading,
+): ImageAttributes {
+  const plain: ImageAttributes = {
+    src: value,
+    loading: force ?? defaultLoading,
+    srcsetRefused: false,
+  };
+  if (!resolveImageSrc) return plain;
+  if (!isResolvableRelativeValue(value)) return plain;
+
+  let resolved: ImageResolution | undefined;
+  try {
+    resolved = resolveImageSrc(value);
+  } catch {
+    return plain;
+  }
+  if (resolved === undefined || resolved === null) return plain;
+  if (typeof resolved === 'string') {
+    return isSafeResolvedImageUrl(resolved)
+      ? { ...plain, src: resolved }
+      : plain;
+  }
+  if (typeof resolved !== 'object' || typeof resolved.src !== 'string') {
+    return plain;
+  }
+  if (!isSafeResolvedImageUrl(resolved.src)) return plain;
+
+  const srcset =
+    typeof resolved.srcset === 'string' && resolved.srcset.trim() !== ''
+      ? resolved.srcset
+      : undefined;
+  const srcsetRefused = srcset !== undefined && !isSafeSrcset(srcset);
+  const keepSrcset = srcset !== undefined && !srcsetRefused;
+  const loading =
+    resolved.loading === 'lazy' || resolved.loading === 'eager'
+      ? resolved.loading
+      : defaultLoading;
+  const width = positiveInteger(resolved.width);
+  const height = positiveInteger(resolved.height);
+
+  return {
+    src: resolved.src,
+    ...(width === undefined ? {} : { width }),
+    ...(height === undefined ? {} : { height }),
+    ...(keepSrcset ? { srcset } : {}),
+    ...(keepSrcset && typeof resolved.sizes === 'string'
+      ? { sizes: resolved.sizes }
+      : {}),
+    loading: force ?? loading,
+    srcsetRefused,
+  };
+}
+
+/**
+ * The `src` one `<img>` should carry: `resolveImageAttributes`'s answer, for
+ * a caller that needs nothing else.
  */
 export function resolveImageAttribute(
   value: string,
   resolveImageSrc: ResolveImageSrc | undefined,
 ): string {
-  if (!resolveImageSrc) return value;
-  if (!isResolvableRelativeValue(value)) return value;
-
-  let resolved: string | undefined;
-  try {
-    resolved = resolveImageSrc(value);
-  } catch {
-    return value;
-  }
-  if (resolved === undefined) return value;
-  return isSafeResolvedUrl(resolved) ? resolved : value;
+  return resolveImageAttributes(value, resolveImageSrc).src;
 }
