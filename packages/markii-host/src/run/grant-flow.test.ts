@@ -841,7 +841,7 @@ describe('runGrantFlow — PROMPT-STORM guard: many distinct hosts fold into one
 
     expect(promptHost).not.toHaveBeenCalled();
     expect(promptManyHosts).toHaveBeenCalledTimes(1);
-    expect(promptManyHosts).toHaveBeenCalledWith(hostCount);
+    expect(promptManyHosts).toHaveBeenCalledWith(manyHosts(hostCount));
     expect(result.allowedHosts).toHaveLength(hostCount);
   });
 
@@ -1003,5 +1003,61 @@ describe('resolveStoredGrant — non-interactive (auto/scheduled), issue #11', (
       memento,
     });
     expect(result.allowedHosts).toEqual([]);
+  });
+});
+
+describe('runGrantFlow: structured hosts handed to the prompts', () => {
+  it('passes the lower-cased host and the normalized declared hosts, and stores the same host', async () => {
+    const memento = fakeMemento();
+    const promptHost = vi.fn(alwaysAllow);
+    const result = await runGrantFlow({
+      documentKey: 'file:///a.mk.md',
+      requirements: requirementsFor({ hosts: ['API.Example.com'] }),
+      memento,
+      promptHost,
+      declaredHosts: ['API.Example.COM.', ' Other.Example.com ', 'bad host'],
+      promptUnknownHosts: alwaysAllow,
+      promptManyHosts: alwaysAllow,
+    });
+    expect(promptHost).toHaveBeenCalledWith('api.example.com', [
+      'api.example.com',
+      'other.example.com',
+    ]);
+    expect(result.allowedHosts).toEqual(['api.example.com']);
+    const stored =
+      memento.get<Record<string, { allowedHosts: string[] }>>(
+        'markii.netGrants',
+      );
+    expect(stored?.['file:///a.mk.md']?.allowedHosts).toEqual([
+      'api.example.com',
+    ]);
+  });
+
+  it('hands the unknown-hosts gate the hosts a decline withdraws', async () => {
+    const promptUnknownHosts = vi.fn(alwaysAllow);
+    await runGrantFlow({
+      documentKey: 'file:///a.mk.md',
+      requirements: requirementsFor({
+        hosts: ['A.example.com', 'b.example.com'],
+        hasUnknownHosts: true,
+      }),
+      memento: fakeMemento(),
+      promptHost: alwaysAllow,
+      promptUnknownHosts,
+      promptManyHosts: alwaysAllow,
+    });
+    expect(promptUnknownHosts).toHaveBeenCalledWith([
+      'a.example.com',
+      'b.example.com',
+    ]);
+  });
+
+  it('words every message with the host noun it is given', () => {
+    expect(hostPromptMessage('h.example.com', ['d.example.com'], 'page')).toBe(
+      "This page's scripts can send data to h.example.com. The page declares d.example.com. Allow?",
+    );
+    expect(manyHostsPromptMessage(12, 'page')).toBe(
+      'This page requests network access to many hosts (12). Allow all or deny all?',
+    );
   });
 });

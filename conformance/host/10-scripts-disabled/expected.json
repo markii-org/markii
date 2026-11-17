@@ -6,6 +6,6 @@
       "reasonContains": "script execution is off"
     }
   ],
-  "diagnostics": ["run (manual) blocked: script execution is off on this device"],
+  "diagnostics": ["run (manual) blocked: script execution is off on {deviceNoun}"],
   "prompts": []
 }

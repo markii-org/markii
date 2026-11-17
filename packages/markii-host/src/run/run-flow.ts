@@ -31,6 +31,7 @@ import {
 } from './bundle-run.js';
 import type { RunResult, SpawnRunRequest } from './run-host.js';
 import type { ValuesFailure } from '../values-failure.js';
+import { settleArrivingValue } from '../values-merge.js';
 import type { RunTrigger, StoredValue } from '@markii/runtime';
 import type { BundleManifest } from '@markii/bundle';
 import type { PackModulesMap } from './lua-resolver.js';
@@ -159,19 +160,10 @@ export function mergePersistedValues(
   const merged: Array<[string, StoredValue]> = [];
   for (const [name, value] of Object.entries(next)) {
     if (typeof value !== 'object' || value === null) continue;
-    if (value.status !== 'error') {
-      merged.push([name, value]);
-      continue;
-    }
     // `previous` is a PERSISTED store, guarded only down to "plain object"
     // when it was read back, so an individual entry can be anything.
-    const priorRaw = Object.hasOwn(previous, name) ? previous[name] : undefined;
-    const prior =
-      typeof priorRaw === 'object' && priorRaw !== null ? priorRaw : undefined;
-    merged.push([
-      name,
-      prior && prior.status !== 'error' ? { ...prior, status: 'stale' } : value,
-    ]);
+    const prior = Object.hasOwn(previous, name) ? previous[name] : undefined;
+    merged.push([name, settleArrivingValue(prior, value)]);
   }
   return Object.fromEntries(merged);
 }

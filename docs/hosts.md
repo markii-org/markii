@@ -53,6 +53,15 @@ the last run's trace. A host shows the first on open and bakes the second
 into an export. `forgetGrants(documentKey)` clears that note's stored
 grants, so its next manual run prompts again.
 
+A host that keeps its own value record, rather than only showing `lastRun`,
+folds each value from `onValue` in with `mergeRunValue(record, name,
+value)`. A value that is not an error replaces the old one. An error
+replaces it only when there is no good value to keep. Otherwise the old
+value stays and reads `stale`, so a failed refresh never wipes good
+figures. `staleValuesForRehydration(values)` marks stored values for
+showing on open, and `noteHasScripts(text)` says whether a note's text holds a
+Lua script block. All three are on the main entry.
+
 ### The adapter fields
 
 Ten fields are required. Each is a primitive or a piece of wording.
@@ -81,14 +90,28 @@ leaves the field out.
 | `exports` | The `formats` the host offers, an optional `resolveTarget()` for the destination, an optional `resolveLinkedSetTarget()`, and `htmlToPdf()` for a host that offers `pdf`. |
 
 The `HostLabels` fields are `appNoun`, `previewNoun`, `diagnosticsSurface`
-and `deviceNoun`, plus an optional `settingName` for a host that exposes
-script execution as one named setting. The `prompt` request carries a
-`kind`, the finished `message`, the two button labels and a
-`consequential` flag. The `kind` is one of `grant-host`,
-`grant-unknown-hosts`, `grant-many-hosts`, `pack-install-consent`,
-`pack-replace`, `pack-overwrite-export` and `enable-scripts`. A host
-that can only show a surface that cannot wait for an answer denies a
-consequential question instead of assuming yes.
+and `deviceNoun`. Two are optional. `settingName` names the one setting
+that turns script execution on, for a host that has one. `noteNoun` is what
+the host calls a note, such as `page`, and defaults to `note`. It is a
+lower-case singular noun that forms its plural with `s`, and every prompt
+and notice that names the note uses it.
+
+The `prompt` request carries a `kind`, the finished `message`, the two
+button labels and a `consequential` flag. The `kind` is one of
+`grant-host`, `grant-unknown-hosts`, `grant-many-hosts`,
+`pack-install-consent`, `pack-replace`, `pack-overwrite-export` and
+`enable-scripts`. A host that can only show a surface that cannot wait for
+an answer denies a consequential question instead of assuming yes.
+
+The three grant kinds also carry the hosts they ask about. `grant-host`
+carries `host` and the note's `declaredHosts`. `grant-unknown-hosts` and
+`grant-many-hosts` carry `hosts`, which their messages count but do not
+list. Every host is lower-cased and has any trailing dot removed. The
+message, the field and the stored grant use that same spelling. A host that
+answers by policy instead of asking a person reads these fields and never
+parses the message. It compares whole hostnames for equality. A grant
+covers every port and path on that host. It denies every kind it does not
+recognize.
 
 The `packs` group has these fields.
 
@@ -261,6 +284,38 @@ complete string literal inside the call, because the grant scan reads
 literal URLs and cannot see an address assembled at run time.
 [scripting.md](scripting.md) explains the rule for note authors.
 
+## Running notes at build time
+
+A site that renders notes ahead of time can run them in its build, so a
+first-time reader sees real figures instead of empty states. The build is a
+Node host: `createNodeHostIsolate` from `@markii/host/node`, an adapter,
+and `run` with the `manual` trigger for each note. The site renders each
+outcome's values through `renderMark` with `store` set.
+
+No person answers the build's prompts, so the adapter answers by policy:
+
+- Allow a `grant-host` request only when its `host` field is in the site's
+  own configuration. That list is site code, never the note, so a note
+  edit cannot widen what the build may reach.
+- Deny every other request, including pack consent and replace questions
+  and any kind the adapter does not recognize.
+- Read the allowlist from the site's base branch. A note changed in an
+  outside pull request runs in that job, and it must not bring its own
+  allowlist.
+
+A manual run gets the full capability tier, so the build job holds no
+secrets the scripts could reach. The build's memento starts empty on every
+build and is never published, so no grant leaves the build. Bake only values
+that came back fresh, never an error.
+
+A page that hydrates and runs scripts is a live host, not an export. The
+baked values are last-known data, so the page shows them through
+`staleValuesForRehydration`. It prefers the reader's own `lastRun` values
+where they exist. Then it folds each `onValue` in with `mergeRunValue`, so
+a reader's first run on open, which has no grant yet, keeps the baked
+figures instead of replacing them with errors. The rule that an export
+keeps values fresh applies to an exported file only.
+
 ## Proving the adapter
 
 `@markii/host/conformance` ships the scenario corpus the reference apps run
@@ -274,6 +329,11 @@ plain data: a note, an ordered list of actions with scripted answers to any
 prompt, and the outcome each action must produce. It records the exact
 questions a run asks, in order. Agreeing on what is asked before code runs
 matters more than agreeing on anything else.
+
+Expected text names the adapter's labels as placeholders, such as
+`{noteNoun}` and `{deviceNoun}`, and the runner fills them from the
+adapter's `labels` before it compares. A host with its own wording passes
+the same scenarios. Run the runner and the corpus from the same release.
 
 The runner runs in Node and needs `@markii/html` installed, because the
 export scenarios render through it. Pack install writes through the

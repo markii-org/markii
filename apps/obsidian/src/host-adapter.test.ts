@@ -70,6 +70,8 @@ describe('createObsidianHostAdapter', () => {
     });
     const request: HostPromptRequest = {
       kind: 'grant-host',
+      host: 'example.com',
+      declaredHosts: [],
       message: 'may this note reach example.com?',
       allowLabel: 'Allow',
       denyLabel: "Don't allow",

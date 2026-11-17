@@ -80,5 +80,8 @@ disablePackMessage
 enablePackMessage
 exportResultMessage
 installPackMessage
+mergeRunValue
 netRefusal
+noteHasScripts
 removePackMessage
+staleValuesForRehydration

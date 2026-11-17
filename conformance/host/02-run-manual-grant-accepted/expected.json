@@ -12,5 +12,5 @@
     "manual run: net declaration mismatch",
     "uses net access to api.example.com"
   ],
-  "prompts": ["This note's scripts can send data to api.example.com. Allow?"]
+  "prompts": ["This {noteNoun}'s scripts can send data to api.example.com. Allow?"]
 }

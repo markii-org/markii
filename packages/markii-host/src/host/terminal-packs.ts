@@ -19,6 +19,7 @@
 import type { DiscoveredPack } from '../packs/discover.js';
 import { prebuiltTerminalScriptPathFor } from '../packs/prebuilt.js';
 import type { HostAdapter } from './adapter.js';
+import { noteNounOf, type NoteNounSource } from './labels.js';
 
 /** One pack's `terminal.js` text, ready for the terminal engine's loader. */
 export interface TerminalPackScript {
@@ -38,35 +39,42 @@ export function packHasTerminalViews(pack: DiscoveredPack): boolean {
   return Object.keys(pack.componentPathsByEngine?.['ansi'] ?? {}).length > 0;
 }
 
-export function terminalScriptMissingLine(namespace: string): string {
-  return `Pack "${namespace}" names terminal views but ships no terminal.js; its components read as a failed pack in the note.`;
+export function terminalScriptMissingLine(
+  namespace: string,
+  labels?: NoteNounSource,
+): string {
+  return `Pack "${namespace}" names terminal views but ships no terminal.js; its components read as a failed pack in the ${noteNounOf(labels)}.`;
 }
 
 export function terminalScriptUnreadableLine(
   namespace: string,
   reason: string,
+  labels?: NoteNounSource,
 ): string {
-  return `Pack "${namespace}" has a terminal.js that could not be read (${reason}); its components read as a failed pack in the note.`;
+  return `Pack "${namespace}" has a terminal.js that could not be read (${reason}); its components read as a failed pack in the ${noteNounOf(labels)}.`;
 }
 
 export function terminalScriptRejectedLine(
   namespace: string,
   reason: string,
+  labels?: NoteNounSource,
 ): string {
-  return `Pack "${namespace}" was not loaded: ${reason}. Its components read as a failed pack in the note.`;
+  return `Pack "${namespace}" was not loaded: ${reason}. Its components read as a failed pack in the ${noteNounOf(labels)}.`;
 }
 
 export function terminalScriptNamespaceMismatchLine(
   namespace: string,
   claimed: string,
+  labels?: NoteNounSource,
 ): string {
-  return `Pack "${namespace}" was not loaded: its terminal.js registers the namespace "${claimed}", which does not match its pack.json. Its components read as a failed pack in the note.`;
+  return `Pack "${namespace}" was not loaded: its terminal.js registers the namespace "${claimed}", which does not match its pack.json. Its components read as a failed pack in the ${noteNounOf(labels)}.`;
 }
 
 /** Reads each terminal-capable pack's `terminal.js`. Never throws. */
 export async function readTerminalPackScripts(
   adapter: Pick<HostAdapter, 'exists' | 'readFile'>,
   packs: readonly DiscoveredPack[],
+  labels?: NoteNounSource,
 ): Promise<ReadTerminalScriptsResult> {
   const scripts: TerminalPackScript[] = [];
   const problems: string[] = [];
@@ -81,7 +89,7 @@ export async function readTerminalPackScripts(
       present = false;
     }
     if (!present) {
-      problems.push(terminalScriptMissingLine(namespace));
+      problems.push(terminalScriptMissingLine(namespace, labels));
       continue;
     }
     try {
@@ -96,6 +104,7 @@ export async function readTerminalPackScripts(
         terminalScriptUnreadableLine(
           namespace,
           err instanceof Error ? err.message : String(err),
+          labels,
         ),
       );
     }

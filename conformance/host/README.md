@@ -53,7 +53,7 @@ needs, is the runner's own `ACTION_CAPABILITY` map:
 | `exportAnsi` | `export-format` (`ansi`) |
 | `exportLinkedSet` | `linked-set-export` (a `resolveLinkedSetTarget`) |
 | `installPack` | `packs` (and an `installRoot`) |
-| `loadPacks` | `packs` |
+| `loadPacks` | `packs` (and an install destination when it carries `requiresInstall`) |
 | `removePack` | `packs` (and an `installRoot` plus `removeFolder`) |
 | `placePack` | `pack-trust` |
 | `listPacks` | `pack-trust` |
@@ -72,6 +72,11 @@ a pack arrives through a file sync. An `installPack`, `loadPacks` or
 runner treat it as a `pack-trust` action, so a scenario built around the
 trust list reports `unsupported` as a whole on a host that trusts its own
 install store.
+
+A `loadPacks` action may carry `"requiresInstall": true` when it loads packs
+the scenario installed earlier. A host with no `installRoot` and
+`removeFolder` reports it as `unsupported` (`packs`), like the install
+action before it, instead of loading nothing and failing the comparison.
 
 `clock` fixes `adapter.now()` for the whole scenario, so a `RunTrace`
 write is byte-stable.
@@ -174,12 +179,22 @@ below), `expected.json` always describes the FULLY CAPABLE host's
 correct behavior, even for a scenario where one real host today has
 nothing to compare it to.
 
+Sentences that carry a host noun use placeholders, and the runner fills
+them from the adapter's own `labels` before it compares. The placeholders
+are `{appNoun}`, `{previewNoun}`, `{diagnosticsSurface}`, `{deviceNoun}`,
+`{noteNoun}` (`note` when the host sets none) and `{settingName}` (left as
+written for a host with no named setting). They work in `diagnostics`,
+`prompts` and any string inside `outcomes`. Any other brace text stays as
+written. The corpus therefore pins each sentence's shape, and the host's
+labels supply its nouns. An adapter outside this repository runs the
+matching runner from `@markii/host/conformance`, which carries the corpus.
+
 `diagnostics` and `prompts` are matched pairwise, in order, by substring
 containment (`actual[i].includes(expected[i])`), with the array LENGTHS
 required to match exactly. Substring containment absorbs a host's own
-sink additions (Obsidian's `[markii] ` console prefix, a device noun
-difference) without the corpus having to spell out three wordings for
-one behavior. Diagnostics lines written by a capability decline itself
+sink additions (Obsidian's `[markii] ` console prefix) without the corpus
+having to spell out three wordings for one behavior. Noun differences come
+from the placeholders above. Diagnostics lines written by a capability decline itself
 (`declined (<capability> unsupported on <host>): …`) are filtered out of
 the actual list before this comparison, since that line exists only
 because the capability was ABSENT, it is not part of what

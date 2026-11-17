@@ -5,7 +5,7 @@
   "actions": [
     { "type": "open" },
     { "type": "installPack", "archive": "files/ana-1.0.0", "answers": ["allow"] },
-    { "type": "loadPacks" },
+    { "type": "loadPacks", "requiresInstall": true },
     {
       "type": "installPack",
       "archive": "files/ana-1.0.0",

@@ -70,6 +70,7 @@
  *   is not known in advance); it fails at execution with the ordinary
  *   `'capability-denied'` kind, same as any other ungranted host.
  */
+import { DEFAULT_NOTE_NOUN } from '../host/labels.js';
 import {
   computeGrantKey,
   type GrantClosure,
@@ -128,11 +129,11 @@ export type PromptHost = (
   declaredHosts: readonly string[],
 ) => Promise<boolean>;
 
-/** Prompts once for the "this note builds a network address dynamically" consent gate. */
-export type PromptUnknownHosts = () => Promise<boolean>;
+/** Prompts once for the "a note builds a network address dynamically" consent gate. `hosts` are the per-host answers a decline withdraws. */
+export type PromptUnknownHosts = (hosts: readonly string[]) => Promise<boolean>;
 
-/** Prompts once for the consolidated "many hosts" gate (PROMPT-STORM fix) — resolves `true` for Allow all, `false` for Deny all. */
-export type PromptManyHosts = (hostCount: number) => Promise<boolean>;
+/** Prompts once for the consolidated "many hosts" gate (PROMPT-STORM fix) over every host in `hosts` — resolves `true` for Allow all, `false` for Deny all. */
+export type PromptManyHosts = (hosts: readonly string[]) => Promise<boolean>;
 
 export interface GrantFlowOptions {
   /** Stable identity for the note this run belongs to — `vscode.Uri.toString()` of the document, in the real adapter. */
@@ -175,15 +176,22 @@ export interface GrantFlowResult {
 export function hostPromptMessage(
   host: string,
   declaredHosts?: readonly string[],
+  noteNoun: string = DEFAULT_NOTE_NOUN,
 ): string {
-  const ask = `This note's scripts can send data to ${host}. Allow?`;
-  if (!declaredHosts || declaredHosts.length === 0) return ask;
-  return `This note's scripts can send data to ${host}. The note declares ${declaredHosts.join(', ')}. Allow?`;
+  const ask = `This ${noteNoun}'s scripts can send data to ${host}.`;
+  if (!declaredHosts || declaredHosts.length === 0) return `${ask} Allow?`;
+  return `${ask} The ${noteNoun} declares ${declaredHosts.join(', ')}. Allow?`;
 }
 
 /** Exact wording of the one extra "hosts can't be listed in advance" prompt. */
-export const UNKNOWN_HOSTS_PROMPT_MESSAGE =
-  "This note builds network addresses at run time, which can't be listed in advance and will be denied; only the hosts written directly in the note can be granted. Allow those?";
+export function unknownHostsPromptMessage(
+  noteNoun: string = DEFAULT_NOTE_NOUN,
+): string {
+  return `This ${noteNoun} builds network addresses at run time, which can't be listed in advance and will be denied; only the hosts written directly in the ${noteNoun} can be granted. Allow those?`;
+}
+
+/** `unknownHostsPromptMessage` under the default note noun. */
+export const UNKNOWN_HOSTS_PROMPT_MESSAGE = unknownHostsPromptMessage();
 
 /** Button labels every prompt in this flow uses — both a plain "Allow" and a "Don't allow" refusal are always offered, never a bare dismiss-only message. */
 export const ALLOW_LABEL = 'Allow';
@@ -217,8 +225,11 @@ export const DONT_ALLOW_LABEL = "Don't allow";
 export const MAX_HOST_PROMPTS = 10;
 
 /** Exact wording of the consolidated "many hosts" gate — normative, mirroring `hostPromptMessage`/`UNKNOWN_HOSTS_PROMPT_MESSAGE`'s pattern of an exported, test-anchored string. */
-export function manyHostsPromptMessage(hostCount: number): string {
-  return `This note requests network access to many hosts (${hostCount}). Allow all or deny all?`;
+export function manyHostsPromptMessage(
+  hostCount: number,
+  noteNoun: string = DEFAULT_NOTE_NOUN,
+): string {
+  return `This ${noteNoun} requests network access to many hosts (${hostCount}). Allow all or deny all?`;
 }
 
 const GRANTS_STORAGE_KEY = 'markii.netGrants';
@@ -341,6 +352,28 @@ export function isSafeHostForPrompt(host: string): boolean {
 }
 
 /**
+ * The one spelling a host takes everywhere it is shown or stored: trimmed,
+ * lower-cased, and without the trailing dot of a fully qualified name. A
+ * policy answer compares whole hostnames for equality, so every surface
+ * must carry this same form.
+ */
+function normalizePromptHost(host: string): string {
+  return host.trim().toLowerCase().replace(/\.+$/, '');
+}
+
+/** The note's declared hosts as a prompt may show them: normalized, safe to display, each once. Display only, so a declaration that fails the check is left out rather than shown. */
+function displayableDeclaredHosts(declared: readonly string[]): string[] {
+  const shown: string[] = [];
+  for (const host of declared) {
+    const normalized = normalizePromptHost(host);
+    if (isSafeHostForPrompt(normalized) && !shown.includes(normalized)) {
+      shown.push(normalized);
+    }
+  }
+  return shown;
+}
+
+/**
  * Splits `hosts` into the ones safe to render in a per-host prompt, and
  * whether the "can't be listed in advance" prompt is needed — either
  * because the static scan already said so (`hasUnknownHosts`), or because
@@ -357,7 +390,7 @@ function partitionHosts(
   let needsUnknownPrompt = hasUnknownHosts;
   for (const host of hosts) {
     if (isSafeHostForPrompt(host)) {
-      safeHosts.push(host);
+      safeHosts.push(host.toLowerCase());
     } else {
       needsUnknownPrompt = true;
     }
@@ -395,7 +428,7 @@ export async function runGrantFlow(
     promptUnknownHosts,
     promptManyHosts,
   } = options;
-  const declaredHosts = options.declaredHosts ?? [];
+  const declaredHosts = displayableDeclaredHosts(options.declaredHosts ?? []);
 
   const key = await computeGrantKey(closureFrom(requirements));
   const stored = readGrant(memento, documentKey);
@@ -421,7 +454,7 @@ export async function runGrantFlow(
     // fold the whole set into one consolidated all-or-nothing gate instead
     // of opening `safeHosts.length` modals in a row. See `MAX_HOST_PROMPTS`'s
     // doc comment.
-    const allowAll = await promptManyHosts(safeHosts.length);
+    const allowAll = await promptManyHosts(safeHosts);
     allowedHosts = allowAll ? [...safeHosts] : [];
   } else {
     allowedHosts = [];
@@ -457,7 +490,7 @@ export async function runGrantFlow(
   // surface — naming the host actually attempted, which is strictly more
   // useful than this gate's "some address, somewhere" wording could be.
   if (needsUnknownPrompt && safeHosts.length > 0) {
-    const allowed = await promptUnknownHosts();
+    const allowed = await promptUnknownHosts(safeHosts);
     if (!allowed) {
       // Declining the "can't be listed in advance" gate withdraws every
       // per-host answer already collected too — see this module's top doc

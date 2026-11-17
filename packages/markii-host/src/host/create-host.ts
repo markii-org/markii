@@ -768,7 +768,7 @@ export function createMarkiiHostWithSeams(
         return { kind: 'declined' };
       }
 
-      for (const line of exportDiagnosticLines(outcome)) {
+      for (const line of exportDiagnosticLines(outcome, adapter.labels)) {
         adapter.diagnostics(line);
       }
 
@@ -930,7 +930,11 @@ export function createMarkiiHostWithSeams(
           packSource(adapter.packs),
           packIo,
         );
-        const read = await readTerminalPackScripts(adapter, result.packs);
+        const read = await readTerminalPackScripts(
+          adapter,
+          result.packs,
+          adapter.labels,
+        );
         for (const line of formatPackDiagnosticLines({
           packs: result.packs,
           skipped: result.skipped,

@@ -17,3 +17,17 @@ export function packsNotInstalledLabel(missing: readonly string[]): string {
     ? `Pack not installed: ${missing[0]}`
     : `Packs not installed: ${missing.join(', ')}`;
 }
+
+/** What a sentence calls a note when the host's labels do not say otherwise. */
+export const DEFAULT_NOTE_NOUN = 'note';
+
+/** The label a host may carry, read structurally so a plain string-only caller needs no `HostLabels`. */
+export interface NoteNounSource {
+  readonly noteNoun?: string;
+}
+
+/** The singular noun a sentence uses for the note: the host's `noteNoun`, else `note`. */
+export function noteNounOf(labels?: NoteNounSource): string {
+  const noun = labels?.noteNoun;
+  return noun === undefined || noun.trim() === '' ? DEFAULT_NOTE_NOUN : noun;
+}

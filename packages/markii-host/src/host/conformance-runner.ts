@@ -55,8 +55,10 @@ import type { RunResult, SpawnRunRequest } from '../run/run-host.js';
 import type {
   HostAdapter,
   HostExportFormat,
+  HostLabels,
   HostPromptRequest,
 } from './adapter.js';
+import { noteNounOf } from './labels.js';
 import {
   scriptsDisabledDiagnosticLine,
   scriptsDisabledNotice,
@@ -128,7 +130,12 @@ export type HostScenarioAction =
       /** `true`: the action belongs to a trust scenario, so a host without the device trust list reports it as `unsupported` (`pack-trust`) instead of running it. */
       readonly requiresTrust?: boolean;
     }
-  | { readonly type: 'loadPacks'; readonly requiresTrust?: boolean }
+  | {
+      readonly type: 'loadPacks';
+      readonly requiresTrust?: boolean;
+      /** `true`: the load reads packs this scenario installed, so a host with no install destination reports it as `unsupported` (`packs`) instead of loading nothing. */
+      readonly requiresInstall?: boolean;
+    }
   | {
       readonly type: 'removePack';
       readonly namespace: string;
@@ -250,7 +257,7 @@ export const ACTION_CAPABILITY: Readonly<
   insertComponent: 'editor',
 };
 
-/** An action's capability: the static map, except that a pack action flagged `requiresTrust` needs the device trust list. */
+/** An action's capability: the static map, except that a pack action flagged `requiresTrust` needs the device trust list. A `requiresInstall` load needs `packs` with an install destination, which `hostDeclaresCapability` checks. */
 function capabilityFor(
   action: HostScenarioAction,
 ): HostScenarioCapability | undefined {
@@ -269,6 +276,15 @@ function exportFormatFor(action: HostScenarioAction): HostExportFormat {
   return action.type === 'exportAnsi' ? 'ansi' : 'html';
 }
 
+/** Whether the action writes to, or reads back from, the host's pack install destination. */
+function needsInstallDestination(action: HostScenarioAction): boolean {
+  return (
+    action.type === 'installPack' ||
+    action.type === 'removePack' ||
+    (action.type === 'loadPacks' && action.requiresInstall === true)
+  );
+}
+
 /** Whether `adapter` declares the capability `action` needs. Never consults the scenario or `expected.json` — only the adapter under test. */
 export function hostDeclaresCapability(
   adapter: HostAdapter,
@@ -284,7 +300,7 @@ export function hostDeclaresCapability(
   }
   if (capability === 'packs') {
     if (adapter.packs === undefined) return false;
-    if (action.type === 'installPack' || action.type === 'removePack') {
+    if (needsInstallDestination(action)) {
       return (
         adapter.packs.installRoot !== undefined &&
         adapter.packs.removeFolder !== undefined
@@ -504,6 +520,17 @@ async function runOneAction(
     );
     return { kind: 'unsupported', capability: 'pack-trust', detail };
   }
+  if (
+    action.type === 'loadPacks' &&
+    action.requiresInstall === true &&
+    !hostDeclaresCapability(adapter, action)
+  ) {
+    const detail = 'this host has no pack-install destination configured.';
+    adapter.diagnostics(
+      `declined (packs unsupported on ${adapter.id}): ${detail}`,
+    );
+    return { kind: 'unsupported', capability: 'packs', detail };
+  }
   switch (action.type) {
     case 'open':
       return host.open({ path: ctx.notePath });
@@ -642,6 +669,56 @@ function augmentExportOutcome(
 ): unknown {
   if (outcome.kind !== 'exported') return outcome;
   return { ...outcome, content: decodeWritten(writtenFiles, outcome.path) };
+}
+
+// --- label placeholders ------------------------------------------------------
+
+/**
+ * Fills `{appNoun}`, `{previewNoun}`, `{diagnosticsSurface}`, `{deviceNoun}`,
+ * `{noteNoun}` and `{settingName}` in `text` from the adapter's own labels,
+ * so the corpus pins a sentence's shape and the host's labels supply its
+ * nouns. `{noteNoun}` is `note` when the host sets none. A `{settingName}`
+ * for a host with no named setting, and any other brace text, stays as written.
+ */
+export function fillLabelPlaceholders(
+  text: string,
+  labels: HostLabels,
+): string {
+  const nouns: Record<string, string | undefined> = {
+    appNoun: labels.appNoun,
+    previewNoun: labels.previewNoun,
+    diagnosticsSurface: labels.diagnosticsSurface,
+    deviceNoun: labels.deviceNoun,
+    noteNoun: noteNounOf(labels),
+    settingName: labels.settingName,
+  };
+  return text.replace(/\{([A-Za-z]+)\}/g, (whole, name: string) =>
+    Object.hasOwn(nouns, name) ? (nouns[name] ?? whole) : whole,
+  );
+}
+
+function fillPlaceholdersDeep(value: unknown, labels: HostLabels): unknown {
+  if (typeof value === 'string') return fillLabelPlaceholders(value, labels);
+  if (Array.isArray(value)) {
+    return value.map((entry) => fillPlaceholdersDeep(entry, labels));
+  }
+  if (typeof value === 'object' && value !== null) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [
+        key,
+        fillPlaceholdersDeep(entry, labels),
+      ]),
+    );
+  }
+  return value;
+}
+
+/** `expected` with every label placeholder in any of its strings filled from `labels`. */
+export function expectedForLabels(
+  expected: HostScenarioExpected,
+  labels: HostLabels,
+): HostScenarioExpected {
+  return fillPlaceholdersDeep(expected, labels) as HostScenarioExpected;
 }
 
 // --- diffing against expected.json -----------------------------------------
@@ -1007,10 +1084,11 @@ export function outcomeMismatches(
 export function assertHostScenario(
   adapter: HostAdapter,
   scenario: HostScenario,
-  expected: HostScenarioExpected,
+  authored: HostScenarioExpected,
   result: HostScenarioRunResult,
 ): string[] {
   const problems: string[] = [];
+  const expected = expectedForLabels(authored, adapter.labels);
   if (result.promptQueueError !== undefined) {
     problems.push(`prompt queue: ${result.promptQueueError}`);
   }

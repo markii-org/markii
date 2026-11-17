@@ -35,6 +35,8 @@ describe('createCliHostAdapter: prompt', () => {
 
     const first = await adapter.prompt({
       kind: 'grant-host',
+      host: 'example.com',
+      declaredHosts: [],
       message: 'Allow example.com?',
       allowLabel: 'Allow',
       denyLabel: "Don't allow",
@@ -42,6 +44,7 @@ describe('createCliHostAdapter: prompt', () => {
     });
     const second = await adapter.prompt({
       kind: 'grant-unknown-hosts',
+      hosts: ['example.com'],
       message: 'Allow any host?',
       allowLabel: 'Allow',
       denyLabel: "Don't allow",
@@ -65,6 +68,8 @@ describe('createCliHostAdapter: prompt', () => {
 
     const allowed = await adapter.prompt({
       kind: 'grant-host',
+      host: 'example.com',
+      declaredHosts: [],
       message: 'Allow example.com?',
       allowLabel: 'Allow',
       denyLabel: "Don't allow",
@@ -72,6 +77,8 @@ describe('createCliHostAdapter: prompt', () => {
     });
     const denied = await adapter.prompt({
       kind: 'grant-host',
+      host: 'other.com',
+      declaredHosts: [],
       message: 'Allow other.com?',
       allowLabel: 'Allow',
       denyLabel: "Don't allow",
@@ -120,9 +127,14 @@ describe('createCliHostAdapter: pack consent and --yes', () => {
     expect(await adapter.prompt({ ...consent, kind: 'pack-replace' })).toBe(
       true,
     );
-    expect(await adapter.prompt({ ...consent, kind: 'grant-host' })).toBe(
-      false,
-    );
+    expect(
+      await adapter.prompt({
+        ...consent,
+        kind: 'grant-host',
+        host: 'example.com',
+        declaredHosts: [],
+      }),
+    ).toBe(false);
     expect(terminal.askedQuestions).toEqual([]);
   });
 });

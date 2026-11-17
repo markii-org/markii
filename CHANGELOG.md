@@ -16,9 +16,29 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
   #84, #87, #88)
 - `@markii/react`'s `MarkComponentProps` and the `@markii/html` render
   context carry `dataName`, the `data=` name as written.
+- `@markii/host`: `HostLabels.noteNoun`, the word prompts and notices use
+  for a note. It defaults to `note`. (#76)
+- `@markii/host`'s main entry exports `mergeRunValue`, which folds one
+  arriving value into a value record and keeps a good value when a refresh
+  fails, plus `staleValuesForRehydration` and `noteHasScripts`. (#75, #77)
+- The host conformance corpus can mark a `loadPacks` action
+  `requiresInstall`, which reports `unsupported` on a host with no install
+  folder. (#78)
 
 ### Changed
 
+- Breaking: `@markii/host`'s `HostPromptRequest` is a union on `kind`.
+  `grant-host` carries `host` and `declaredHosts`, and
+  `grant-unknown-hosts` and `grant-many-hosts` carry `hosts`, so a host
+  that answers by policy never parses the message. Code that builds a
+  prompt request must supply them. (#80)
+- Breaking for adapters outside this repository: expected text in the host
+  conformance corpus uses label placeholders such as `{noteNoun}`, so run
+  the `@markii/host/conformance` runner with the corpus from the same
+  release. (#78)
+- Grant prompts show a note's declared hosts lower-cased and without a
+  trailing dot. A declaration that is not a valid hostname is left out of
+  the prompt.
 - A stale stat, progress bar, chart or table renders at opacity 0.82
   instead of 0.8, so its text keeps 4.5:1 contrast on every default
   ground. (#84)

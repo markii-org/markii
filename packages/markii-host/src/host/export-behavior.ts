@@ -51,6 +51,7 @@ import type {
 import { mdPlainFromSource } from './export/md-plain.js';
 import type { HostAdapter, HostExportFormat, HostLabels } from './adapter.js';
 import type { ExportOutcome } from './create-host.js';
+import { noteNounOf, type NoteNounSource } from './labels.js';
 
 /** The file name an export lands under, by format: the note's own base name with the format's own extension, so the export lands beside the note unless the host's picker says otherwise. */
 export function exportDefaultFileName(
@@ -105,16 +106,20 @@ export function exportResultMessage(
   labels: HostLabels,
 ): string {
   if (outcome.kind !== 'exported') {
-    return `Markii: could not export this note. Open ${labels.diagnosticsSurface} for details.`;
+    return `Markii: could not export this ${noteNounOf(labels)}. Open ${labels.diagnosticsSurface} for details.`;
   }
   const name = fileNameOf(outcome.path);
   return outcome.valueCount === 0 && outcome.hasScripts === true
-    ? `Markii: exported ${name}. The note has no stored script values, so data-bound components show their empty states.`
+    ? `Markii: exported ${name}. The ${noteNounOf(labels)} has no stored script values, so data-bound components show their empty states.`
     : `Markii: exported ${name}.`;
 }
 
 /** One diagnostic line describing HOW an export's body was rendered: the pack-vs-static distinction, kept off the result message and put here instead. */
-export function renderEngineDiagnosticLine(render: ExportRenderInfo): string {
+export function renderEngineDiagnosticLine(
+  render: ExportRenderInfo,
+  labels?: NoteNounSource,
+): string {
+  const noteNoun = noteNounOf(labels);
   if (render.engine === 'react') {
     const packs =
       render.packCount === 1 ? '1 pack' : `${String(render.packCount)} packs`;
@@ -128,14 +133,14 @@ export function renderEngineDiagnosticLine(render: ExportRenderInfo): string {
     return 'Rendered with the static engine because no pack components are loaded, which matches what the preview shows.';
   }
   if (render.reason === 'no-renderer') {
-    return 'Rendered with the static engine because a preview panel could not be opened for this note. Pack components exported as labeled boxes; open the preview and export again to include them.';
+    return `Rendered with the static engine because a preview panel could not be opened for this ${noteNoun}. Pack components exported as labeled boxes; open the preview and export again to include them.`;
   }
   if (render.reason === 'timeout') {
     const detail = render.detail ? ` Detail: ${render.detail}` : '';
     return `Rendered with the static engine because the preview did not answer in time. Pack components exported as labeled boxes.${detail}`;
   }
   const detail = render.detail ? ` Detail: ${render.detail}` : '';
-  return `Rendered with the static engine because the preview could not render the note. Pack components exported as labeled boxes.${detail}`;
+  return `Rendered with the static engine because the preview could not render the ${noteNoun}. Pack components exported as labeled boxes.${detail}`;
 }
 
 /** One skipped image's diagnostics line: which file, and why it kept its original source instead of being embedded. */
@@ -191,6 +196,7 @@ export function imageEmbedDiagnosticLines(
 /** The full diagnostics-surface detail for one html/pdf export attempt. */
 export function exportDiagnosticLines(
   outcome: NoteFileExportOutcome,
+  labels?: NoteNounSource,
 ): string[] {
   if (outcome.kind === 'failed') {
     const where = outcome.path ? ` to ${outcome.path}` : '';
@@ -198,7 +204,7 @@ export function exportDiagnosticLines(
   }
   return [
     `Export wrote ${outcome.path}: ${String(outcome.bytes)} bytes, ${String(outcome.valueCount)} stored values baked in.`,
-    renderEngineDiagnosticLine(outcome.render),
+    renderEngineDiagnosticLine(outcome.render, labels),
     ...imageEmbedDiagnosticLines(outcome.images),
   ];
 }

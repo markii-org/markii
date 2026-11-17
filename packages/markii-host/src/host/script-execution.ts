@@ -31,6 +31,7 @@
  */
 import type { RunTrigger } from '@markii/runtime';
 import type { HostLabels } from './adapter.js';
+import { noteNounOf } from './labels.js';
 
 /**
  * What a blocked MANUAL run says. Two short sentences: what happened, and
@@ -39,17 +40,17 @@ import type { HostLabels } from './adapter.js';
  * actively watching.
  */
 export function scriptsDisabledNoticeText(labels: HostLabels): string {
-  return `Markii: script execution is off on ${labels.deviceNoun}. Turn it on in the Markii settings to run this note.`;
+  return `Markii: script execution is off on ${labels.deviceNoun}. Turn it on in the Markii settings to run this ${noteNounOf(labels)}.`;
 }
 
 /** What the toggle command says once script execution is off. */
 export function scriptsDisabledConfirmationText(labels: HostLabels): string {
-  return `Markii: script execution turned OFF on ${labels.deviceNoun}. No note runs its scripts until you turn it back on.`;
+  return `Markii: script execution turned OFF on ${labels.deviceNoun}. No ${noteNounOf(labels)} runs its scripts until you turn it back on.`;
 }
 
 /** What the toggle command says once script execution is on again. Says what did NOT change, since the honest answer to "did this re-grant anything" is no. */
 export function scriptsEnabledConfirmationText(labels: HostLabels): string {
-  return `Markii: script execution turned ON for ${labels.deviceNoun}. Your existing grants are unchanged, so a note still prompts for any host it has not been granted.`;
+  return `Markii: script execution turned ON for ${labels.deviceNoun}. Your existing grants are unchanged, so a ${noteNounOf(labels)} still prompts for any host it has not been granted.`;
 }
 
 /**

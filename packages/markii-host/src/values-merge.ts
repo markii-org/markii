@@ -55,3 +55,49 @@ export function mergeArrivingValue(
   if (!replaced) entries.push([name, value]);
   return Object.fromEntries(entries);
 }
+
+/**
+ * What an arriving value becomes, given the value the store already holds
+ * under its name. A value that is not an error replaces the prior one. An
+ * error replaces it only when there is no prior good value to fall back to,
+ * so the error surfaces on a note that never succeeded. Otherwise the prior
+ * value stays and is marked `stale`, so a failed refresh never wipes good
+ * figures. This is the one home of that rule: `mergeRunValue` and
+ * `run/run-flow.ts`'s `mergePersistedValues` both call it.
+ *
+ * `prior` may come from persisted storage, which is guarded only down to
+ * "plain object", so anything that is not an object counts as absent.
+ */
+export function settleArrivingValue(
+  prior: unknown,
+  value: StoredValue,
+): StoredValue {
+  if (value.status !== 'error') return value;
+  if (typeof prior !== 'object' || prior === null) return value;
+  const previous = prior as StoredValue;
+  return previous.status !== 'error' ? { ...previous, status: 'stale' } : value;
+}
+
+/**
+ * Folds one value arriving from a run into a value store, as a NEW object.
+ * Replaces the name when the value is not an error. For an error value it
+ * keeps a prior good value, marked `stale`, and stores the error only when
+ * no good value exists (`settleArrivingValue`). Every other name is left as
+ * it was, and a name keeps its position.
+ *
+ * The store is a plain record, the shape both preview hosts hold in state
+ * and `ValueStore.snapshot()` returns. `__proto__` is a legal script name
+ * and is stored as an own property, never as a prototype change.
+ */
+export function mergeRunValue(
+  store: Readonly<Record<string, StoredValue>> | undefined,
+  name: string,
+  value: StoredValue,
+): Record<string, StoredValue> {
+  if (typeof value !== 'object' || value === null) {
+    return Object.fromEntries(Object.entries(store ?? {}));
+  }
+  const prior =
+    store !== undefined && Object.hasOwn(store, name) ? store[name] : undefined;
+  return mergeArrivingValue(store, name, settleArrivingValue(prior, value));
+}

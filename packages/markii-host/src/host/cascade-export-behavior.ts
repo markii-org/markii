@@ -55,6 +55,7 @@ import {
   renderEngineDiagnosticLine,
 } from './export-behavior.js';
 import type { HostAdapter, HostLabels } from './adapter.js';
+import { noteNounOf, type NoteNounSource } from './labels.js';
 import type { ExportLinkedSetOutcome } from './create-host.js';
 
 /** One note the cascade exported, for the diagnostics surface. */
@@ -120,6 +121,8 @@ export interface CascadeArchiveRequest {
   readonly embedImagesFor?: (notePath: string) => ExportImageReader;
   /** Hides the collapsed script marker in every exported note. Defaults to `false`. */
   readonly hideScriptBlocks?: boolean;
+  /** What the failure reasons call a note. Defaults to `note`. */
+  readonly noteNoun?: string;
 }
 
 /** The archive a cascade would write, or why it could not be built. Nothing is written here; the caller owns the save path. */
@@ -167,7 +170,7 @@ export async function buildCascadeArchive(
       return {
         kind: 'failed',
         reason: rootUnreadable
-          ? `could not read the root note ${rootUnreadable.path}`
+          ? `could not read the root ${request.noteNoun ?? noteNounOf()} ${rootUnreadable.path}`
           : 'nothing was exported',
       };
     }
@@ -268,11 +271,12 @@ export function cascadeResultMessage(
     return `Markii: could not export this cascade. Open ${labels.diagnosticsSurface} for details.`;
   }
   const name = fileNameOf(outcome.path);
-  const summary = `Markii: exported ${name} with ${countedNoun(outcome.notes.length, 'note')}.`;
+  const noteNoun = noteNounOf(labels);
+  const summary = `Markii: exported ${name} with ${countedNoun(outcome.notes.length, noteNoun)}.`;
   const partial =
     outcome.truncated !== undefined || outcome.unreadable.length > 0;
   if (partial) {
-    return `${summary} Some linked notes were left out, so open ${labels.diagnosticsSurface} for details.`;
+    return `${summary} Some linked ${noteNoun}s were left out, so open ${labels.diagnosticsSurface} for details.`;
   }
   return where === undefined ? summary : `${summary} ${where}`;
 }
@@ -286,29 +290,31 @@ export function cascadeResultMessage(
  */
 export function cascadeDiagnosticLines(
   outcome: CascadeExportOutcome,
+  labels?: NoteNounSource,
 ): string[] {
+  const noteNoun = noteNounOf(labels);
   if (outcome.kind === 'failed') {
     const where = outcome.path ? ` to ${outcome.path}` : '';
     return [`Cascade export failed${where}: ${outcome.reason}`];
   }
 
   const lines: string[] = [
-    `Cascade export wrote ${outcome.path}: ${String(outcome.bytes)} bytes, ${countedNoun(outcome.notes.length, 'note')}.`,
+    `Cascade export wrote ${outcome.path}: ${String(outcome.bytes)} bytes, ${countedNoun(outcome.notes.length, noteNoun)}.`,
   ];
   for (const note of outcome.notes) {
     lines.push(
       `Exported ${note.path} as ${note.entryName} with ${countedNoun(note.valueCount, 'stored value')} baked in.`,
-      renderEngineDiagnosticLine(note.render),
+      renderEngineDiagnosticLine(note.render, labels),
       ...imageEmbedDiagnosticLines(note.images),
     );
   }
   if (outcome.truncated === 'depth') {
     lines.push(
-      `The walk stopped at the maximum depth of ${String(DEFAULT_CASCADE_MAX_DEPTH)} hops, so notes further out were left out.`,
+      `The walk stopped at the maximum depth of ${String(DEFAULT_CASCADE_MAX_DEPTH)} hops, so ${noteNoun}s further out were left out.`,
     );
   } else if (outcome.truncated === 'count') {
     lines.push(
-      `The walk stopped at the maximum of ${countedNoun(DEFAULT_CASCADE_MAX_NOTES, 'note')}, so the remaining links were left out.`,
+      `The walk stopped at the maximum of ${countedNoun(DEFAULT_CASCADE_MAX_NOTES, noteNoun)}, so the remaining links were left out.`,
     );
   }
   for (const entry of outcome.unreadable) {
@@ -355,6 +361,7 @@ export async function exportLinkedSetViaAdapter(
     if (path === undefined) return undefined;
     const target = path;
     const archive = await buildCascadeArchive({
+      noteNoun: noteNounOf(adapter.labels),
       ...archiveRequest,
       readNote: async (notePath) => {
         try {
@@ -386,7 +393,7 @@ export async function exportLinkedSetViaAdapter(
       reason: cascadeReasonOf(error),
     };
   }
-  for (const line of cascadeDiagnosticLines(outcome)) {
+  for (const line of cascadeDiagnosticLines(outcome, adapter.labels)) {
     adapter.diagnostics(line);
   }
   return outcome;

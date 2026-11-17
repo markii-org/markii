@@ -17,7 +17,11 @@ import {
   assertHostScenario,
   containsInOrder,
   createAnswerQueue,
+  expectedForLabels,
+  fillLabelPlaceholders,
   hostDeclaresCapability,
+  listHostScenarioNames,
+  loadHostScenario,
   outcomeMismatches,
   runHostScenario,
   zipArchiveDirectory,
@@ -517,3 +521,113 @@ describe('assertHostScenario', () => {
 function readNote(dir: string): string {
   return readFileSync(path.join(dir, 'note.mk.md'), 'utf8');
 }
+
+describe('label placeholders in the corpus', () => {
+  it('fills each noun from the labels and leaves unknown brace text alone', () => {
+    const labels = { ...CLI_LABELS, noteNoun: 'page' };
+    expect(
+      fillLabelPlaceholders(
+        '{appNoun}|{previewNoun}|{diagnosticsSurface}|{deviceNoun}|{noteNoun}|{other}|{settingName}',
+        labels,
+      ),
+    ).toBe(
+      'command line tool|the rendered note|stderr|this device|page|{other}|{settingName}',
+    );
+  });
+
+  it('reads note when the host sets no note noun', () => {
+    expect(fillLabelPlaceholders('{noteNoun}', CLI_LABELS)).toBe('note');
+  });
+
+  it('never fills a name that only exists on Object.prototype', () => {
+    expect(fillLabelPlaceholders('{constructor}', CLI_LABELS)).toBe(
+      '{constructor}',
+    );
+  });
+
+  it('pins the default-label sentences of the corpus, byte for byte', () => {
+    const prompts = (name: string): readonly string[] =>
+      expectedForLabels(loadHostScenario(name).expected, CLI_LABELS).prompts;
+    const diagnostics = (name: string): readonly string[] =>
+      expectedForLabels(loadHostScenario(name).expected, CLI_LABELS)
+        .diagnostics;
+    expect(prompts('02-run-manual-grant-accepted')).toEqual([
+      "This note's scripts can send data to api.example.com. Allow?",
+    ]);
+    expect(prompts('18-last-run-and-grants')).toEqual([
+      "This note's scripts can send data to api.example.com. Allow?",
+      "This note's scripts can send data to api.example.com. Allow?",
+    ]);
+    expect(diagnostics('10-scripts-disabled')).toEqual([
+      'run (manual) blocked: script execution is off on this device',
+    ]);
+    expect(diagnostics('16-pack-trust')).toContain(
+      'Pack "sneaky" is present but not enabled on this device; it was not loaded.',
+    );
+  });
+
+  it('follows a host that names its note and its device differently', () => {
+    const labels = {
+      ...CLI_LABELS,
+      noteNoun: 'page',
+      deviceNoun: 'this workspace',
+    };
+    const filled = expectedForLabels(
+      loadHostScenario('02-run-manual-grant-accepted').expected,
+      labels,
+    );
+    expect(filled.prompts).toEqual([
+      "This page's scripts can send data to api.example.com. Allow?",
+    ]);
+    expect(
+      expectedForLabels(
+        loadHostScenario('10-scripts-disabled').expected,
+        labels,
+      ).diagnostics,
+    ).toEqual([
+      'run (manual) blocked: script execution is off on this workspace',
+    ]);
+  });
+
+  it('leaves no raw placeholder behind for the default labels', () => {
+    for (const name of listHostScenarioNames()) {
+      const filled = JSON.stringify(
+        expectedForLabels(loadHostScenario(name).expected, CLI_LABELS),
+      );
+      expect(filled).not.toMatch(
+        /\{(?:appNoun|previewNoun|diagnosticsSurface|deviceNoun|noteNoun)\}/,
+      );
+    }
+  });
+});
+
+describe('a host with no pack install destination', () => {
+  const installScenarios = [
+    '06-install-pack-then-render',
+    '13-install-pack-declined',
+    '14-remove-pack',
+    '15-load-packs-engine-views',
+  ];
+
+  for (const name of installScenarios) {
+    it(`reports ${name} as unsupported and passes`, async () => {
+      const { dir, noteText, scenario, expected } = loadHostScenario(name);
+      const adapter = fakeAdapter({
+        packs: {
+          trust: 'none',
+          engine: 'react',
+          authorizedFolders: async () => [],
+          reservedNamespaces: () => new Set(),
+        },
+      });
+      const result = await runHostScenario(adapter, scenario, noteText, dir);
+      expect(assertHostScenario(adapter, scenario, expected, result)).toEqual(
+        [],
+      );
+      const kinds = result.outcomes.map(
+        (outcome) => (outcome as { kind: string }).kind,
+      );
+      expect(kinds).toContain('unsupported');
+    });
+  }
+});

@@ -146,6 +146,8 @@ describe('createVSCodeHostAdapter', () => {
     });
     const answer = await adapter.prompt({
       kind: 'grant-host',
+      host: 'example.com',
+      declaredHosts: [],
       message: 'm',
       allowLabel: 'Allow',
       denyLabel: 'Deny',

@@ -5,6 +5,6 @@
   "actions": [
     { "type": "open" },
     { "type": "installPack", "archive": "files/duo-1.0.0", "answers": ["allow"] },
-    { "type": "loadPacks" }
+    { "type": "loadPacks", "requiresInstall": true }
   ]
 }

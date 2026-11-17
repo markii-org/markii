@@ -27,15 +27,7 @@ export interface HostDirEntry {
  * whole app surface routes through this single method. `message`, `allowLabel`, and `denyLabel` are already fully
  * built by `@markii/host`; the adapter only has to show them.
  */
-export interface HostPromptRequest {
-  readonly kind:
-    | 'grant-host'
-    | 'grant-unknown-hosts'
-    | 'grant-many-hosts'
-    | 'pack-install-consent'
-    | 'pack-replace'
-    | 'pack-overwrite-export'
-    | 'enable-scripts';
+export type HostPromptRequest = {
   readonly message: string;
   readonly allowLabel: string;
   readonly denyLabel: string;
@@ -46,7 +38,32 @@ export interface HostPromptRequest {
    * `HostAdapter.prompt`'s contract only requires it never THROWS.
    */
   readonly consequential: boolean;
-}
+} & (
+  | {
+      readonly kind: 'grant-host';
+      /** The one host this prompt asks about: validated and lower-cased, the same value the grant stores and the message names. */
+      readonly host: string;
+      /** The hosts the note's scripts declare, normalized the same way and listed in the message. Empty when the note declares none. */
+      readonly declaredHosts: readonly string[];
+    }
+  | {
+      readonly kind: 'grant-unknown-hosts';
+      /** The validated, lower-cased hosts a decline withdraws. The message does not list them, so a host can show them beside it. */
+      readonly hosts: readonly string[];
+    }
+  | {
+      readonly kind: 'grant-many-hosts';
+      /** Every validated, lower-cased host the one all-or-nothing answer covers. The message names only their count. */
+      readonly hosts: readonly string[];
+    }
+  | {
+      readonly kind:
+        | 'pack-install-consent'
+        | 'pack-replace'
+        | 'pack-overwrite-export'
+        | 'enable-scripts';
+    }
+);
 
 /**
  * A discriminated union: `workerPath` and `workerBytes` are mutually
@@ -222,6 +239,13 @@ export interface HostLabels {
   readonly diagnosticsSurface: string;
   /** "this workspace" | "this device" */
   readonly deviceNoun: string;
+  /**
+   * What this host calls the document a note is: "page" for a host that
+   * says page. A bare, lower-case, singular noun that forms its plural
+   * with a trailing `s`. Every prompt and notice sentence that names the
+   * note interpolates it. Defaults to `note`.
+   */
+  readonly noteNoun?: string;
   /**
    * The literal setting a user would toggle to turn script execution back
    * on, when this host exposes one as a named setting (`"markii.scriptsDisabled"`

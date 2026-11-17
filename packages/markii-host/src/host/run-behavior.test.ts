@@ -54,8 +54,10 @@ describe('promptsFromAdapter', () => {
     const prompts = promptsFromAdapter(adapter);
 
     await prompts.promptHost('api.example.com', []);
-    await prompts.promptUnknownHosts();
-    await prompts.promptManyHosts(20);
+    await prompts.promptUnknownHosts(['api.example.com']);
+    await prompts.promptManyHosts(
+      Array.from({ length: 20 }, (_, i) => `h${String(i)}.example.com`),
+    );
 
     expect(seen.map((r) => r.kind)).toEqual([
       'grant-host',
@@ -72,8 +74,8 @@ describe('promptsFromAdapter', () => {
     const adapter = fakeAdapter({ prompt: async () => false });
     const prompts = promptsFromAdapter(adapter);
     expect(await prompts.promptHost('host', [])).toBe(false);
-    expect(await prompts.promptUnknownHosts()).toBe(false);
-    expect(await prompts.promptManyHosts(11)).toBe(false);
+    expect(await prompts.promptUnknownHosts(['a.example.com'])).toBe(false);
+    expect(await prompts.promptManyHosts(['a.example.com'])).toBe(false);
   });
 });
 

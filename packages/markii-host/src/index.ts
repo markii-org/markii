@@ -121,3 +121,6 @@ export type {
   Unsupported,
 } from './host/create-host.js';
 export { netRefusal } from './run/net-refusal.js';
+export { noteHasScripts } from './export/note-export.js';
+export { staleValuesForRehydration } from './run/stale-values.js';
+export { mergeRunValue } from './values-merge.js';

@@ -19,9 +19,9 @@
 import {
   ALLOW_LABEL,
   DONT_ALLOW_LABEL,
-  UNKNOWN_HOSTS_PROMPT_MESSAGE,
   hostPromptMessage,
   manyHostsPromptMessage,
+  unknownHostsPromptMessage,
   type PromptHost,
   type PromptManyHosts,
   type PromptUnknownHosts,
@@ -40,6 +40,7 @@ import {
 import type { RunRequest } from './create-host.js';
 import { BROWSER_ISOLATE_ENTRY } from './adapter.js';
 import type { HostAdapter, HostIsolate } from './adapter.js';
+import { noteNounOf } from './labels.js';
 
 /**
  * External wall-clock budget for one run, matching the figure both
@@ -62,27 +63,32 @@ export function promptsFromAdapter(adapter: HostAdapter): {
   promptUnknownHosts: PromptUnknownHosts;
   promptManyHosts: PromptManyHosts;
 } {
+  const noteNoun = noteNounOf(adapter.labels);
   return {
     promptHost: (host, declaredHosts) =>
       adapter.prompt({
         kind: 'grant-host',
-        message: hostPromptMessage(host, declaredHosts),
+        host,
+        declaredHosts,
+        message: hostPromptMessage(host, declaredHosts, noteNoun),
         allowLabel: ALLOW_LABEL,
         denyLabel: DONT_ALLOW_LABEL,
         consequential: true,
       }),
-    promptUnknownHosts: () =>
+    promptUnknownHosts: (hosts) =>
       adapter.prompt({
         kind: 'grant-unknown-hosts',
-        message: UNKNOWN_HOSTS_PROMPT_MESSAGE,
+        hosts,
+        message: unknownHostsPromptMessage(noteNoun),
         allowLabel: ALLOW_LABEL,
         denyLabel: DONT_ALLOW_LABEL,
         consequential: true,
       }),
-    promptManyHosts: (hostCount) =>
+    promptManyHosts: (hosts) =>
       adapter.prompt({
         kind: 'grant-many-hosts',
-        message: manyHostsPromptMessage(hostCount),
+        hosts,
+        message: manyHostsPromptMessage(hosts.length, noteNoun),
         allowLabel: ALLOW_LABEL,
         denyLabel: DONT_ALLOW_LABEL,
         consequential: true,
