@@ -6,6 +6,13 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-11-18
+
+The stable release of the web host batch. It ships on the npm `latest`
+dist-tag for all twelve packages, together with the VS Code extension, the
+Obsidian plugin and the Neovim plugin at 0.18.0. The 0.18.0-next.0 section
+below lists the other changes in detail.
+
 ### Added
 
 - `net.get(url)` in `@markii/lua`: a GET that returns `{ status, body }`
