@@ -226,7 +226,8 @@ classified `network` only when the error that ended it carries one. A
 script that copies the failure text into its own `error()`, or catches the
 failure and then fails another way, is a `script-error`. A policy refusal
 stays `capability-denied`, a run the watchdog stopped stays a script error,
-and an HTTP status is a response. The probes are
+and an HTTP status is a response. `net.fetch_json` raises an ordinary
+script error for a status outside 200 to 299. The probes are
 `packages/markii-lua/src/network-failure.probe.test.ts` and
 `packages/markii-host/src/run/network-failure.probe.test.ts`.
 

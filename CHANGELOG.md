@@ -6,6 +6,22 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `net.get(url)` in `@markii/lua`: a GET that returns `{ status, body }`
+  with the raw text and never raises on a status. It needs the same grant
+  as `net.fetch_json`, runs under the auto tier, and the consent scan
+  reads its URL. (#90)
+
+### Changed
+
+- Breaking for scripts: `net.fetch_json` raises
+  `GET <url> answered <status>` when the response status is outside 200 to
+  299, instead of returning the error body as data. A rate limit or a
+  missing page then fails the run as a script error, and the page keeps the
+  last good value marked stale. A script that reads an error body switches
+  to `net.get`. (#90)
+
 ## [0.18.0-next.0] - 2026-11-17
 
 ### Added

@@ -38,6 +38,21 @@ describe('extractRunRequirements — literal host extraction', () => {
     expect(requirements.hasUnknownHosts).toBe(false);
   });
 
+  it('picks up a sole string-literal URL passed to net.get', () => {
+    const text = fence('a', 'return net.get("https://get.example.com/x")');
+    const requirements = extractRunRequirements(text);
+    expect(requirements.hosts).toEqual(['get.example.com']);
+    expect(requirements.hasUnknownHosts).toBe(false);
+  });
+
+  it('marks a non-literal net.get URL as unknown', () => {
+    const text = fence(
+      'a',
+      'local u = "https://x.example.com/"\nreturn net.get(u)',
+    );
+    expect(extractRunRequirements(text).hasUnknownHosts).toBe(true);
+  });
+
   it('picks up net.post and net.patch literal URLs too, ignoring the second (body) argument', () => {
     const text =
       fence('a', 'return net.post("https://post.example.com/x", "{}")') +

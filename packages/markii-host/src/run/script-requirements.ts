@@ -2,7 +2,7 @@
  * Pure, vscode-free analysis of what a manual run of a document WILL need
  * (slice 1 of the v2 Run arc, GitHub issue #1's locked design comment):
  * the runnable script blocks, and the set of hostnames its scripts
- * statically reach for via `net.fetch_json`/`net.post`/`net.patch`. Slice 2
+ * statically reach for via `net.fetch_json`/`net.get`/`net.post`/`net.patch`. Slice 2
  * uses this to drive the grant/prompt flow ("This note's scripts can send
  * data to <host>. Allow?") — this module does no prompting, no storage,
  * and no execution; it only reads.
@@ -47,7 +47,7 @@ export interface RunRequirements {
    */
   hosts: string[];
   /**
-   * `true` when at least one `net.fetch_json`/`net.post`/`net.patch` call
+   * `true` when at least one `net.fetch_json`/`net.get`/`net.post`/`net.patch` call
    * site's URL argument could not be resolved to a literal (a
    * concatenation, a variable, any non-literal expression), OR when any
    * script block is a `src=` reference (its actual Lua source lives in a
@@ -71,8 +71,8 @@ export interface RunRequirements {
   grantScripts: GrantClosureScript[];
 }
 
-/** The three host-reaching capability calls this scan looks for (docs/scripting.md's `net` table). */
-const NET_CALL_NAMES = ['fetch_json', 'post', 'patch'] as const;
+/** The host-reaching capability calls this scan looks for (docs/scripting.md's `net` table). */
+const NET_CALL_NAMES = ['fetch_json', 'get', 'post', 'patch'] as const;
 
 const CALL_SITE_PATTERN = new RegExp(
   `\\bnet\\.(${NET_CALL_NAMES.join('|')})\\s*\\(`,

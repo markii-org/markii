@@ -409,6 +409,8 @@ export function buildCapabilities(config: CapabilityConfig): {
   // side effect, expected and documented in CHANGELOG: a script that does
   // `if net then ... end` to feature-detect now always sees a table.
   const netGrants = config.netGrants ?? { get: [], post: [] };
+  const isSuccessStatus = (status: number): boolean =>
+    status >= 200 && status <= 299;
   preludeParts.push('net = net or {}\n');
 
   rawGlobals.__smd_net_get_raw = (async (url: string) => {
@@ -423,6 +425,12 @@ export function buildCapabilities(config: CapabilityConfig): {
       const message = `fetch response for "${url}" exceeds the ${maxFetchBytes}-byte cap`;
       recordDenial('denied', message);
       throw capabilityError(message);
+    }
+    // The status is checked after the byte cap and before the parse, so a
+    // non-JSON error page reports its status. The prelude raises the
+    // ordinary script error; nothing here is a denial or a transport failure.
+    if (!isSuccessStatus(res.status)) {
+      return LuaMultiReturn.of<string | number>(res.status, '');
     }
     let parsed: unknown;
     try {
@@ -452,7 +460,25 @@ export function buildCapabilities(config: CapabilityConfig): {
     // scalars and cross the boundary cleanly with no proxy involved; the
     // prelude below decodes this text into a genuine Lua table entirely
     // in Lua (`__smd_json_decode`, `./json-decode`).
-    return res.body;
+    return LuaMultiReturn.of<string | number>(res.status, res.body);
+  }) as (...args: never[]) => Promise<unknown>;
+
+  // `net.get` shares the grant, host and byte-cap checks with `fetch_json`
+  // but never raises on status and never decodes the body.
+  rawGlobals.__smd_net_get_status_raw = (async (url: string) => {
+    const host = hostnameOf(url);
+    if (!config.net || !host || !netGrants.get.includes(host)) {
+      const message = `net access to host "${host ?? url}" not granted for GET`;
+      recordDenial('denied', message);
+      throw capabilityError(message);
+    }
+    const res = await callNetProvider(() => config.net!.get(url));
+    if (res.body.length > maxFetchBytes) {
+      const message = `fetch response for "${url}" exceeds the ${maxFetchBytes}-byte cap`;
+      recordDenial('denied', message);
+      throw capabilityError(message);
+    }
+    return LuaMultiReturn.of<string | number>(res.status, res.body);
   }) as (...args: never[]) => Promise<unknown>;
 
   ensureJsonDecodePrelude();
@@ -468,7 +494,24 @@ local __smd_net_get = __smd_net_get_raw
 -- closes for the primitives the decoder uses internally.
 local __smd_net_get_json_decode = __smd_json_decode
 __smd_net_get_raw = nil
-net.fetch_json = function(url) return __smd_net_get_json_decode(__smd_net_get(url):await()) end
+-- Captured for the same reason: a script reassigning \`error\` or
+-- \`tostring\` must not change how a non-2xx status is reported.
+local __smd_net_get_error = error
+local __smd_net_get_tostring = tostring
+net.fetch_json = function(url)
+  local status, text = __smd_net_get(url):await()
+  if status < 200 or status > 299 then
+    __smd_net_get_error("GET " .. __smd_net_get_tostring(url) .. " answered " .. __smd_net_get_tostring(status), 0)
+  end
+  return __smd_net_get_json_decode(text)
+end
+
+local __smd_net_get_status = __smd_net_get_status_raw
+__smd_net_get_status_raw = nil
+net.get = function(url)
+  local status, respBody = __smd_net_get_status(url):await()
+  return { status = status, body = respBody }
+end
 `);
 
   // POST/PATCH are effectful. Wired unconditionally like GET above: the

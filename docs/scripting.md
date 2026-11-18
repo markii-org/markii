@@ -234,6 +234,21 @@ from the scripts that did finish stay on the page and are remembered for
 the next time the note is opened. The scripts that never ran keep their
 previous values, still marked stale.
 
+An error status stops the script. When the server answers outside 200 to
+299, `net.fetch_json` raises `GET <url> answered <status>`, so a rate limit
+or a missing page never reaches your script as data. Uncaught, it fails the
+run, and the page keeps the last good value marked stale. Wrap the call in
+`pcall` to handle the failure yourself. To read the error body, use
+`net.get`, which returns the status and the raw text:
+
+```lua
+local r = net.get("https://api.github.com/repos/x/y")
+if r.status == 404 then
+  return "no such repository"
+end
+return json.decode(r.body).stargazers_count
+```
+
 One habit is worth building early: validate inside the function you hand to
 `cache.get`. The cache stores whatever that function returns, and APIs
 sometimes return an error body with a 200 status. Stored once, a bad reply
@@ -362,7 +377,10 @@ install it, and notes never carry it.
 What actually makes scripting approachable is the host API, which is kept
 small, flat, and holdable in one head:
 
-- `net.fetch_json(url)`: fetch and parse JSON from a granted host
+- `net.fetch_json(url)`: fetch and parse JSON from a granted host. A
+  status outside 200 to 299 raises an error
+- `net.get(url)`: fetch from a granted host and return `{ status, body }`
+  with the raw text. It never raises on a status
 - `cache.get(key, ttl, fn)`: return cached value or compute and store it
 - `bundle.read(path)` / `bundle.write(path, data)`: bundle-scoped files
 - `json.decode(text)` / `json.encode(value)`: JSON text to Lua data and back
