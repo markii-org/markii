@@ -37,8 +37,8 @@ import { parentPort } from 'node:worker_threads';
 import { existsSync } from 'node:fs';
 import * as path from 'node:path';
 
-import { netProviderDenial } from '@markii/lua';
-import { createNetProvider } from './net-provider.js';
+import { createNetBridge } from './net-bridge-worker.js';
+import type { NetBridgeRequest } from './net-bridge.js';
 
 // The job/result shapes and the run itself moved to `./run-job.ts` when
 // the Obsidian host forced a second, non-Node isolate (see that file's doc
@@ -75,7 +75,27 @@ async function main(): Promise<void> {
   }
   const port = parentPort;
 
-  port.once('message', (message: unknown) => {
+  // Network is served by the HOST, never in this thread: the isolate has no
+  // network provider of its own, so nothing a host configures for a request
+  // (headers included) exists here. See `./net-bridge.ts`.
+  const bridge = createNetBridge((message: NetBridgeRequest) => {
+    port.postMessage(message);
+  });
+  let running = false;
+
+  port.on('message', (message: unknown) => {
+    // Net replies arrive throughout the run; the bridge ignores anything
+    // that is not one of its own.
+    bridge.handleMessage(message);
+    if (running) return;
+    if (
+      typeof message === 'object' &&
+      message !== null &&
+      (message as { kind?: unknown }).kind === 'markii:net-reply'
+    ) {
+      return;
+    }
+    running = true;
     void (async () => {
       if (!isRunJob(message)) {
         port.postMessage(
@@ -96,16 +116,7 @@ async function main(): Promise<void> {
           postProgress: (progress) => {
             port.postMessage(progress);
           },
-          // The Lua brand is supplied HERE, where the runtime is already
-          // present, rather than imported by the provider itself — see
-          // `./net-provider.ts`'s doc comment.
-          createNet: (allowlist, maxFetchBytes, policy) =>
-            createNetProvider(
-              allowlist,
-              maxFetchBytes,
-              policy,
-              netProviderDenial,
-            ),
+          createNet: () => bridge.provider,
           wasmUri: resolveWasmUri(),
         });
         port.postMessage(result);

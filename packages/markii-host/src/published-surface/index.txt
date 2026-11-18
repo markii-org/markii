@@ -30,6 +30,7 @@ HostDirEntry
 HostEditor
 HostExportCapabilities
 HostExportFormat
+HostHeaders
 HostIsolate
 HostLabels
 HostPackSource

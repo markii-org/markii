@@ -159,6 +159,25 @@ A page that needs reach into private networks it does not control should
 not offer scripts network access at all, or should send requests through a
 server of its own that resolves and pins as described above.
 
+### Host request headers
+
+A host may add request headers for an exact origin, such as an
+`Authorization` token, through the `headers` option of
+`createNodeHostIsolate` or `createFetchNetProvider`. Three rules hold:
+
+- A header attaches only when the request's origin equals the key. The
+  Node provider checks it again on every redirect hop, so a redirect to
+  another origin, even an allowed one, carries none.
+- Header values live in the host thread or the page. The provider that adds
+  them runs on the host side of the bridge in both isolates, and nothing
+  posted to the worker carries them.
+- Headers attach to GET only. A note granted the origin cannot use a
+  token's write access through POST or PATCH.
+
+A note granted the origin can still read whatever the token can read, so a
+host should supply a read-only token. The probes are in
+`packages/markii-host/src/run/host-headers.probe.test.ts`.
+
 ### The note view (`doc`)
 
 A script can read the note it runs in: `doc.directives()` for the note's

@@ -12,6 +12,11 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
   with the raw text and never raises on a status. It needs the same grant
   as `net.fetch_json`, runs under the auto tier, and the consent scan
   reads its URL. (#90)
+- `@markii/host`: a `headers` option on `createNodeHostIsolate` and
+  `createFetchNetProvider` adds request headers, such as an API token, for
+  an exact origin. They go on GET requests only, are checked again on every
+  redirect hop, and never reach the worker that runs scripts. The
+  `HostHeaders` type is exported. (#91)
 
 ### Changed
 
@@ -21,6 +26,9 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
   missing page then fails the run as a script error, and the page keeps the
   last good value marked stale. A script that reads an error body switches
   to `net.get`. (#90)
+- `@markii/host`: the worker-thread isolate answers `net.*` from the host
+  thread through the message bridge the Web Worker isolate already used.
+  Requests, pinning and failure kinds behave as before. (#91)
 
 ## [0.18.0-next.0] - 2026-11-17
 

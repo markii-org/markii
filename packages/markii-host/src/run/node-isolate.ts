@@ -10,15 +10,19 @@ import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import type { HostIsolate } from '../host/adapter.js';
+import type { HostHeaders, NormalizedHostHeaders } from './host-headers.js';
 import type { IsolateSpawner, RunIsolate } from './isolate.js';
+import { createNetProvider, normalizeNodeHostHeaders } from './net-provider.js';
+import { serveNetFromHost } from './net-served-isolate.js';
 
 /**
- * The default isolate: a `node:worker_threads` worker, which is what every
- * Node host uses. It is the only kind that accepts `resourceLimits`, so it is also the only
- * kind whose V8 heap is bounded — see `./isolate.ts` for why a host might
- * still have to supply the other one.
+ * A bare `node:worker_threads` worker, with no network of its own. It is the
+ * only kind that accepts `resourceLimits`, so it is also the only kind whose
+ * V8 heap is bounded — see `./isolate.ts` for why a host might still have to
+ * supply the other one. Never handed out unwrapped: `createWorkerThreadIsolate`
+ * puts the host-side network in front of it.
  */
-export const workerThreadIsolate: IsolateSpawner = (options): RunIsolate => {
+const spawnWorkerThread: IsolateSpawner = (options): RunIsolate => {
   const worker = new Worker(options.entryPath, {
     ...(options.execArgv ? { execArgv: options.execArgv } : {}),
     ...(options.env ? { env: options.env } : {}),
@@ -50,6 +54,34 @@ export const workerThreadIsolate: IsolateSpawner = (options): RunIsolate => {
   };
 };
 
+/**
+ * The worker-thread isolate every Node host uses. Its `net.*` requests are
+ * answered by the HOST thread through the net bridge, by the pinned provider
+ * built from the run's own allowlist, byte cap and pin policy. `headers`
+ * (already validated) are added there, so they never enter the worker.
+ */
+export function createWorkerThreadIsolate(
+  headers: NormalizedHostHeaders = new Map(),
+): IsolateSpawner {
+  return (options) =>
+    serveNetFromHost(
+      spawnWorkerThread(options),
+      (allowlist, maxFetchBytes, policy, signal) =>
+        createNetProvider(
+          allowlist,
+          maxFetchBytes,
+          policy as Parameters<typeof createNetProvider>[2],
+          (message) => new Error(message),
+          undefined,
+          signal,
+          headers,
+        ),
+    );
+}
+
+/** The default isolate: `createWorkerThreadIsolate()` with no host headers. */
+export const workerThreadIsolate: IsolateSpawner = createWorkerThreadIsolate();
+
 export interface NodeHostIsolateOptions {
   /**
    * The worker entry on disk, or a function that finds it when a run asks.
@@ -57,6 +89,14 @@ export interface NodeHostIsolateOptions {
    * Defaults to `node-worker.js` in the package's `dist/`.
    */
   workerPath?: string | (() => string);
+  /**
+   * Request headers by ORIGIN (`https://api.github.com`), added to GET
+   * requests to exactly that origin and to no redirect hop that leaves it.
+   * They are applied on the host side of the net bridge and never enter the
+   * worker. An invalid origin or header throws here, at construction. Use a
+   * read-only token: a note granted the origin can read with it.
+   */
+  headers?: HostHeaders;
 }
 
 /**
@@ -68,6 +108,10 @@ export interface NodeHostIsolateOptions {
 export function createNodeHostIsolate(
   options: NodeHostIsolateOptions = {},
 ): Extract<HostIsolate, { kind: 'node' }> {
+  const spawnIsolate =
+    options.headers === undefined
+      ? workerThreadIsolate
+      : createWorkerThreadIsolate(normalizeNodeHostHeaders(options.headers));
   return {
     kind: 'node',
     workerPath: (): string => {
@@ -83,6 +127,6 @@ export function createNodeHostIsolate(
       }
       return packaged;
     },
-    spawnIsolate: workerThreadIsolate,
+    spawnIsolate,
   };
 }

@@ -58,7 +58,7 @@ export interface BrowserIsolateOptions {
 }
 
 /** Pulls the fields the host needs to build the same provider the worker would have built for itself. */
-function netArgsFrom(job: unknown): {
+export function netArgsFrom(job: unknown): {
   allowlist: string[];
   maxFetchBytes: number;
   policy: unknown;

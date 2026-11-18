@@ -7,6 +7,9 @@ describe('createNodeHostIsolate', () => {
     const isolate = createNodeHostIsolate({ workerPath: '/x/worker.js' });
     expect(isolate.kind).toBe('node');
     expect(isolate.spawnIsolate).toBe(workerThreadIsolate);
+    expect(createNodeHostIsolate({ headers: {} }).spawnIsolate).not.toBe(
+      workerThreadIsolate,
+    );
     expect(isolate.workerPath()).toBe('/x/worker.js');
   });
 

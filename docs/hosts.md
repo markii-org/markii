@@ -209,7 +209,9 @@ Pick the entry that matches the environment.
   the repository tests, in `e2e/browser-host`.
 - Node and an Electron main process use `@markii/host/node`. It provides a
   worker thread isolate with a heap cap and the address-pinning network
-  provider. `createNodeHostIsolate()` starts the packaged worker, which
+  provider. The provider runs in the host thread and answers the worker's
+  requests through a message bridge, so the worker holds no network code.
+  `createNodeHostIsolate()` starts the packaged worker, which
   carries the Lua engine and needs nothing from the host's own
   dependencies. A host that bundles everything into one file bundles
   `@markii/host/node-worker` as a second output and passes its path as
@@ -265,19 +267,29 @@ The provider refuses redirects, because a browser hides the target of a
 manual redirect and it cannot be checked against the allowlist. A note
 must therefore name the final URL.
 
-The provider's `fetch` option replaces the global `fetch`. It is the place
-to add a header for one origin: the replacement receives the URL and the
-request options, and returns the response.
+The `headers` option adds request headers for an exact origin, such as an
+API token. A header goes only on a GET request whose scheme, host and port
+equal the key. POST and PATCH requests never carry one, so a note cannot
+use a token's write access.
 
 ```ts
 createFetchNetProvider({
-  allowedOrigins: ['https://api.example.com'],
-  fetch: (url, init) =>
-    fetch(url, url.startsWith('https://api.example.com/')
-      ? { ...init, headers: { ...init?.headers, authorization: token } }
-      : init),
+  allowedOrigins: ['https://api.github.com'],
+  headers: {
+    'https://api.github.com': { authorization: `Bearer ${token}` },
+  },
 });
 ```
+
+Names are lower-cased. The provider sets `host`, `content-length`,
+`content-type`, `transfer-encoding` and `connection` itself and refuses them
+here. An invalid origin or header throws when the provider is created. The
+headers stay in the page and never reach the worker. Give the provider a
+read-only token, because any note granted the origin can read what the token
+can read.
+
+The provider's `fetch` option replaces the global `fetch`. The replacement
+receives the URL and the request options, and returns the response.
 
 The script side has one more rule. A note must write each URL as one
 complete string literal inside the call, because the grant scan reads
@@ -303,8 +315,14 @@ No person answers the build's prompts, so the adapter answers by policy:
   outside pull request runs in that job, and it must not bring its own
   allowlist.
 
-A manual run gets the full capability tier, so the build job holds no
-secrets the scripts could reach. The build's memento starts empty on every
+A manual run gets the full capability tier. Keep secrets out of the
+scripts' reach, with one exception: a token the build passes as
+`createNodeHostIsolate({ headers })`. It takes the same shape as the browser
+provider's `headers` option and follows the same rules. The provider adds
+the headers in the host thread, and the worker that runs the scripts never
+receives them. A redirect hop to another origin carries none. A
+`GITHUB_TOKEN` with read-only permissions raises the GitHub API's rate limit
+for a build. The build's memento starts empty on every
 build and is never published, so no grant leaves the build. Bake only values
 that came back fresh, never an error.
 

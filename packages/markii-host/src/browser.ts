@@ -17,6 +17,7 @@
 import type { NetProvider, NetResponse } from '@markii/lua';
 import type { HostIsolate } from './host/adapter.js';
 import { createBrowserIsolate } from './run/browser-isolate.js';
+import { normalizeHostHeaders, type HostHeaders } from './run/host-headers.js';
 import { netRefusal, netTransport } from './run/net-refusal.js';
 import type { IsolateSpawner } from './run/isolate.js';
 
@@ -40,6 +41,13 @@ export interface FetchNetProviderOptions {
   denial?: (message: string) => Error;
   /** The `fetch` to use. Defaults to the global one; injectable for tests. */
   fetch?: typeof fetch;
+  /**
+   * Request headers by ORIGIN, added to GET requests to exactly that origin.
+   * They are added here, in the page, so they never enter the worker. An
+   * invalid origin or header throws when the provider is created. Use a
+   * read-only token: a note granted the origin can read with it.
+   */
+  headers?: HostHeaders;
 }
 
 function originOf(entry: string): string | undefined {
@@ -118,6 +126,10 @@ export function createFetchNetProvider(
       .map(originOf)
       .filter((origin): origin is string => origin !== undefined),
   );
+  const hostHeaders = normalizeHostHeaders(options.headers, (name, value) => {
+    // The `Headers` constructor is the platform's own validator.
+    new Headers([[name, value]]);
+  });
   const build = options.denial ?? ((message: string) => new Error(message));
   // Every policy refusal is marked so the net bridge can tell it from a
   // transport failure (a plain `Error`).
@@ -162,6 +174,11 @@ export function createFetchNetProvider(
           method,
           ...(body !== undefined
             ? { body, headers: { 'content-type': 'text/plain;charset=UTF-8' } }
+            : {}),
+          // GET only, and only for the request's own origin. Redirects are
+          // not followed here, so there is no later hop to guard.
+          ...(method === 'GET' && hostHeaders.has(url.origin)
+            ? { headers: hostHeaders.get(url.origin) }
             : {}),
           redirect: 'manual',
           credentials: 'omit',

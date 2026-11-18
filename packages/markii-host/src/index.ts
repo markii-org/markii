@@ -43,6 +43,7 @@ export type {
   SkippedImage,
 } from './export/image-embed.js';
 export type { PinPolicy } from './run/net-pinning.js';
+export type { HostHeaders } from './run/host-headers.js';
 export type { PackModulesMap } from './run/lua-resolver.js';
 export type {
   DiscoveredPack,

@@ -17,6 +17,9 @@
  * A Web Worker isolate asks this provider through the net bridge. The
  * worker entry removes its own network globals after startup, so the
  * allowlist enforced here is the only path to the network.
+ *
+ * Host-set headers (`hostHeaders`) are added here, on the host side of that
+ * bridge, so their values never exist in the isolate that runs Lua.
  */
 import * as http from 'node:http';
 import * as https from 'node:https';
@@ -25,12 +28,27 @@ import * as dns from 'node:dns';
 import type { NetProvider, NetResponse } from '@markii/lua';
 import { netRefusal, netTransport } from './net-refusal.js';
 import {
+  normalizeHostHeaders,
+  type HostHeaders,
+  type NormalizedHostHeaders,
+} from './host-headers.js';
+import {
   pinHostAddress,
   pinnedLookup,
   type HostLookup,
   type PinnedAddress,
   type PinPolicy,
 } from './net-pinning.js';
+
+/** Validates host headers against `node:http`'s own rules. Throws at construction time, never during a run. */
+export function normalizeNodeHostHeaders(
+  headers: HostHeaders | undefined,
+): NormalizedHostHeaders {
+  return normalizeHostHeaders(headers, (name, value) => {
+    http.validateHeaderName(name);
+    http.validateHeaderValue(name, value);
+  });
+}
 
 function describeThrown(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -108,6 +126,8 @@ function issueRequest(
   /** See `createNetProvider`'s own `denial` parameter — injected for the same reason. */
   denial: (message: string) => Error,
   signal?: AbortSignal,
+  /** Host-set headers for this hop; empty unless the hop is a GET to a keyed origin. */
+  extraHeaders: Readonly<Record<string, string>> = {},
 ): Promise<HopResponse> {
   return new Promise((resolve, reject) => {
     const mod = url.protocol === 'https:' ? https : http;
@@ -123,6 +143,7 @@ function issueRequest(
     const headers: Record<string, string> = {
       'user-agent': 'node',
       accept: '*/*',
+      ...extraHeaders,
     };
     if (bodyBuffer) {
       headers['content-length'] = String(bodyBuffer.byteLength);
@@ -289,6 +310,8 @@ export function createNetProvider(
   lookup: HostLookup = defaultHostLookup,
   /** Aborted when the run ends: an in-flight request is destroyed and no further hop is made. */
   signal?: AbortSignal,
+  /** Headers the host adds for an exact origin, GET only. Normalized by `normalizeNodeHostHeaders`. */
+  hostHeaders: NormalizedHostHeaders = new Map(),
 ): NetProvider {
   const allowed = new Set(allowlist.map((host) => host.toLowerCase()));
   // Every policy refusal is built by the injected `denial` and then marked,
@@ -345,6 +368,9 @@ export function createNetProvider(
         maxFetchBytes,
         refuse,
         signal,
+        // Decided per hop from THIS hop's origin: a redirect to another
+        // origin, even an allowed one, carries none of the host's headers.
+        method === 'GET' ? hostHeaders.get(parsed.origin) : undefined,
       );
 
       if (response.status >= 300 && response.status < 400) {
