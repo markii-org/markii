@@ -707,18 +707,79 @@
   border-radius: 6px;
 }
 
-.mk-figure__caption {
+.mk-figure__caption,
+.mk-video__caption {
   margin-block-start: 0.5rem;
   font-size: 0.9em;
   color: var(--mk-muted);
 }
 
-.mk-figure__caption > :first-child {
+.mk-figure__caption > :first-child,
+.mk-video__caption > :first-child {
   margin-block-start: 0;
 }
 
-.mk-figure__caption > * + * {
+.mk-figure__caption > * + *,
+.mk-video__caption > * + * {
   margin-block-start: 0.5rem;
+}
+
+/* ---------- video ---------- */
+
+/*
+ * Like a figure, only the inline half of the browser's default margin is
+ * removed. The frame fits the clip so the print badge centers on it.
+ */
+.mk-video {
+  margin-inline: 0;
+}
+
+.mk-video__frame {
+  display: block;
+  position: relative;
+}
+
+.mk-video__media {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+
+/*
+ * A page on paper cannot play, so the frame shows a flat play badge over
+ * the poster or first frame. It never shows on screen: the native controls
+ * already say it is a video.
+ */
+@media print {
+  .mk-video__frame::after {
+    content: '';
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-start: 50%;
+    inline-size: 3rem;
+    block-size: 3rem;
+    box-sizing: border-box;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    border: 1px solid var(--mk-border);
+    background: var(--mk-bg);
+    opacity: 0.85;
+  }
+
+  .mk-video__frame::before {
+    content: '';
+    position: absolute;
+    z-index: 1;
+    inset-block-start: 50%;
+    inset-inline-start: 50%;
+    inline-size: 0;
+    block-size: 0;
+    /* The triangle sits a little right of center so it reads as centered. */
+    transform: translate(-40%, -50%);
+    border-block: 0.5rem solid transparent;
+    border-inline-start: 0.8rem solid var(--mk-fg);
+  }
 }
 
 /* ---------- tabs ---------- */

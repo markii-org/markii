@@ -155,6 +155,9 @@ function skippedImageLine(skipped: SkippedImage): string {
   if (skipped.reason === 'unsupported-type') {
     return `Skipped ${skipped.src}: this file type is not supported for embedding.`;
   }
+  if (skipped.reason === 'video-not-embedded') {
+    return `Skipped ${skipped.src}: video clips are not embedded, so the exported file keeps this path and needs the clip beside it to play.`;
+  }
   return `Skipped ${skipped.src}: ${skipped.detail ?? 'the file could not be read'}.`;
 }
 

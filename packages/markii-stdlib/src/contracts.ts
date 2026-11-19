@@ -108,7 +108,7 @@ function layoutWrapperContract(
 /**
  * The standard component set, seeded from the components that ship with
  * `@markii/react` today (`packages/platforms/markii-react/src/components/
- * {callout,kbd,rating,divider,details,card,badge,figure,tabs,tab}.tsx`). Each
+ * {callout,kbd,rating,divider,details,card,badge,figure,video,tabs,tab}.tsx`). Each
  * contract was written by reading the real implementation — `kind` from how
  * the component is registered in `defaultRegistry`, `attributes` from
  * exactly the props the component reads (no invented attributes).
@@ -264,6 +264,32 @@ export const STANDARD_COMPONENTS: Record<string, ComponentContract> = {
     },
     description:
       'An image with a rich caption, e.g. `:::figure{src="cat.png" alt="A cat"} A cat, napping. ::: `. Body is the directive\'s inner markdown, rendered as the caption.',
+  },
+  video: {
+    name: 'video',
+    kind: 'container',
+    attributes: {
+      src: {
+        type: 'string',
+        required: true,
+        description:
+          'Clip URL. Required; an unsafe scheme (e.g. `javascript:`) or any `data:` URL is dropped and no clip is rendered.',
+      },
+      poster: {
+        type: 'string',
+        required: false,
+        description:
+          'Image shown before the clip plays. An unsafe scheme is dropped and the clip renders without a poster.',
+      },
+      alt: {
+        type: 'string',
+        required: false,
+        description:
+          'Accessible name of the clip. Nothing is set when absent or empty.',
+      },
+    },
+    description:
+      'A short, silent, looping clip with a rich caption, a replacement for an animated GIF, e.g. `:::video{src="demo.mp4" poster="demo.png" alt="The demo"} The demo, 10 seconds. ::: `. Body is the directive\'s inner markdown, rendered as the caption. It plays muted while at least half of it is in view, and never plays for a reader who asked for reduced motion.',
   },
   tabs: {
     name: 'tabs',

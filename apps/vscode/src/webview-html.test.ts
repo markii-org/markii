@@ -48,6 +48,13 @@ describe('buildWebviewHtml', () => {
     expect(withoutSchemeToken).not.toMatch(/https?:\/\//);
   });
 
+  it('allows media from the webview source and https only, never data:', () => {
+    const csp = extractCsp(buildWebviewHtml(BASE_OPTIONS));
+    const mediaSrc = /media-src ([^;]*);/.exec(csp)?.[1] ?? '';
+    expect(mediaSrc.split(/\s+/)).toEqual([BASE_OPTIONS.cspSource, 'https:']);
+    expect(mediaSrc).not.toContain('data:');
+  });
+
   it('embeds the stylesheet and script URIs', () => {
     const html = buildWebviewHtml(BASE_OPTIONS);
     expect(html).toContain(`href="${BASE_OPTIONS.styleUri}"`);

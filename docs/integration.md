@@ -302,7 +302,7 @@ attribute value and a refused image source are different: their full
 sentence is written for a tooltip, and a terminal has no tooltip to put it
 in, so printing that sentence inline would land it back in the page. Those
 two cases print a short dim label instead (`[callout: type ignored]`,
-`[figure: image not shown]`), on its own line for a block component and
+`[figure: image not shown]`, `[video: clip not shown]`), on its own line for a block component and
 inline for an inline one, and the full sentence reaches a host only through
 `onDiagnostic`. The wording for every case is shared with the static engine
 and lives in one module, so a failing name reads the same in a terminal as
@@ -482,7 +482,9 @@ image option works as follows. `renderMark` and `renderMarkNode` in `@markii/rea
 `renderMarkToHtml` and `renderMarkNodeToHtml` in `@markii/html`, take an
 optional `resolveImageSrc` function. It is called for a relative `<img src>`,
 whether that comes from an ordinary markdown image or from a component that
-builds its own, such as the standard figure. It is never called for a source
+builds its own, such as the standard figure. The `video` component sends its
+clip and its poster through the same function. A clip then refuses any
+`data:` result. It is never called for a source
 that already carries a scheme, a protocol-relative form, a bare fragment, or
 an empty value. Returning `undefined`, or throwing, leaves the source exactly
 as the author wrote it, so one unresolvable image never costs a render.
@@ -584,7 +586,7 @@ source is what this is for.
 Both renderers also take an `onDiagnostic` callback. It is called once for
 each quiet marker a render produces for a value the renderer recognized and
 declined to use: a known attribute whose value is outside its closed set, a
-figure source refused as unsafe, a block component written as an inline
+figure or video source refused as unsafe, a video with no source, a block component written as an inline
 directive (`form-mismatch`), and an inline component that received neither
 content nor attributes (`empty-inline`). It receives the kind, the directive, the
 attribute when there is one, and the sentence that explains the marker, so a

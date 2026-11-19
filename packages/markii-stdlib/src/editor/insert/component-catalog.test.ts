@@ -34,6 +34,10 @@ describe('standardComponentCatalog', () => {
     expect(figure?.kind).toBe('container');
     expect(figure?.requiredAttributes).toEqual(['src']);
 
+    const video = catalog.find((entry) => entry.directiveName === 'video');
+    expect(video?.kind).toBe('container');
+    expect(video?.requiredAttributes).toEqual(['src']);
+
     const kbd = catalog.find((entry) => entry.directiveName === 'kbd');
     expect(kbd?.kind).toBe('inline');
     expect(kbd?.requiredAttributes).toEqual([]);

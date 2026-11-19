@@ -154,6 +154,20 @@ describe('imageEmbedDiagnosticLines', () => {
   });
 });
 
+describe('imageEmbedDiagnosticLines for a local clip', () => {
+  it('says the clip keeps its path and needs to sit beside the file', () => {
+    const lines = imageEmbedDiagnosticLines({
+      embedded: [],
+      embeddedBytes: 0,
+      skipped: [{ src: 'clips/a.mp4', reason: 'video-not-embedded' }],
+      remote: 0,
+    });
+    expect(lines).toEqual([
+      'Skipped clips/a.mp4: video clips are not embedded, so the exported file keeps this path and needs the clip beside it to play.',
+    ]);
+  });
+});
+
 describe('exportDiagnosticLines', () => {
   it('records a failure reason verbatim', () => {
     const lines = exportDiagnosticLines({ kind: 'failed', reason: 'boom' });

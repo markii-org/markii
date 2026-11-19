@@ -810,6 +810,13 @@ the embedder does not recognize or one that could not be read. Each of
 those is named on the diagnostics surface, with its size where size is the
 reason. None of them is a failure, and none belongs in the notice.
 
+A local video poster is embedded like an image. The clip itself never is,
+because a clip would swell the file far past a useful size. The export keeps
+the clip's path, so the file plays it only beside the clip. The diagnostics
+surface names each local clip. A host whose preview runs under a content
+security policy allows `media-src` from its own resource source and `https:`,
+never `data:`. The VS Code preview does. Obsidian sets no policy.
+
 Images in an export load eagerly, because a file may print from a hidden
 window that never scrolls. `createHtmlExportEngine` renders that way, and a
 host that exports through its own React pass sets `imageLoading: 'eager'`.

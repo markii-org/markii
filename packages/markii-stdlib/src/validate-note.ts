@@ -37,6 +37,9 @@ const VALUE_DIRECTIVE_NAME = 'value';
 /** The standard component whose `src` is a URL the renderers check. */
 const FIGURE_DIRECTIVE_NAME = 'figure';
 
+/** The standard component whose `src` and `poster` are URLs the renderers check. */
+const VIDEO_DIRECTIVE_NAME = 'video';
+
 const DIRECTIVE_NODE_TYPES: ReadonlySet<string> = new Set([
   'textDirective',
   'leafDirective',
@@ -183,6 +186,16 @@ export function unsafeImageSrcMessage(directive: string): string {
   return `${directive}: image source was refused as unsafe and was not shown`;
 }
 
+/** The diagnostic text for a `video` whose clip source uses a refused scheme. */
+export function unsafeVideoSrcMessage(directive: string): string {
+  return `${directive}: source uses a scheme that is not allowed`;
+}
+
+/** The diagnostic text for a `video` whose poster uses a refused scheme. */
+export function unsafeVideoPosterMessage(directive: string): string {
+  return `${directive}: poster uses a scheme that is not allowed, so no poster is shown`;
+}
+
 /** The diagnostic text for a Markdown image whose source uses a refused scheme. */
 function unsafeMarkdownImageMessage(): string {
   return 'image: source uses a scheme that is not allowed';
@@ -199,7 +212,8 @@ export interface ValidateNoteOptions {
    * The URL scheme rule, normally `@markii/core`'s `isSafeUrl`. Given, a
    * `figure` whose `src` it refuses yields an `'unsafe-image-src'`
    * finding, and a Markdown `image`, `link` or `definition` whose URL it
-   * refuses yields an `'unsafe-url'` finding. Omitted, no source is
+   * refuses yields an `'unsafe-url'` finding, as does a `video` whose
+   * `src` or `poster` it refuses. Omitted, no source is
    * checked. Only the scheme is judged: a
    * relative path a host resolves is never a finding here.
    */
@@ -331,6 +345,28 @@ export function validateNote(
         message: unsafeImageSrcMessage(name),
         ...at,
       });
+    }
+    if (isSafeUrl !== undefined && name === VIDEO_DIRECTIVE_NAME) {
+      const poster = Object.hasOwn(attributes, 'poster')
+        ? attributes['poster']
+        : undefined;
+      if (typeof src === 'string' && src !== '' && !isSafeUrl(src)) {
+        events.push({
+          kind: 'unsafe-url',
+          directive: name,
+          message: unsafeVideoSrcMessage(name),
+          ...at,
+        });
+      }
+      if (typeof poster === 'string' && poster !== '' && !isSafeUrl(poster)) {
+        events.push({
+          kind: 'unsafe-url',
+          directive: name,
+          attribute: 'poster',
+          message: unsafeVideoPosterMessage(name),
+          ...at,
+        });
+      }
     }
     const invalid = firstInvalidEnum(
       (entry.attributes ?? []).map((a) => [a.name, a.values] as const),

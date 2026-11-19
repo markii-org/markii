@@ -238,3 +238,17 @@ export function resolveImageAttribute(
 ): string {
   return resolveImageAttributes(value, resolveImageSrc).src;
 }
+
+/**
+ * The `src` one `<video>` should carry, or `null` when it must not be drawn.
+ * The resolver answers as it does for an image. A clip then refuses every
+ * `data:` URL, in any letter case and with any whitespace the URL parser
+ * would remove, because a clip has no business being inline.
+ */
+export function resolveVideoSrc(
+  value: string,
+  resolveImageSrc: ResolveImageSrc | undefined,
+): string | null {
+  const src = resolveImageAttributes(value, resolveImageSrc).src;
+  return schemeOf(forSchemeTest(src)) === 'data' ? null : src;
+}

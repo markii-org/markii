@@ -54,6 +54,8 @@ export {
   standardNoteCatalog,
   unknownDirectiveMessage,
   unsafeImageSrcMessage,
+  unsafeVideoPosterMessage,
+  unsafeVideoSrcMessage,
   validateNote,
   type NoteCatalogAttribute,
   type NoteCatalogEntry,

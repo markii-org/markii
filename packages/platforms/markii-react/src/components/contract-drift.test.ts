@@ -116,6 +116,7 @@ const ATTRIBUTE_READ_SOURCES: Record<string, AttributeReadSpec> = {
   card: { own: ['card.tsx'] },
   badge: { own: ['badge.tsx'] },
   figure: { own: ['figure.tsx'] },
+  video: { own: ['video.tsx'] },
   tabs: { own: ['tabs.tsx'] },
   tab: { childDirective: ['tabs.tsx'] },
   stat: { own: ['stat.tsx'] },
@@ -214,7 +215,7 @@ describe('STANDARD_COMPONENTS vs defaultRegistry — coverage', () => {
     );
   });
 
-  it('covers exactly the 23 standard components (the 20 audited for issue #17 slice 2, plus divider, the fit layout wrapper, and table)', () => {
+  it('covers exactly the 24 standard components', () => {
     // Not a load-bearing count on its own — the two tests above already
     // prove the sets are equal both ways — but pins the number so a
     // component silently added to one side and removed from the other
@@ -223,7 +224,7 @@ describe('STANDARD_COMPONENTS vs defaultRegistry — coverage', () => {
     expect(Object.keys(defaultRegistry).sort()).toEqual(
       Object.keys(STANDARD_COMPONENTS).sort(),
     );
-    expect(Object.keys(defaultRegistry)).toHaveLength(23);
+    expect(Object.keys(defaultRegistry)).toHaveLength(24);
   });
 });
 

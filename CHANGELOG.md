@@ -6,6 +6,21 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- The `video` standard component: a short, silent, looping clip with an
+  optional `poster`, an optional `alt` and a caption body, written like a
+  figure. It replaces an animated GIF. `@markii/react` plays it muted while
+  at least half of it is in view, never under reduced motion and never
+  again after the reader paused it. `@markii/html` output plays on click,
+  print shows a play badge over the poster, and `@markii/ansi` prints a
+  link. Clip and poster go through `resolveImageSrc` and the image scheme
+  check, and a `data:` clip is refused. `Video` joins each engine's
+  component exports, and `@markii/stdlib` exports `unsafeVideoSrcMessage`
+  and `unsafeVideoPosterMessage`. HTML exports embed a local poster and
+  list a local clip on the diagnostics surface. The VS Code preview allows
+  media from its own source and `https:`. (#93)
+
 ### Fixed
 
 - A `figure` after another block keeps the document rhythm gap above it.

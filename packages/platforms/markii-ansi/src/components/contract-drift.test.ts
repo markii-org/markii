@@ -67,6 +67,7 @@ const ATTRIBUTE_READ_SOURCES: Record<string, string[]> = {
   card: ['card.ts'],
   badge: ['badge.ts'],
   figure: ['figure.ts'],
+  video: ['video.ts'],
   tabs: ['tabs-string.ts'],
   tab: ['tab.ts'],
   stat: ['stat.ts'],
@@ -147,11 +148,11 @@ describe('STANDARD_COMPONENTS vs defaultAnsiRegistry — coverage', () => {
     );
   });
 
-  it('covers exactly the 23 standard components', () => {
+  it('covers exactly the 24 standard components', () => {
     expect(Object.keys(defaultAnsiRegistry).sort()).toEqual(
       Object.keys(STANDARD_COMPONENTS).sort(),
     );
-    expect(Object.keys(defaultAnsiRegistry)).toHaveLength(23);
+    expect(Object.keys(defaultAnsiRegistry)).toHaveLength(24);
   });
 });
 

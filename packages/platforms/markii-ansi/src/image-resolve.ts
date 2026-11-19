@@ -1,4 +1,9 @@
-import { isResolvableRelativeValue, isSafeResolvedUrl } from './url-resolve.js';
+import {
+  forSchemeTest,
+  isResolvableRelativeValue,
+  isSafeResolvedUrl,
+  schemeOf,
+} from './url-resolve.js';
 
 /**
  * The shared logic behind `renderMarkToAnsi`'s `resolveImageSrc` option
@@ -63,4 +68,18 @@ export function resolveImageAttribute(
   const src = typeof resolved === 'string' ? resolved : resolved.src;
   if (typeof src !== 'string') return value;
   return isSafeResolvedUrl(src) ? src : value;
+}
+
+/**
+ * The `src` one video reference should carry, or `null` when it must not be
+ * shown. The resolver answers as it does for an image. A clip then refuses
+ * every `data:` URL, in any letter case and with any whitespace the URL
+ * parser would remove.
+ */
+export function resolveVideoSrc(
+  value: string,
+  resolveImageSrc: ResolveImageSrc | undefined,
+): string | null {
+  const src = resolveImageAttribute(value, resolveImageSrc);
+  return schemeOf(forSchemeTest(src)) === 'data' ? null : src;
 }

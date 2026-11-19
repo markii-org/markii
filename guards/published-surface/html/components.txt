@@ -20,6 +20,7 @@ Stat
 Tab
 Table
 Tabs
+Video
 createLayoutWrapper
 defaultHtmlRegistry
 layoutWrapperPresetAxis

@@ -25,9 +25,10 @@
  * without the image, with a quiet marker.
  *
  * `'unsafe-url'` — a Markdown image, link, autolink or reference
- * definition whose URL uses a scheme the sanitizer refuses. Reported only
- * by `validateNote`, and only when the caller passes `isSafeUrl`. Carries
- * no directive.
+ * definition whose URL uses a scheme the sanitizer refuses. Reported by
+ * `validateNote` when the caller passes `isSafeUrl`, with no directive.
+ * The standard `video` reports it too, naming the directive, when its
+ * `src` or `poster` is refused; the renderers report that case as well.
  *
  * `'form-mismatch'` — a registered block component was written as an
  * inline directive (`:callout[x]`); it rendered as the inline fallback

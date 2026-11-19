@@ -223,4 +223,60 @@ describe('embedImagesInHtml', () => {
     expect(report.embeddedBytes).toBe(PNG.byteLength + other.byteLength);
     expect(report.remote).toBe(1);
   });
+
+  describe('a video', () => {
+    const VIDEO =
+      '<figure class="mk-video"><span class="mk-video__frame"><video class="mk-video__media" src="clips/a.mp4" poster="a.png" controls muted loop playsinline preload="metadata"></video></span></figure>';
+
+    it('embeds a local poster and keeps the clip path', async () => {
+      const read = vi.fn(readerFor({ 'a.png': PNG }));
+      const { html, report } = await embedImagesInHtml(VIDEO, read);
+      expect(html).toContain(`poster="${toImageDataUri(PNG, 'image/png')}"`);
+      expect(html).toContain('src="clips/a.mp4"');
+      expect(read).toHaveBeenCalledTimes(1);
+      expect(read).toHaveBeenCalledWith('a.png');
+      expect(report.embedded).toEqual(['a.png']);
+      expect(report.embeddedBytes).toBe(PNG.byteLength);
+    });
+
+    it('reports a local clip as skipped, once, and never reads it', async () => {
+      const read = vi.fn(readerFor({ 'a.png': PNG }));
+      const { report } = await embedImagesInHtml(VIDEO + VIDEO, read);
+      expect(report.skipped).toEqual([
+        { src: 'clips/a.mp4', reason: 'video-not-embedded' },
+      ]);
+      expect(read).not.toHaveBeenCalledWith('clips/a.mp4');
+    });
+
+    it('does not report a remote clip, and leaves a remote poster alone', async () => {
+      const html =
+        '<video src="https://x.test/a.mp4" poster="https://x.test/a.png"></video>';
+      const result = await embedImagesInHtml(html, readerFor({}));
+      expect(result.html).toBe(html);
+      expect(result.report.skipped).toEqual([]);
+      expect(result.report.remote).toBe(1);
+    });
+
+    it('applies the image cap to a poster', async () => {
+      const big = new Uint8Array(MAX_EMBEDDED_IMAGE_BYTES + 1);
+      const { html, report } = await embedImagesInHtml(
+        '<video src="https://x.test/a.mp4" poster="big.png"></video>',
+        readerFor({ 'big.png': big }),
+      );
+      expect(html).toContain('poster="big.png"');
+      expect(report.skipped).toEqual([
+        {
+          src: 'big.png',
+          reason: 'too-large',
+          byteLength: big.byteLength,
+        },
+      ]);
+    });
+
+    it('leaves a video with no poster alone', async () => {
+      const html = '<video src="https://x.test/a.mp4"></video>';
+      const result = await embedImagesInHtml(html, readerFor({}));
+      expect(result.html).toBe(html);
+    });
+  });
 });

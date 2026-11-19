@@ -132,7 +132,7 @@ Attributes become the component's settings, and the markdown inside a
 container becomes its content.
 
 The reference renderer ships a standard set: `callout`, `card`, `badge`,
-`details`, `figure`, `tabs` and `tab`, `kbd`, `rating`, `divider`, and four
+`details`, `figure`, `video`, `tabs` and `tab`, `kbd`, `rating`, `divider`, and four
 data-bound components, `stat`, `progress`, `chart`, and `table`. These are
 defaults, not a fixed vocabulary. You can restyle them, replace them, or add
 your own.
@@ -147,6 +147,26 @@ particular look:
 
 `variant` accepts `line`, `dots`, or `ornament`. Any other value quietly
 falls back to `line`.
+
+The `video` component holds a short, silent, looping clip, such as a
+terminal or interface demo. It replaces an animated GIF, which is several
+times larger and cannot be paused. It is written like a figure, and its
+body is the caption:
+
+```
+:::video{src="demo.mp4" poster="demo.png" alt="Opening a note"}
+The preview updates as you type.
+:::
+```
+
+`poster` is an optional still shown before the clip starts and on paper.
+`alt` names the clip for assistive tools. Playback is fixed and not
+authored. The clip is always muted and loops, and the reader always gets
+the player's controls. The reference renderer plays it while at least half
+of it is in view, never for a reader who asked for reduced motion, and never
+again after the reader paused it. Static HTML plays on click. A printed page
+shows a play badge over the poster. A terminal prints a link to the clip.
+A `data:` source is refused.
 
 The label sits centered by default. An optional `label-align` attribute moves
 it: `left` or `right` pins it near that end of the rule, and `center` is the

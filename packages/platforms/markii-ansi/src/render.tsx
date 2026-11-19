@@ -38,6 +38,7 @@ import {
   type TextAlign,
 } from './text-grid.js';
 import { drawTableGrid } from './components/table-grid.js';
+import { videoHeaderLines } from './components/video.js';
 import {
   ROW_GUTTER,
   resolveRowLayout,
@@ -194,6 +195,7 @@ const DETAILS_NAME = 'details';
 const CARD_NAME = 'card';
 const CALLOUT_NAME = 'callout';
 const FIGURE_NAME = 'figure';
+const VIDEO_NAME = 'video';
 
 /** Block-level hast tags this engine recognizes; anything else inside a directive's children is treated as inline content. */
 const BLOCK_TAGS: ReadonlySet<string> = new Set([
@@ -1436,7 +1438,8 @@ function isInteractiveCapableBlock(node: AnyBlockNode, wctx: WalkContext) {
       name === DETAILS_NAME ||
       name === CARD_NAME ||
       name === CALLOUT_NAME ||
-      name === FIGURE_NAME) &&
+      name === FIGURE_NAME ||
+      name === VIDEO_NAME) &&
     hasRealComponent(wctx.registry, name)
   );
 }
@@ -1967,7 +1970,36 @@ function renderFigureElement(
   );
 }
 
-/** Renders one directive as a real Ink element (block position only). Dispatches `row`/`tabs`/`details`/`card`/`figure` to their real builders; every other directive falls back to the string engine, wrapped in one `<Text>`. */
+/**
+ * `:::video{...} caption markdown :::` as a real Ink element, the way
+ * `renderFigureElement` draws a figure: the header lines from
+ * `components/video.ts` stack directly above the caption body.
+ */
+function renderVideoElement(
+  element: Element,
+  attributes: DirectiveAttributes,
+  width: number,
+  indent: string,
+  wctx: WalkContext,
+): ReactElement | null {
+  const headerLines = videoHeaderLines(attributes, {
+    color: wctx.color,
+    glyphs: wctx.glyphs,
+    resolveImageSrc: wctx.resolveImageSrc,
+    onDiagnostic: wctx.onDiagnostic,
+    dim: (text) => dim(text, wctx.color),
+    text: stripControlCharacters,
+  });
+  const body = renderBlocksElement(element.children, width, indent, wctx);
+  return (
+    <Box flexDirection="column">
+      {styledText(headerLines.join('\n'))}
+      {body}
+    </Box>
+  );
+}
+
+/** Renders one directive as a real Ink element (block position only). Dispatches `row`/`tabs`/`details`/`card`/`figure`/`video` to their real builders; every other directive falls back to the string engine, wrapped in one `<Text>`. */
 function renderDirectiveElement(
   element: Element,
   width: number,
@@ -2006,7 +2038,8 @@ function renderDirectiveElement(
       name === DETAILS_NAME ||
       name === CARD_NAME ||
       name === CALLOUT_NAME ||
-      name === FIGURE_NAME) &&
+      name === FIGURE_NAME ||
+      name === VIDEO_NAME) &&
     hasRealComponent(wctx.registry, name)
   ) {
     // None of these six own a layout axis (`registryLayoutAxis` is
@@ -2059,6 +2092,8 @@ function renderDirectiveElement(
         el = renderTabsElement(element, width, indent, wctx);
       } else if (name === DETAILS_NAME) {
         el = renderDetailsElement(element, attributes, width, indent, wctx);
+      } else if (name === VIDEO_NAME) {
+        el = renderVideoElement(element, attributes, width, indent, wctx);
       } else {
         el = renderFigureElement(element, attributes, width, indent, wctx);
       }

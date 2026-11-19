@@ -1174,6 +1174,26 @@ describe('renderMark — render-level conformance fixtures (conformance/render/)
     expect(images).toEqual(['resolved/cat.png', 'resolved/dog.png']);
   });
 
+  it('10-video: the markup matches the committed HTML fixture, attribute order and the muted property aside', () => {
+    const { container } = render(
+      renderMark(readRenderFixture('10-video'), defaultRegistry),
+    );
+    const expected = readFileSync(
+      join(conformanceDir(), 'render', '10-video.html'),
+      'utf8',
+    );
+    // React sets `muted` as a property, so it is not in the serialized
+    // markup; the property is checked on every clip instead.
+    const videos = [...container.querySelectorAll('video')];
+    expect(videos).toHaveLength(2);
+    for (const video of videos) expect(video.muted).toBe(true);
+    expect(sortedAttributes(container.innerHTML)).toBe(
+      sortedAttributes(
+        expected.replace(/\n$/, '').replace(/ muted(?==|>| )/g, ''),
+      ),
+    );
+  });
+
   it('07-notice: the silent-value-drop notice marker on an enum mismatch and a refused figure src', () => {
     const { container } = render(
       renderMark(readRenderFixture('07-notice'), defaultRegistry),

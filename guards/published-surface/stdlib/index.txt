@@ -41,4 +41,6 @@ reportDiagnostic
 standardNoteCatalog
 unknownDirectiveMessage
 unsafeImageSrcMessage
+unsafeVideoPosterMessage
+unsafeVideoSrcMessage
 validateNote

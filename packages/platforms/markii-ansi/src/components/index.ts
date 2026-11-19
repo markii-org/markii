@@ -9,6 +9,7 @@ import { Chart } from './chart.js';
 import { Details } from './details-string.js';
 import { Divider } from './divider.js';
 import { Figure } from './figure.js';
+import { Video } from './video.js';
 import { Kbd } from './kbd.js';
 import {
   createLayoutWrapper,
@@ -35,6 +36,7 @@ export { InteractiveDetails } from './details.js';
 export { Divider } from './divider.js';
 export type { DividerVariant } from './divider.js';
 export { Figure } from './figure.js';
+export { Video } from './video.js';
 export { Kbd } from './kbd.js';
 export {
   createLayoutWrapper,
@@ -111,6 +113,7 @@ export const defaultAnsiRegistry: AnsiRegistry = createAnsiRegistry({
   },
   badge: { component: Badge, inline: inlineFromContract('badge') },
   figure: { component: Figure, inline: inlineFromContract('figure') },
+  video: { component: Video, inline: inlineFromContract('video') },
   tabs: { component: Tabs, inline: inlineFromContract('tabs') },
   tab: { component: Tab, inline: inlineFromContract('tab') },
   row: { component: Row, inline: inlineFromContract('row') },

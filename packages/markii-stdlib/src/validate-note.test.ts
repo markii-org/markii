@@ -4,6 +4,8 @@ import {
   invalidEnumAttribute,
   standardNoteCatalog,
   unsafeImageSrcMessage,
+  unsafeVideoPosterMessage,
+  unsafeVideoSrcMessage,
   validateNote,
   type NoteCatalogEntry,
   type NoteTreeNode,
@@ -203,6 +205,46 @@ describe('validateNote with a URL scheme rule', () => {
     const safe = root(
       directive('leafDirective', 'figure', { src: 'images/a.png' }),
       directive('leafDirective', 'figure', {}),
+    );
+    expect(validateNote(safe, catalog, { isSafeUrl })).toEqual([]);
+  });
+});
+
+describe('validateNote with a video', () => {
+  const catalog = standardNoteCatalog();
+  const isSafeUrl = (url: string): boolean => !url.startsWith('javascript:');
+
+  it('reports a refused src and a refused poster, each at the directive range', () => {
+    const events = validateNote(
+      root(
+        directive(
+          'leafDirective',
+          'video',
+          { src: 'javascript:x', poster: 'javascript:y' },
+          2,
+        ),
+      ),
+      catalog,
+      { isSafeUrl },
+    );
+    expect(events.map((e) => [e.kind, e.directive, e.message])).toEqual([
+      ['unsafe-url', 'video', unsafeVideoSrcMessage('video')],
+      ['unsafe-url', 'video', unsafeVideoPosterMessage('video')],
+    ]);
+    expect(events[1]?.attribute).toBe('poster');
+  });
+
+  it('reports nothing without the rule or for safe and relative sources', () => {
+    const unsafe = root(
+      directive('leafDirective', 'video', { src: 'javascript:x' }),
+    );
+    expect(validateNote(unsafe, catalog)).toEqual([]);
+    const safe = root(
+      directive('leafDirective', 'video', {
+        src: 'clips/a.mp4',
+        poster: 'https://x.test/a.png',
+      }),
+      directive('leafDirective', 'video', {}),
     );
     expect(validateNote(safe, catalog, { isSafeUrl })).toEqual([]);
   });

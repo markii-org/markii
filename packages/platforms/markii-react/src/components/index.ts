@@ -21,6 +21,7 @@ import { Stat } from './stat.js';
 import { Tab } from './tab.js';
 import { Tabs } from './tabs.js';
 import { Table } from './table.js';
+import { Video } from './video.js';
 
 export { Badge } from './badge.js';
 export type { BadgeVariant } from './badge.js';
@@ -32,6 +33,7 @@ export { Chart } from './chart.js';
 export { Details } from './details.js';
 export { Divider } from './divider.js';
 export { Figure } from './figure.js';
+export { Video } from './video.js';
 export { Kbd } from './kbd.js';
 export {
   createLayoutWrapper,
@@ -98,6 +100,7 @@ export const defaultRegistry: Registry = {
   card: { component: Card, inline: inlineFromContract('card') },
   badge: { component: Badge, inline: inlineFromContract('badge') },
   figure: { component: Figure, inline: inlineFromContract('figure') },
+  video: { component: Video, inline: inlineFromContract('video') },
   tabs: { component: Tabs, inline: inlineFromContract('tabs') },
   tab: { component: Tab, inline: inlineFromContract('tab') },
   stat: { component: Stat, inline: inlineFromContract('stat') },

@@ -183,8 +183,14 @@ export function buildWebviewHtml(options: WebviewHtmlOptions): string {
     cspSource URL. That widens nothing on its own — which local files may
     actually be served is decided by the panel's localResourceRoots
     (preview-panel.ts), not by this policy.
+
+  - media-src allows https: and the webview's own source so a video
+    directive's clip can load. It follows
+    img-src, minus data:, because a clip has no business being inline. A
+    relative src is rewritten to the same asWebviewUri form as an image, so
+    the panel's localResourceRoots decide which local clips may be served.
 -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${cspSource} https: data:; style-src ${cspSource} 'unsafe-inline'; font-src ${cspSource}; script-src 'nonce-${nonce}';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${cspSource} https: data:; media-src ${cspSource} https:; style-src ${cspSource} 'unsafe-inline'; font-src ${cspSource}; script-src 'nonce-${nonce}';">
 <link rel="stylesheet" href="${styleUri}">
 ${packStyleTags}
 <title>${title}</title>

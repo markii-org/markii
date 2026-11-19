@@ -64,7 +64,7 @@ describe('STANDARD_COMPONENTS', () => {
     }
   });
 
-  it('seeds exactly the twenty-three components that exist in @markii/react today', () => {
+  it('seeds exactly the twenty-four components that exist in @markii/react today', () => {
     expect(Object.keys(STANDARD_COMPONENTS).sort()).toEqual([
       'badge',
       'callout',
@@ -88,6 +88,7 @@ describe('STANDARD_COMPONENTS', () => {
       'tab',
       'table',
       'tabs',
+      'video',
       'wide',
     ]);
   });
@@ -141,6 +142,14 @@ describe('STANDARD_COMPONENTS', () => {
     expect(STANDARD_COMPONENTS.figure?.kind).toBe('container');
     expect(STANDARD_COMPONENTS.tabs?.kind).toBe('container');
     expect(STANDARD_COMPONENTS.tab?.kind).toBe('container');
+  });
+
+  it('marks video as a container directive with src, poster and alt only', () => {
+    expect(STANDARD_COMPONENTS.video?.kind).toBe('container');
+    expect(
+      Object.keys(STANDARD_COMPONENTS.video?.attributes ?? {}).sort(),
+    ).toEqual(['alt', 'poster', 'src']);
+    expect(STANDARD_COMPONENTS.video?.attributes.src?.required).toBe(true);
   });
 
   it('marks badge as an inline directive, matching its :badge[...] form', () => {

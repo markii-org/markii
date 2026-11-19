@@ -1,0 +1,9 @@
+▶ video The demo (demo.mp4)
+The demo, ten seconds.
+
+▶ video (plain.mp4)
+No poster.
+
+▶ video
+[video: clip not shown]
+Refused clip.

@@ -26,6 +26,7 @@ UnknownDirective
 UnknownDirectiveProps
 ValueDirective
 ValueDirectiveProps
+Video
 createLayoutWrapper
 defaultRegistry
 layoutWrapperPresetAxis

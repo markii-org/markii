@@ -137,6 +137,36 @@ export function unsafeImageSrcTitle(directive: string): string {
   return `${directive}: image source was refused as unsafe and was not shown`;
 }
 
+/** The marker text for a `video` whose clip `src` uses a scheme that is not allowed. Identical across the engines and to `@markii/stdlib`'s `unsafeVideoSrcMessage`. */
+export function unsafeVideoSrcTitle(directive: string): string {
+  return `${directive}: source uses a scheme that is not allowed`;
+}
+
+/** The marker text for a `video` whose `poster` uses a scheme that is not allowed; the clip still renders, without a poster. Identical across the engines and to `@markii/stdlib`'s `unsafeVideoPosterMessage`. */
+export function unsafeVideoPosterTitle(directive: string): string {
+  return `${directive}: poster uses a scheme that is not allowed, so no poster is shown`;
+}
+
+/** The marker text for a `video` with no `src`: only the caption is shown. Identical across the engines. */
+export function missingVideoSrcTitle(directive: string): string {
+  return `${directive}: no source was given, so no clip is shown`;
+}
+
+/** The INLINE marker text for a `video` whose clip `src` was refused; the full sentence goes to `onDiagnostic` only. */
+export function unsafeVideoSrcLabel(directive: string): string {
+  return `${directive}: clip not shown`;
+}
+
+/** The INLINE marker text for a `video` whose `poster` was refused. */
+export function unsafeVideoPosterLabel(directive: string): string {
+  return `${directive}: poster not shown`;
+}
+
+/** The INLINE marker text for a `video` with no `src`. */
+export function missingVideoSrcLabel(directive: string): string {
+  return `${directive}: no source`;
+}
+
 /** The diagnostic text for a host `renderCode` callback that threw; the code block rendered as usual. Wording identical to `@markii/html`'s `codeRendererFailedTitle`. */
 export function codeRendererFailedTitle(): string {
   return 'code block: the host code renderer failed, so the plain block was shown';

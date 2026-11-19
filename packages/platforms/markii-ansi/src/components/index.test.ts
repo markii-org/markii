@@ -4,8 +4,8 @@ import { defaultAnsiRegistry } from './index.js';
 import { registryLayoutAxis, readRegistryComponent } from '../registry.js';
 
 describe('defaultAnsiRegistry', () => {
-  it('registers all 23 standard components', () => {
-    expect(Object.keys(defaultAnsiRegistry)).toHaveLength(23);
+  it('registers all 24 standard components', () => {
+    expect(Object.keys(defaultAnsiRegistry)).toHaveLength(24);
   });
 
   it('every entry has a real component function', () => {

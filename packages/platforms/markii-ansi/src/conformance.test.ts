@@ -109,6 +109,7 @@ describe('render-level conformance fixtures (conformance/render/)', () => {
     '07-notice',
     '08-row-cards',
     '09-ascii-boxes',
+    '10-video',
   ];
 
   /** Fixtures whose committed `.txt` is rendered with `box: 'ascii'`; every other one uses the default unicode glyphs. */

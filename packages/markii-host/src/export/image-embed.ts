@@ -25,6 +25,13 @@
  * base64 encoding, and the reporting stay in ONE place, shared by every
  * host.
  *
+ * VIDEO. A `<video>` is read for two attributes. A local `poster` is an
+ * image and is embedded the same way, with the same cap and report. The
+ * clip `src` is never embedded, because a clip would swell the file far
+ * past any useful size. A local clip keeps its path and is reported as
+ * skipped with the `video-not-embedded` reason, so the diagnostics surface
+ * says the exported file will not play it away from its folder.
+ *
  * NOTHING HERE EVER FAILS AN EXPORT. An image that is too large, of an
  * unknown type, missing, or unreadable keeps the source the author wrote
  * and is recorded in the returned report. The host turns that report into
@@ -143,7 +150,8 @@ export type ExportImageReader = (
 ) => ExportImageResult | Promise<ExportImageResult>;
 
 /** Why one image kept its original source instead of being embedded. Only outcomes worth a diagnostics line appear here; a remote URL is not a skip, it is the documented behavior. */
-export type ImageSkipReason = 'unsupported-type' | 'too-large' | 'unreadable';
+export type ImageSkipReason =
+  'unsupported-type' | 'too-large' | 'unreadable' | 'video-not-embedded';
 
 /** One image that was not embedded, and why. */
 export interface SkippedImage {
@@ -234,18 +242,30 @@ function decodeAttributeValue(value: string): string {
 }
 
 /**
- * Matches one `<img ...>` start tag. Both renderers emit attribute values
- * in double quotes, and every `<` inside rendered text or code is escaped
- * to `&lt;` before it reaches here, so a `>`-terminated scan cannot run
- * past a tag or match a literal `<img` a note merely talks about.
+ * Matches one `<img ...>` or `<video ...>` start tag. Both renderers emit
+ * attribute values in double quotes, and every `<` inside rendered text or
+ * code is escaped to `&lt;` before it reaches here, so a `>`-terminated
+ * scan cannot run past a tag or match a literal `<img` a note merely talks
+ * about.
  */
-const IMG_TAG_PATTERN = /<img\b[^>]*>/gi;
+const MEDIA_TAG_PATTERN = /<(?:img|video)\b[^>]*>/gi;
 
-/** Matches the `src="..."` attribute inside one already-matched `<img>` tag. */
+/** Matches the `src="..."` attribute inside one already-matched start tag. */
 const SRC_ATTRIBUTE_PATTERN = /(\ssrc=")([^"]*)(")/i;
 
+/** Matches the `poster="..."` attribute inside one already-matched `<video>` tag. */
+const POSTER_ATTRIBUTE_PATTERN = /(\sposter=")([^"]*)(")/i;
+
+/** The attribute that holds the image of one start tag: `src` on an `<img>`, `poster` on a `<video>`. */
+function imageAttributePattern(tag: string): RegExp {
+  return /^<video\b/i.test(tag)
+    ? POSTER_ATTRIBUTE_PATTERN
+    : SRC_ATTRIBUTE_PATTERN;
+}
+
 /**
- * Rewrites every embeddable local `<img src>` in `html` into a `data:` URI,
+ * Rewrites every embeddable local `<img src>` and `<video poster>` in
+ * `html` into a `data:` URI,
  * using `readImage` to fetch each source's bytes, and reports what happened
  * to every image it saw.
  *
@@ -266,9 +286,22 @@ export async function embedImagesInHtml(
   // Resolved once per distinct source: `undefined` means "keep the original".
   const dataUris = new Map<string, string | undefined>();
 
-  const tags = html.match(IMG_TAG_PATTERN) ?? [];
+  // A local clip is reported once however often it appears.
+  const clips = new Set<string>();
+
+  const tags = html.match(MEDIA_TAG_PATTERN) ?? [];
   for (const tag of tags) {
-    const attribute = SRC_ATTRIBUTE_PATTERN.exec(tag);
+    if (/^<video\b/i.test(tag)) {
+      const clip = SRC_ATTRIBUTE_PATTERN.exec(tag);
+      const clipSrc = decodeAttributeValue(clip?.[2] ?? '');
+      if (isEmbeddableImageSrc(clipSrc)) {
+        if (!clips.has(clipSrc)) {
+          clips.add(clipSrc);
+          skipped.push({ src: clipSrc, reason: 'video-not-embedded' });
+        }
+      }
+    }
+    const attribute = imageAttributePattern(tag).exec(tag);
     if (!attribute) continue;
     const rawSrc = attribute[2] ?? '';
     const src = decodeAttributeValue(rawSrc);
@@ -332,14 +365,15 @@ export async function embedImagesInHtml(
     embeddedBytes += result.bytes.byteLength;
   }
 
-  const rewritten = html.replace(IMG_TAG_PATTERN, (tag) => {
-    const attribute = SRC_ATTRIBUTE_PATTERN.exec(tag);
+  const rewritten = html.replace(MEDIA_TAG_PATTERN, (tag) => {
+    const pattern = imageAttributePattern(tag);
+    const attribute = pattern.exec(tag);
     if (!attribute) return tag;
     const src = decodeAttributeValue(attribute[2] ?? '');
     const dataUri = dataUris.get(src);
     if (dataUri === undefined) return tag;
     return tag.replace(
-      SRC_ATTRIBUTE_PATTERN,
+      pattern,
       (_match, before: string, _value: string, after: string) =>
         `${before}${dataUri}${after}`,
     );

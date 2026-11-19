@@ -70,6 +70,8 @@ export interface GlyphSet {
   readonly barEmpty: string;
   readonly starFilled: string;
   readonly starEmpty: string;
+  /** The mark before a `video`'s label line. */
+  readonly play: string;
   /** What a `stat` shows when its value is empty. */
   readonly emptyValue: string;
   /** The key legend on the live viewer's status line. */
@@ -106,6 +108,7 @@ const UNICODE: GlyphSet = {
   barEmpty: '░',
   starFilled: '★',
   starEmpty: '☆',
+  play: '▶',
   emptyValue: '—',
   keyLegend:
     'q quit  ↑↓/jk focus  ←→/tab switch  enter open/close  space/pgdn scroll  g/G top/end',
@@ -141,6 +144,7 @@ const ASCII: GlyphSet = {
   barEmpty: '.',
   starFilled: '*',
   starEmpty: '.',
+  play: '>',
   emptyValue: '-',
   keyLegend:
     'q quit  up/down/jk focus  left/right/tab switch  enter open/close  space/pgdn scroll  g/G top/end',
