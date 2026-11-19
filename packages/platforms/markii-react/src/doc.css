@@ -691,8 +691,13 @@
 
 /* ---------- figure ---------- */
 
+/*
+ * Only the inline half of the browser's default figure margin is removed.
+ * The block margins stay like a paragraph's, so the document rhythm rule
+ * spaces a figure like every other block.
+ */
 .mk-figure {
-  margin: 0;
+  margin-inline: 0;
 }
 
 .mk-figure__img {

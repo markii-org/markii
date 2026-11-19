@@ -6,6 +6,12 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- A `figure` after another block keeps the document rhythm gap above it.
+  `doc.css` reset the figure's whole margin, which outranked the rhythm
+  rule and left the figure flush against the block before it. (#92)
+
 ## [0.18.0] - 2026-11-18
 
 The stable release of the web host batch. It ships on the npm `latest`

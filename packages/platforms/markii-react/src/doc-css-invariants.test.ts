@@ -157,6 +157,15 @@ describe('doc.css: S3-01 — a component sets no outer margin (docs/spec.md §9)
         }
         expect(violations).toEqual([]);
       });
+
+      // A zero is not harmless on the block axis: any class selector
+      // outranks the zero-specificity rhythm rule, so a block margin reset
+      // on a component root removes the rhythm gap above it.
+      it(`${selector} declares no block-axis margin, zero included`, () => {
+        const blockAxis =
+          /\bmargin(?:-block(?:-start|-end)?|-top|-bottom)?\s*:\s*[^;]+/gi;
+        expect(block.body.match(blockAxis) ?? []).toEqual([]);
+      });
     }
   }
 });
