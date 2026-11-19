@@ -656,7 +656,7 @@ future. Before any work starts, the orchestrator:
 A change that only makes the reporter's case pass, a special case or a
 flag added for one host, is not acceptable. A change that makes one host
 work has to hold for all of them. When the outcome is unclear, the
-question goes to the user or a design review before a worker starts.
+question goes to the user before a worker starts.
 
 ## Commit messages (user-set 2026-08-25, binding)
 
