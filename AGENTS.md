@@ -636,6 +636,28 @@ same commit as the change that triggers them:
 - Progress lives on disk (`tmp/PLAN.md`, `TODO.md`) and is updated as each
   piece lands, so a context compaction loses nothing.
 
+## Issue triage (user-set 2026-11-20)
+
+An issue from a consumer is a report, not a spec. The reporter knows
+their own case. The project has to fit every host and the format's
+future. Before any work starts, the orchestrator:
+
+- checks every claim in the issue against the code and the docs, and
+  reproduces the failure where it can;
+- judges the ask against the product principles, the architecture rules
+  and the decisions already recorded, and against where the format is
+  going, not only against the reporter's site;
+- picks one outcome and gives the reason: Markii changes because the ask
+  fits the design, the consumer adjusts because Markii already offers a
+  way or the ask does not belong in Markii, or Markii changes in a
+  different way than the issue proposes because the problem is real but
+  the proposed fix does not fit.
+
+A change that only makes the reporter's case pass, a special case or a
+flag added for one host, is not acceptable. A change that makes one host
+work has to hold for all of them. When the outcome is unclear, the
+question goes to the user or a design review before a worker starts.
+
 ## Commit messages (user-set 2026-08-25, binding)
 
 NEVER put a link to a chat, conversation, or agent session in a commit
