@@ -658,6 +658,21 @@ flag added for one host, is not acceptable. A change that makes one host
 work has to hold for all of them. When the outcome is unclear, the
 question goes to the user before a worker starts.
 
+## Possible features (user-set 2026-11-20)
+
+Work that nobody needs now and that blocks nothing does not sit in the
+local queue. It goes straight to a GitHub issue titled
+`Possible feature: ...` with the `Possible Feature` label. The same holds
+for such a finding made during an implementation or a bug fix. The issue
+carries what a later reader needs: what exists today, why it is not done,
+and what doing it would take.
+
+Only three kinds of finding earn an issue: a likely bottleneck, a design
+gap that will cause trouble later, or a feature that would make the
+current design complete. Small polish and passing ideas do not. Once
+filed, an issue is not raised again unless the user asks or a real need
+appears.
+
 ## Commit messages (user-set 2026-08-25, binding)
 
 NEVER put a link to a chat, conversation, or agent session in a commit
