@@ -6,6 +6,12 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.18.1] - 2026-11-20
+
+The `video` component and a figure spacing fix. All twelve packages, the
+VS Code extension, the Obsidian plugin and the Neovim plugin move to
+0.18.1.
+
 ### Added
 
 - The `video` standard component: a short, silent, looping clip with an
