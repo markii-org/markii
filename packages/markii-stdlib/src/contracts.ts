@@ -289,7 +289,7 @@ export const STANDARD_COMPONENTS: Record<string, ComponentContract> = {
       },
     },
     description:
-      'A short, silent, looping clip with a rich caption, a replacement for an animated GIF, e.g. `:::video{src="demo.mp4" poster="demo.png" alt="The demo"} The demo, 10 seconds. ::: `. Body is the directive\'s inner markdown, rendered as the caption. It plays muted while at least half of it is in view, and never plays for a reader who asked for reduced motion.',
+      'A short looping clip that starts muted, with a rich caption, a replacement for an animated GIF, e.g. `:::video{src="demo.mp4" poster="demo.png" alt="The demo"} The demo, 10 seconds. ::: `. Body is the directive\'s inner markdown, rendered as the caption. It plays muted while at least half of it is in view, and never plays for a reader who asked for reduced motion.',
   },
   tabs: {
     name: 'tabs',

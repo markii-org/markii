@@ -106,8 +106,9 @@ function useVisibilityPlayback(
 
 /**
  * `:::video{src="..." poster="..." alt="..."} caption markdown :::` — a
- * short, silent, looping clip with a rich caption, a replacement for an
- * animated GIF. It is not a general player: no sound controls, no embeds.
+ * short looping clip that starts muted, with a rich caption, a replacement
+ * for an animated GIF. The native controls let the reader unmute it. It is
+ * not a general player: it never starts with sound and embeds nothing.
  *
  * Security: `src` and `poster` are directive attributes, which bypass
  * `@markii/core`'s hast sanitizer, so each goes through `isSafeUrl` first

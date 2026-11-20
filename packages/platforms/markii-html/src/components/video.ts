@@ -12,7 +12,7 @@ const DIRECTIVE_NAME = 'video';
 
 /**
  * `:::video{src="..." poster="..." alt="..."} caption markdown :::` — a
- * short, silent, looping clip with a rich caption. Matches `@markii/react`'s
+ * short looping clip that starts muted, with a rich caption. Matches `@markii/react`'s
  * `Video` markup byte-for-byte. The output is static: the reader presses
  * play, and the page runs no script.
  *

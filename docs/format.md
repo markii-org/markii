@@ -148,7 +148,7 @@ particular look:
 `variant` accepts `line`, `dots`, or `ornament`. Any other value quietly
 falls back to `line`.
 
-The `video` component holds a short, silent, looping clip, such as a
+The `video` component holds a short looping clip that starts muted, such as a
 terminal or interface demo. It replaces an animated GIF, which is several
 times larger and cannot be paused. It is written like a figure, and its
 body is the caption:
@@ -161,10 +161,12 @@ The preview updates as you type.
 
 `poster` is an optional still shown before the clip starts and on paper.
 `alt` names the clip for assistive tools. Playback is fixed and not
-authored. The clip is always muted and loops, and the reader always gets
-the player's controls. The reference renderer plays it while at least half
-of it is in view, never for a reader who asked for reduced motion, and never
-again after the reader paused it. Static HTML plays on click. A printed page
+authored. The clip starts muted and loops. The reader always gets the player's
+controls, including the volume button, so a clip with sound can be unmuted.
+An author cannot make a clip start with sound: browsers only play a clip on
+their own when it is muted. The reference renderer plays it while at least half
+of it is in view, never for a reader who asked for reduced motion, and it
+never resumes on its own after the reader paused it. Static HTML plays on click. A printed page
 shows a play badge over the poster. A terminal prints a link to the clip.
 A `data:` source is refused.
 
