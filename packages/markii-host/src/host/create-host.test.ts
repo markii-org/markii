@@ -1218,3 +1218,93 @@ describe('createMarkiiHost behaviors resolve `failed` when an adapter primitive 
     expect(outcome).toHaveProperty('reason');
   });
 });
+
+describe('createMarkiiHost.checkNote', () => {
+  const NOTE = [
+    ':::callout{type=loud}',
+    'x',
+    ':::',
+    '',
+    '[bad](javascript:alert(1))',
+    '',
+    ':::ana_timeline{scale=hours}',
+    ':::',
+    '',
+  ].join('\n');
+
+  it('reports standard-set findings with positions and is quiet for a clean note', async () => {
+    const host = createMarkiiHost(fakeAdapter());
+    const outcome = await host.checkNote(NOTE);
+    expect(outcome.kind).toBe('checked');
+    if (outcome.kind !== 'checked') return;
+    const kinds = outcome.findings.map((finding) => finding.kind);
+    expect(kinds).toContain('invalid-attribute-value');
+    expect(kinds).toContain('unsafe-url');
+    expect(kinds).toContain('unknown-directive');
+    expect(outcome.findings[0]?.position?.startLine).toBe(1);
+    expect(await host.checkNote(':::callout{type=info}\nx\n:::\n')).toEqual({
+      kind: 'checked',
+      findings: [],
+    });
+  });
+
+  it('knows a pack directive and checks its declared attribute', async () => {
+    const folder = await makePackFolder('ana', {
+      name: 'ana',
+      engine: 'react',
+      components: {
+        timeline: {
+          source: './Timeline.tsx',
+          kind: 'container',
+          attributes: [{ name: 'scale', values: ['days', 'weeks'] }],
+        },
+      },
+    });
+    const host = createMarkiiHost(
+      fakeAdapter({
+        ...realFs,
+        packs: {
+          trust: 'none',
+          engine: 'react',
+          authorizedFolders: async () => [folder],
+          reservedNamespaces: () => new Set(),
+        },
+      }),
+    );
+    const outcome = await host.checkNote(NOTE);
+    if (outcome.kind !== 'checked') throw new Error('expected checked');
+    const kinds = outcome.findings.map((finding) => finding.kind);
+    expect(kinds).not.toContain('unknown-directive');
+    expect(outcome.findings).toContainEqual(
+      expect.objectContaining({
+        kind: 'invalid-attribute-value',
+        directive: 'ana_timeline',
+        attribute: 'scale',
+      }),
+    );
+  });
+
+  it('degrades to the standard set when the pack read rejects, with one diagnostics line', async () => {
+    const lines: string[] = [];
+    const host = createMarkiiHost(
+      fakeAdapter({
+        diagnostics: (line) => lines.push(line),
+        packs: {
+          trust: 'none',
+          engine: 'react',
+          authorizedFolders: async () => {
+            throw new Error('boom');
+          },
+          reservedNamespaces: () => new Set(),
+        },
+      }),
+    );
+    const outcome = await host.checkNote(NOTE);
+    expect(outcome.kind).toBe('checked');
+    if (outcome.kind !== 'checked') return;
+    expect(outcome.findings.map((finding) => finding.kind)).toContain(
+      'unsafe-url',
+    );
+    expect(lines).toEqual(['read the pack catalog failed: boom']);
+  });
+});

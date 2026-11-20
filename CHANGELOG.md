@@ -6,6 +6,18 @@ project uses [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `@markii/host`: `checkNote(text)` and the `CheckNoteOutcome` type. It
+  returns the findings in a note's source with positions: an unknown
+  directive, a form mismatch, an attribute value outside its set and a
+  refused URL scheme. It knows every component the packs declare and never
+  loads pack code.
+- The VS Code extension lists a note's findings as warnings in the Problems
+  panel, on open, while typing and on save. The Obsidian plugin writes them
+  to the developer console. `markii lsp` uses the same behavior, and its
+  output is unchanged.
+
 ## [0.18.1] - 2026-11-20
 
 The `video` component and a figure spacing fix. All twelve packages, the

@@ -63,6 +63,7 @@ needs, is the runner's own `ACTION_CAPABILITY` map:
 | `hoverAt` | `editor` |
 | `typedOpenerAt` | `editor` |
 | `insertComponent` | `editor` |
+| `checkNote` | (always supported) |
 
 `pack-trust` is declared by an adapter whose pack source sets
 `trust: 'device-list'` (and an `installRoot`): installed packs load only
@@ -169,6 +170,8 @@ coarse, matching each `kind`:
   compare the column span an accepted item replaces and where filtering
   starts; `fenceEditCount` compares how many fence rewrites travel with an
   accepted container item.
+- `checked`: `findings`, the exact ordered list, each with `kind`, an optional
+  `attribute` and the one-based source `line`.
 - `hover`: `contains`, a substring of the hover text. Optional `start` and
   `end` compare the hovered name's columns.
 - every other `kind` (`opened`, `none`, `not-found`, `failed`, `invalid`,

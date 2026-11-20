@@ -4,12 +4,10 @@
  * host behind completion and hover. Not shipped; only `*.test.ts` files
  * import it.
  */
-import { standardNoteCatalog } from '@markii/stdlib';
 import { createMarkiiHost } from '@markii/host';
 import { createCliHostAdapter } from '../host-adapter.js';
 import { createFakeTerminal } from '../test-terminal.js';
 import { createFrameParser, encodeFrame } from './frames.js';
-import { noteDiagnostics } from './note-diagnostics.js';
 import { createLspServer, type LspServer } from './server.js';
 
 /** A decoded JSON-RPC payload in a test: shapes are asserted by the test itself. */
@@ -74,8 +72,10 @@ export function createHarness(options: { debounceMs?: number } = {}): Harness {
     completeAt: (request) => host.completeAt(request),
     hoverAt: (request) => host.hoverAt(request),
     typedOpenerAt: (request) => host.typedOpenerAt(request),
-    diagnose: (text) =>
-      Promise.resolve(noteDiagnostics(text, standardNoteCatalog())),
+    diagnose: async (text) => {
+      const outcome = await host.checkNote(text);
+      return outcome.kind === 'checked' ? [...outcome.findings] : [];
+    },
   });
   let nextId = 1;
 

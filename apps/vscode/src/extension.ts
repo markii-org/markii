@@ -73,6 +73,12 @@ import {
 } from './completion.js';
 import { isPreviewableDocument } from './mark-document.js';
 import { typedNewlineLine } from './typed-opener.js';
+import { createDebouncer, type Debouncer } from './debounce.js';
+import {
+  NOTE_CHECK_DEBOUNCE_MS,
+  noteProblems,
+  NOTE_FINDING_SOURCE,
+} from './note-findings.js';
 import {
   insertComponentQuickPickItems,
   INSERT_COMPONENT_QUICK_PICK_PLACEHOLDER,
@@ -1102,10 +1108,87 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     },
   );
+  // Findings in the note's source, through the shared host's `checkNote`:
+  // on open, on change (debounced) and on save, as warnings in the Problems
+  // panel. A document's entries leave when it closes.
+  const findingsCollection =
+    vscode.languages.createDiagnosticCollection(NOTE_FINDING_SOURCE);
+  const findingDebouncers = new Map<string, Debouncer<void>>();
+  const checkDocument = async (
+    document: vscode.TextDocument,
+  ): Promise<void> => {
+    if (vscode.languages.match(MARKII_DOCUMENT_SELECTOR, document) === 0) {
+      return;
+    }
+    const version = document.version;
+    const outcome = await editorHost.checkNote(document.getText());
+    // A failed check wrote its own diagnostics line and keeps the last entries.
+    if (outcome.kind !== 'checked') return;
+    if (document.isClosed || document.version !== version) return;
+    findingsCollection.set(
+      document.uri,
+      noteProblems(outcome.findings).map((problem) => {
+        const diagnostic = new vscode.Diagnostic(
+          new vscode.Range(
+            problem.startLine,
+            problem.startColumn,
+            problem.endLine,
+            problem.endColumn,
+          ),
+          problem.message,
+          vscode.DiagnosticSeverity.Warning,
+        );
+        diagnostic.source = problem.source;
+        diagnostic.code = problem.code;
+        return diagnostic;
+      }),
+    );
+  };
+  const scheduleCheck = (document: vscode.TextDocument): void => {
+    if (vscode.languages.match(MARKII_DOCUMENT_SELECTOR, document) === 0) {
+      return;
+    }
+    const key = document.uri.toString();
+    let debouncer = findingDebouncers.get(key);
+    if (debouncer === undefined) {
+      debouncer = createDebouncer<void>(NOTE_CHECK_DEBOUNCE_MS, () => {
+        void checkDocument(document);
+      });
+      findingDebouncers.set(key, debouncer);
+    }
+    debouncer.schedule();
+  };
+  const recheckOpenNotes = (): void => {
+    for (const document of vscode.workspace.textDocuments) {
+      void checkDocument(document);
+    }
+  };
+  for (const document of vscode.workspace.textDocuments) {
+    void checkDocument(document);
+  }
+  const findingsListeners = [
+    findingsCollection,
+    vscode.workspace.onDidOpenTextDocument((document) => {
+      void checkDocument(document);
+    }),
+    vscode.workspace.onDidChangeTextDocument((event) => {
+      scheduleCheck(event.document);
+    }),
+    vscode.workspace.onDidSaveTextDocument((document) => {
+      void checkDocument(document);
+    }),
+    vscode.workspace.onDidCloseTextDocument((document) => {
+      const key = document.uri.toString();
+      findingDebouncers.get(key)?.cancel();
+      findingDebouncers.delete(key);
+      findingsCollection.delete(document.uri);
+    }),
+  ];
   const packsConfigChangeListener = vscode.workspace.onDidChangeConfiguration(
     (event) => {
       if (event.affectsConfiguration('markii.packs')) {
         editorHost.invalidateCatalog();
+        recheckOpenNotes();
         void reloadActivePreviewPacks(context);
       }
     },
@@ -1113,6 +1196,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const workspaceFoldersChangeListener =
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
       editorHost.invalidateCatalog();
+      recheckOpenNotes();
     });
 
   context.subscriptions.push(
@@ -1134,6 +1218,7 @@ export function activate(context: vscode.ExtensionContext): void {
     completionProviderHandle,
     hoverProviderHandle,
     typedOpenerListener,
+    ...findingsListeners,
     packsConfigChangeListener,
     workspaceFoldersChangeListener,
   );

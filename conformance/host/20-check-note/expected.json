@@ -1,0 +1,13 @@
+{
+  "outcomes": [
+    {
+      "kind": "checked",
+      "findings": [
+        { "kind": "invalid-attribute-value", "attribute": "type", "line": 3 },
+        { "kind": "unsafe-url", "line": 7 }
+      ]
+    }
+  ],
+  "diagnostics": [],
+  "prompts": []
+}

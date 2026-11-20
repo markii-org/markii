@@ -1,13 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { standardNoteCatalog } from '@markii/stdlib';
-import { noteDiagnostics } from './note-diagnostics.js';
+import { noteFindings, standardCheckCatalog } from './note-check-behavior.js';
 
 const unsafe = (text: string) =>
-  noteDiagnostics(text, standardNoteCatalog()).filter(
+  noteFindings(text, standardCheckCatalog()).filter(
     (event) => event.kind === 'unsafe-url',
   );
 
-describe('noteDiagnostics with Markdown URLs', () => {
+describe('noteFindings with Markdown URLs', () => {
   it('flags a refused scheme on an image, a link, an autolink and a definition', () => {
     const text = [
       '![a](javascript:alert(1))',

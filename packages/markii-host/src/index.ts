@@ -94,6 +94,7 @@ export type {
 } from './host/cascade-export-behavior.js';
 export { createMarkiiHost } from './host/create-host.js';
 export type {
+  CheckNoteOutcome,
   CompleteOutcome,
   DisablePackOutcome,
   EditorPositionRequest,

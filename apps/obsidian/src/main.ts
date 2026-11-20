@@ -1,5 +1,6 @@
 import { readFile as nodeReadFile, rm as nodeRm } from 'node:fs/promises';
 import {
+  debounce,
   FileSystemAdapter,
   MarkdownView,
   Notice,
@@ -94,6 +95,10 @@ import {
 import { registerReadingView } from './reading-view.js';
 import { pickPackArchiveFile } from './pick-folder.js';
 import { createObsidianPrompt } from './run-modals.js';
+import {
+  createNoteFindingsReporter,
+  NOTE_CHECK_DEBOUNCE_MS,
+} from './note-findings.js';
 import { createObsidianHostAdapter } from './host-adapter.js';
 import { OBSIDIAN_LABELS } from './labels.js';
 
@@ -258,8 +263,21 @@ export default class MarkiiPlugin extends Plugin {
       },
       true,
     );
+    // Findings in the note's source, on open and after each pause in typing.
+    this.registerEvent(
+      this.app.workspace.on('file-open', (file) => {
+        if (!file?.path.endsWith(MARK_EXTENSION)) return;
+        this.noteFindings.forget(file.path);
+        void this.app.vault.cachedRead(file).then((text) => {
+          void this.checkNoteFindings(file.path, text);
+        });
+      }),
+    );
     this.registerEvent(
       this.app.workspace.on('editor-change', (editor, info) => {
+        if (info.file?.path.endsWith(MARK_EXTENSION)) {
+          this.scheduleNoteCheck(info.file.path, editor.getValue());
+        }
         if (!enterTyped) return;
         enterTyped = false;
         if (!info.file?.path.endsWith(MARK_EXTENSION)) return;
@@ -692,6 +710,30 @@ export default class MarkiiPlugin extends Plugin {
   }
 
   private completionHostInstance: MarkiiHost | undefined;
+
+  /**
+   * Checks a note's source through the shared host and writes its findings
+   * to the developer console, one line each with its line number. The
+   * reporter drops a repeat of the lines it last wrote for the note.
+   */
+  private readonly noteFindings = createNoteFindingsReporter((line) => {
+    this.completionHost().diagnostics(line);
+  });
+
+  private async checkNoteFindings(path: string, text: string): Promise<void> {
+    const outcome = await this.completionHost().checkNote(text);
+    // A failed check wrote its own diagnostics line already.
+    if (outcome.kind !== 'checked') return;
+    this.noteFindings.report(path, outcome.findings);
+  }
+
+  private readonly scheduleNoteCheck = debounce(
+    (path: string, text: string) => {
+      void this.checkNoteFindings(path, text);
+    },
+    NOTE_CHECK_DEBOUNCE_MS,
+    true,
+  );
 
   /**
    * The long-lived host behind directive completion. Its catalog is cached

@@ -4,6 +4,7 @@ BundleSnapshotResult
 CascadeExportedNote
 CascadeLinkResolver
 CascadeTruncation
+CheckNoteOutcome
 CompleteOutcome
 DisablePackOutcome
 DiscoveredPack

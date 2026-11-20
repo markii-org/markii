@@ -24,8 +24,8 @@ The host writes a `HostAdapter` and passes it to `createMarkiiHost` from
 `run`, `lastRun`, `forgetGrants`, `exportNote`, `exportLinkedSet`,
 `installPack`, `loadPacks`, `loadTerminalPacks`, `removePack`,
 `installedPacks`, `enablePack`, `disablePack`, `completeAt`,
-`completeAtSync`, `hoverAt`, `insertComponent`, `typedOpenerAt`,
-`invalidateCatalog` and `diagnostics`.
+`completeAtSync`, `hoverAt`, `checkNote`, `insertComponent`,
+`typedOpenerAt`, `invalidateCatalog` and `diagnostics`.
 
 ### Outcomes
 
@@ -724,8 +724,9 @@ pack components from each installed pack's `pack.json` and loads no pack
 code.
 
 The position encoding is negotiated (UTF-8, UTF-16 or UTF-32), with UTF-16
-as the default the protocol defines. Diagnostics come from
-`validateNote(tree, catalog)` in `@markii/stdlib`, which needs no renderer.
+as the default the protocol defines. Diagnostics come from the host's
+`checkNote(text)`, which runs `validateNote(tree, catalog)` from
+`@markii/stdlib` and needs no renderer.
 It reports a directive that names nothing, a block component written
 inline or the reverse, and an attribute value outside its declared set.
 Given `isSafeUrl`, it also reports a markdown image, link, autolink or
@@ -737,6 +738,17 @@ renderers report the kinds that do depend on an engine, such as a
 component with no view for it. The server's diagnostics surface is the
 client's diagnostics list, and pack-loading failures arrive as log
 messages.
+
+Every editor host shows the same findings, because each one calls
+`checkNote`. It checks against the standard set and every component the
+packs declare. It reads only each pack's manifest, so checking a note never
+runs pack code. When the packs cannot be read, it writes one diagnostics
+line and still checks against the standard set. The VS Code extension
+checks a note when it opens, after a 300 millisecond pause in typing and on
+save. It lists the findings as warnings in the Problems panel, with the
+squiggles in the editor. The Obsidian plugin checks on open and after the
+same pause, and writes one line per finding to the developer console. It
+writes a note's lines again only when they change.
 
 Helix, Emacs and other LSP clients start the server with the command
 `markii lsp`. Neovim has a thin plugin in `apps/nvim` that registers the

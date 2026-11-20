@@ -1,7 +1,7 @@
 /**
  * `markii lsp`: the language server over the terminal's stdio. This module
- * wires the pieces (the shared host for completion and hover, the pack
- * catalog for diagnostics, the protocol server) and resolves with the
+ * wires the pieces (the shared host for completion and hover, the shared
+ * host for note findings, the protocol server) and resolves with the
  * process exit code once the client sends `exit` or closes the stream.
  * The protocol itself lives in `./lsp/server.ts`; the Markii behavior
  * lives in `@markii/host` and `@markii/stdlib/editor`.
@@ -16,14 +16,9 @@ import {
   type HostEditor,
 } from '@markii/host';
 import { formatPackDiagnosticLines } from '@markii/host/internal';
-import {
-  standardNoteCatalog,
-  type DiagnosticEvent,
-  type NoteCatalogEntry,
-} from '@markii/stdlib';
+import type { DiagnosticEvent } from '@markii/stdlib';
 import { createCliHostAdapter } from './host-adapter.js';
 import { resolveCliPackOptions } from './pack-store.js';
-import { noteDiagnostics, packNoteCatalog } from './lsp/note-diagnostics.js';
 import { createLspServer, type LspServer } from './lsp/server.js';
 import type { Terminal } from './terminal.js';
 
@@ -67,15 +62,14 @@ export async function runLspCommand(
   });
   const host = createMarkiiHost(adapter);
 
-  // Pack components are read from each pack.json, lazily on the first
-  // check. No pack script is read or evaluated here: a finding about a note
-  // must never run code a pack ships.
-  let catalog: Promise<readonly NoteCatalogEntry[]> | undefined;
-  const loadCatalog = (): Promise<readonly NoteCatalogEntry[]> => {
-    catalog ??= host.loadPacks().then((outcome) => {
-      if (outcome.kind !== 'loaded') return standardNoteCatalog();
-      // A folder that could not be read as a pack leaves its directives
-      // unknown in the findings; the reason goes to the client's log.
+  // The findings come from the host's `checkNote`, which reads each
+  // pack.json and never a pack script. A folder that could not be read as a
+  // pack leaves its directives unknown in the findings; the reason goes to
+  // the client's log, once, on the first check.
+  let packNotices: Promise<void> | undefined;
+  const reportPackNotices = (): Promise<void> => {
+    packNotices ??= host.loadPacks().then((outcome) => {
+      if (outcome.kind !== 'loaded') return;
       const failing = outcome.skipped.filter(
         (entry) => entry.engineUnsupported === undefined,
       );
@@ -87,9 +81,8 @@ export async function runLspCommand(
       })) {
         server?.notice(line);
       }
-      return packNoteCatalog(outcome);
     });
-    return catalog;
+    return packNotices;
   };
 
   let server: LspServer | undefined;
@@ -108,7 +101,14 @@ export async function runLspCommand(
       hoverAt: (request) => host.hoverAt(request),
       typedOpenerAt: (request) => host.typedOpenerAt(request),
       diagnose: async (text): Promise<DiagnosticEvent[]> => {
-        return noteDiagnostics(text, await loadCatalog());
+        await reportPackNotices();
+        const outcome = await host.checkNote(text);
+        if (outcome.kind !== 'checked') {
+          throw new Error(
+            outcome.kind === 'failed' ? outcome.reason : outcome.kind,
+          );
+        }
+        return [...outcome.findings];
       },
     });
     const running = server;

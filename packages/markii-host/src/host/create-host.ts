@@ -35,7 +35,12 @@ import { readPersistedValues } from '../run/run-flow.js';
 import { clearGrantForDocument } from '../run/grant-flow.js';
 import { readLastRunTrace, type RunTrace } from '../run/run-trace.js';
 import { staleValuesForRehydration } from '../run/stale-values.js';
-import type { OnDiagnostic, UnavailableComponent } from '@markii/stdlib';
+import type {
+  DiagnosticEvent,
+  NoteCatalogEntry,
+  OnDiagnostic,
+  UnavailableComponent,
+} from '@markii/stdlib';
 import type {
   CompletionItem,
   ComponentDocumentation,
@@ -73,6 +78,11 @@ import {
   type CascadeExportedNote,
   type UnreadableCascadeNote,
 } from './cascade-export-behavior.js';
+import {
+  noteCatalogFromPacks,
+  noteFindings,
+  standardCheckCatalog,
+} from './note-check-behavior.js';
 import { buildComponentCatalog } from '../insert/component-catalog.js';
 import {
   formatPackDiagnosticLines,
@@ -468,6 +478,16 @@ export type CompleteOutcome =
   | { readonly kind: 'failed'; readonly reason: string }
   | Unsupported;
 
+export type CheckNoteOutcome =
+  /** The note's findings, in source order, with positions. Empty for a clean note. A pack read that failed still yields the standard-set findings. */
+  | {
+      readonly kind: 'checked';
+      readonly findings: readonly DiagnosticEvent[];
+    }
+  /** The note could not be parsed or validated. The diagnostics line is already written. */
+  | { readonly kind: 'failed'; readonly reason: string }
+  | Unsupported;
+
 export type HoverOutcome =
   | {
       readonly kind: 'hover';
@@ -563,6 +583,13 @@ export interface MarkiiHost {
   /** Drops the cached completion/hover catalog, for a host whose pack folders just changed. `installPack` and `loadPacks` do this themselves. */
   invalidateCatalog(): void;
   hoverAt(request: EditorPositionRequest): Promise<HoverOutcome>;
+  /**
+   * The problems in a note's source: an unknown attribute value, a refused
+   * URL scheme, a form mismatch, an unknown directive. It reads each pack's
+   * manifest only, so pack directives are known and their declared
+   * attributes checked. It needs no editor, and it never throws.
+   */
+  checkNote(text: string): Promise<CheckNoteOutcome>;
   insertComponent(request: InsertComponentRequest): Promise<InsertOutcome>;
   diagnostics(line: string): void;
 }
@@ -642,6 +669,31 @@ export function createMarkiiHostWithSeams(
       failedOutcome(adapter, 'read the pack catalog', err);
       return buildComponentCatalog([]);
     }
+  }
+
+  /** The catalog `checkNote` validates against. A rejected pack read writes one diagnostics line and leaves the standard set. */
+  async function readNoteCatalog(): Promise<readonly NoteCatalogEntry[]> {
+    if (!adapter.packs) return standardCheckCatalog();
+    try {
+      const result = await loadPacksViaAdapter(
+        packSource(adapter.packs),
+        packIo,
+      );
+      return noteCatalogFromPacks(
+        [...(adapter.packs.bundledPacks?.() ?? []), ...result.packs],
+        result.components,
+      );
+    } catch (err) {
+      failedOutcome(adapter, 'read the pack catalog', err);
+      return standardCheckCatalog();
+    }
+  }
+  let noteCatalog: Promise<readonly NoteCatalogEntry[]> | undefined;
+
+  /** Drops both cached catalogs, for any change to the packs a host reads. */
+  function invalidateCatalogs(): void {
+    catalogCache.invalidate();
+    noteCatalog = undefined;
   }
 
   /** Completion and hover fire per keystroke, so they read a cached catalog. `insertComponent` stays uncached: it runs once per command. */
@@ -881,7 +933,7 @@ export function createMarkiiHostWithSeams(
         reservedNamespaces: adapter.packs.reservedNamespaces(),
       });
 
-      catalogCache.invalidate();
+      invalidateCatalogs();
       for (const line of installPackDiagnosticLines(outcome, archivePath)) {
         adapter.diagnostics(line);
       }
@@ -897,7 +949,7 @@ export function createMarkiiHostWithSeams(
           'this host has no pack folders configured.',
         );
       }
-      catalogCache.invalidate();
+      invalidateCatalogs();
       try {
         const result = await loadPacksViaAdapter(
           packSource(adapter.packs),
@@ -950,7 +1002,7 @@ export function createMarkiiHostWithSeams(
           'this host does not run the terminal engine, so it has no terminal packs.',
         );
       }
-      catalogCache.invalidate();
+      invalidateCatalogs();
       try {
         const result = await loadPacksViaAdapter(
           packSource(adapter.packs),
@@ -1007,7 +1059,7 @@ export function createMarkiiHostWithSeams(
         packs.removeFolder.bind(packs),
         packs.reservedNamespaces(),
       );
-      catalogCache.invalidate();
+      invalidateCatalogs();
       // The trust entry goes whatever happened to the folder: this device
       // has withdrawn its authorization, so the pack stops loading. Only a
       // refused or malformed request leaves the list alone.
@@ -1042,7 +1094,7 @@ export function createMarkiiHostWithSeams(
         );
       }
       const outcome = await enablePackViaAdapter(adapter, namespace);
-      catalogCache.invalidate();
+      invalidateCatalogs();
       adapter.diagnostics(enablePackDiagnosticLine(outcome));
       return outcome;
     },
@@ -1056,7 +1108,7 @@ export function createMarkiiHostWithSeams(
         );
       }
       const outcome = await disablePackViaAdapter(adapter, namespace);
-      catalogCache.invalidate();
+      invalidateCatalogs();
       adapter.diagnostics(disablePackDiagnosticLine(outcome));
       return outcome;
     },
@@ -1123,7 +1175,19 @@ export function createMarkiiHostWithSeams(
     },
 
     invalidateCatalog(): void {
-      catalogCache.invalidate();
+      invalidateCatalogs();
+    },
+
+    async checkNote(text: string): Promise<CheckNoteOutcome> {
+      try {
+        noteCatalog ??= readNoteCatalog();
+        return {
+          kind: 'checked',
+          findings: noteFindings(text, await noteCatalog),
+        };
+      } catch (err) {
+        return failedOutcome(adapter, 'check findings', err);
+      }
     },
 
     async hoverAt(request: EditorPositionRequest): Promise<HoverOutcome> {

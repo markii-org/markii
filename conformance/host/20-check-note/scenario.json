@@ -1,0 +1,6 @@
+{
+  "id": "check-note",
+  "invariant": "checking a note reports each finding with its source line and stays quiet for a clean directive",
+  "clock": 1700000000000,
+  "actions": [{ "type": "checkNote" }]
+}

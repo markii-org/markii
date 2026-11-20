@@ -161,7 +161,17 @@ export type HostScenarioAction =
     }
   | { readonly type: 'hoverAt'; readonly line: number; readonly column: number }
   | { readonly type: 'typedOpenerAt'; readonly line: number }
+  /** Checks the scenario's note text for findings. */
+  | { readonly type: 'checkNote' }
   | { readonly type: 'insertComponent'; readonly name: string };
+
+/** One finding of a `checked` outcome as `expected.json` writes it: the kind, the attribute when one is involved, and the one-based source line. */
+interface ExpectedFinding {
+  readonly kind: string;
+  readonly attribute?: string;
+  readonly line?: number;
+  readonly position?: { readonly startLine: number };
+}
 
 export interface HostScenario {
   readonly id: string;
@@ -256,6 +266,7 @@ export const ACTION_CAPABILITY: Readonly<
   completeAt: 'editor',
   hoverAt: 'editor',
   typedOpenerAt: 'editor',
+  checkNote: undefined,
   insertComponent: 'editor',
 };
 
@@ -648,6 +659,9 @@ async function runOneAction(
 
     case 'hoverAt':
       return host.hoverAt({ line: action.line, column: action.column });
+
+    case 'checkNote':
+      return host.checkNote(ctx.noteText);
 
     case 'typedOpenerAt':
       return host.typedOpenerAt({ line: action.line });
@@ -1063,6 +1077,24 @@ export function outcomeMismatches(
             `fenceEditCount: expected ${String(expected['fenceEditCount'])}, got ${String(got)}`,
           );
         }
+      }
+      break;
+    }
+    case 'checked': {
+      const want = (expected['findings'] as ExpectedFinding[]) ?? [];
+      const got = (actualRecord['findings'] as ExpectedFinding[]) ?? [];
+      const project = (finding: ExpectedFinding): string =>
+        JSON.stringify([
+          finding.kind,
+          finding.attribute ?? null,
+          finding.line ?? finding.position?.startLine ?? null,
+        ]);
+      const wantKeys = want.map(project);
+      const gotKeys = got.map(project);
+      if (JSON.stringify(wantKeys) !== JSON.stringify(gotKeys)) {
+        mismatches.push(
+          `findings: expected ${JSON.stringify(wantKeys)}, got ${JSON.stringify(gotKeys)}`,
+        );
       }
       break;
     }
